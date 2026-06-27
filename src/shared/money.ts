@@ -52,7 +52,7 @@ export function allocate(total: number, weights: number[]): number[] {
   const result = [...floors]
   for (const { i } of order) {
     if (remainder <= 0) break
-    result[i] += 1
+    result[i] = (result[i] ?? 0) + 1
     remainder -= 1
   }
   return result
