@@ -41,3 +41,25 @@ describe('allocate', () => {
     expect(allocate(0, [1, 1])).toEqual([0, 0])
   })
 })
+
+describe('toMinor (negatives)', () => {
+  it('rounds ties away from zero for negative amounts', () => {
+    expect(toMinor(-1.005, 2)).toBe(-101)
+    expect(toMinor(-12.5, 2)).toBe(-1250)
+  })
+  it('never returns negative zero', () => {
+    expect(Object.is(toMinor(-0.004, 2), -0)).toBe(false)
+    expect(toMinor(-0.004, 2)).toBe(0)
+  })
+})
+
+describe('allocate (negatives)', () => {
+  it('splits a negative total exactly, mirroring the positive case', () => {
+    const parts = allocate(-1000, [1, 1, 1])
+    expect(parts).toEqual([-334, -333, -333])
+    expect(parts.reduce((a, b) => a + b, 0)).toBe(-1000)
+  })
+  it('splits a negative total proportionally', () => {
+    expect(allocate(-1000, [3, 1])).toEqual([-750, -250])
+  })
+})

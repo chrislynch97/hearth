@@ -9,7 +9,11 @@ export function toMinor(major: number, decimalPlaces: number): number {
   // Position of the new decimal point after shifting by decimalPlaces
   const newDotIdx = dotIdx + decimalPlaces
   const shifted = digits.slice(0, newDotIdx) + '.' + digits.slice(newDotIdx)
-  return Math.round(parseFloat(shifted))
+  // Round half away from zero (Math.round rounds toward +∞, which biases negative ties).
+  const parsed = parseFloat(shifted)
+  const result = Math.sign(parsed) * Math.round(Math.abs(parsed))
+  // Normalise -0 to 0.
+  return result === 0 ? 0 : result
 }
 
 export function fromMinor(minor: number, decimalPlaces: number): number {
@@ -43,6 +47,11 @@ export function formatMoney(
 export function allocate(total: number, weights: number[]): number[] {
   const weightSum = weights.reduce((a, b) => a + b, 0)
   if (weightSum === 0 || total === 0) return weights.map(() => 0)
+  // For negative totals, compute on the magnitude and reapply the sign so that
+  // the largest-remainder fix-up logic (which relies on remainder > 0) works correctly.
+  if (total < 0) {
+    return allocate(-total, weights).map((p) => (p === 0 ? 0 : -p))
+  }
   const raw = weights.map((w) => (total * w) / weightSum)
   const floors = raw.map((r) => Math.floor(r))
   let remainder = total - floors.reduce((a, b) => a + b, 0)

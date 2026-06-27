@@ -35,3 +35,10 @@ describe('fundingPerMonth', () => {
     expect(total).toBe(4958)
   })
 })
+
+describe('roundMinor (negatives)', () => {
+  it('rounds ties away from zero', () => {
+    expect(roundMinor(-4583.5)).toBe(-4584)
+    expect(roundMinor(-4583.4)).toBe(-4583)
+  })
+})
