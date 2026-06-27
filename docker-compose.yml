@@ -1,0 +1,12 @@
+services:
+  hearthledger:
+    build: .
+    ports:
+      - "8787:8787"
+    volumes:
+      - ./data:/data
+    environment:
+      - PORT=8787
+      - DATABASE_URL=file:/data/app.db
+      - CLIENT_DIR=/app/dist/client
+    restart: unless-stopped
