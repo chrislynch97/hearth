@@ -1,0 +1,84 @@
+import { z } from 'zod'
+import { asc, eq, isNull, max } from 'drizzle-orm'
+import { TRPCError } from '@trpc/server'
+import { router, publicProcedure } from '../trpc/trpc'
+import { category } from '../db/schema'
+import { newId } from '../../shared/ids'
+
+export const categoriesRouter = router({
+  list: publicProcedure.query(async ({ ctx }) => {
+    return ctx.db
+      .select()
+      .from(category)
+      .where(isNull(category.archivedAt))
+      .orderBy(asc(category.sortOrder), asc(category.name))
+  }),
+
+  create: publicProcedure
+    .input(z.object({ name: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const now = Date.now()
+
+      const [result] = await ctx.db.select({ maxOrder: max(category.sortOrder) }).from(category)
+      const nextOrder = (result?.maxOrder ?? 0) + 1
+
+      const id = newId()
+      await ctx.db.insert(category).values({
+        id,
+        name: input.name,
+        sortOrder: nextOrder,
+        createdAt: now,
+        updatedAt: now,
+      })
+
+      const [inserted] = await ctx.db.select().from(category).where(eq(category.id, id))
+
+      if (!inserted) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to insert category' })
+      }
+
+      return inserted
+    }),
+
+  update: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().min(1).optional(),
+        sortOrder: z.number().int().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...fields } = input
+      const now = Date.now()
+
+      await ctx.db
+        .update(category)
+        .set({ ...fields, updatedAt: now })
+        .where(eq(category.id, id))
+
+      const [updated] = await ctx.db.select().from(category).where(eq(category.id, id))
+
+      if (!updated) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Category not found' })
+      }
+
+      return updated
+    }),
+
+  archive: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const [target] = await ctx.db.select().from(category).where(eq(category.id, input.id))
+
+      if (!target) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Category not found' })
+      }
+
+      const now = Date.now()
+      await ctx.db
+        .update(category)
+        .set({ archivedAt: now, updatedAt: now })
+        .where(eq(category.id, input.id))
+    }),
+})

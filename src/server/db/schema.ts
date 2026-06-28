@@ -32,3 +32,30 @@ export const member = sqliteTable('member', {
 
 export type Household = typeof household.$inferSelect
 export type Member = typeof member.$inferSelect
+
+export const category = sqliteTable('category', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  sortOrder: integer('sort_order').notNull().default(0),
+  archivedAt: integer('archived_at'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+export const pot = sqliteTable('pot', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  categoryId: text('category_id').references(() => category.id),
+  ownerId: text('owner_id')
+    .notNull()
+    .references(() => member.id),
+  isDrawdown: integer('is_drawdown').notNull().default(0),
+  sortOrder: integer('sort_order').notNull().default(0),
+  note: text('note'),
+  archivedAt: integer('archived_at'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+export type Category = typeof category.$inferSelect
+export type Pot = typeof pot.$inferSelect
