@@ -4,12 +4,12 @@ import {
   Center,
   Group,
   Loader,
-  Stack,
-  Text,
   Title,
   useMantineColorScheme,
 } from '@mantine/core'
 import { trpc } from './trpc'
+import { SetupWizard } from './setup/SetupWizard'
+import { MainApp } from './MainApp'
 
 function ThemeToggle() {
   const { toggleColorScheme } = useMantineColorScheme()
@@ -38,13 +38,13 @@ export function App() {
           </Center>
         )}
         {ctx.data?.needsSetup && (
-          <Stack>
-            <Title order={2}>Welcome</Title>
-            <Text>Let's set up your household. (Setup wizard arrives in Phase 2.)</Text>
-          </Stack>
+          <SetupWizard
+            householdName={ctx.data.household?.displayName ?? 'My Household'}
+            currencyCode={ctx.data.household?.currencyCode ?? 'GBP'}
+          />
         )}
-        {ctx.data && !ctx.data.needsSetup && (
-          <Text>Ready — {ctx.data.household?.displayName}.</Text>
+        {ctx.data && !ctx.data.needsSetup && ctx.data.household && (
+          <MainApp household={ctx.data.household} members={ctx.data.members} />
         )}
       </AppShell.Main>
     </AppShell>
