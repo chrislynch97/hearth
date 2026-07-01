@@ -43,7 +43,7 @@ function PotBacklogRow({
         <Group gap="xs" wrap="wrap">
           <Text fw={600}>
             {isPullBack ? 'Pull' : 'Transfer'} {formatMoney(Math.abs(pot.total), money)}{' '}
-            {isPullBack ? 'back from' : 'into'} {pot.potName}
+            {isPullBack ? 'into' : 'out of'} {pot.potName}
           </Text>
           {owner && (
             <Badge
