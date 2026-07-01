@@ -87,3 +87,35 @@ export const expenseShare = sqliteTable('expense_share', {
 
 export type Expense = typeof expense.$inferSelect
 export type ExpenseShare = typeof expenseShare.$inferSelect
+
+export const reconciliationBatch = sqliteTable('reconciliation_batch', {
+  id: text('id').primaryKey(),
+  potId: text('pot_id').references(() => pot.id), // null = mixed/multi-pot
+  totalAmount: integer('total_amount').notNull(),
+  transactionCount: integer('transaction_count').notNull(),
+  reversedAt: integer('reversed_at'),
+  note: text('note'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+export const spendTransaction = sqliteTable('spend_transaction', {
+  id: text('id').primaryKey(),
+  date: text('date').notNull(), // YYYY-MM-DD
+  description: text('description').notNull(),
+  amount: integer('amount').notNull(), // minor units; + = spend, - = refund
+  ownerId: text('owner_id').notNull().references(() => member.id),
+  potId: text('pot_id').references(() => pot.id), // null = needs a pot
+  categoryId: text('category_id').references(() => category.id), // used only when potId is null
+  reconciled: integer('reconciled').notNull().default(0),
+  reconciledAt: integer('reconciled_at'),
+  reconciliationBatchId: text('reconciliation_batch_id').references(() => reconciliationBatch.id),
+  source: text('source').notNull().default('manual'),
+  splitGroupId: text('split_group_id'),
+  note: text('note'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+export type ReconciliationBatch = typeof reconciliationBatch.$inferSelect
+export type SpendTransaction = typeof spendTransaction.$inferSelect
