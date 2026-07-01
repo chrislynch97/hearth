@@ -1,6 +1,7 @@
-import { AppShell, Button, Group, NavLink, Title, useMantineColorScheme } from '@mantine/core'
+import { AppShell, Badge, Button, Group, NavLink, Title, useMantineColorScheme } from '@mantine/core'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { trpc } from '../trpc'
+import { formatMoney } from '../../shared/money'
 
 function ThemeToggle() {
   const { toggleColorScheme } = useMantineColorScheme()
@@ -16,11 +17,17 @@ const NAV_ITEMS = [
   { to: '/pots', label: 'Pots & Categories' },
   { to: '/outgoings', label: 'Outgoings' },
   { to: '/funding', label: 'Funding Plan' },
+  { to: '/spending', label: 'Spending' },
+  { to: '/catchup', label: 'Catch-up' },
 ]
 
 export function AppLayout() {
   const ctx = trpc.bootstrap.context.useQuery()
+  const backlogQuery = trpc.reconcile.backlog.useQuery()
   const location = useLocation()
+
+  const household = ctx.data?.household
+  const grandTotal = backlogQuery.data?.grandTotal ?? 0
 
   return (
     <AppShell header={{ height: 56 }} navbar={{ width: 220, breakpoint: 'sm' }} padding="md">
@@ -38,6 +45,17 @@ export function AppLayout() {
             to={item.to}
             label={item.label}
             active={location.pathname === item.to}
+            rightSection={
+              item.to === '/catchup' && grandTotal !== 0 && household ? (
+                <Badge size="sm" color="orange" variant="filled">
+                  {formatMoney(Math.abs(grandTotal), {
+                    symbol: household.currencySymbol,
+                    decimalPlaces: household.currencyDecimalPlaces,
+                    locale: household.locale,
+                  })}
+                </Badge>
+              ) : undefined
+            }
           />
         ))}
       </AppShell.Navbar>
