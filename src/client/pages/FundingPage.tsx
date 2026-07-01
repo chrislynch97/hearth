@@ -1,10 +1,137 @@
-import { Stack, Text, Title } from '@mantine/core'
+import { Alert, Badge, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { trpc } from '../trpc'
+import { formatMoney } from '../../shared/money'
+import type { PotFunding } from '../../server/plan/funding'
 
 export function FundingPage() {
+  const ctxQuery = trpc.bootstrap.context.useQuery()
+  const fundingQuery = trpc.plan.funding.useQuery()
+  const membersQuery = trpc.members.list.useQuery()
+
+  const household = ctxQuery.data?.household
+  const money = {
+    symbol: household?.currencySymbol ?? '£',
+    decimalPlaces: household?.currencyDecimalPlaces ?? 2,
+    locale: household?.locale ?? 'en-GB',
+  }
+
+  const isLoading = fundingQuery.isLoading || membersQuery.isLoading
+  const plan = fundingQuery.data
+  const members = membersQuery.data ?? []
+  const memberById = new Map(members.map((m) => [m.id, m]))
+
+  const hasAnything = plan ? plan.perPerson.length > 0 || plan.pots.length > 0 : false
+
+  const potsByOwner = new Map<string, PotFunding[]>()
+  if (plan) {
+    for (const p of plan.pots) {
+      if (p.fundingPerMonth === 0) continue
+      const list = potsByOwner.get(p.ownerId) ?? []
+      list.push(p)
+      potsByOwner.set(p.ownerId, list)
+    }
+  }
+
   return (
-    <Stack gap="md" maw={600} mx="auto" mt="xl">
+    <Stack gap="lg" maw={900} mx="auto" mt="xl">
       <Title order={2}>Funding Plan</Title>
-      <Text c="dimmed">Coming next.</Text>
+
+      {isLoading && (
+        <Center>
+          <Loader size="sm" />
+        </Center>
+      )}
+
+      {!isLoading && (!plan || !hasAnything) && (
+        <Text c="dimmed">Add outgoings to see your funding plan.</Text>
+      )}
+
+      {!isLoading && plan && hasAnything && (
+        <>
+          <Text size="sm" c="dimmed">
+            This is what to set up as standing orders in Monzo (or your bank) each month.
+          </Text>
+
+          {plan.unassignedFundingPerMonth > 0 && (
+            <Alert color="yellow" title="Unassigned outgoings">
+              {formatMoney(plan.unassignedFundingPerMonth, money)} of outgoings isn't assigned to a pot.
+            </Alert>
+          )}
+
+          <Group grow align="stretch">
+            {plan.perPerson.map((person) => (
+              <Card key={person.memberId} withBorder padding="md">
+                <Stack gap={6}>
+                  <Title order={4}>{person.displayName}</Title>
+                  <Group justify="space-between">
+                    <Text size="sm" c="dimmed">
+                      Personal pots
+                    </Text>
+                    <Text size="sm">{formatMoney(person.personalPotFunding, money)}</Text>
+                  </Group>
+                  <Group justify="space-between">
+                    <Text size="sm" c="dimmed">
+                      Joint contribution
+                    </Text>
+                    <Text size="sm">{formatMoney(person.jointContribution, money)}</Text>
+                  </Group>
+                  <Group justify="space-between">
+                    <Text size="sm" fw={700}>
+                      Set aside
+                    </Text>
+                    <Text size="sm" fw={700}>
+                      {formatMoney(person.setAside, money)}
+                    </Text>
+                  </Group>
+                </Stack>
+              </Card>
+            ))}
+          </Group>
+
+          <Card withBorder padding="md">
+            <Group justify="space-between">
+              <Text fw={600}>Joint pots total</Text>
+              <Text fw={600}>{formatMoney(plan.jointPotFundingTotal, money)}</Text>
+            </Group>
+          </Card>
+
+          <Card withBorder padding="md">
+            <Stack gap="sm">
+              <Title order={4}>Standing orders</Title>
+              {[...potsByOwner.entries()].map(([ownerId, pots]) => {
+                const owner = memberById.get(ownerId)
+                return (
+                  <Stack key={ownerId} gap={4}>
+                    <Text size="xs" fw={700} c="dimmed" tt="uppercase">
+                      {owner?.displayName ?? ownerId}
+                    </Text>
+                    <Stack gap={2}>
+                      {pots.map((p) => (
+                        <Group key={p.potId} justify="space-between" px="xs" py={4}>
+                          <Group gap="xs">
+                            <Text size="sm">{p.name}</Text>
+                            {p.isDrawdown && (
+                              <Badge size="sm" color="grape" variant="light">
+                                savings
+                              </Badge>
+                            )}
+                          </Group>
+                          <Text size="sm">{formatMoney(p.fundingPerMonth, money)}/mo</Text>
+                        </Group>
+                      ))}
+                    </Stack>
+                  </Stack>
+                )
+              })}
+              {potsByOwner.size === 0 && (
+                <Text size="sm" c="dimmed">
+                  No standing orders needed yet.
+                </Text>
+              )}
+            </Stack>
+          </Card>
+        </>
+      )}
     </Stack>
   )
 }
