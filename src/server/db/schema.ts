@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 export const household = sqliteTable('household', {
   id: text('id').primaryKey(),
@@ -59,3 +59,31 @@ export const pot = sqliteTable('pot', {
 
 export type Category = typeof category.$inferSelect
 export type Pot = typeof pot.$inferSelect
+
+export const expense = sqliteTable('expense', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  recurrence: text('recurrence').notNull(), // 'monthly' | 'quarterly' | 'yearly'
+  note: text('note'),
+  active: integer('active').notNull().default(1),
+  dueAnchor: text('due_anchor'),            // YYYY-MM-DD of one known occurrence
+  dueReminderDays: integer('due_reminder_days'),
+  archivedAt: integer('archived_at'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+export const expenseShare = sqliteTable('expense_share', {
+  id: text('id').primaryKey(),
+  expenseId: text('expense_id').notNull().references(() => expense.id, { onDelete: 'cascade' }),
+  ownerId: text('owner_id').notNull().references(() => member.id),
+  amount: integer('amount').notNull(),      // minor units, per-recurrence cost for this owner
+  potId: text('pot_id').references(() => pot.id),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, (t) => ({
+  uniqExpenseOwner: uniqueIndex('expense_share_expense_owner').on(t.expenseId, t.ownerId),
+}))
+
+export type Expense = typeof expense.$inferSelect
+export type ExpenseShare = typeof expenseShare.$inferSelect

@@ -15,6 +15,13 @@
       "when": 1782680351872,
       "tag": "0001_dazzling_nightshade",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1782929816514,
+      "tag": "0002_salty_miracleman",
+      "breakpoints": true
     }
   ]
 }
