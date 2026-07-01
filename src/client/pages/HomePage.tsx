@@ -1,17 +1,24 @@
-import { Badge, Group, Stack, Text, Title } from '@mantine/core'
-import type { Household, Member } from '../server/db/schema'
+import { Badge, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { trpc } from '../trpc'
 
-interface MainAppProps {
-  household: Household
-  members: Member[]
-}
+export function HomePage() {
+  const ctx = trpc.bootstrap.context.useQuery()
 
-export function MainApp({ household, members }: MainAppProps) {
+  if (ctx.isLoading) {
+    return (
+      <Center h={200}>
+        <Loader />
+      </Center>
+    )
+  }
+
+  const household = ctx.data?.household
+  const members = ctx.data?.members ?? []
   const activeMembers = members.filter((m) => m.archivedAt === null)
 
   return (
     <Stack gap="lg" maw={600} mx="auto" mt="xl">
-      <Title order={2}>{household.displayName}</Title>
+      <Title order={2}>{household?.displayName ?? 'Household'}</Title>
       <Group gap="sm" wrap="wrap">
         {activeMembers.map((m) => (
           <Badge

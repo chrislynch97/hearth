@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { MantineProvider } from '@mantine/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { httpBatchLink } from '@trpc/client'
+import { BrowserRouter } from 'react-router-dom'
 import '@mantine/core/styles.css'
 import { trpc } from './trpc'
 import { theme } from './theme'
@@ -17,7 +18,9 @@ function Root() {
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <MantineProvider theme={theme} defaultColorScheme="auto">
-          <App />
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
         </MantineProvider>
       </QueryClientProvider>
     </trpc.Provider>
