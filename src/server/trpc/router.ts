@@ -4,6 +4,8 @@ import { householdRouter } from '../routers/household'
 import { membersRouter } from '../routers/members'
 import { categoriesRouter } from '../routers/categories'
 import { potsRouter } from '../routers/pots'
+import { expensesRouter } from '../routers/expenses'
+import { planRouter } from '../routers/plan'
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({ status: 'ok' as const })),
@@ -12,6 +14,8 @@ export const appRouter = router({
   members: membersRouter,
   categories: categoriesRouter,
   pots: potsRouter,
+  expenses: expensesRouter,
+  plan: planRouter,
 })
 
 export type AppRouter = typeof appRouter
