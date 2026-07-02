@@ -126,7 +126,7 @@ function MembersStep({ onNext, onBack }: MembersStepProps) {
       )}
       <Stack gap="xs">
         {activeMembers.map((m) => (
-          <Group key={m.id} justify="space-between" px="xs" py={6} style={{ borderRadius: 6, background: 'light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))' }}>
+          <Group key={m.id} justify="space-between" px="xs" py={6} style={{ borderRadius: 6, background: 'light-dark(var(--mantine-color-sand-0), var(--mantine-color-dark-6))' }}>
             <Group gap="xs">
               {m.color ? (
                 <div
@@ -143,7 +143,7 @@ function MembersStep({ onNext, onBack }: MembersStepProps) {
                 {m.displayName}
               </Text>
               {m.kind === 'joint' && (
-                <Badge size="xs" color="gray" variant="light">
+                <Badge size="xs" color="sand" variant="light">
                   joint
                 </Badge>
               )}
@@ -297,7 +297,7 @@ export function SetupWizard({ householdName, currencyCode }: SetupWizardProps) {
 
   return (
     <Stack gap="xl" maw={640} mx="auto" mt="xl">
-      <Title order={2}>Set up Hearthledger</Title>
+      <Title order={2}>Set up Hearth</Title>
       <Stepper active={active} allowNextStepsSelect={false}>
         <Stepper.Step label="Household" description="Name & currency">
           <HouseholdStep

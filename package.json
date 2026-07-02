@@ -1,10 +1,10 @@
 {
-  "name": "hearthledger",
+  "name": "hearth",
   "private": true,
   "license": "FSL-1.1-MIT",
   "type": "module",
   "scripts": {
-    "dev:client": "vite",
+    "dev:client": "vite --host",
     "dev:server": "tsx watch src/server/index.ts",
     "build": "vite build",
     "start": "tsx src/server/index.ts",

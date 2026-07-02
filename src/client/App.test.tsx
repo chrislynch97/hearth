@@ -13,9 +13,9 @@ describe('App shell', () => {
   it('renders the product title', () => {
     render(
       <Shell>
-        <h4>Hearthledger</h4>
+        <h4>Hearth</h4>
       </Shell>,
     )
-    expect(screen.getByText('Hearthledger')).toBeInTheDocument()
+    expect(screen.getByText('Hearth')).toBeInTheDocument()
   })
 })

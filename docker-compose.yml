@@ -1,5 +1,5 @@
 services:
-  hearthledger:
+  hearth:
     build: .
     ports:
       - "8787:8787"

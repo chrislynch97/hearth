@@ -332,7 +332,7 @@ function PotRow({ pot, members, categories }: PotRowProps) {
         wrap="nowrap"
         style={{
           borderRadius: 6,
-          background: 'light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))',
+          background: 'light-dark(var(--mantine-color-sand-0), var(--mantine-color-dark-6))',
         }}
       >
         <Group gap="xs" wrap="wrap">
@@ -358,7 +358,7 @@ function PotRow({ pot, members, categories }: PotRowProps) {
             </Badge>
           )}
           {pot.isDrawdown === 1 && (
-            <Badge size="sm" color="grape" variant="light">
+            <Badge size="sm" color="sand" variant="light">
               savings
             </Badge>
           )}

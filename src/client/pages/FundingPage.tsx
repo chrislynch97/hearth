@@ -53,7 +53,7 @@ export function FundingPage() {
           </Text>
 
           {plan.unassignedFundingPerMonth > 0 && (
-            <Alert color="yellow" title="Unassigned outgoings">
+            <Alert color="apricot" title="Unassigned outgoings">
               {formatMoney(plan.unassignedFundingPerMonth, money)} of outgoings isn't assigned to a pot.
             </Alert>
           )}
@@ -111,7 +111,7 @@ export function FundingPage() {
                           <Group gap="xs">
                             <Text size="sm">{p.name}</Text>
                             {p.isDrawdown && (
-                              <Badge size="sm" color="grape" variant="light">
+                              <Badge size="sm" color="sand" variant="light">
                                 savings
                               </Badge>
                             )}

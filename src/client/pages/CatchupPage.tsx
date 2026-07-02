@@ -135,7 +135,7 @@ function HistorySection({ money }: { money: MoneyFormat }) {
                 py={6}
                 style={{
                   borderRadius: 6,
-                  background: 'light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))',
+                  background: 'light-dark(var(--mantine-color-sand-0), var(--mantine-color-dark-6))',
                   opacity: isReversed ? 0.6 : 1,
                 }}
               >
@@ -155,7 +155,7 @@ function HistorySection({ money }: { money: MoneyFormat }) {
                     {b.transactionCount} txn{b.transactionCount === 1 ? '' : 's'}
                   </Text>
                   {isReversed && (
-                    <Badge size="sm" color="gray" variant="light">
+                    <Badge size="sm" color="sand" variant="light">
                       Reversed
                     </Badge>
                   )}
@@ -215,12 +215,12 @@ export function CatchupPage() {
       {!isLoading && backlog && (
         <>
           {hasBacklog ? (
-            <Alert color="orange" title="Reconciliation needed">
+            <Alert color="apricot" title="Reconciliation needed">
               You need to move {formatMoney(Math.abs(backlog.grandTotal), money)} across{' '}
               {backlog.perPot.length} pot{backlog.perPot.length === 1 ? '' : 's'}.
             </Alert>
           ) : (
-            <Alert color="green" title="All caught up">
+            <Alert color="moss" title="All caught up">
               Nothing to reconcile right now.
             </Alert>
           )}

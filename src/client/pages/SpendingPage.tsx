@@ -197,7 +197,7 @@ function QuickAddForm({
           </Alert>
         )}
         {successMessage && !error && (
-          <Alert color="green" title="Logged">
+          <Alert color="moss" title="Logged">
             {successMessage}
           </Alert>
         )}
@@ -272,7 +272,7 @@ function SpendRow({
         <Table.Td>{spend.description}</Table.Td>
         <Table.Td>{owner?.displayName ?? spend.ownerId}</Table.Td>
         <Table.Td>
-          <Text c={isRefund ? 'teal' : undefined} fw={isRefund ? 600 : undefined}>
+          <Text c={isRefund ? 'moss' : undefined} fw={isRefund ? 600 : undefined}>
             {isRefund ? '+' : ''}
             {formatMoney(Math.abs(spend.amount), money)}
           </Text>
@@ -282,7 +282,7 @@ function SpendRow({
             <Text size="sm">{pot.name}</Text>
           ) : (
             <Group gap="xs" wrap="nowrap">
-              <Badge size="sm" color="yellow" variant="light">
+              <Badge size="sm" color="apricot" variant="light">
                 Needs a pot
               </Badge>
               <AssignPotCell spend={spend} pots={pots} />
@@ -291,11 +291,11 @@ function SpendRow({
         </Table.Td>
         <Table.Td>
           {spend.reconciled === 1 ? (
-            <Badge size="sm" color="green" variant="light">
+            <Badge size="sm" color="moss" variant="light">
               Reconciled
             </Badge>
           ) : (
-            <Badge size="sm" color="gray" variant="light">
+            <Badge size="sm" color="sand" variant="light">
               Pending
             </Badge>
           )}

@@ -1,4 +1,4 @@
-# Hearthledger
+# Hearth
 
 Local-first, self-hostable household budgeting app.
 
