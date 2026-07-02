@@ -1,4 +1,6 @@
-import { ActionIcon, AppShell, Badge, Group, NavLink, Text, useMantineColorScheme } from '@mantine/core'
+import { ActionIcon, AppShell, Badge, Burger, Group, NavLink, Text, useMantineColorScheme } from '@mantine/core'
+import { useDisclosure } from '@mantine/hooks'
+import { useEffect } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { trpc } from '../trpc'
 import { hearthTokens } from '../theme'
@@ -32,6 +34,11 @@ export function AppLayout() {
   const ctx = trpc.bootstrap.context.useQuery()
   const backlogQuery = trpc.reconcile.backlog.useQuery()
   const location = useLocation()
+  const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure()
+
+  useEffect(() => {
+    closeMobile()
+  }, [location.pathname])
 
   const household = ctx.data?.household
   const members = (ctx.data?.members ?? []).filter((m) => m.archivedAt === null)
@@ -40,9 +47,14 @@ export function AppLayout() {
 
   return (
     <AppShell
-      navbar={{ width: 210, breakpoint: 'sm' }}
+      header={{ height: 52 }}
+      navbar={{ width: 210, breakpoint: 'sm', collapsed: { mobile: !mobileOpened } }}
       padding="xl"
       styles={{
+        header: {
+          backgroundColor: 'light-dark(var(--mantine-color-moss-6), var(--mantine-color-dark-7))',
+          borderBottom: 'none',
+        },
         navbar: {
           backgroundColor: 'light-dark(var(--mantine-color-moss-6), var(--mantine-color-dark-7))',
         },
@@ -51,6 +63,31 @@ export function AppLayout() {
         },
       }}
     >
+      <AppShell.Header hiddenFrom="sm">
+        <Group h="100%" px="md" justify="space-between">
+          <Group gap={10}>
+            <Burger
+              opened={mobileOpened}
+              onClick={toggleMobile}
+              size="sm"
+              color={hearthTokens.brand.linen}
+              aria-label="Toggle navigation"
+            />
+            <Text
+              size="lg"
+              fw={500}
+              style={{
+                fontFamily: 'var(--mantine-font-family-headings)',
+                color: hearthTokens.brand.linen,
+              }}
+            >
+              Hearth
+            </Text>
+          </Group>
+          <ThemeToggle />
+        </Group>
+      </AppShell.Header>
+
       <AppShell.Navbar>
         <AppShell.Section px="md" pt="xl" pb="lg">
           <Group gap={10}>

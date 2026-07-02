@@ -93,9 +93,10 @@ function ShareRowEditor({
       </Text>
       {rows.map((row) => {
         const member = memberById.get(row.ownerId)
+        const ownerPots = pots.filter((p) => p.ownerId === row.ownerId)
         const potOptions = [
           { value: '', label: 'No pot' },
-          ...pots.map((p) => ({ value: p.id, label: p.name })),
+          ...ownerPots.map((p) => ({ value: p.id, label: p.name })),
         ]
         return (
           <Group key={row.ownerId} grow align="flex-end" wrap="nowrap">
