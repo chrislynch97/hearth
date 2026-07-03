@@ -29,6 +29,9 @@ const NAV_ITEMS = [
   { to: '/funding', label: 'Funding' },
   { to: '/spending', label: 'Spending' },
   { to: '/catchup', label: 'Catch-up' },
+  { to: '/income', label: 'Income' },
+  { to: '/payslips', label: 'Payslips' },
+  { to: '/raises', label: 'Raises' },
 ]
 
 export function AppLayout() {
