@@ -1,6 +1,7 @@
 import { Center, Loader } from '@mantine/core'
 import { Route, Routes } from 'react-router-dom'
 import { trpc } from './trpc'
+import { LoginGate } from './LoginGate'
 import { SetupWizard } from './setup/SetupWizard'
 import { AppLayout } from './layout/AppLayout'
 import { HomePage } from './pages/HomePage'
@@ -16,6 +17,24 @@ import { ReportsPage } from './pages/ReportsPage'
 import { SettingsPage } from './pages/SettingsPage'
 
 export function App() {
+  const authStatus = trpc.auth.status.useQuery()
+
+  if (authStatus.isLoading) {
+    return (
+      <Center h={200}>
+        <Loader />
+      </Center>
+    )
+  }
+
+  if (authStatus.data?.passwordSet && !authStatus.data.authenticated) {
+    return <LoginGate />
+  }
+
+  return <AuthedApp />
+}
+
+function AuthedApp() {
   const ctx = trpc.bootstrap.context.useQuery()
 
   if (ctx.isLoading) {

@@ -8,6 +8,7 @@ import {
   Group,
   Modal,
   NumberInput,
+  PasswordInput,
   Select,
   Stack,
   Table,
@@ -387,6 +388,124 @@ function DataSection() {
 }
 
 // ---------------------------------------------------------------------------
+// Security (optional shared password)
+// ---------------------------------------------------------------------------
+
+function SecuritySection() {
+  const utils = trpc.useUtils()
+  const statusQuery = trpc.auth.status.useQuery()
+  const setPassword = trpc.auth.setPassword.useMutation()
+  const clearPassword = trpc.auth.clearPassword.useMutation()
+  const logout = trpc.auth.logout.useMutation()
+
+  const passwordSet = statusQuery.data?.passwordSet ?? false
+
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  function reset() {
+    setCurrent('')
+    setNext('')
+    setConfirm('')
+  }
+
+  async function handleSet() {
+    setError('')
+    setMessage('')
+    if (next.length < 1) return setError('Enter a new password.')
+    if (next !== confirm) return setError('Passwords do not match.')
+    try {
+      await setPassword.mutateAsync({ currentPassword: current || undefined, newPassword: next })
+      await utils.auth.status.invalidate()
+      setMessage(passwordSet ? 'Password changed.' : 'Password set.')
+      reset()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update password.')
+    }
+  }
+
+  async function handleClear() {
+    setError('')
+    setMessage('')
+    try {
+      await clearPassword.mutateAsync({ currentPassword: current })
+      await utils.auth.status.invalidate()
+      setMessage('Password removed.')
+      reset()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove password.')
+    }
+  }
+
+  async function handleLogout() {
+    await logout.mutateAsync()
+    await utils.auth.status.invalidate()
+  }
+
+  return (
+    <Card withBorder padding="md" radius="md">
+      <Group justify="space-between" mb="sm">
+        <Title order={4}>Security</Title>
+        {passwordSet && (
+          <Button size="xs" variant="default" onClick={() => void handleLogout()}>
+            Log out
+          </Button>
+        )}
+      </Group>
+      <Text size="xs" c="dimmed" mb="sm">
+        An optional single password for everyone who opens this household. For internet exposure, put
+        it behind a reverse proxy or Tailscale.
+      </Text>
+      <Stack gap="sm">
+        {passwordSet && (
+          <PasswordInput
+            label="Current password"
+            value={current}
+            onChange={(e) => setCurrent(e.currentTarget.value)}
+          />
+        )}
+        <Group grow>
+          <PasswordInput
+            label={passwordSet ? 'New password' : 'Password'}
+            value={next}
+            onChange={(e) => setNext(e.currentTarget.value)}
+          />
+          <PasswordInput label="Confirm" value={confirm} onChange={(e) => setConfirm(e.currentTarget.value)} />
+        </Group>
+        {message && (
+          <Alert color="moss" variant="light">
+            {message}
+          </Alert>
+        )}
+        {error && (
+          <Alert color="red" title="Error">
+            {error}
+          </Alert>
+        )}
+        <Group justify="flex-end" gap="sm">
+          {passwordSet && (
+            <Button
+              variant="light"
+              color="red"
+              loading={clearPassword.isPending}
+              onClick={() => void handleClear()}
+            >
+              Remove password
+            </Button>
+          )}
+          <Button loading={setPassword.isPending} onClick={() => void handleSet()}>
+            {passwordSet ? 'Change password' : 'Set password'}
+          </Button>
+        </Group>
+      </Stack>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // About
 // ---------------------------------------------------------------------------
 
@@ -427,6 +546,7 @@ export function SettingsPage() {
       <Title order={2}>Settings</Title>
       <GeneralSection />
       <MembersSection />
+      <SecuritySection />
       <DataSection />
       <AboutSection />
     </Stack>
