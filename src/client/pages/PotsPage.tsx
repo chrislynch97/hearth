@@ -206,9 +206,10 @@ interface PotRowProps {
   pot: Pot
   members: Member[]
   categories: Category[]
+  unused: boolean
 }
 
-function PotRow({ pot, members, categories }: PotRowProps) {
+function PotRow({ pot, members, categories, unused }: PotRowProps) {
   const utils = trpc.useUtils()
   const [editing, setEditing] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
@@ -360,6 +361,16 @@ function PotRow({ pot, members, categories }: PotRowProps) {
           {pot.isDrawdown === 1 && (
             <Badge size="sm" color="sand" variant="light">
               savings
+            </Badge>
+          )}
+          {unused && (
+            <Badge
+              size="sm"
+              variant="outline"
+              color="gray"
+              title="Never referenced by an outgoing, spend, or reconciliation — safe to delete"
+            >
+              unused
             </Badge>
           )}
           {pot.note && (
@@ -519,11 +530,15 @@ function PotsPanel({
   pots,
   categories,
   members,
+  usedIds,
+  usageReady,
   isLoading,
 }: {
   pots: Pot[]
   categories: Category[]
   members: Member[]
+  usedIds: Set<string>
+  usageReady: boolean
   isLoading: boolean
 }) {
   const groups = new Map<string | null, Pot[]>()
@@ -535,11 +550,19 @@ function PotsPanel({
   }
 
   const orderedCategoryIds = categories.map((c) => c.id)
+  const unusedCount = usageReady ? pots.filter((p) => !usedIds.has(p.id)).length : 0
 
   return (
     <Card withBorder padding="md">
       <Stack gap="sm">
-        <Title order={4}>Pots</Title>
+        <Group justify="space-between" align="center">
+          <Title order={4}>Pots</Title>
+          {unusedCount > 0 && (
+            <Text size="xs" c="dimmed">
+              {unusedCount} unused — never referenced by an outgoing or spend, safe to delete
+            </Text>
+          )}
+        </Group>
         {isLoading && (
           <Center>
             <Loader size="sm" />
@@ -562,7 +585,13 @@ function PotsPanel({
                 </Text>
                 <Stack gap={2}>
                   {items.map((p) => (
-                    <PotRow key={p.id} pot={p} members={members} categories={categories} />
+                    <PotRow
+                      key={p.id}
+                      pot={p}
+                      members={members}
+                      categories={categories}
+                      unused={usageReady && !usedIds.has(p.id)}
+                    />
                   ))}
                 </Stack>
               </Stack>
@@ -575,7 +604,13 @@ function PotsPanel({
               </Text>
               <Stack gap={2}>
                 {(groups.get(null) ?? []).map((p) => (
-                  <PotRow key={p.id} pot={p} members={members} categories={categories} />
+                  <PotRow
+                    key={p.id}
+                    pot={p}
+                    members={members}
+                    categories={categories}
+                    unused={usageReady && !usedIds.has(p.id)}
+                  />
                 ))}
               </Stack>
             </Stack>
@@ -595,19 +630,23 @@ export function PotsPage() {
   const categoriesQuery = trpc.categories.list.useQuery()
   const potsQuery = trpc.pots.list.useQuery()
   const membersQuery = trpc.members.list.useQuery()
+  const usedIdsQuery = trpc.pots.usedIds.useQuery()
 
   const categories = categoriesQuery.data ?? []
   const pots = potsQuery.data ?? []
   const members = (membersQuery.data ?? []).filter((m) => m.archivedAt === null)
+  const usedIds = new Set(usedIdsQuery.data ?? [])
 
   return (
-    <Stack gap="lg" maw={900} mx="auto" mt="xl">
+    <Stack gap="lg" maw={900} mx="auto">
       <Title order={2}>Pots &amp; Categories</Title>
       <CategoriesPanel categories={categories} isLoading={categoriesQuery.isLoading} />
       <PotsPanel
         pots={pots}
         categories={categories}
         members={members}
+        usedIds={usedIds}
+        usageReady={usedIdsQuery.isSuccess}
         isLoading={potsQuery.isLoading || membersQuery.isLoading}
       />
     </Stack>

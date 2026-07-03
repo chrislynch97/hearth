@@ -203,7 +203,7 @@ export function CatchupPage() {
   const hasBacklog = !!backlog && (backlog.perPot.length > 0 || backlog.unassigned.count > 0)
 
   return (
-    <Stack gap="lg" maw={900} mx="auto" mt="xl">
+    <Stack gap="lg" maw={900} mx="auto">
       <Title order={2}>Catch-up</Title>
 
       {isLoading && (

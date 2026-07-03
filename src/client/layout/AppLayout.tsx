@@ -5,7 +5,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import { trpc } from '../trpc'
 import { hearthTokens } from '../theme'
 
-function ThemeToggle() {
+function ThemeToggle({ visibleFrom }: { visibleFrom?: string }) {
   const { colorScheme, toggleColorScheme } = useMantineColorScheme()
   const isDark = colorScheme === 'dark'
   return (
@@ -14,6 +14,7 @@ function ThemeToggle() {
       size="sm"
       onClick={toggleColorScheme}
       aria-label="Toggle colour scheme"
+      visibleFrom={visibleFrom}
       style={{ color: hearthTokens.brand.linen, opacity: 0.65 }}
     >
       {isDark ? '☀' : '☾'}
@@ -47,7 +48,7 @@ export function AppLayout() {
 
   return (
     <AppShell
-      header={{ height: 52 }}
+      header={{ height: { base: 52, sm: 0 } }}
       navbar={{ width: 210, breakpoint: 'sm', collapsed: { mobile: !mobileOpened } }}
       padding="xl"
       styles={{
@@ -182,7 +183,8 @@ export function AppLayout() {
                 {household?.displayName ?? 'Hearth'}
               </Text>
             </Group>
-            <ThemeToggle />
+            {/* Mobile shows its own toggle in the header, so only render this on desktop. */}
+            <ThemeToggle visibleFrom="sm" />
           </Group>
         </AppShell.Section>
       </AppShell.Navbar>

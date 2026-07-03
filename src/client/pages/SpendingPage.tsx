@@ -457,7 +457,7 @@ export function SpendingPage() {
   const isLoading = membersQuery.isLoading || potsQuery.isLoading
 
   return (
-    <Stack gap="lg" maw={900} mx="auto" mt="xl">
+    <Stack gap="lg" maw={900} mx="auto">
       <Title order={2}>Spending</Title>
 
       {isLoading && (

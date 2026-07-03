@@ -208,6 +208,27 @@ describe('pots router', () => {
     })
   })
 
+  it('usedIds omits pots with no references, includes pots used by a spend', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db })
+
+    const members = await caller.members.list()
+    const joint = members.find((m) => m.kind === 'joint')!
+
+    const used = await caller.pots.create({ name: 'Groceries', ownerId: joint.id })
+    const unused = await caller.pots.create({ name: 'Never Used', ownerId: joint.id })
+
+    // Nothing references either pot yet.
+    expect(await caller.pots.usedIds()).toEqual([])
+
+    await caller.spends.add({ description: 'Aldi', amount: 1200, ownerId: joint.id, potId: used.id })
+
+    const ids = await caller.pots.usedIds()
+    expect(ids).toContain(used.id)
+    expect(ids).not.toContain(unused.id)
+  })
+
   it('create with a person member as owner works', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)

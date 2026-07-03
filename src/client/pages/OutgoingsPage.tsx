@@ -424,7 +424,7 @@ export function OutgoingsPage() {
   }
 
   return (
-    <Stack gap="lg" maw={900} mx="auto" mt="xl">
+    <Stack gap="lg" maw={900} mx="auto">
       <Group justify="space-between">
         <Title order={2}>Outgoings</Title>
         <Button onClick={openAdd}>Add outgoing</Button>

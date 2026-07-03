@@ -1,4 +1,4 @@
-import { createTheme, type MantineColorsTuple } from '@mantine/core'
+import { createTheme, Select, type MantineColorsTuple } from '@mantine/core'
 
 /**
  * Hearth — Mantine theme (brand v1)
@@ -54,6 +54,12 @@ export const theme = createTheme({
 
   defaultRadius: 'md',
   radius: { xs: '6px', sm: '9px', md: '12px', lg: '16px', xl: '20px' },
+
+  components: {
+    // Every Select is searchable by default, so long lists (pots, currencies,
+    // owners) can be typed into instead of scrolled. Override per-instance if not wanted.
+    Select: Select.extend({ defaultProps: { searchable: true } }),
+  },
 })
 
 /**

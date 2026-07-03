@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { asc, eq, isNull, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
-import { pot, member } from '../db/schema'
+import { pot, member, expenseShare, spendTransaction, reconciliationBatch } from '../db/schema'
 import { newId } from '../../shared/ids'
 
 export const potsRouter = router({
@@ -12,6 +12,21 @@ export const potsRouter = router({
       .from(pot)
       .where(isNull(pot.archivedAt))
       .orderBy(asc(pot.sortOrder), asc(pot.name))
+  }),
+
+  // Pots referenced by an outgoing share, a spend, or a reconciliation batch.
+  // Anything not in this set has never been used and is safe to delete.
+  usedIds: publicProcedure.query(async ({ ctx }) => {
+    const [shares, spends, batches] = await Promise.all([
+      ctx.db.select({ potId: expenseShare.potId }).from(expenseShare),
+      ctx.db.select({ potId: spendTransaction.potId }).from(spendTransaction),
+      ctx.db.select({ potId: reconciliationBatch.potId }).from(reconciliationBatch),
+    ])
+    const used = new Set<string>()
+    for (const row of [...shares, ...spends, ...batches]) {
+      if (row.potId) used.add(row.potId)
+    }
+    return [...used]
   }),
 
   create: publicProcedure
