@@ -44,6 +44,11 @@ describe('formatMoney', () => {
   it('formats negative amounts', () => {
     expect(formatMoney(-500, { symbol: '£', decimalPlaces: 2, locale: 'en-GB' })).toBe('-£5.00')
   })
+  it('groups thousands with commas', () => {
+    expect(formatMoney(123456789, { symbol: '£', decimalPlaces: 2, locale: 'en-GB' })).toBe('£1,234,567.89')
+    expect(formatMoney(-123456, { symbol: '£', decimalPlaces: 2, locale: 'en-GB' })).toBe('-£1,234.56')
+    expect(formatMoney(100000, { symbol: '£', decimalPlaces: 0, locale: 'en-GB' })).toBe('£100,000')
+  })
 })
 
 describe('allocate', () => {

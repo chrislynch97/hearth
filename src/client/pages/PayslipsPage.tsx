@@ -3,6 +3,7 @@ import {
   ActionIcon,
   Alert,
   Badge,
+  Box,
   Button,
   Card,
   Center,
@@ -26,6 +27,7 @@ import { formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { subtractMonths } from '../../shared/dates'
 import { useMoney } from '../useMoney'
 import type { MoneyFormat } from '../useMoney'
+import { hearthTokens } from '../theme'
 import type { Member, PayslipComponentType } from '../../server/db/schema'
 import type { PayslipWithLines } from '../../server/routers/payslips'
 
@@ -42,15 +44,28 @@ const KIND_OPTIONS = [
 function ComponentManager({ ownerId, components }: { ownerId: string; components: PayslipComponentType[] }) {
   const utils = trpc.useUtils()
   const create = trpc.payslipComponents.create.useMutation()
+  const update = trpc.payslipComponents.update.useMutation()
   const archive = trpc.payslipComponents.archive.useMutation()
 
   const [name, setName] = useState('')
   const [kind, setKind] = useState<'earning' | 'deduction' | 'employer_info'>('earning')
   const [isVariable, setIsVariable] = useState(false)
   const [error, setError] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
 
   async function invalidate() {
     await Promise.all([utils.payslipComponents.list.invalidate(), utils.income.overview.invalidate()])
+  }
+
+  async function handleRename(id: string) {
+    const trimmed = editName.trim()
+    const original = components.find((c) => c.id === id)?.name
+    if (trimmed && trimmed !== original) {
+      await update.mutateAsync({ id, name: trimmed })
+      await invalidate()
+    }
+    setEditingId(null)
   }
 
   async function handleAdd() {
@@ -67,29 +82,63 @@ function ComponentManager({ ownerId, components }: { ownerId: string; components
       <Stack gap={2}>
         {components.map((c) => (
           <Group key={c.id} justify="space-between" px="xs" py={4} wrap="nowrap">
-            <Group gap="xs">
-              <Text size="sm">{c.name}</Text>
-              <Badge size="xs" variant="light" color={c.kind === 'deduction' ? 'apricot' : c.kind === 'employer_info' ? 'gray' : 'moss'}>
-                {c.kind === 'employer_info' ? 'employer' : c.kind}
-              </Badge>
-              {c.isVariable === 1 && (
-                <Badge size="xs" variant="outline" color="gray">
-                  variable
-                </Badge>
-              )}
-            </Group>
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              size="sm"
-              aria-label={`Remove ${c.name}`}
-              onClick={async () => {
-                await archive.mutateAsync({ id: c.id })
-                await invalidate()
-              }}
-            >
-              ×
-            </ActionIcon>
+            {editingId === c.id ? (
+              <Group gap="xs" style={{ flex: 1 }} wrap="nowrap">
+                <TextInput
+                  size="xs"
+                  value={editName}
+                  onChange={(e) => setEditName(e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void handleRename(c.id)
+                    if (e.key === 'Escape') setEditingId(null)
+                  }}
+                  autoFocus
+                  style={{ flex: 1 }}
+                />
+                <Button size="xs" onClick={() => void handleRename(c.id)} loading={update.isPending}>
+                  Save
+                </Button>
+              </Group>
+            ) : (
+              <>
+                <Group gap="xs">
+                  <Text size="sm">{c.name}</Text>
+                  <Badge size="xs" variant="light" color={c.kind === 'deduction' ? 'apricot' : c.kind === 'employer_info' ? 'gray' : 'moss'}>
+                    {c.kind === 'employer_info' ? 'employer' : c.kind}
+                  </Badge>
+                  {c.isVariable === 1 && (
+                    <Badge size="xs" variant="outline" color="gray">
+                      variable
+                    </Badge>
+                  )}
+                </Group>
+                <Group gap={4} wrap="nowrap">
+                  <ActionIcon
+                    variant="subtle"
+                    size="sm"
+                    aria-label={`Rename ${c.name}`}
+                    onClick={() => {
+                      setEditingId(c.id)
+                      setEditName(c.name)
+                    }}
+                  >
+                    ✎
+                  </ActionIcon>
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    size="sm"
+                    aria-label={`Remove ${c.name}`}
+                    onClick={async () => {
+                      await archive.mutateAsync({ id: c.id })
+                      await invalidate()
+                    }}
+                  >
+                    ×
+                  </ActionIcon>
+                </Group>
+              </>
+            )}
           </Group>
         ))}
         {components.length === 0 && (
@@ -310,6 +359,46 @@ function PayslipModal({ opened, onClose, ownerId, components, lastPayslip, paysl
 }
 
 // ---------------------------------------------------------------------------
+// Net-pay trend
+// ---------------------------------------------------------------------------
+
+function NetTrendCard({ payslips, money }: { payslips: PayslipWithLines[]; money: MoneyFormat }) {
+  const chronological = [...payslips].sort((a, b) => a.payDate.localeCompare(b.payDate))
+  if (chronological.length < 2) return null
+  const max = Math.max(1, ...chronological.map((p) => p.totals.effectiveNet))
+
+  return (
+    <Card withBorder padding="md" radius="md">
+      <Title order={4} mb="sm">
+        Net pay over time
+      </Title>
+      <Group gap={6} align="flex-end" h={110} wrap="nowrap">
+        {chronological.map((p) => (
+          <Box key={p.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <Box
+              title={`${p.periodLabel || p.payDate}: ${formatMoney(p.totals.effectiveNet, money)}`}
+              style={{
+                width: '100%',
+                maxWidth: 40,
+                height: `${Math.max(2, (p.totals.effectiveNet / max) * 84)}px`,
+                borderRadius: 3,
+                backgroundColor: p.hasVariablePay ? hearthTokens.brand.apricot : hearthTokens.brand.moss,
+              }}
+            />
+            <Text size="9px" c="dimmed">
+              {p.payDate.slice(2, 7)}
+            </Text>
+          </Box>
+        ))}
+      </Group>
+      <Text size="xs" c="dimmed" mt={4}>
+        Apricot bars include variable pay (bonus / overtime).
+      </Text>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // PayslipsPage
 // ---------------------------------------------------------------------------
 
@@ -412,6 +501,8 @@ export function PayslipsPage() {
       {activeOwner && !payslipsQuery.isLoading && payslips.length === 0 && components.length > 0 && (
         <Text c="dimmed">No payslips yet. Use “Add payslip” to record one.</Text>
       )}
+
+      {payslips.length > 0 && <NetTrendCard payslips={payslips} money={money} />}
 
       {payslips.length > 0 && (
         <Card withBorder padding="md">

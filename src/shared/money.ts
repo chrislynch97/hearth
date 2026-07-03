@@ -35,7 +35,8 @@ export function formatMoney(
   const intPart = Math.floor(absMinor / factor)
   const fracPart = absMinor % factor
 
-  const intStr = intPart.toString()
+  // Group the integer part in threes (deterministic; no toLocaleString).
+  const intStr = intPart.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
   const fracStr = opts.decimalPlaces > 0
     ? '.' + fracPart.toString().padStart(opts.decimalPlaces, '0')
     : ''

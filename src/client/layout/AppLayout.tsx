@@ -22,19 +22,68 @@ function ThemeToggle({ visibleFrom }: { visibleFrom?: string }) {
   )
 }
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Overview' },
-  { to: '/pots', label: 'Pots' },
-  { to: '/outgoings', label: 'Outgoings' },
-  { to: '/funding', label: 'Funding' },
-  { to: '/spending', label: 'Spending' },
-  { to: '/catchup', label: 'Catch-up' },
-  { to: '/income', label: 'Income' },
-  { to: '/payslips', label: 'Payslips' },
-  { to: '/raises', label: 'Raises' },
-  { to: '/reports', label: 'Reports' },
-  { to: '/settings', label: 'Settings' },
+interface NavItem {
+  to: string
+  label: string
+}
+
+// Grouped navigation (spec §5.6): Plan · Track · People & income · Reports · Settings.
+const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
+  { title: null, items: [{ to: '/', label: 'Overview' }] },
+  {
+    title: 'Plan',
+    items: [
+      { to: '/pots', label: 'Pots' },
+      { to: '/outgoings', label: 'Outgoings' },
+      { to: '/funding', label: 'Funding' },
+    ],
+  },
+  {
+    title: 'Track',
+    items: [
+      { to: '/spending', label: 'Spending' },
+      { to: '/catchup', label: 'Catch-up' },
+    ],
+  },
+  {
+    title: 'People & income',
+    items: [
+      { to: '/income', label: 'Income' },
+      { to: '/payslips', label: 'Payslips' },
+      { to: '/raises', label: 'Raises' },
+    ],
+  },
+  {
+    title: null,
+    items: [
+      { to: '/reports', label: 'Reports' },
+      { to: '/settings', label: 'Settings' },
+    ],
+  },
 ]
+
+/** The hearth mark, optically nudged up so it sits on the text's cap height. */
+function HearthMark({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" style={{ marginTop: -3, flexShrink: 0 }}>
+      <polyline
+        points="8,25 24,10 40,25"
+        stroke={hearthTokens.brand.linen}
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M14 25 V40 H34 V25"
+        stroke={hearthTokens.brand.linen}
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="24" cy="32" r="3.8" fill={hearthTokens.brand.apricot} />
+    </svg>
+  )
+}
 
 export function AppLayout() {
   const ctx = trpc.bootstrap.context.useQuery()
@@ -96,27 +145,12 @@ export function AppLayout() {
 
       <AppShell.Navbar>
         <AppShell.Section px="md" pt="xl" pb="lg">
-          <Group gap={10}>
-            <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
-              <polyline
-                points="8,25 24,10 40,25"
-                stroke={hearthTokens.brand.linen}
-                strokeWidth="3.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M14 25 V40 H34 V25"
-                stroke={hearthTokens.brand.linen}
-                strokeWidth="3.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <circle cx="24" cy="32" r="3.8" fill={hearthTokens.brand.apricot} />
-            </svg>
+          <Group gap={8} align="center">
+            <HearthMark />
             <Text
               size="xl"
               fw={500}
+              lh={1}
               style={{
                 fontFamily: 'var(--mantine-font-family-headings)',
                 color: hearthTokens.brand.linen,
@@ -127,38 +161,56 @@ export function AppLayout() {
           </Group>
         </AppShell.Section>
 
-        <AppShell.Section grow px="xs">
-          {NAV_ITEMS.map((item) => {
-            const isActive = location.pathname === item.to
-            return (
-              <NavLink
-                key={item.to}
-                component={Link}
-                to={item.to}
-                label={item.label}
-                active={isActive}
-                variant="light"
-                style={{
-                  borderRadius: 8,
-                  marginBottom: 2,
-                  backgroundColor: isActive ? 'rgba(239, 237, 227, 0.18)' : undefined,
-                }}
-                styles={{
-                  label: {
-                    color: hearthTokens.brand.linen,
-                    fontWeight: isActive ? 500 : 400,
-                  },
-                }}
-                rightSection={
-                  item.to === '/catchup' && backlogCount > 0 ? (
-                    <Badge size="sm" color="apricot" variant="filled" circle>
-                      {backlogCount}
-                    </Badge>
-                  ) : undefined
-                }
-              />
-            )
-          })}
+        <AppShell.Section grow px="xs" style={{ overflowY: 'auto' }}>
+          {NAV_SECTIONS.map((section, i) => (
+            <div key={section.title ?? `group-${i}`} style={{ marginBottom: 4 }}>
+              {section.title && (
+                <Text
+                  size="xs"
+                  fw={700}
+                  tt="uppercase"
+                  px="sm"
+                  mt={i === 0 ? 0 : 14}
+                  mb={4}
+                  ff="monospace"
+                  style={{ color: hearthTokens.brand.linen, opacity: 0.45, letterSpacing: '0.06em' }}
+                >
+                  {section.title}
+                </Text>
+              )}
+              {section.items.map((item) => {
+                const isActive = location.pathname === item.to
+                return (
+                  <NavLink
+                    key={item.to}
+                    component={Link}
+                    to={item.to}
+                    label={item.label}
+                    active={isActive}
+                    variant="light"
+                    style={{
+                      borderRadius: 8,
+                      marginBottom: 2,
+                      backgroundColor: isActive ? 'rgba(239, 237, 227, 0.18)' : undefined,
+                    }}
+                    styles={{
+                      label: {
+                        color: hearthTokens.brand.linen,
+                        fontWeight: isActive ? 500 : 400,
+                      },
+                    }}
+                    rightSection={
+                      item.to === '/catchup' && backlogCount > 0 ? (
+                        <Badge size="sm" color="apricot" variant="filled" circle>
+                          {backlogCount}
+                        </Badge>
+                      ) : undefined
+                    }
+                  />
+                )
+              })}
+            </div>
+          ))}
         </AppShell.Section>
 
         <AppShell.Section px="md" pb="md" pt="sm">
