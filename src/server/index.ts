@@ -18,7 +18,8 @@ async function main() {
   await runMigrations()
   await ensureSeed(db)
 
-  const app = Fastify({ logger: true })
+  // 64 MB body limit so restoring a large JSON export isn't rejected (default 1 MB).
+  const app = Fastify({ logger: true, bodyLimit: 64 * 1024 * 1024 })
 
   await app.register(fastifyTRPCPlugin, {
     prefix: '/trpc',

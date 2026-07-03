@@ -43,6 +43,18 @@ export function formatMoney(
   return `${sign}${opts.symbol}${intStr}${fracStr}`
 }
 
+/** Rescale a minor-units amount when the currency's decimal places change.
+ *  Increasing places is exact; decreasing rounds half away from zero (lossy). */
+export function rescaleMinor(amount: number, fromDecimalPlaces: number, toDecimalPlaces: number): number {
+  const delta = toDecimalPlaces - fromDecimalPlaces
+  if (delta === 0) return amount
+  if (delta > 0) return amount * 10 ** delta
+  const factor = 10 ** -delta
+  const scaled = amount / factor
+  const result = Math.sign(scaled) * Math.round(Math.abs(scaled))
+  return result === 0 ? 0 : result
+}
+
 /** Split `total` (minor units) across `weights`, largest-remainder so the parts sum to exactly `total`. */
 export function allocate(total: number, weights: number[]): number[] {
   const weightSum = weights.reduce((a, b) => a + b, 0)

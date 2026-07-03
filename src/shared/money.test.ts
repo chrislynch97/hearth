@@ -1,5 +1,23 @@
 import { describe, it, expect } from 'vitest'
-import { toMinor, fromMinor, formatMoney, allocate } from './money'
+import { toMinor, fromMinor, formatMoney, allocate, rescaleMinor } from './money'
+
+describe('rescaleMinor', () => {
+  it('is a no-op when decimal places are unchanged', () => {
+    expect(rescaleMinor(1250, 2, 2)).toBe(1250)
+  })
+  it('scales up exactly when increasing decimal places', () => {
+    // £12.50 as 2dp = 1250 → as 3dp = 12500
+    expect(rescaleMinor(1250, 2, 3)).toBe(12500)
+  })
+  it('scales down with rounding when decreasing decimal places', () => {
+    // 1250 (2dp) → 0dp: 12.5 → 13 (round half away from zero)
+    expect(rescaleMinor(1250, 2, 0)).toBe(13)
+    expect(rescaleMinor(-1250, 2, 0)).toBe(-13)
+  })
+  it('handles negative amounts when scaling up', () => {
+    expect(rescaleMinor(-500, 2, 3)).toBe(-5000)
+  })
+})
 
 describe('toMinor', () => {
   it('converts major units to integer minor units', () => {
