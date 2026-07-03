@@ -33,6 +33,7 @@ const NAV_ITEMS = [
   { to: '/payslips', label: 'Payslips' },
   { to: '/raises', label: 'Raises' },
   { to: '/reports', label: 'Reports' },
+  { to: '/settings', label: 'Settings' },
 ]
 
 export function AppLayout() {
