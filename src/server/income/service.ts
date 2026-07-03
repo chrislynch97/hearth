@@ -33,19 +33,16 @@ export interface MemberIncome {
   monthlyIncome: number
 }
 
-export async function computeIncomeByMember(
-  db: DB,
-  asOf: string = todayIso(),
-): Promise<Map<string, MemberIncome>> {
-  const [householdRow] = await db.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
-  const basis = (householdRow?.incomeBasisDefault ?? 'regular_net') as IncomeBasis
+export interface OwnedPayslipSummary extends PayslipSummary {
+  ownerId: string
+}
 
-  const members = await db.select().from(member).where(isNull(member.archivedAt))
+/** Load every payslip as a normalised summary (net/gross/variability resolved
+ *  from its lines' components). Shared by income aggregation and the dashboard. */
+export async function loadPayslipSummaries(db: DB): Promise<OwnedPayslipSummary[]> {
   const payslips = await db.select().from(payslip)
   const lines = await db.select().from(payslipLine)
   const components = await db.select().from(payslipComponentType)
-  const raises = await db.select().from(raise)
-  const sources = await db.select().from(incomeSource).where(isNull(incomeSource.archivedAt))
 
   const componentById = new Map(components.map((c) => [c.id, c]))
   const linesByPayslip = new Map<string, typeof lines>()
@@ -55,8 +52,7 @@ export async function computeIncomeByMember(
     linesByPayslip.set(l.payslipId, arr)
   }
 
-  const payslipsByOwner = new Map<string, PayslipSummary[]>()
-  for (const p of payslips) {
+  return payslips.map((p) => {
     const pls = linesByPayslip.get(p.id) ?? []
     const totals = computePayslipTotals(
       pls.map((l) => ({
@@ -68,8 +64,25 @@ export async function computeIncomeByMember(
     const hasVariablePay = pls.some(
       (l) => componentById.get(l.componentId)?.isVariable === 1 && l.amount !== 0,
     )
+    return { ownerId: p.ownerId, payDate: p.payDate, effectiveNet: totals.effectiveNet, grossPay: totals.grossPay, hasVariablePay }
+  })
+}
+
+export async function computeIncomeByMember(
+  db: DB,
+  asOf: string = todayIso(),
+): Promise<Map<string, MemberIncome>> {
+  const [householdRow] = await db.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
+  const basis = (householdRow?.incomeBasisDefault ?? 'regular_net') as IncomeBasis
+
+  const members = await db.select().from(member).where(isNull(member.archivedAt))
+  const raises = await db.select().from(raise)
+  const sources = await db.select().from(incomeSource).where(isNull(incomeSource.archivedAt))
+
+  const payslipsByOwner = new Map<string, PayslipSummary[]>()
+  for (const p of await loadPayslipSummaries(db)) {
     const arr = payslipsByOwner.get(p.ownerId) ?? []
-    arr.push({ payDate: p.payDate, effectiveNet: totals.effectiveNet, grossPay: totals.grossPay, hasVariablePay })
+    arr.push({ payDate: p.payDate, effectiveNet: p.effectiveNet, grossPay: p.grossPay, hasVariablePay: p.hasVariablePay })
     payslipsByOwner.set(p.ownerId, arr)
   }
 

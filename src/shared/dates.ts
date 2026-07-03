@@ -19,6 +19,19 @@ export function subtractMonths(iso: string, months: number): string {
   return `${pad(targetYear, 4)}-${pad(targetMonth + 1, 2)}-${pad(day, 2)}`
 }
 
+/** Add a number of whole months (negative to subtract), clamping the day to the
+ *  last valid day of the target month. */
+export function addMonths(iso: string, months: number): string {
+  return subtractMonths(iso, -months)
+}
+
+/** Add a number of days (negative to subtract) to a `YYYY-MM-DD` date. */
+export function addDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number) as [number, number, number]
+  const dt = new Date(Date.UTC(y, m - 1, d + days))
+  return `${pad(dt.getUTCFullYear(), 4)}-${pad(dt.getUTCMonth() + 1, 2)}-${pad(dt.getUTCDate(), 2)}`
+}
+
 function daysInMonth(year: number, monthZeroBased: number): number {
   // Day 0 of the next month is the last day of this month.
   return new Date(Date.UTC(year, monthZeroBased + 1, 0)).getUTCDate()
