@@ -36,6 +36,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
       { to: '/pots', label: 'Pots' },
       { to: '/outgoings', label: 'Outgoings' },
       { to: '/funding', label: 'Funding' },
+      { to: '/upcoming', label: 'Upcoming' },
     ],
   },
   {

@@ -10,6 +10,9 @@ const INTERVAL_MONTHS: Record<ExpenseRecurrence, number> = {
   yearly: 12,
 }
 
+/** Fallback "due soon" horizon when an expense has no explicit reminder window. */
+const DEFAULT_REMINDER_DAYS = 7
+
 export interface UpcomingExpenseInput {
   id: string
   name: string
@@ -17,6 +20,8 @@ export interface UpcomingExpenseInput {
   dueAnchor: string | null
   /** Total per-recurrence cash-out (sum of the expense's shares). */
   amount: number
+  /** Days ahead to flag as "due soon"; null uses the default. */
+  reminderDays?: number | null
 }
 
 export interface UpcomingPayment {
@@ -25,6 +30,8 @@ export interface UpcomingPayment {
   date: string
   amount: number
   daysUntil: number
+  /** Within the expense's reminder window (or the default). */
+  dueSoon: boolean
 }
 
 function daysBetween(from: string, to: string): number {
@@ -59,13 +66,16 @@ export function projectUpcoming(input: {
   for (const e of expenses) {
     if (!e.dueAnchor) continue
     const interval = INTERVAL_MONTHS[e.recurrence]
+    const reminderWindow = e.reminderDays ?? DEFAULT_REMINDER_DAYS
     for (const date of occurrencesInRange(e.dueAnchor, interval, from, to)) {
+      const daysUntil = daysBetween(from, date)
       payments.push({
         expenseId: e.id,
         name: e.name,
         date,
         amount: e.amount,
-        daysUntil: daysBetween(from, date),
+        daysUntil,
+        dueSoon: daysUntil <= reminderWindow,
       })
     }
   }

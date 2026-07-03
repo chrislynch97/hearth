@@ -61,4 +61,20 @@ describe('projectUpcoming', () => {
     })
     expect(out[0]?.daysUntil).toBe(5)
   })
+
+  it('flags due-soon within the reminder window (or the 7-day default)', () => {
+    const [defaulted] = projectUpcoming({
+      expenses: [{ id: 'e1', name: 'A', recurrence: 'monthly', dueAnchor: '2026-06-16', amount: 1 }],
+      from: '2026-06-10',
+      to: '2026-06-30',
+    })
+    expect(defaulted?.dueSoon).toBe(true) // 6 days ≤ default 7
+
+    const [tight] = projectUpcoming({
+      expenses: [{ id: 'e1', name: 'A', recurrence: 'monthly', dueAnchor: '2026-06-16', amount: 1, reminderDays: 3 }],
+      from: '2026-06-10',
+      to: '2026-06-30',
+    })
+    expect(tight?.dueSoon).toBe(false) // 6 days > custom 3
+  })
 })

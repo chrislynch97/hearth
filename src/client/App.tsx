@@ -15,6 +15,7 @@ import { PayslipsPage } from './pages/PayslipsPage'
 import { RaisesPage } from './pages/RaisesPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { UpcomingPage } from './pages/UpcomingPage'
 
 export function App() {
   const authStatus = trpc.auth.status.useQuery()
@@ -61,6 +62,7 @@ function AuthedApp() {
         <Route path="pots" element={<PotsPage />} />
         <Route path="outgoings" element={<OutgoingsPage />} />
         <Route path="funding" element={<FundingPage />} />
+        <Route path="upcoming" element={<UpcomingPage />} />
         <Route path="spending" element={<SpendingPage />} />
         <Route path="catchup" element={<CatchupPage />} />
         <Route path="income" element={<IncomePage />} />

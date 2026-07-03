@@ -249,7 +249,7 @@ function UpcomingCard({
   upcoming,
   money,
 }: {
-  upcoming: Array<{ expenseId: string; name: string; date: string; amount: number; daysUntil: number }>
+  upcoming: Array<{ expenseId: string; name: string; date: string; amount: number; daysUntil: number; dueSoon: boolean }>
   money: MoneyFormat
 }) {
   if (upcoming.length === 0) return null
@@ -267,7 +267,7 @@ function UpcomingCard({
           <Group key={`${u.expenseId}-${i}`} justify="space-between" px="xs" py={4}>
             <Group gap="xs">
               <Text size="sm">{u.name}</Text>
-              <Badge size="sm" variant="light" color={u.daysUntil <= 7 ? 'apricot' : 'gray'}>
+              <Badge size="sm" variant="light" color={u.dueSoon ? 'apricot' : 'gray'}>
                 {u.daysUntil === 0 ? 'today' : `in ${u.daysUntil}d`}
               </Badge>
             </Group>

@@ -127,6 +127,7 @@ export const dashboardRouter = router({
         recurrence: e.recurrence as 'monthly' | 'quarterly' | 'yearly',
         dueAnchor: e.dueAnchor,
         amount: (sharesByExpense.get(e.id) ?? []).reduce((acc, s) => acc + s.amount, 0),
+        reminderDays: e.dueReminderDays,
       }))
       const upcoming = projectUpcoming({ expenses: upcomingExpenses, from: today, to: addDays(today, UPCOMING_HORIZON_DAYS) })
 
