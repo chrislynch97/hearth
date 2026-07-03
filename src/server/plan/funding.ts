@@ -25,6 +25,8 @@ export interface FundingMemberInput {
   kind: 'person' | 'joint'
   displayName: string
   jointContributionWeight: number | null
+  /** Monthly spendable income (spec §6.3); drives income-proportional split and remainder. */
+  monthlyIncome: number
 }
 
 export interface PotFunding {
@@ -41,6 +43,8 @@ export interface PersonFunding {
   personalPotFunding: number
   jointContribution: number
   setAside: number
+  monthlyIncome: number
+  remainder: number
 }
 
 export interface FundingPlan {
@@ -108,10 +112,13 @@ export function computeFundingPlan(input: {
     const customWeights = persons.map((p) => p.jointContributionWeight ?? 0)
     const allZero = customWeights.every((w) => w === 0)
     weights = allZero ? persons.map(() => 1) : customWeights
+  } else if (jointContributionBasis === 'income_proportional') {
+    // Split by each person's share of income; fall back to equal until income exists.
+    const incomeWeights = persons.map((p) => p.monthlyIncome)
+    const allZero = incomeWeights.every((w) => w <= 0)
+    weights = allZero ? persons.map(() => 1) : incomeWeights.map((w) => Math.max(w, 0))
   } else {
-    // 'equal' and 'income_proportional' (income data doesn't exist yet;
-    // will use monthlyIncome once income lands) both fall back to equal weights.
-    weights = persons.map(() => 1)
+    weights = persons.map(() => 1) // 'equal'
   }
 
   const jointShares = persons.length > 0 ? allocate(jointPotFundingTotal, weights) : []
@@ -119,12 +126,15 @@ export function computeFundingPlan(input: {
   const perPerson: PersonFunding[] = persons.map((person, i) => {
     const personalPotFunding = personalPotFundingByMemberId.get(person.id) ?? 0
     const jointContribution = jointShares[i] ?? 0
+    const setAside = personalPotFunding + jointContribution
     return {
       memberId: person.id,
       displayName: person.displayName,
       personalPotFunding,
       jointContribution,
-      setAside: personalPotFunding + jointContribution,
+      setAside,
+      monthlyIncome: person.monthlyIncome,
+      remainder: person.monthlyIncome - setAside,
     }
   })
 

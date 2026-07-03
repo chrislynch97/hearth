@@ -8,6 +8,11 @@ import { expensesRouter } from '../routers/expenses'
 import { planRouter } from '../routers/plan'
 import { spendsRouter } from '../routers/spends'
 import { reconcileRouter } from '../routers/reconcile'
+import { incomeSourcesRouter } from '../routers/incomeSources'
+import { payslipComponentsRouter } from '../routers/payslipComponents'
+import { payslipsRouter } from '../routers/payslips'
+import { raisesRouter } from '../routers/raises'
+import { incomeRouter } from '../routers/income'
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({ status: 'ok' as const })),
@@ -20,6 +25,11 @@ export const appRouter = router({
   plan: planRouter,
   spends: spendsRouter,
   reconcile: reconcileRouter,
+  incomeSources: incomeSourcesRouter,
+  payslipComponents: payslipComponentsRouter,
+  payslips: payslipsRouter,
+  raises: raisesRouter,
+  income: incomeRouter,
 })
 
 export type AppRouter = typeof appRouter

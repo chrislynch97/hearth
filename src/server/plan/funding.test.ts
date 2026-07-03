@@ -4,9 +4,9 @@ import { computeFundingPlan } from './funding'
 describe('computeFundingPlan', () => {
   it('computes pot funding, per-person split, joint contribution, and unassigned (equal basis)', () => {
     const members = [
-      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null },
-      { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: null },
-      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null },
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 0 },
+      { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: null, monthlyIncome: 0 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
     ]
 
     const pots = [
@@ -73,9 +73,9 @@ describe('computeFundingPlan', () => {
 
   it('splits joint contribution by custom weights (3:1)', () => {
     const members = [
-      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: 3 },
-      { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: 1 },
-      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null },
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: 3, monthlyIncome: 0 },
+      { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: 1, monthlyIncome: 0 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
     ]
 
     const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint', isDrawdown: false }]
@@ -110,8 +110,8 @@ describe('computeFundingPlan', () => {
 
   it('inactive expenses do not contribute to funding', () => {
     const members = [
-      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null },
-      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null },
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 0 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
     ]
     const pots = [{ id: 'alice-pot', name: 'Alice Personal', ownerId: 'alice', isDrawdown: false }]
     const expenses = [
@@ -130,8 +130,8 @@ describe('computeFundingPlan', () => {
 
   it('drawdown pots do not count toward personalPotFunding or jointPotFundingTotal', () => {
     const members = [
-      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null },
-      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null },
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 0 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
     ]
     const pots = [
       { id: 'alice-drawdown', name: 'Alice Drawdown', ownerId: 'alice', isDrawdown: true },
@@ -158,9 +158,9 @@ describe('computeFundingPlan', () => {
 
   it('income_proportional basis falls back to equal split (no income data yet)', () => {
     const members = [
-      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null },
-      { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: null },
-      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null },
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 0 },
+      { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: null, monthlyIncome: 0 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
     ]
     const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint', isDrawdown: false }]
     const expenses = [
@@ -186,9 +186,9 @@ describe('computeFundingPlan', () => {
 
   it('custom weights all zero falls back to equal split', () => {
     const members = [
-      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: 0 },
-      { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: 0 },
-      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null },
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: 0, monthlyIncome: 0 },
+      { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: 0, monthlyIncome: 0 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
     ]
     const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint', isDrawdown: false }]
     const expenses = [
@@ -206,8 +206,60 @@ describe('computeFundingPlan', () => {
     expect(bob.jointContribution).toBe(2500)
   })
 
+  it('income_proportional basis splits the joint contribution by each person\'s income share', () => {
+    const members = [
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 300000 },
+      { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: null, monthlyIncome: 100000 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
+    ]
+    const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint', isDrawdown: false }]
+    const expenses = [
+      {
+        recurrence: 'monthly' as const,
+        active: true,
+        shares: [{ ownerId: 'joint', amount: 4000, potId: 'joint-pot' }],
+      },
+    ]
+
+    const plan = computeFundingPlan({ pots, expenses, members, jointContributionBasis: 'income_proportional' })
+    const alice = plan.perPerson.find((p) => p.memberId === 'alice')!
+    const bob = plan.perPerson.find((p) => p.memberId === 'bob')!
+    // 3:1 income → 3000 / 1000 of the 4000 joint total
+    expect(alice.jointContribution).toBe(3000)
+    expect(bob.jointContribution).toBe(1000)
+    expect(alice.jointContribution + bob.jointContribution).toBe(plan.jointPotFundingTotal)
+  })
+
+  it('remainder is monthly income minus set-aside', () => {
+    const members = [
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 250000 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
+    ]
+    const pots = [
+      { id: 'alice-pot', name: 'Alice Personal', ownerId: 'alice', isDrawdown: false },
+      { id: 'joint-pot', name: 'Joint', ownerId: 'joint', isDrawdown: false },
+    ]
+    const expenses = [
+      {
+        recurrence: 'monthly' as const,
+        active: true,
+        shares: [
+          { ownerId: 'alice', amount: 40000, potId: 'alice-pot' },
+          { ownerId: 'joint', amount: 20000, potId: 'joint-pot' },
+        ],
+      },
+    ]
+
+    const plan = computeFundingPlan({ pots, expenses, members, jointContributionBasis: 'equal' })
+    const alice = plan.perPerson.find((p) => p.memberId === 'alice')!
+    // set-aside = 40000 personal + 20000 joint (only person) = 60000; remainder = 250000 − 60000
+    expect(alice.setAside).toBe(60000)
+    expect(alice.monthlyIncome).toBe(250000)
+    expect(alice.remainder).toBe(190000)
+  })
+
   it('no persons yields empty perPerson split', () => {
-    const members = [{ id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null }]
+    const members = [{ id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 }]
     const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint', isDrawdown: false }]
     const expenses = [
       {

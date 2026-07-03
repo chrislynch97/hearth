@@ -2,6 +2,7 @@ import { and, eq, isNull } from 'drizzle-orm'
 import { router, publicProcedure } from '../trpc/trpc'
 import { expense, expenseShare, household, member, pot } from '../db/schema'
 import { computeFundingPlan } from '../plan/funding'
+import { computeIncomeByMember } from '../income/service'
 import type { Recurrence } from '../../shared/recurrence'
 
 const HOUSEHOLD_ID = 'household'
@@ -16,6 +17,7 @@ export const planRouter = router({
       .where(and(isNull(expense.archivedAt), eq(expense.active, 1)))
 
     const members = await ctx.db.select().from(member).where(isNull(member.archivedAt))
+    const incomeByMember = await computeIncomeByMember(ctx.db)
 
     const [householdRow] = await ctx.db.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
     const jointContributionBasis = (householdRow?.jointContributionBasis ?? 'equal') as
@@ -46,6 +48,7 @@ export const planRouter = router({
         kind: m.kind as 'person' | 'joint',
         displayName: m.displayName,
         jointContributionWeight: m.jointContributionWeight,
+        monthlyIncome: incomeByMember.get(m.id)?.monthlyIncome ?? 0,
       })),
       jointContributionBasis,
     })
