@@ -12,6 +12,7 @@ import { CatchupPage } from './pages/CatchupPage'
 import { IncomePage } from './pages/IncomePage'
 import { PayslipsPage } from './pages/PayslipsPage'
 import { RaisesPage } from './pages/RaisesPage'
+import { ReportsPage } from './pages/ReportsPage'
 
 export function App() {
   const ctx = trpc.bootstrap.context.useQuery()
@@ -45,6 +46,7 @@ export function App() {
         <Route path="income" element={<IncomePage />} />
         <Route path="payslips" element={<PayslipsPage />} />
         <Route path="raises" element={<RaisesPage />} />
+        <Route path="reports" element={<ReportsPage />} />
       </Route>
     </Routes>
   )

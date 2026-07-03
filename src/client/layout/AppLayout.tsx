@@ -32,6 +32,7 @@ const NAV_ITEMS = [
   { to: '/income', label: 'Income' },
   { to: '/payslips', label: 'Payslips' },
   { to: '/raises', label: 'Raises' },
+  { to: '/reports', label: 'Reports' },
 ]
 
 export function AppLayout() {
