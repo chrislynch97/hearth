@@ -7,10 +7,11 @@ import { household } from '../db/schema'
 import { ALL_TABLES, MONEY_COLUMNS } from '../db/tables'
 import { ensureSeed } from '../db/seed'
 import { rescaleMinor } from '../../shared/money'
+import { buildSnapshot, EXPORT_VERSION } from '../db/snapshot'
+import { runBackup } from '../backup/runner'
 import type { DB } from '../db/client'
 
 const HOUSEHOLD_ID = 'household'
-const EXPORT_VERSION = 1
 const INSERT_CHUNK = 200
 
 // drizzle's dynamic-table typing is intentionally strict; these thin casts let us
@@ -30,11 +31,7 @@ async function runBatch(db: DB, statements: BatchStatement[]): Promise<void> {
 export const dataRouter = router({
   /** The portability contract: every table's rows as JSON. */
   export: publicProcedure.query(async ({ ctx }) => {
-    const tables: Record<string, Array<Record<string, unknown>>> = {}
-    for (const [name, table] of ALL_TABLES) {
-      tables[name] = (await ctx.db.select().from(table as SQLiteTable)) as Array<Record<string, unknown>>
-    }
-    return { version: EXPORT_VERSION, exportedAt: Date.now(), tables }
+    return buildSnapshot(ctx.db)
   }),
 
   /** Replace all data with a previously exported snapshot (validated, atomic). */
@@ -121,6 +118,11 @@ export const dataRouter = router({
 
       return { rescaled, decimalPlaces: toDp }
     }),
+
+  /** Write a JSON backup to disk now (the auto-backup, triggered manually). */
+  backupNow: publicProcedure.mutation(async ({ ctx }) => {
+    return runBackup(ctx.db)
+  }),
 
   /** Row counts per table + the database location, for the About screen. */
   stats: publicProcedure.query(async ({ ctx }) => {

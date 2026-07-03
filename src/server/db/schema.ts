@@ -10,6 +10,8 @@ export const household = sqliteTable('household', {
   budgetPeriodStartDay: integer('budget_period_start_day').notNull().default(1),
   passwordHash: text('password_hash'),
   themePreference: text('theme_preference').notNull().default('system'),
+  backupFrequency: text('backup_frequency').notNull().default('off'), // 'off' | 'daily' | 'weekly'
+  backupLastAt: integer('backup_last_at'),
   setupCompletedAt: integer('setup_completed_at'),
   incomeBasisDefault: text('income_basis_default').notNull().default('regular_net'),
   jointContributionBasis: text('joint_contribution_basis').notNull().default('equal'),

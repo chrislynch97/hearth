@@ -261,13 +261,29 @@ function MembersSection() {
 
 function DataSection() {
   const utils = trpc.useUtils()
+  const ctx = trpc.bootstrap.context.useQuery()
   const importMut = trpc.data.import.useMutation()
   const resetMut = trpc.data.reset.useMutation()
+  const updateHousehold = trpc.household.update.useMutation()
+  const backupNow = trpc.data.backupNow.useMutation()
   const fileRef = useRef<HTMLInputElement>(null)
 
+  const hh = ctx.data?.household
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [confirmReset, setConfirmReset] = useState(false)
+
+  async function setFrequency(frequency: 'off' | 'daily' | 'weekly') {
+    await updateHousehold.mutateAsync({ backupFrequency: frequency })
+    await utils.bootstrap.context.invalidate()
+  }
+
+  async function handleBackupNow() {
+    setError('')
+    const result = await backupNow.mutateAsync()
+    await utils.bootstrap.context.invalidate()
+    setMessage(`Backup written to ${result.file}`)
+  }
 
   async function handleExport() {
     setError('')
@@ -303,17 +319,53 @@ function DataSection() {
         Data
       </Title>
       <Stack gap="sm">
+        <Group justify="space-between" align="flex-end">
+          <div>
+            <Text size="sm" fw={500}>
+              Automatic backups
+            </Text>
+            <Text size="xs" c="dimmed">
+              Written to a{' '}
+              <Text span ff="monospace" fz="xs">
+                backups/
+              </Text>{' '}
+              folder next to your database (last 14 kept).
+              {hh?.backupLastAt
+                ? ` Last: ${new Date(hh.backupLastAt).toLocaleString()}.`
+                : ' None yet.'}
+            </Text>
+          </div>
+          <Group gap="sm" align="flex-end">
+            <Select
+              label="Frequency"
+              size="xs"
+              w={110}
+              data={[
+                { value: 'off', label: 'Off' },
+                { value: 'daily', label: 'Daily' },
+                { value: 'weekly', label: 'Weekly' },
+              ]}
+              value={hh?.backupFrequency ?? 'off'}
+              onChange={(v) => void setFrequency((v as 'off' | 'daily' | 'weekly') ?? 'off')}
+              allowDeselect={false}
+            />
+            <Button size="xs" variant="default" loading={backupNow.isPending} onClick={() => void handleBackupNow()}>
+              Back up now
+            </Button>
+          </Group>
+        </Group>
+        <Divider />
         <Group justify="space-between">
           <div>
             <Text size="sm" fw={500}>
-              Backup
+              Download backup
             </Text>
             <Text size="xs" c="dimmed">
-              Download all your data as a JSON file — the portable backup format.
+              Save all your data as a JSON file — the portable backup format.
             </Text>
           </div>
           <Button variant="default" onClick={() => void handleExport()}>
-            Download backup
+            Download
           </Button>
         </Group>
         <Divider />

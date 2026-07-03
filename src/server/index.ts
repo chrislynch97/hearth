@@ -12,6 +12,7 @@ import { createContext } from './trpc/context'
 import { runMigrations } from './db/migrate'
 import { ensureSeed } from './db/seed'
 import { db } from './db/client'
+import { startBackupScheduler } from './backup/runner'
 import { household } from './db/schema'
 import { parseSessionCookie } from './auth/cookies'
 import { isValidSessionToken } from './auth/password'
@@ -25,6 +26,7 @@ const PORT = Number(process.env.PORT ?? 8787)
 async function main() {
   await runMigrations()
   await ensureSeed(db)
+  startBackupScheduler(db)
 
   // 64 MB body limit so restoring a large JSON export isn't rejected (default 1 MB).
   const app = Fastify({ logger: true, bodyLimit: 64 * 1024 * 1024 })
