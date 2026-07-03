@@ -16,8 +16,11 @@ export function parseSessionCookie(cookieHeader: string | undefined): string | u
   return undefined
 }
 
-/** Serialize the session cookie; pass `null` to clear it. */
-export function serializeSessionCookie(token: string | null): string {
-  const base = `${SESSION_COOKIE}=${token === null ? '' : encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/`
-  return token === null ? `${base}; Max-Age=0` : `${base}; Max-Age=${MAX_AGE_SECONDS}`
+/** Serialize the session cookie; pass `null` to clear it. Adds `Secure` when
+ *  served over HTTPS so the cookie isn't sent in cleartext. */
+export function serializeSessionCookie(token: string | null, secure = false): string {
+  let cookie = `${SESSION_COOKIE}=${token === null ? '' : encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/`
+  if (secure) cookie += '; Secure'
+  cookie += token === null ? '; Max-Age=0' : `; Max-Age=${MAX_AGE_SECONDS}`
+  return cookie
 }
