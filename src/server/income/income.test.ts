@@ -49,13 +49,15 @@ describe('netIncomeSourceMonthly', () => {
 
 describe('salaryMonthly', () => {
   const asOf = '2026-07-03'
-  it('regular_net uses the most recent payslip\'s regular (bonus-excluded) net', () => {
-    // Latest payslip: net 450000 but regularNet 300000 (a bonus month).
-    const slips = [slip('2026-05-31', 400000, 500000), slip('2026-06-30', 450000, 560000, 300000)]
-    expect(salaryMonthly(slips, 'regular_net', asOf)).toBe(300000)
+  it('regular_net prefers the most recent bonus-free payslip and uses its actual net', () => {
+    // May is a clean month (£3241.28); June has a bonus. Use May's real net, not
+    // a proportional estimate off June (deductions are non-linear in gross).
+    const may = slip('2026-05-29', 324128, 508333)
+    const june = slip('2026-06-30', 408805, 708333, 293378) // bonus month
+    expect(salaryMonthly([may, june], 'regular_net', asOf)).toBe(324128)
   })
-  it('regular_net works from a single payslip even if it includes a bonus', () => {
-    const slips = [slip('2026-06-30', 400000, 700000, 285714)] // £4000 net, £2857.14 regular
+  it('regular_net falls back to the latest payslip\'s regularNet when no clean month exists', () => {
+    const slips = [slip('2026-06-30', 400000, 700000, 285714)] // only a bonus month
     expect(salaryMonthly(slips, 'regular_net', asOf)).toBe(285714)
   })
   it('latest_payslip uses the most recent payslip net, bonus included', () => {

@@ -62,17 +62,23 @@ export function netIncomeSourceMonthly(sources: IncomeSourceSummary[]): number {
 }
 
 /** The salaried monthly figure for one owner under the chosen basis (spec §6.3).
- *  `regular_net` (default) uses the most recent payslip's regular net — its net
- *  with any bonus/overtime removed — so a bonus month doesn't inflate income. */
+ *  `regular_net` (default) prefers the most recent *bonus-free* payslip and uses
+ *  its actual net — the truest "normal month". Only when no clean payslip exists
+ *  does it fall back to the latest payslip's `regularNet` (a proportional
+ *  estimate, since a bonus shifts every threshold-based deduction). */
 export function salaryMonthly(payslips: PayslipSummary[], basis: IncomeBasis, asOf: string): number {
-  const [latest] = sortedDesc(payslips)
+  const sorted = sortedDesc(payslips)
+  const latest = sorted[0]
   switch (basis) {
     case 'latest_payslip':
       return latest ? latest.effectiveNet : 0
     case 'rolling_12m':
       return roundMinor(rolling12mNet(payslips, asOf) / 12)
-    case 'regular_net':
+    case 'regular_net': {
+      const clean = sorted.find((p) => !p.hasVariablePay)
+      if (clean) return clean.effectiveNet
       return latest ? latest.regularNet : 0
+    }
   }
 }
 
