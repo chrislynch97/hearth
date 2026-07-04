@@ -180,6 +180,7 @@ export function RaisesPage() {
 
       {raises.length > 0 && (
         <Card withBorder padding="md">
+          <Table.ScrollContainer minWidth={520}>
           <Table verticalSpacing="xs" horizontalSpacing="md">
             <Table.Thead>
               <Table.Tr>
@@ -223,6 +224,7 @@ export function RaisesPage() {
               ))}
             </Table.Tbody>
           </Table>
+          </Table.ScrollContainer>
         </Card>
       )}
 

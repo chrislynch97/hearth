@@ -506,6 +506,7 @@ export function PayslipsPage() {
 
       {payslips.length > 0 && (
         <Card withBorder padding="md">
+          <Table.ScrollContainer minWidth={640}>
           <Table verticalSpacing="xs" horizontalSpacing="md">
             <Table.Thead>
               <Table.Tr>
@@ -575,6 +576,7 @@ export function PayslipsPage() {
               })}
             </Table.Tbody>
           </Table>
+          </Table.ScrollContainer>
         </Card>
       )}
 

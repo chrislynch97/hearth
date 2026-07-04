@@ -277,30 +277,32 @@ function MonthOverMonth({ report, money, dp }: { report: Report; money: MoneyFor
           No spending in this window.
         </Text>
       ) : (
-        <Table verticalSpacing="xs" horizontalSpacing="sm">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Category</Table.Th>
-              {months.map((m) => (
-                <Table.Th key={m} ta="right">
-                  {m.slice(2)}
-                </Table.Th>
-              ))}
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {rows.map((r) => (
-              <Table.Tr key={r.categoryId ?? 'uncat'}>
-                <Table.Td>{r.name}</Table.Td>
-                {r.byMonth.map((v, i) => (
-                  <Table.Td key={i} ta="right" c={v === 0 ? 'dimmed' : undefined}>
-                    {v === 0 ? '—' : formatMoney(v, money)}
-                  </Table.Td>
+        <Table.ScrollContainer minWidth={120 + months.length * 70}>
+          <Table verticalSpacing="xs" horizontalSpacing="sm">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Category</Table.Th>
+                {months.map((m) => (
+                  <Table.Th key={m} ta="right">
+                    {m.slice(2)}
+                  </Table.Th>
                 ))}
               </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+            </Table.Thead>
+            <Table.Tbody>
+              {rows.map((r) => (
+                <Table.Tr key={r.categoryId ?? 'uncat'}>
+                  <Table.Td>{r.name}</Table.Td>
+                  {r.byMonth.map((v, i) => (
+                    <Table.Td key={i} ta="right" c={v === 0 ? 'dimmed' : undefined}>
+                      {v === 0 ? '—' : formatMoney(v, money)}
+                    </Table.Td>
+                  ))}
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
     </Card>
   )
