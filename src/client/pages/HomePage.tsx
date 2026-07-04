@@ -160,6 +160,83 @@ function SnapshotSection({
 }
 
 // ---------------------------------------------------------------------------
+// Net worth tile — current standing (period-independent), links to /accounts
+// ---------------------------------------------------------------------------
+
+function NetWorthTile({
+  data,
+  money,
+}: {
+  data: {
+    assets: number
+    liabilities: number
+    netWorth: number
+    timeline: Array<{ date: string; netWorth: number }>
+  }
+  money: MoneyFormat
+}) {
+  const hasData = data.assets !== 0 || data.liabilities !== 0 || data.timeline.length > 0
+  if (!hasData) return null
+  const negative = data.netWorth < 0
+  const spark = data.timeline.slice(-12)
+  const maxAbs = Math.max(1, ...spark.map((p) => Math.abs(p.netWorth)))
+  return (
+    <Card
+      component={Link}
+      to="/accounts"
+      padding="lg"
+      radius="lg"
+      style={{
+        textDecoration: 'none',
+        color: 'inherit',
+        backgroundColor: 'light-dark(var(--mantine-color-moss-0), var(--mantine-color-dark-6))',
+        border: `1px solid ${hearthTokens.brand.moss}33`,
+      }}
+    >
+      <Group justify="space-between" align="flex-end" wrap="nowrap">
+        <div>
+          <Text size="xs" fw={700} tt="uppercase" c="dimmed" ff="monospace" lts="0.05em" mb={4}>
+            Net worth
+          </Text>
+          <Text
+            fw={700}
+            fz={28}
+            c={negative ? 'red' : undefined}
+            style={{ fontFamily: 'var(--mantine-font-family-headings)', lineHeight: 1.1 }}
+          >
+            {formatMoney(data.netWorth, money)}
+          </Text>
+          <Group gap="md" mt={4}>
+            <Text size="xs" c="dimmed">
+              Assets {formatMoney(data.assets, money)}
+            </Text>
+            <Text size="xs" c="dimmed">
+              Liabilities {formatMoney(data.liabilities, money)}
+            </Text>
+          </Group>
+        </div>
+        {spark.length >= 2 && (
+          <Group gap={3} align="flex-end" h={44} wrap="nowrap" style={{ flexShrink: 0 }}>
+            {spark.map((p) => (
+              <Box
+                key={p.date}
+                title={`${p.date}: ${formatMoney(p.netWorth, money)}`}
+                style={{
+                  width: 6,
+                  height: `${Math.max(2, (Math.abs(p.netWorth) / maxAbs) * 40)}px`,
+                  borderRadius: 2,
+                  backgroundColor: p.netWorth < 0 ? hearthTokens.brand.apricot : hearthTokens.brand.moss,
+                }}
+              />
+            ))}
+          </Group>
+        )}
+      </Group>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // D — Allocation by category
 // ---------------------------------------------------------------------------
 
@@ -363,6 +440,7 @@ export function HomePage() {
 
   const [periodStart, setPeriodStart] = useState<string | undefined>(undefined)
   const summaryQuery = trpc.dashboard.summary.useQuery(periodStart ? { periodStart } : undefined)
+  const accountsSummary = trpc.accounts.summary.useQuery()
 
   const householdName = ctx.data?.household?.displayName
   const summary = summaryQuery.data
@@ -422,6 +500,7 @@ export function HomePage() {
             coupleSurplus={summary.coupleSurplus}
             money={money}
           />
+          {accountsSummary.data && <NetWorthTile data={accountsSummary.data} money={money} />}
           <Group grow align="stretch" wrap="wrap">
             <AllocationCard allocation={summary.allocation} householdIncome={summary.householdMonthlyIncome} money={money} />
             <TrendCard trend={summary.incomeTrend} money={money} />
