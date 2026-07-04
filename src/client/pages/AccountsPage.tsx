@@ -51,6 +51,23 @@ const subtypeLabel = (kind: string, value: string | null): string | null => {
   return SUBTYPES[kind as 'asset' | 'liability']?.find((s) => s.value === value)?.label ?? value
 }
 
+// A balance older than this is flagged as stale — net worth may be out of date.
+const STALE_DAYS = 90
+
+function daysSince(dateStr: string): number {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  if (!y || !m || !d) return 0
+  return Math.floor((Date.now() - Date.UTC(y, m - 1, d)) / 86_400_000)
+}
+
+function ageLabel(days: number): string {
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 31) return `${days}d ago`
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`
+  return `${Math.floor(days / 365)}y ago`
+}
+
 // ---------------------------------------------------------------------------
 // Net worth headline + trend
 // ---------------------------------------------------------------------------
@@ -288,7 +305,16 @@ function BalancesModal({
   const [valueMajor, setValueMajor] = useState<number | string>('')
   const [error, setError] = useState('')
 
-  const balances = [...(balancesQuery.data ?? [])].reverse() // newest first
+  const ascending = balancesQuery.data ?? []
+  const balances = [...ascending].reverse() // newest first for display
+  // Change vs the previous (older) snapshot, keyed by balance id.
+  const deltaById = new Map<string, { delta: number; pct: number | null }>()
+  ascending.forEach((b, i) => {
+    const prev = ascending[i - 1]
+    if (!prev) return
+    const delta = b.value - prev.value
+    deltaById.set(b.id, { delta, pct: prev.value !== 0 ? (delta / prev.value) * 100 : null })
+  })
 
   async function refresh() {
     await Promise.all([
@@ -372,29 +398,49 @@ function BalancesModal({
               <Table.Tr>
                 <Table.Th>Date</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Balance</Table.Th>
+                <Table.Th style={{ textAlign: 'right' }}>Change</Table.Th>
                 <Table.Th />
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {balances.map((b) => (
-                <Table.Tr key={b.id}>
-                  <Table.Td>{fmt(b.asOfDate)}</Table.Td>
-                  <Table.Td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {formatMoney(b.value, money)}
-                  </Table.Td>
-                  <Table.Td style={{ textAlign: 'right' }}>
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      size="sm"
-                      aria-label="Delete balance"
-                      onClick={() => void handleRemove(b.id)}
-                    >
-                      ×
-                    </ActionIcon>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
+              {balances.map((b) => {
+                const change = deltaById.get(b.id)
+                // "Good" = wealth moving the right way: assets up, or debts down.
+                const good = change ? (account.kind === 'asset' ? change.delta > 0 : change.delta < 0) : false
+                const flat = change ? change.delta === 0 : false
+                return (
+                  <Table.Tr key={b.id}>
+                    <Table.Td>{fmt(b.asOfDate)}</Table.Td>
+                    <Table.Td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {formatMoney(b.value, money)}
+                    </Table.Td>
+                    <Table.Td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {!change ? (
+                        <Text size="xs" c="dimmed">
+                          —
+                        </Text>
+                      ) : (
+                        <Text size="xs" c={flat ? 'dimmed' : good ? hearthTokens.semantic.positive : 'red'}>
+                          {change.delta > 0 ? '+' : ''}
+                          {formatMoney(change.delta, money)}
+                          {change.pct !== null ? ` (${change.pct > 0 ? '+' : ''}${change.pct.toFixed(1)}%)` : ''}
+                        </Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}>
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        size="sm"
+                        aria-label="Delete balance"
+                        onClick={() => void handleRemove(b.id)}
+                      >
+                        ×
+                      </ActionIcon>
+                    </Table.Td>
+                  </Table.Tr>
+                )
+              })}
             </Table.Tbody>
           </Table>
         )}
@@ -428,6 +474,7 @@ function AccountGroup({
   onBalances: (a: AccountWithValue) => void
   onDelete: (a: AccountWithValue) => void
 }) {
+  const fmt = useFormatDate()
   return (
     <Card withBorder padding="md" radius="md">
       <Group justify="space-between" mb="sm">
@@ -481,9 +528,22 @@ function AccountGroup({
                     </Text>
                   </Table.Td>
                   <Table.Td>
-                    <Text size="xs" c="dimmed">
-                      {a.asOfDate ?? '—'}
-                    </Text>
+                    {a.asOfDate === null ? (
+                      <Badge size="xs" variant="light" color="apricot">
+                        no data
+                      </Badge>
+                    ) : (
+                      <Group gap={6} wrap="nowrap">
+                        <Text size="xs" c="dimmed">
+                          {fmt(a.asOfDate)}
+                        </Text>
+                        {daysSince(a.asOfDate) > STALE_DAYS && (
+                          <Badge size="xs" variant="light" color="apricot" title={ageLabel(daysSince(a.asOfDate))}>
+                            stale
+                          </Badge>
+                        )}
+                      </Group>
+                    )}
                   </Table.Td>
                   <Table.Td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {a.currentValue === null ? (
@@ -543,6 +603,7 @@ export function AccountsPage() {
   const accounts = accountsQuery.data ?? []
   const assets = useMemo(() => accounts.filter((a) => a.kind === 'asset'), [accounts])
   const liabilities = useMemo(() => accounts.filter((a) => a.kind === 'liability'), [accounts])
+  const staleCount = accounts.filter((a) => a.asOfDate === null || daysSince(a.asOfDate) > STALE_DAYS).length
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Account | null>(null)
@@ -593,6 +654,14 @@ export function AccountsPage() {
           />
           <TrendCard timeline={summary.timeline} money={money} />
         </>
+      )}
+
+      {!isLoading && accounts.length > 0 && staleCount > 0 && (
+        <Alert color="apricot" variant="light" title="Some balances are out of date">
+          {staleCount} account{staleCount === 1 ? '' : 's'} {staleCount === 1 ? "hasn't" : "haven't"} been
+          updated in over {Math.round(STALE_DAYS / 30)} months — your net worth may be stale. Open an
+          account's balances to record a current value.
+        </Alert>
       )}
 
       {!isLoading && accounts.length === 0 && (
