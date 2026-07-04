@@ -148,6 +148,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
     items: [
       { to: '/spending', label: 'Spending' },
       { to: '/catchup', label: 'Catch-up' },
+      { to: '/import', label: 'Import' },
     ],
   },
   {
