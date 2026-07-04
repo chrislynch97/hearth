@@ -18,6 +18,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { trpc } from '../trpc'
 import { hearthTokens } from '../theme'
 import { QuickAddSpend } from '../QuickAddSpend'
+import './nav.css'
 
 // `g` then one of these navigates (spec §7).
 const GO_TO: Record<string, string> = {
@@ -305,6 +306,7 @@ export function AppLayout() {
                     label={item.label}
                     active={isActive}
                     variant="light"
+                    className="hearth-navlink"
                     style={{
                       borderRadius: 8,
                       marginBottom: 2,

@@ -1,0 +1,6 @@
+/* Nav sits on the green navbar, so Mantine's default near-white hover clashes.
+   Use a subtle linen tint that reads well in both light and dark. The extra
+   :not([data-active]) keeps specificity above Mantine's own hover rule. */
+.hearth-navlink:not([data-active]):hover {
+  background-color: rgba(239, 237, 227, 0.1);
+}
