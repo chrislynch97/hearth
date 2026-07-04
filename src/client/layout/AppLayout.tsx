@@ -333,14 +333,14 @@ export function AppLayout() {
         <AppShell.Section px="md" pb="md" pt="sm">
           <Group gap={8} justify="space-between">
             <Group gap={8}>
-              {people.slice(0, 4).map((m) => (
+              {people.slice(0, 4).map((m, i) => (
                 <div
                   key={m.id}
                   style={{
                     width: 28,
                     height: 28,
                     borderRadius: '50%',
-                    backgroundColor: m.color ?? hearthTokens.brand.moss,
+                    backgroundColor: m.color ?? hearthTokens.ownerPalette[i % hearthTokens.ownerPalette.length],
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
