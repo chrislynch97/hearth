@@ -13,6 +13,8 @@ import {
   payslip,
   payslipLine,
   raise,
+  account,
+  accountBalance,
 } from './schema'
 
 /** Every table, in FK-dependency (insert-safe) order — parents first. Reverse
@@ -31,6 +33,8 @@ export const ALL_TABLES: ReadonlyArray<readonly [string, SQLiteTable]> = [
   ['payslip', payslip],
   ['payslipLine', payslipLine],
   ['raise', raise],
+  ['account', account],
+  ['accountBalance', accountBalance],
 ] as const
 
 /** (table, column) pairs holding money in minor units — rescaled when the
@@ -44,4 +48,5 @@ export const MONEY_COLUMNS: ReadonlyArray<readonly [SQLiteTable, string]> = [
   [payslipLine, 'amount'],
   [raise, 'newSalary'],
   [raise, 'bonus'],
+  [accountBalance, 'value'],
 ] as const

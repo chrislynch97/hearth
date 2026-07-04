@@ -195,3 +195,42 @@ export type PayslipComponentType = typeof payslipComponentType.$inferSelect
 export type Payslip = typeof payslip.$inferSelect
 export type PayslipLine = typeof payslipLine.$inferSelect
 export type Raise = typeof raise.$inferSelect
+
+// ---------------------------------------------------------------------------
+// Accounts & net worth (Phase 6) — asset/liability balances tracked over time.
+// Balances are *not* the live-ledger the spec deliberately excludes; they are
+// point-in-time snapshots the household enters periodically (e.g. a mortgage
+// statement, a pension valuation) to chart net worth. Net worth subtracts
+// liability balances from asset balances.
+// ---------------------------------------------------------------------------
+
+export const account = sqliteTable('account', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  kind: text('kind').notNull(),                  // 'asset' | 'liability'
+  subtype: text('subtype'),                      // savings|pension|investment|property|mortgage|loan|student_loan|credit_card|other
+  ownerId: text('owner_id')
+    .notNull()
+    .references(() => member.id),                // person or joint
+  institution: text('institution'),             // e.g. 'Vanguard', 'Barclays'
+  note: text('note'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  archivedAt: integer('archived_at'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+export const accountBalance = sqliteTable('account_balance', {
+  id: text('id').primaryKey(),
+  accountId: text('account_id').notNull().references(() => account.id, { onDelete: 'cascade' }),
+  asOfDate: text('as_of_date').notNull(),        // YYYY-MM-DD
+  value: integer('value').notNull(),             // minor units; magnitude of the balance (liabilities stored positive)
+  note: text('note'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, (t) => ({
+  uniqAccountDate: uniqueIndex('account_balance_account_date').on(t.accountId, t.asOfDate),
+}))
+
+export type Account = typeof account.$inferSelect
+export type AccountBalance = typeof accountBalance.$inferSelect

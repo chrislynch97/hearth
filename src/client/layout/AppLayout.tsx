@@ -30,6 +30,7 @@ const GO_TO: Record<string, string> = {
   s: '/spending',
   c: '/catchup',
   i: '/income',
+  w: '/accounts',
   r: '/reports',
 }
 
@@ -39,7 +40,7 @@ function ShortcutsHelp({ opened, onClose }: { opened: boolean; onClose: () => vo
     ['g then d', 'Go to Overview'],
     ['g then p / o / f / u', 'Pots / Outgoings / Funding / Upcoming'],
     ['g then s / c', 'Spending / Catch-up'],
-    ['g then i / r', 'Income / Reports'],
+    ['g then i / w / r', 'Income / Net worth / Reports'],
     ['?', 'Show this help'],
   ]
   return (
@@ -106,6 +107,10 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
       { to: '/payslips', label: 'Payslips' },
       { to: '/raises', label: 'Raises' },
     ],
+  },
+  {
+    title: 'Wealth',
+    items: [{ to: '/accounts', label: 'Net worth' }],
   },
   {
     title: null,

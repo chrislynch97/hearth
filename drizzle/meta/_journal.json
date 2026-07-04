@@ -43,6 +43,13 @@
       "when": 1783085557725,
       "tag": "0005_military_greymalkin",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1783161679483,
+      "tag": "0006_shocking_leper_queen",
+      "breakpoints": true
     }
   ]
 }
