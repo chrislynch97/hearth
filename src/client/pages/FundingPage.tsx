@@ -1,7 +1,37 @@
-import { Alert, Badge, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { useState } from 'react'
+import { Alert, Badge, Button, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { trpc } from '../trpc'
 import { formatMoney } from '../../shared/money'
+import type { MoneyFormat } from '../useMoney'
 import type { PotFunding } from '../../server/plan/funding'
+
+/** The per-person standing orders as plaintext, ready to paste into a bank. */
+function buildPlanText(
+  perPerson: Array<{
+    memberId: string
+    displayName: string
+    jointContribution: number
+    setAside: number
+  }>,
+  potsByOwner: Map<string, PotFunding[]>,
+  jointTotal: number,
+  money: MoneyFormat,
+): string {
+  const lines: string[] = ['Hearth — monthly funding plan', '']
+  for (const person of perPerson) {
+    lines.push(`${person.displayName}:`)
+    for (const p of potsByOwner.get(person.memberId) ?? []) {
+      lines.push(`  ${p.name}  ${formatMoney(p.fundingPerMonth, money)}/mo`)
+    }
+    if (person.jointContribution > 0) {
+      lines.push(`  Joint contribution  ${formatMoney(person.jointContribution, money)}/mo`)
+    }
+    lines.push(`  → Set aside  ${formatMoney(person.setAside, money)}/mo`)
+    lines.push('')
+  }
+  lines.push(`Joint pots total: ${formatMoney(jointTotal, money)}/mo`)
+  return lines.join('\n')
+}
 
 export function FundingPage() {
   const ctxQuery = trpc.bootstrap.context.useQuery()
@@ -32,9 +62,29 @@ export function FundingPage() {
     }
   }
 
+  const [copied, setCopied] = useState(false)
+  async function handleCopy() {
+    if (!plan) return
+    const text = buildPlanText(plan.perPerson, potsByOwner, plan.jointPotFundingTotal, money)
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard blocked (e.g. insecure context) — no-op; the plan is still on screen.
+    }
+  }
+
   return (
     <Stack gap="lg" maw={900} mx="auto">
-      <Title order={2}>Funding Plan</Title>
+      <Group justify="space-between" align="center">
+        <Title order={2}>Funding Plan</Title>
+        {!isLoading && plan && hasAnything && (
+          <Button variant="default" onClick={() => void handleCopy()}>
+            {copied ? 'Copied ✓' : 'Copy plan'}
+          </Button>
+        )}
+      </Group>
 
       {isLoading && (
         <Center>
