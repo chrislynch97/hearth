@@ -103,6 +103,21 @@ export const reconciliationBatch = sqliteTable('reconciliation_batch', {
   updatedAt: integer('updated_at').notNull(),
 })
 
+// Import batches — one Monzo CSV upload (spec §5.3). Preserved for audit and
+// so a whole import can be identified (and, in future, reversed).
+export const importBatch = sqliteTable('import_batch', {
+  id: text('id').primaryKey(),
+  source: text('source').notNull(),        // 'monzo_csv'
+  filename: text('filename'),
+  rowCount: integer('row_count').notNull(),        // rows in the file
+  importedCount: integer('imported_count').notNull(),
+  skippedCount: integer('skipped_count').notNull(),
+  mapping: text('mapping'),                 // JSON: column mapping used
+  importedAt: integer('imported_at').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
 export const spendTransaction = sqliteTable('spend_transaction', {
   id: text('id').primaryKey(),
   date: text('date').notNull(), // YYYY-MM-DD
@@ -114,15 +129,21 @@ export const spendTransaction = sqliteTable('spend_transaction', {
   reconciled: integer('reconciled').notNull().default(0),
   reconciledAt: integer('reconciled_at'),
   reconciliationBatchId: text('reconciliation_batch_id').references(() => reconciliationBatch.id),
-  source: text('source').notNull().default('manual'),
+  source: text('source').notNull().default('manual'), // 'manual' | 'import'
+  importRef: text('import_ref'),                       // Monzo Transaction ID; unique dedup key (NULL for manual)
+  importBatchId: text('import_batch_id').references(() => importBatch.id),
+  raw: text('raw'),                                    // JSON of the original imported row
   splitGroupId: text('split_group_id'),
   note: text('note'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
-})
+}, (t) => ({
+  uniqImportRef: uniqueIndex('spend_transaction_import_ref').on(t.importRef),
+}))
 
 export type ReconciliationBatch = typeof reconciliationBatch.$inferSelect
 export type SpendTransaction = typeof spendTransaction.$inferSelect
+export type ImportBatch = typeof importBatch.$inferSelect
 
 // ---------------------------------------------------------------------------
 // Income, payslips & raises (Phase 5)
