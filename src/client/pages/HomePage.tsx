@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Anchor,
   Badge,
@@ -450,6 +450,16 @@ export function HomePage() {
     const base = summary?.period ?? periodForDate(new Date().toISOString().slice(0, 10), startDay)
     setPeriodStart(shiftPeriod(base, delta, startDay).start)
   }
+
+  // `[` / `]` (handled globally in AppLayout) shift the period. Use a ref so the
+  // listener always calls the latest shift without re-subscribing each render.
+  const shiftRef = useRef(shift)
+  shiftRef.current = shift
+  useEffect(() => {
+    const onPeriod = (e: Event) => shiftRef.current((e as CustomEvent<number>).detail)
+    window.addEventListener('hearth:period', onPeriod)
+    return () => window.removeEventListener('hearth:period', onPeriod)
+  }, [])
 
   if (ctx.isLoading || summaryQuery.isLoading) {
     return (

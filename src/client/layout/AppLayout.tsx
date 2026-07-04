@@ -10,6 +10,7 @@ import {
   NavLink,
   Stack,
   Text,
+  TextInput,
   useMantineColorScheme,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
@@ -37,6 +38,8 @@ const GO_TO: Record<string, string> = {
 function ShortcutsHelp({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const rows: [string, string][] = [
     ['n', 'Add a spend'],
+    ['/', 'Go to page…'],
+    ['[ ]', 'Previous / next period'],
     ['g then d', 'Go to Overview'],
     ['g then p / o / f / u', 'Pots / Outgoings / Funding / Upcoming'],
     ['g then s / c', 'Spending / Catch-up'],
@@ -54,6 +57,53 @@ function ShortcutsHelp({ opened, onClose }: { opened: boolean; onClose: () => vo
             </Group>
           </Group>
         ))}
+      </Stack>
+    </Modal>
+  )
+}
+
+/** Quick "go to…" palette opened with `/` (spec §7). Type to filter destinations,
+ *  Enter jumps to the top match. */
+function NavPalette({ opened, onClose }: { opened: boolean; onClose: () => void }) {
+  const navigate = useNavigate()
+  const [query, setQuery] = useState('')
+  const items = NAV_SECTIONS.flatMap((s) => s.items)
+  const filtered = query
+    ? items.filter((i) => i.label.toLowerCase().includes(query.toLowerCase()))
+    : items
+
+  function go(to: string) {
+    setQuery('')
+    onClose()
+    navigate(to)
+  }
+
+  return (
+    <Modal opened={opened} onClose={onClose} title="Go to…" size="sm">
+      <TextInput
+        data-autofocus
+        placeholder="Search pages…"
+        value={query}
+        onChange={(e) => setQuery(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && filtered[0]) {
+            e.preventDefault()
+            go(filtered[0].to)
+          }
+        }}
+        mb="sm"
+      />
+      <Stack gap={2}>
+        {filtered.map((i) => (
+          <Button key={i.to} variant="subtle" color="gray" justify="flex-start" onClick={() => go(i.to)}>
+            {i.label}
+          </Button>
+        ))}
+        {filtered.length === 0 && (
+          <Text size="sm" c="dimmed">
+            No matching page.
+          </Text>
+        )}
       </Stack>
     </Modal>
   )
@@ -152,6 +202,7 @@ export function AppLayout() {
   const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure()
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
 
   useEffect(() => {
     closeMobile()
@@ -179,6 +230,13 @@ export function AppLayout() {
       }
       if (e.key === '?') {
         setHelpOpen(true)
+      } else if (e.key === '/') {
+        e.preventDefault()
+        setPaletteOpen(true)
+      } else if (e.key === '[' || e.key === ']') {
+        // Prev/next budget period — period-aware pages listen for this.
+        e.preventDefault()
+        window.dispatchEvent(new CustomEvent('hearth:period', { detail: e.key === '[' ? -1 : 1 }))
       } else if (e.key === 'n' || e.key === 'N') {
         e.preventDefault()
         setQuickAddOpen(true)
@@ -376,6 +434,7 @@ export function AppLayout() {
 
       <QuickAddSpend opened={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
       <ShortcutsHelp opened={helpOpen} onClose={() => setHelpOpen(false)} />
+      <NavPalette opened={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </AppShell>
   )
 }
