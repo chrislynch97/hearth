@@ -61,19 +61,26 @@ function CalendarMonth({
 }) {
   const firstWeekday = (new Date(Date.UTC(year, month, 1)).getUTCDay() + 6) % 7 // Mon = 0
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
-  const cells: Array<number | null> = [...Array(firstWeekday).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
+  // Always render 6 week rows (42 cells) so every month is the same height.
+  const days: Array<number | null> = [
+    ...Array(firstWeekday).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ]
+  const cells: Array<number | null> = [...days, ...Array(Math.max(0, 42 - days.length)).fill(null)]
 
   return (
     <Card withBorder padding="sm" radius="md">
       <Text fw={600} size="sm" mb="xs">
         {MONTH_NAMES[month]} {year}
       </Text>
-      <Box style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+      <Box style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
         {WEEKDAYS.map((d) => (
           <Text key={d} size="9px" c="dimmed" ta="center" fw={700}>
             {d}
           </Text>
         ))}
+      </Box>
+      <Box style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: '40px', gap: 4 }}>
         {cells.map((day, i) => {
           if (day === null) return <div key={`b${i}`} />
           const dateStr = `${year}-${pad(month + 1)}-${pad(day)}`
@@ -85,7 +92,6 @@ function CalendarMonth({
               key={dateStr}
               title={payments ? payments.map((p) => `${p.name}: ${formatMoney(p.amount, money)}`).join('\n') : undefined}
               style={{
-                minHeight: 40,
                 borderRadius: 6,
                 padding: 3,
                 fontSize: 10,
