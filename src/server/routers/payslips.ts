@@ -67,10 +67,17 @@ async function loadPayslip(db: DB, payslipId: string): Promise<PayslipWithLines>
   const byId = new Map(components.map((c) => [c.id, c]))
 
   const totals = computePayslipTotals(
-    lines.map((l) => ({ kind: (byId.get(l.componentId)?.kind ?? 'employer_info') as ComponentKind, amount: l.amount })),
+    lines.map((l) => {
+      const component = byId.get(l.componentId)
+      return {
+        kind: (component?.kind ?? 'employer_info') as ComponentKind,
+        amount: l.amount,
+        isVariable: component?.isVariable === 1,
+      }
+    }),
     row.netPay,
   )
-  const hasVariablePay = lines.some((l) => byId.get(l.componentId)?.isVariable === 1 && l.amount !== 0)
+  const hasVariablePay = totals.variableEarnings !== 0
 
   return { ...row, lines, totals, hasVariablePay }
 }

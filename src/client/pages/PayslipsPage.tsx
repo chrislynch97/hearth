@@ -106,7 +106,7 @@ function ComponentManager({ ownerId, components }: { ownerId: string; components
                   <Badge size="xs" variant="light" color={c.kind === 'deduction' ? 'apricot' : c.kind === 'employer_info' ? 'gray' : 'moss'}>
                     {c.kind === 'employer_info' ? 'employer' : c.kind}
                   </Badge>
-                  {c.isVariable === 1 && (
+                  {c.isVariable === 1 && c.kind === 'earning' && (
                     <Badge size="xs" variant="outline" color="gray">
                       variable
                     </Badge>
@@ -156,12 +156,34 @@ function ComponentManager({ ownerId, components }: { ownerId: string; components
           onChange={(e) => setName(e.currentTarget.value)}
           style={{ flex: 1 }}
         />
-        <Select label="Type" data={KIND_OPTIONS} value={kind} onChange={(v) => setKind((v as typeof kind) ?? 'earning')} allowDeselect={false} w={150} />
-        <Switch label="Variable" checked={isVariable} onChange={(e) => setIsVariable(e.currentTarget.checked)} mb={8} />
+        <Select
+          label="Type"
+          data={KIND_OPTIONS}
+          value={kind}
+          onChange={(v) => {
+            const next = (v as typeof kind) ?? 'earning'
+            setKind(next)
+            if (next !== 'earning') setIsVariable(false)
+          }}
+          allowDeselect={false}
+          w={150}
+        />
+        {kind === 'earning' && (
+          <Switch
+            label="Variable"
+            checked={isVariable}
+            onChange={(e) => setIsVariable(e.currentTarget.checked)}
+            mb={8}
+          />
+        )}
         <Button onClick={() => void handleAdd()} loading={create.isPending}>
           Add
         </Button>
       </Group>
+      <Text size="xs" c="dimmed">
+        Mark an earning <strong>Variable</strong> if it changes month to month — a bonus or overtime.
+        Variable earnings are left out of your regular monthly income so a one-off doesn't inflate it.
+      </Text>
       {(error || create.error) && (
         <Alert color="red" title="Error">
           {error || create.error?.message}

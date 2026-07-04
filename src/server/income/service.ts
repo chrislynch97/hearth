@@ -10,7 +10,6 @@ import {
   payslip,
   payslipComponentType,
   payslipLine,
-  raise,
 } from '../db/schema'
 import { todayIso } from '../../shared/dates'
 import type { Recurrence } from '../../shared/recurrence'
@@ -22,7 +21,6 @@ import {
   type IncomeSourceSummary,
   type PayslipSummary,
 } from './income'
-import type { RaiseInput } from './raises'
 
 const HOUSEHOLD_ID = 'household'
 
@@ -55,16 +53,24 @@ export async function loadPayslipSummaries(db: DB): Promise<OwnedPayslipSummary[
   return payslips.map((p) => {
     const pls = linesByPayslip.get(p.id) ?? []
     const totals = computePayslipTotals(
-      pls.map((l) => ({
-        kind: (componentById.get(l.componentId)?.kind ?? 'employer_info') as ComponentKind,
-        amount: l.amount,
-      })),
+      pls.map((l) => {
+        const component = componentById.get(l.componentId)
+        return {
+          kind: (component?.kind ?? 'employer_info') as ComponentKind,
+          amount: l.amount,
+          isVariable: component?.isVariable === 1,
+        }
+      }),
       p.netPay,
     )
-    const hasVariablePay = pls.some(
-      (l) => componentById.get(l.componentId)?.isVariable === 1 && l.amount !== 0,
-    )
-    return { ownerId: p.ownerId, payDate: p.payDate, effectiveNet: totals.effectiveNet, grossPay: totals.grossPay, hasVariablePay }
+    return {
+      ownerId: p.ownerId,
+      payDate: p.payDate,
+      effectiveNet: totals.effectiveNet,
+      grossPay: totals.grossPay,
+      regularNet: totals.regularNet,
+      hasVariablePay: totals.variableEarnings !== 0,
+    }
   })
 }
 
@@ -76,21 +82,19 @@ export async function computeIncomeByMember(
   const basis = (householdRow?.incomeBasisDefault ?? 'regular_net') as IncomeBasis
 
   const members = await db.select().from(member).where(isNull(member.archivedAt))
-  const raises = await db.select().from(raise)
   const sources = await db.select().from(incomeSource).where(isNull(incomeSource.archivedAt))
 
   const payslipsByOwner = new Map<string, PayslipSummary[]>()
   for (const p of await loadPayslipSummaries(db)) {
     const arr = payslipsByOwner.get(p.ownerId) ?? []
-    arr.push({ payDate: p.payDate, effectiveNet: p.effectiveNet, grossPay: p.grossPay, hasVariablePay: p.hasVariablePay })
+    arr.push({
+      payDate: p.payDate,
+      effectiveNet: p.effectiveNet,
+      grossPay: p.grossPay,
+      regularNet: p.regularNet,
+      hasVariablePay: p.hasVariablePay,
+    })
     payslipsByOwner.set(p.ownerId, arr)
-  }
-
-  const raisesByOwner = new Map<string, RaiseInput[]>()
-  for (const r of raises) {
-    const arr = raisesByOwner.get(r.ownerId) ?? []
-    arr.push({ id: r.id, effectiveDate: r.effectiveDate, newSalary: r.newSalary })
-    raisesByOwner.set(r.ownerId, arr)
   }
 
   const sourcesByOwner = new Map<string, IncomeSourceSummary[]>()
@@ -107,7 +111,7 @@ export async function computeIncomeByMember(
 
   const result = new Map<string, MemberIncome>()
   for (const m of members) {
-    const salary = salaryMonthly(payslipsByOwner.get(m.id) ?? [], raisesByOwner.get(m.id) ?? [], basis, asOf)
+    const salary = salaryMonthly(payslipsByOwner.get(m.id) ?? [], basis, asOf)
     const incomeSourceMonthly = netIncomeSourceMonthly(sourcesByOwner.get(m.id) ?? [])
     result.set(m.id, {
       memberId: m.id,

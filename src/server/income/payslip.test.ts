@@ -46,6 +46,45 @@ describe('computePayslipTotals', () => {
 
   it('handles an empty payslip', () => {
     const totals = computePayslipTotals([])
-    expect(totals).toEqual({ grossPay: 0, totalDeductions: 0, computedNet: 0, effectiveNet: 0 })
+    expect(totals).toEqual({
+      grossPay: 0,
+      totalDeductions: 0,
+      computedNet: 0,
+      effectiveNet: 0,
+      variableEarnings: 0,
+      regularNet: 0,
+    })
+  })
+
+  it('regularNet equals net when there is no variable pay', () => {
+    const totals = computePayslipTotals([
+      { kind: 'earning', amount: 300000 },
+      { kind: 'deduction', amount: 60000 },
+    ])
+    expect(totals.variableEarnings).toBe(0)
+    expect(totals.regularNet).toBe(240000)
+  })
+
+  it('regularNet removes a bonus proportionally (bonus does not inflate salary)', () => {
+    // £5000 basic + £2000 bonus (variable) = £7000 gross; £3000 deductions → £4000 net.
+    // Regular share of gross = 5000/7000; regularNet = 4000 × 5/7 = £2857.14 → 285714.
+    const totals = computePayslipTotals([
+      { kind: 'earning', amount: 500000 },
+      { kind: 'earning', amount: 200000, isVariable: true },
+      { kind: 'deduction', amount: 300000 },
+    ])
+    expect(totals.grossPay).toBe(700000)
+    expect(totals.variableEarnings).toBe(200000)
+    expect(totals.effectiveNet).toBe(400000)
+    expect(totals.regularNet).toBe(285714)
+  })
+
+  it('ignores the variable flag on deductions', () => {
+    const totals = computePayslipTotals([
+      { kind: 'earning', amount: 300000 },
+      { kind: 'deduction', amount: 60000, isVariable: true }, // nonsensical → ignored
+    ])
+    expect(totals.variableEarnings).toBe(0)
+    expect(totals.regularNet).toBe(240000)
   })
 })

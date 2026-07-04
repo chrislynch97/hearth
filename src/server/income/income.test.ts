@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   monthlyIncome,
   netIncomeSourceMonthly,
-  recentNetRatio,
-  regularPayslip,
   rolling12mIncome,
   rolling12mNet,
   runningTotalNet,
@@ -11,8 +9,8 @@ import {
   type PayslipSummary,
 } from './income'
 
-function slip(payDate: string, effectiveNet: number, grossPay: number, hasVariablePay = false): PayslipSummary {
-  return { payDate, effectiveNet, grossPay, hasVariablePay }
+function slip(payDate: string, effectiveNet: number, grossPay: number, regularNet = effectiveNet): PayslipSummary {
+  return { payDate, effectiveNet, grossPay, regularNet, hasVariablePay: regularNet !== effectiveNet }
 }
 
 describe('runningTotalNet', () => {
@@ -37,35 +35,6 @@ describe('rolling 12-month windows', () => {
   })
 })
 
-describe('regularPayslip', () => {
-  it('returns the most recent payslip with no variable pay', () => {
-    const slips = [
-      slip('2026-01-31', 100000, 130000),
-      slip('2026-02-28', 180000, 220000, true), // bonus month → not regular
-      slip('2026-03-31', 105000, 135000),
-    ]
-    expect(regularPayslip(slips)?.payDate).toBe('2026-03-31')
-  })
-  it('returns null when every payslip has variable pay', () => {
-    expect(regularPayslip([slip('2026-01-31', 1, 1, true)])).toBeNull()
-  })
-})
-
-describe('recentNetRatio', () => {
-  it('is Σ net / Σ gross over the last 3 regular payslips', () => {
-    const slips = [
-      slip('2026-01-31', 75000, 100000),
-      slip('2026-02-28', 75000, 100000),
-      slip('2026-03-31', 75000, 100000),
-      slip('2026-04-30', 200000, 300000, true), // variable, ignored
-    ]
-    expect(recentNetRatio(slips)).toBeCloseTo(0.75, 5)
-  })
-  it('returns null with no regular payslips', () => {
-    expect(recentNetRatio([])).toBeNull()
-  })
-})
-
 describe('netIncomeSourceMonthly', () => {
   it('sums monthly-equivalents of active net sources, excluding gross and inactive', () => {
     const total = netIncomeSourceMonthly([
@@ -80,50 +49,39 @@ describe('netIncomeSourceMonthly', () => {
 
 describe('salaryMonthly', () => {
   const asOf = '2026-07-03'
-  it('regular_net uses the most recent non-variable payslip', () => {
-    const slips = [slip('2026-06-30', 300000, 380000), slip('2026-05-31', 400000, 500000, true)]
-    expect(salaryMonthly(slips, [], 'regular_net', asOf)).toBe(300000)
+  it('regular_net uses the most recent payslip\'s regular (bonus-excluded) net', () => {
+    // Latest payslip: net 450000 but regularNet 300000 (a bonus month).
+    const slips = [slip('2026-05-31', 400000, 500000), slip('2026-06-30', 450000, 560000, 300000)]
+    expect(salaryMonthly(slips, 'regular_net', asOf)).toBe(300000)
   })
-  it('regular_net returns 0 when there is no regular payslip (leaving income sources to carry it)', () => {
-    const slips = [slip('2026-06-30', 200000, 250000, true)] // only a bonus month
-    const raises = [{ id: 'r1', effectiveDate: '2026-01-01', newSalary: 4800000 }] // £48k/yr
-    // No regular payslip → recentNetRatio is also null (it needs regular payslips),
-    // so the (currentSalary/12 × ratio) fallback can't apply → 0.
-    expect(salaryMonthly(slips, raises, 'regular_net', asOf)).toBe(0)
+  it('regular_net works from a single payslip even if it includes a bonus', () => {
+    const slips = [slip('2026-06-30', 400000, 700000, 285714)] // £4000 net, £2857.14 regular
+    expect(salaryMonthly(slips, 'regular_net', asOf)).toBe(285714)
   })
-  it('regular_net prefers a present (even older) regular payslip over the raise-based fallback', () => {
-    const raises = [{ id: 'r1', effectiveDate: '2026-01-01', newSalary: 4800000 }]
-    const slips = [
-      slip('2025-01-31', 80000, 100000), // older, but regular → used directly
-      slip('2026-06-30', 200000, 250000, true), // recent bonus month → not regular
-    ]
-    expect(salaryMonthly(slips, raises, 'regular_net', asOf)).toBe(80000)
-  })
-  it('latest_payslip uses the most recent payslip regardless of variability', () => {
-    const slips = [slip('2026-05-31', 300000, 380000), slip('2026-06-30', 450000, 560000, true)]
-    expect(salaryMonthly(slips, [], 'latest_payslip', asOf)).toBe(450000)
+  it('latest_payslip uses the most recent payslip net, bonus included', () => {
+    const slips = [slip('2026-05-31', 300000, 380000), slip('2026-06-30', 450000, 560000, 300000)]
+    expect(salaryMonthly(slips, 'latest_payslip', asOf)).toBe(450000)
   })
   it('rolling_12m averages net over the trailing year', () => {
     const slips = [slip('2026-01-31', 120000, 150000), slip('2026-02-28', 120000, 150000)]
-    // Σ net = 240000 over the window / 12 = 20000
-    expect(salaryMonthly(slips, [], 'rolling_12m', asOf)).toBe(20000)
+    expect(salaryMonthly(slips, 'rolling_12m', asOf)).toBe(20000) // 240000 / 12
   })
   it('returns 0 when there is no payslip data', () => {
-    expect(salaryMonthly([], [], 'regular_net', asOf)).toBe(0)
-    expect(salaryMonthly([], [], 'latest_payslip', asOf)).toBe(0)
-    expect(salaryMonthly([], [], 'rolling_12m', asOf)).toBe(0)
+    expect(salaryMonthly([], 'regular_net', asOf)).toBe(0)
+    expect(salaryMonthly([], 'latest_payslip', asOf)).toBe(0)
+    expect(salaryMonthly([], 'rolling_12m', asOf)).toBe(0)
   })
 })
 
 describe('monthlyIncome', () => {
   const asOf = '2026-07-03'
-  it('adds salary and active net income sources', () => {
+  it('adds regular salary and active net income sources', () => {
     const slips = [slip('2026-06-30', 300000, 380000)]
     const sources = [{ amount: 20000, basis: 'net' as const, recurrence: 'monthly' as const, active: true }]
-    expect(monthlyIncome({ payslips: slips, raises: [], sources, basis: 'regular_net', asOf })).toBe(320000)
+    expect(monthlyIncome({ payslips: slips, sources, basis: 'regular_net', asOf })).toBe(320000)
   })
   it('works from income sources alone when there are no payslips', () => {
     const sources = [{ amount: 150000, basis: 'net' as const, recurrence: 'monthly' as const, active: true }]
-    expect(monthlyIncome({ payslips: [], raises: [], sources, basis: 'regular_net', asOf })).toBe(150000)
+    expect(monthlyIncome({ payslips: [], sources, basis: 'regular_net', asOf })).toBe(150000)
   })
 })
