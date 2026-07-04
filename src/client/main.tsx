@@ -8,6 +8,7 @@ import '@mantine/core/styles.css'
 import { trpc } from './trpc'
 import { theme } from './theme'
 import { App } from './App'
+import { ErrorBoundary } from './ErrorState'
 
 function Root() {
   const [queryClient] = useState(() => new QueryClient())
@@ -18,9 +19,11 @@ function Root() {
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <MantineProvider theme={theme} defaultColorScheme="auto">
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
+          <ErrorBoundary>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </ErrorBoundary>
         </MantineProvider>
       </QueryClientProvider>
     </trpc.Provider>

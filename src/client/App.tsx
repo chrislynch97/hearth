@@ -1,6 +1,7 @@
 import { Center, Loader } from '@mantine/core'
 import { Route, Routes } from 'react-router-dom'
 import { trpc } from './trpc'
+import { ConnectionError } from './ErrorState'
 import { LoginGate } from './LoginGate'
 import { SetupWizard } from './setup/SetupWizard'
 import { AppLayout } from './layout/AppLayout'
@@ -28,6 +29,10 @@ export function App() {
     )
   }
 
+  if (authStatus.isError) {
+    return <ConnectionError onRetry={() => void authStatus.refetch()} retrying={authStatus.isFetching} />
+  }
+
   if (authStatus.data?.passwordSet && !authStatus.data.authenticated) {
     return <LoginGate />
   }
@@ -44,6 +49,10 @@ function AuthedApp() {
         <Loader />
       </Center>
     )
+  }
+
+  if (ctx.isError) {
+    return <ConnectionError onRetry={() => void ctx.refetch()} retrying={ctx.isFetching} />
   }
 
   if (ctx.data?.needsSetup) {
