@@ -67,10 +67,19 @@ function RaiseModal({ opened, onClose, ownerId, raise }: RaiseModalProps) {
 
   return (
     <Modal opened={opened} onClose={onClose} title={isEditing ? 'Edit raise' : 'Add raise'} size="md">
-      <Stack gap="sm">
+      <Stack
+        gap="sm"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            void handleSubmit()
+          }
+        }}
+      >
         <TextInput
           label="Effective date"
           type="date"
+          data-autofocus
           value={effectiveDate}
           onChange={(e) => setEffectiveDate(e.currentTarget.value)}
         />
