@@ -1,3 +1,4 @@
+import { getTableColumns } from 'drizzle-orm'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import {
   household,
@@ -37,16 +38,26 @@ export const ALL_TABLES: ReadonlyArray<readonly [string, SQLiteTable]> = [
   ['accountBalance', accountBalance],
 ] as const
 
-/** (table, column) pairs holding money in minor units — rescaled when the
- *  household's currency decimal-places change. */
-export const MONEY_COLUMNS: ReadonlyArray<readonly [SQLiteTable, string]> = [
-  [expenseShare, 'amount'],
-  [spendTransaction, 'amount'],
-  [reconciliationBatch, 'totalAmount'],
-  [incomeSource, 'amount'],
-  [payslip, 'netPay'],
-  [payslipLine, 'amount'],
-  [raise, 'newSalary'],
-  [raise, 'bonus'],
-  [accountBalance, 'value'],
-] as const
+/** JS property names that hold money in minor units. Integer columns with one
+ *  of these names are treated as money and rescaled when the currency's
+ *  decimal-places change. Kept as a small convention set — NOT a per-table
+ *  list — so a new table with a conventionally-named money column is picked up
+ *  automatically (spec §5.7: "columns derived from schema metadata"). Deliberately
+ *  excludes non-money integers like sortOrder, *At timestamps, counts and weights. */
+export const MONEY_FIELD_NAMES: ReadonlySet<string> = new Set([
+  'amount',
+  'totalAmount',
+  'netPay',
+  'newSalary',
+  'bonus',
+  'value',
+])
+
+/** (table, column) pairs holding money in minor units, derived from the schema:
+ *  every integer column across ALL_TABLES whose property name is a money name. */
+export const MONEY_COLUMNS: ReadonlyArray<readonly [SQLiteTable, string]> = ALL_TABLES.flatMap(
+  ([, table]) =>
+    Object.entries(getTableColumns(table))
+      .filter(([key, col]) => col.dataType === 'number' && MONEY_FIELD_NAMES.has(key))
+      .map(([key]) => [table, key] as const),
+)
