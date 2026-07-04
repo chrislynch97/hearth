@@ -17,7 +17,8 @@ import {
   Title,
 } from '@mantine/core'
 import { trpc } from '../trpc'
-import { downloadJson } from '../csv'
+import { downloadBlob, downloadJson, toCsv } from '../csv'
+import { zipStore } from '../zip'
 
 // ---------------------------------------------------------------------------
 // General household settings
@@ -293,6 +294,34 @@ function DataSection() {
     setMessage('Backup downloaded.')
   }
 
+  async function handleExportCsv() {
+    setError('')
+    const snapshot = await utils.data.export.fetch()
+    const entries = Object.entries(snapshot.tables)
+      .filter(([, rows]) => rows.length > 0)
+      .map(([name, rows]) => {
+        const cols = Object.keys(rows[0] ?? {})
+        const table: Array<Array<string | number>> = [
+          cols,
+          ...rows.map((row) =>
+            cols.map((c) => {
+              const v = row[c]
+              if (v === null || v === undefined) return ''
+              return typeof v === 'object' ? JSON.stringify(v) : (v as string | number)
+            }),
+          ),
+        ]
+        return { name: `${name}.csv`, data: new TextEncoder().encode(toCsv(table)) }
+      })
+    if (entries.length === 0) {
+      setError('No data to export yet.')
+      return
+    }
+    const stamp = new Date().toISOString().slice(0, 10)
+    downloadBlob(`hearth-csv-${stamp}.zip`, zipStore(entries))
+    setMessage(`Exported ${entries.length} tables as CSV.`)
+  }
+
   async function handleImportFile(file: File) {
     setError('')
     setMessage('')
@@ -361,12 +390,18 @@ function DataSection() {
               Download backup
             </Text>
             <Text size="xs" c="dimmed">
-              Save all your data as a JSON file — the portable backup format.
+              JSON is the portable backup format (used by Restore). CSV gives one file
+              per table, zipped — handy for spreadsheets.
             </Text>
           </div>
-          <Button variant="default" onClick={() => void handleExport()}>
-            Download
-          </Button>
+          <Group gap="sm">
+            <Button variant="default" onClick={() => void handleExportCsv()}>
+              Download CSV
+            </Button>
+            <Button variant="default" onClick={() => void handleExport()}>
+              Download JSON
+            </Button>
+          </Group>
         </Group>
         <Divider />
         <Group justify="space-between">
