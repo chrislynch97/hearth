@@ -364,8 +364,7 @@ export function HomePage() {
   const [periodStart, setPeriodStart] = useState<string | undefined>(undefined)
   const summaryQuery = trpc.dashboard.summary.useQuery(periodStart ? { periodStart } : undefined)
 
-  const people = (ctx.data?.members ?? []).filter((m) => m.archivedAt === null && m.kind === 'person')
-  const firstPerson = people[0]
+  const householdName = ctx.data?.household?.displayName
   const summary = summaryQuery.data
 
   function shift(delta: number) {
@@ -385,7 +384,8 @@ export function HomePage() {
     <Stack gap="lg" maw={900} mx="auto">
       <Group justify="space-between" align="center">
         <Title order={2}>
-          {getGreeting()}, {firstPerson?.displayName ?? 'there'}
+          {getGreeting()}
+          {householdName ? `, ${householdName}` : ''}
         </Title>
         <Button component={Link} to="/spending">
           + Quick add
