@@ -1,9 +1,61 @@
-import { ActionIcon, AppShell, Badge, Burger, Group, NavLink, Text, useMantineColorScheme } from '@mantine/core'
+import {
+  ActionIcon,
+  AppShell,
+  Badge,
+  Burger,
+  Button,
+  Group,
+  Kbd,
+  Modal,
+  NavLink,
+  Stack,
+  Text,
+  useMantineColorScheme,
+} from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { useEffect } from 'react'
-import { Link, Outlet, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { trpc } from '../trpc'
 import { hearthTokens } from '../theme'
+import { QuickAddSpend } from '../QuickAddSpend'
+
+// `g` then one of these navigates (spec §7).
+const GO_TO: Record<string, string> = {
+  d: '/',
+  p: '/pots',
+  o: '/outgoings',
+  f: '/funding',
+  u: '/upcoming',
+  s: '/spending',
+  c: '/catchup',
+  i: '/income',
+  r: '/reports',
+}
+
+function ShortcutsHelp({ opened, onClose }: { opened: boolean; onClose: () => void }) {
+  const rows: [string, string][] = [
+    ['n', 'Add a spend'],
+    ['g then d', 'Go to Overview'],
+    ['g then p / o / f / u', 'Pots / Outgoings / Funding / Upcoming'],
+    ['g then s / c', 'Spending / Catch-up'],
+    ['g then i / r', 'Income / Reports'],
+    ['?', 'Show this help'],
+  ]
+  return (
+    <Modal opened={opened} onClose={onClose} title="Keyboard shortcuts" size="sm">
+      <Stack gap="xs">
+        {rows.map(([keys, desc]) => (
+          <Group key={keys} justify="space-between">
+            <Text size="sm">{desc}</Text>
+            <Group gap={4}>
+              {keys.split(' ').map((k, i) => (k === 'then' ? <Text key={i} size="xs" c="dimmed">then</Text> : <Kbd key={i}>{k}</Kbd>))}
+            </Group>
+          </Group>
+        ))}
+      </Stack>
+    </Modal>
+  )
+}
 
 function ThemeToggle({ visibleFrom }: { visibleFrom?: string }) {
   const { colorScheme, toggleColorScheme } = useMantineColorScheme()
@@ -90,11 +142,54 @@ export function AppLayout() {
   const ctx = trpc.bootstrap.context.useQuery()
   const backlogQuery = trpc.reconcile.backlog.useQuery()
   const location = useLocation()
+  const navigate = useNavigate()
   const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure()
+  const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   useEffect(() => {
     closeMobile()
   }, [location.pathname])
+
+  // Global keyboard shortcuts (spec §7): n = add spend, g+letter = navigate, ? = help.
+  useEffect(() => {
+    let gPending = false
+    let gTimer: ReturnType<typeof setTimeout> | undefined
+
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const el = document.activeElement as HTMLElement | null
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) {
+        return
+      }
+      if (gPending) {
+        gPending = false
+        const to = GO_TO[e.key.toLowerCase()]
+        if (to) {
+          e.preventDefault()
+          navigate(to)
+        }
+        return
+      }
+      if (e.key === '?') {
+        setHelpOpen(true)
+      } else if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault()
+        setQuickAddOpen(true)
+      } else if (e.key === 'g') {
+        gPending = true
+        gTimer = setTimeout(() => {
+          gPending = false
+        }, 1200)
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      if (gTimer) clearTimeout(gTimer)
+    }
+  }, [navigate])
 
   const household = ctx.data?.household
   const members = (ctx.data?.members ?? []).filter((m) => m.archivedAt === null)
@@ -140,13 +235,24 @@ export function AppLayout() {
               Hearth
             </Text>
           </Group>
-          <ThemeToggle />
+          <Group gap={4}>
+            <ActionIcon
+              variant="subtle"
+              size="sm"
+              onClick={() => setQuickAddOpen(true)}
+              aria-label="Add spend"
+              style={{ color: hearthTokens.brand.linen }}
+            >
+              ＋
+            </ActionIcon>
+            <ThemeToggle />
+          </Group>
         </Group>
       </AppShell.Header>
 
       <AppShell.Navbar>
-        <AppShell.Section px="md" pt="xl" pb="lg">
-          <Group gap={8} align="center">
+        <AppShell.Section px="md" pt="xl" pb="md">
+          <Group gap={8} align="center" mb="md">
             <HearthMark />
             <Text
               size="xl"
@@ -160,6 +266,16 @@ export function AppLayout() {
               Hearth
             </Text>
           </Group>
+          <Button
+            fullWidth
+            size="xs"
+            color="apricot"
+            variant="filled"
+            onClick={() => setQuickAddOpen(true)}
+            styles={{ label: { color: hearthTokens.brand.ink } }}
+          >
+            + Add spend
+          </Button>
         </AppShell.Section>
 
         <AppShell.Section grow px="xs" style={{ overflowY: 'auto' }}>
@@ -250,6 +366,9 @@ export function AppLayout() {
       <AppShell.Main>
         <Outlet />
       </AppShell.Main>
+
+      <QuickAddSpend opened={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
+      <ShortcutsHelp opened={helpOpen} onClose={() => setHelpOpen(false)} />
     </AppShell>
   )
 }
