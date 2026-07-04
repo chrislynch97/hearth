@@ -21,7 +21,7 @@ import {
 } from '@mantine/core'
 import { trpc } from '../trpc'
 import { formatMoney, fromMinor, toMinor } from '../../shared/money'
-import { useMoney } from '../useMoney'
+import { useMoney, useFormatDate } from '../useMoney'
 import { hearthTokens } from '../theme'
 import type { MoneyFormat } from '../useMoney'
 import type { Account } from '../../server/db/schema'
@@ -279,6 +279,7 @@ function BalancesModal({
   money: MoneyFormat
 }) {
   const utils = trpc.useUtils()
+  const fmt = useFormatDate()
   const balancesQuery = trpc.accounts.balances.useQuery({ accountId: account.id }, { enabled: opened })
   const addBalance = trpc.accounts.addBalance.useMutation()
   const removeBalance = trpc.accounts.removeBalance.useMutation()
@@ -377,7 +378,7 @@ function BalancesModal({
             <Table.Tbody>
               {balances.map((b) => (
                 <Table.Tr key={b.id}>
-                  <Table.Td>{b.asOfDate}</Table.Td>
+                  <Table.Td>{fmt(b.asOfDate)}</Table.Td>
                   <Table.Td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {formatMoney(b.value, money)}
                   </Table.Td>

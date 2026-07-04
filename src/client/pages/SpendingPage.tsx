@@ -23,6 +23,7 @@ import {
 import { trpc } from '../trpc'
 import type { Member, Pot, SpendTransaction } from '../../server/db/schema'
 import { allocate, formatMoney, fromMinor, toMinor } from '../../shared/money'
+import { useFormatDate } from '../useMoney'
 
 interface MoneyFormat {
   symbol: string
@@ -412,6 +413,7 @@ function SpendRow({
   money: MoneyFormat
 }) {
   const utils = trpc.useUtils()
+  const fmt = useFormatDate()
   const remove = trpc.spends.remove.useMutation()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [splitOpen, setSplitOpen] = useState(false)
@@ -429,7 +431,7 @@ function SpendRow({
   return (
     <>
       <Table.Tr>
-        <Table.Td>{spend.date}</Table.Td>
+        <Table.Td>{fmt(spend.date)}</Table.Td>
         <Table.Td>
           <Group gap={6} wrap="nowrap">
             {spend.description}

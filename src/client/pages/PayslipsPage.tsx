@@ -25,7 +25,7 @@ import {
 import { trpc } from '../trpc'
 import { formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { subtractMonths } from '../../shared/dates'
-import { useMoney } from '../useMoney'
+import { useMoney, useFormatDate } from '../useMoney'
 import type { MoneyFormat } from '../useMoney'
 import { hearthTokens } from '../theme'
 import type { Member, PayslipComponentType } from '../../server/db/schema'
@@ -426,6 +426,7 @@ function NetTrendCard({ payslips, money }: { payslips: PayslipWithLines[]; money
 
 export function PayslipsPage() {
   const money = useMoney()
+  const fmt = useFormatDate()
   const membersQuery = trpc.members.list.useQuery()
   const persons = (membersQuery.data ?? []).filter((m) => m.archivedAt === null && m.kind === 'person')
 
@@ -548,7 +549,7 @@ export function PayslipsPage() {
                   <Table.Tr key={p.id}>
                     <Table.Td>
                       <Group gap="xs">
-                        <Text size="sm">{p.periodLabel || p.payDate}</Text>
+                        <Text size="sm">{p.periodLabel || fmt(p.payDate)}</Text>
                         {p.hasVariablePay && (
                           <Badge size="xs" variant="light" color="apricot">
                             variable

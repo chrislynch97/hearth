@@ -18,7 +18,7 @@ import {
 } from '@mantine/core'
 import { trpc } from '../trpc'
 import { formatMoney, fromMinor, toMinor } from '../../shared/money'
-import { useMoney } from '../useMoney'
+import { useMoney, useFormatDate } from '../useMoney'
 import type { Member } from '../../server/db/schema'
 import type { RaiseWithIncrease } from '../../server/routers/raises'
 
@@ -128,6 +128,7 @@ function RaiseModal({ opened, onClose, ownerId, raise }: RaiseModalProps) {
 
 export function RaisesPage() {
   const money = useMoney()
+  const fmt = useFormatDate()
   const membersQuery = trpc.members.list.useQuery()
   const persons = (membersQuery.data ?? []).filter((m) => m.archivedAt === null && m.kind === 'person')
 
@@ -204,7 +205,7 @@ export function RaisesPage() {
             <Table.Tbody>
               {raises.map((r) => (
                 <Table.Tr key={r.id}>
-                  <Table.Td>{r.effectiveDate}</Table.Td>
+                  <Table.Td>{fmt(r.effectiveDate)}</Table.Td>
                   <Table.Td>{formatMoney(r.newSalary, money)}</Table.Td>
                   <Table.Td>
                     {r.percentIncrease === null ? '—' : `${r.percentIncrease > 0 ? '+' : ''}${r.percentIncrease.toFixed(1)}%`}

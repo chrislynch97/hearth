@@ -17,7 +17,7 @@ import { Link } from 'react-router-dom'
 import { trpc } from '../trpc'
 import { formatMoney } from '../../shared/money'
 import { periodForDate, shiftPeriod } from '../../shared/period'
-import { useMoney } from '../useMoney'
+import { useMoney, useFormatDate } from '../useMoney'
 import { hearthTokens } from '../theme'
 import type { MoneyFormat } from '../useMoney'
 
@@ -376,6 +376,7 @@ function RecentActivityCard({
   money: MoneyFormat
 }) {
   const utils = trpc.useUtils()
+  const fmt = useFormatDate()
   const potsQuery = trpc.pots.list.useQuery()
   const update = trpc.spends.update.useMutation()
   const pots = potsQuery.data ?? []
@@ -401,7 +402,7 @@ function RecentActivityCard({
                 {r.description}
               </Text>
               <Text size="xs" c="dimmed">
-                {r.date}
+                {fmt(r.date)}
               </Text>
             </Group>
             <Group gap="xs" wrap="nowrap">

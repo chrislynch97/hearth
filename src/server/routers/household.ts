@@ -17,6 +17,8 @@ export const householdRouter = router({
         locale: z.string().optional(),
         budgetPeriodStartDay: z.number().int().min(1).max(28).optional(),
         themePreference: z.enum(['system', 'light', 'dark']).optional(),
+        weekStart: z.enum(['monday', 'sunday']).optional(),
+        dateFormat: z.enum(['iso', 'numeric', 'medium', 'long']).optional(),
         backupFrequency: z.enum(['off', 'daily', 'weekly']).optional(),
         incomeBasisDefault: z
           .enum(['regular_net', 'latest_payslip', 'rolling_12m'])

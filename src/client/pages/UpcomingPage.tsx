@@ -13,7 +13,7 @@ import {
 } from '@mantine/core'
 import { trpc } from '../trpc'
 import { formatMoney } from '../../shared/money'
-import { useMoney } from '../useMoney'
+import { useMoney, useFormatDate, useWeekStart } from '../useMoney'
 import type { MoneyFormat } from '../useMoney'
 import { hearthTokens } from '../theme'
 
@@ -26,7 +26,8 @@ interface Payment {
   dueSoon: boolean
 }
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const WEEKDAYS_MON = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const WEEKDAYS_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -53,13 +54,17 @@ function CalendarMonth({
   month,
   byDate,
   money,
+  weekStart,
 }: {
   year: number
   month: number
   byDate: Map<string, Payment[]>
   money: MoneyFormat
+  weekStart: 'monday' | 'sunday'
 }) {
-  const firstWeekday = (new Date(Date.UTC(year, month, 1)).getUTCDay() + 6) % 7 // Mon = 0
+  const weekdays = weekStart === 'sunday' ? WEEKDAYS_SUN : WEEKDAYS_MON
+  const dow = new Date(Date.UTC(year, month, 1)).getUTCDay() // 0 = Sun
+  const firstWeekday = weekStart === 'sunday' ? dow : (dow + 6) % 7
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
   // Always render 6 week rows (42 cells) so every month is the same height.
   const days: Array<number | null> = [
@@ -74,7 +79,7 @@ function CalendarMonth({
         {MONTH_NAMES[month]} {year}
       </Text>
       <Box style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
-        {WEEKDAYS.map((d) => (
+        {weekdays.map((d) => (
           <Text key={d} size="9px" c="dimmed" ta="center" fw={700}>
             {d}
           </Text>
@@ -121,6 +126,8 @@ function CalendarMonth({
 
 export function UpcomingPage() {
   const money = useMoney()
+  const fmt = useFormatDate()
+  const weekStart = useWeekStart()
   const [horizon, setHorizon] = useState('60')
   const query = trpc.plan.upcoming.useQuery({ horizonDays: Number(horizon) })
   const data = query.data
@@ -171,7 +178,14 @@ export function UpcomingPage() {
 
           <Group grow align="flex-start" wrap="wrap">
             {months.map((m) => (
-              <CalendarMonth key={`${m.year}-${m.month}`} year={m.year} month={m.month} byDate={byDate} money={money} />
+              <CalendarMonth
+                key={`${m.year}-${m.month}`}
+                year={m.year}
+                month={m.month}
+                byDate={byDate}
+                money={money}
+                weekStart={weekStart}
+              />
             ))}
           </Group>
 
@@ -185,7 +199,7 @@ export function UpcomingPage() {
                   <Group gap="xs">
                     <Text size="sm">{p.name}</Text>
                     <Text size="xs" c="dimmed">
-                      {p.date}
+                      {fmt(p.date)}
                     </Text>
                     <Badge size="sm" variant="light" color={p.dueSoon ? 'apricot' : 'gray'}>
                       {p.daysUntil === 0 ? 'today' : `in ${p.daysUntil}d`}

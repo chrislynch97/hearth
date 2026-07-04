@@ -50,6 +50,13 @@
       "when": 1783161679483,
       "tag": "0006_shocking_leper_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1783163238096,
+      "tag": "0007_great_expediter",
+      "breakpoints": true
     }
   ]
 }

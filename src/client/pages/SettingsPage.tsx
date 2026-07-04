@@ -37,6 +37,8 @@ function GeneralSection() {
   const [jointBasis, setJointBasis] = useState('equal')
   const [incomeBasis, setIncomeBasis] = useState('regular_net')
   const [decimalPlaces, setDecimalPlaces] = useState<number | string>(2)
+  const [weekStart, setWeekStart] = useState('monday')
+  const [dateFormat, setDateFormat] = useState('medium')
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
@@ -47,6 +49,8 @@ function GeneralSection() {
     setJointBasis(hh.jointContributionBasis)
     setIncomeBasis(hh.incomeBasisDefault)
     setDecimalPlaces(hh.currencyDecimalPlaces)
+    setWeekStart(hh.weekStart)
+    setDateFormat(hh.dateFormat)
   }, [hh])
 
   async function handleSave() {
@@ -56,6 +60,8 @@ function GeneralSection() {
       budgetPeriodStartDay: Number(startDay),
       jointContributionBasis: jointBasis as 'equal' | 'income_proportional' | 'custom',
       incomeBasisDefault: incomeBasis as 'regular_net' | 'latest_payslip' | 'rolling_12m',
+      weekStart: weekStart as 'monday' | 'sunday',
+      dateFormat: dateFormat as 'iso' | 'numeric' | 'medium' | 'long',
     })
     // Currency decimal-places change rescales every money column, so it goes
     // through the dedicated endpoint.
@@ -115,6 +121,30 @@ function GeneralSection() {
             ]}
             value={incomeBasis}
             onChange={(v) => setIncomeBasis(v ?? 'regular_net')}
+            allowDeselect={false}
+          />
+        </Group>
+        <Group grow>
+          <Select
+            label="Week starts on"
+            data={[
+              { value: 'monday', label: 'Monday' },
+              { value: 'sunday', label: 'Sunday' },
+            ]}
+            value={weekStart}
+            onChange={(v) => setWeekStart(v ?? 'monday')}
+            allowDeselect={false}
+          />
+          <Select
+            label="Date format"
+            data={[
+              { value: 'medium', label: 'Medium (4 Jul 2026)' },
+              { value: 'long', label: 'Long (4 July 2026)' },
+              { value: 'numeric', label: 'Numeric (04/07/2026)' },
+              { value: 'iso', label: 'ISO (2026-07-04)' },
+            ]}
+            value={dateFormat}
+            onChange={(v) => setDateFormat(v ?? 'medium')}
             allowDeselect={false}
           />
         </Group>
