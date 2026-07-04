@@ -4,6 +4,70 @@ import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
 import { appRouter } from '../trpc/router'
 
+describe('spends router — split', () => {
+  it('splits a spend into rows that sum to the original, sharing a group id', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db })
+    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
+    const alice = await caller.members.addPerson({ displayName: 'Alice' })
+    const groceries = await caller.pots.create({ name: 'Groceries', ownerId: joint.id })
+    const treats = await caller.pots.create({ name: 'Treats', ownerId: alice.id })
+
+    const s = await caller.spends.add({ description: 'Big shop', amount: 5000, ownerId: joint.id, potId: groceries.id })
+    const group = await caller.spends.split({
+      id: s.id,
+      parts: [
+        { amount: 3000, ownerId: joint.id, potId: groceries.id },
+        { amount: 2000, ownerId: alice.id, potId: treats.id },
+      ],
+    })
+
+    expect(group).toHaveLength(2)
+    expect(group.reduce((a, r) => a + r.amount, 0)).toBe(5000)
+    expect(new Set(group.map((r) => r.splitGroupId)).size).toBe(1)
+    expect(group.every((r) => r.description === 'Big shop' && r.date === s.date)).toBe(true)
+    // The original row is reused as one of the parts.
+    expect(group.some((r) => r.id === s.id)).toBe(true)
+  })
+
+  it('rejects a split that does not sum to the original', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db })
+    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
+    const s = await caller.spends.add({ description: 'X', amount: 5000, ownerId: joint.id })
+    await expect(
+      caller.spends.split({
+        id: s.id,
+        parts: [
+          { amount: 3000, ownerId: joint.id },
+          { amount: 1000, ownerId: joint.id },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('refuses to split a reconciled spend', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db })
+    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
+    const pot = await caller.pots.create({ name: 'P', ownerId: joint.id })
+    const s = await caller.spends.add({ description: 'X', amount: 4000, ownerId: joint.id, potId: pot.id })
+    await caller.reconcile.markPotMoved({ potId: pot.id })
+    await expect(
+      caller.spends.split({
+        id: s.id,
+        parts: [
+          { amount: 2000, ownerId: joint.id, potId: pot.id },
+          { amount: 2000, ownerId: joint.id, potId: pot.id },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+})
+
 describe('spends router', () => {
   it('add with a pot → list returns it', async () => {
     const db = await makeTestDb()

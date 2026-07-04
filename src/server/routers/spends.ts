@@ -153,6 +153,86 @@ export const spendsRouter = router({
       return { id: input.id }
     }),
 
+  /** Replace one spend with several rows that sum to the original, each with its
+   *  own owner/pot. The rows share a split_group_id; the original row becomes the
+   *  first part (keeping its date, description and source). */
+  split: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        parts: z
+          .array(
+            z.object({
+              amount: z.number().int(),
+              ownerId: z.string(),
+              potId: z.string().nullable().optional(),
+              categoryId: z.string().nullable().optional(),
+              note: z.string().nullable().optional(),
+            }),
+          )
+          .min(2),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [original] = await ctx.db.select().from(spendTransaction).where(eq(spendTransaction.id, input.id))
+      if (!original) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Spend transaction not found' })
+      }
+      if (original.reconciled === 1) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'A reconciled spend cannot be split. Undo its reconciliation first.' })
+      }
+
+      const total = input.parts.reduce((acc, p) => acc + p.amount, 0)
+      if (total !== original.amount) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Split parts must sum to the original amount (${original.amount}); got ${total}.`,
+        })
+      }
+
+      for (const part of input.parts) {
+        await validateOwnerAndPot(ctx.db, part.ownerId, part.potId, part.categoryId)
+      }
+
+      const now = Date.now()
+      const splitGroupId = newId()
+      const [first, ...rest] = input.parts
+
+      // Turn the original row into the first part (preserves date/description/source).
+      await ctx.db
+        .update(spendTransaction)
+        .set({
+          amount: first!.amount,
+          ownerId: first!.ownerId,
+          potId: first!.potId ?? null,
+          categoryId: first!.categoryId ?? null,
+          note: first!.note ?? original.note,
+          splitGroupId,
+          updatedAt: now,
+        })
+        .where(eq(spendTransaction.id, original.id))
+
+      for (const part of rest) {
+        await ctx.db.insert(spendTransaction).values({
+          id: newId(),
+          date: original.date,
+          description: original.description,
+          amount: part.amount,
+          ownerId: part.ownerId,
+          potId: part.potId ?? null,
+          categoryId: part.categoryId ?? null,
+          reconciled: 0,
+          source: original.source,
+          splitGroupId,
+          note: part.note ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })
+      }
+
+      return ctx.db.select().from(spendTransaction).where(eq(spendTransaction.splitGroupId, splitGroupId))
+    }),
+
   suggestPot: publicProcedure
     .input(z.object({ description: z.string(), ownerId: z.string() }))
     .query(async ({ ctx, input }) => {
