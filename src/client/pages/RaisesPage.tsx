@@ -21,7 +21,7 @@ import { trpc } from '../trpc'
 import { formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { useMoney, useFormatDate } from '../useMoney'
 import type { MoneyFormat } from '../useMoney'
-import { hearthTokens } from '../theme'
+import { hearthTokens, chartXAxisProps } from '../theme'
 import type { Member } from '../../server/db/schema'
 import type { RaiseWithIncrease } from '../../server/routers/raises'
 
@@ -56,7 +56,7 @@ function SalaryTrendCard({
         series={[{ name: 'salary', label: 'Annual salary', color: hearthTokens.brand.moss }]}
         valueFormatter={(v) => formatMoney(v, money)}
         yAxisProps={{ width: 76 }}
-        xAxisProps={{ tick: { fontSize: 10 } }}
+        xAxisProps={chartXAxisProps}
         gridAxis="xy"
       />
     </Card>

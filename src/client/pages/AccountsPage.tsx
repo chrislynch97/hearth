@@ -19,10 +19,11 @@ import {
   TextInput,
   Title,
 } from '@mantine/core'
+import { AreaChart } from '@mantine/charts'
 import { trpc } from '../trpc'
 import { formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { useMoney, useFormatDate } from '../useMoney'
-import { hearthTokens } from '../theme'
+import { hearthTokens, chartXAxisProps } from '../theme'
 import type { MoneyFormat } from '../useMoney'
 import type { Account } from '../../server/db/schema'
 import type { AccountWithValue } from '../../server/routers/accounts'
@@ -130,33 +131,28 @@ function TrendCard({
   money: MoneyFormat
 }) {
   if (timeline.length < 2) return null
-  const maxAbs = Math.max(1, ...timeline.map((p) => Math.abs(p.netWorth)))
+  // YY-MM labels; recharts thins them automatically when there are many points.
+  const data = timeline.map((p) => ({ date: p.date.slice(2, 7), netWorth: p.netWorth }))
   return (
     <Card withBorder padding="md" radius="md">
       <Title order={4} mb="sm">
         Net worth over time
       </Title>
-      <Group gap={6} align="flex-end" h={100} wrap="nowrap">
-        {timeline.map((p) => {
-          const neg = p.netWorth < 0
-          return (
-            <Box key={p.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-              <Box
-                title={`${p.date}: ${formatMoney(p.netWorth, money)}`}
-                style={{
-                  width: '100%',
-                  height: `${Math.max(2, (Math.abs(p.netWorth) / maxAbs) * 78)}px`,
-                  borderRadius: 3,
-                  backgroundColor: neg ? hearthTokens.brand.apricot : hearthTokens.brand.moss,
-                }}
-              />
-              <Text size="9px" c="dimmed">
-                {p.date.slice(2, 7)}
-              </Text>
-            </Box>
-          )
-        })}
-      </Group>
+      <AreaChart
+        h={180}
+        data={data}
+        dataKey="date"
+        // Net worth can dip below zero — split the fill so negative stretches
+        // read apricot (a liability warning) and positive reads moss.
+        type="split"
+        splitColors={[hearthTokens.brand.moss, hearthTokens.brand.apricot]}
+        series={[{ name: 'netWorth', label: 'Net worth', color: hearthTokens.brand.moss }]}
+        valueFormatter={(v) => formatMoney(v, money)}
+        withDots={false}
+        yAxisProps={{ width: 76 }}
+        xAxisProps={chartXAxisProps}
+        gridAxis="y"
+      />
     </Card>
   )
 }

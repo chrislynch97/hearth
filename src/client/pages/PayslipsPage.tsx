@@ -27,7 +27,7 @@ import { formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { subtractMonths } from '../../shared/dates'
 import { useMoney, useFormatDate } from '../useMoney'
 import type { MoneyFormat } from '../useMoney'
-import { hearthTokens } from '../theme'
+import { hearthTokens, chartXAxisProps } from '../theme'
 import type { Member, PayslipComponentType } from '../../server/db/schema'
 import type { PayslipWithLines } from '../../server/routers/payslips'
 
@@ -437,7 +437,7 @@ function NetTrendCard({ payslips, money }: { payslips: PayslipWithLines[]; money
         ]}
         valueFormatter={(v) => formatMoney(v, money)}
         yAxisProps={{ width: 76 }}
-        xAxisProps={{ tick: { fontSize: 10 } }}
+        xAxisProps={chartXAxisProps}
         gridAxis="y"
       />
     </Card>

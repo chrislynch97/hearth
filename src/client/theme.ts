@@ -95,3 +95,12 @@ export const hearthTokens = {
   // Owner accent colours (assign per household member)
   ownerPalette: ['#6e8a5f', '#c1745a', '#8a7a6a', '#5b7d86', '#a08a52'],
 } as const
+
+/**
+ * Shared x-axis props for @mantine/charts. We shrink the tick font to fit more
+ * date labels, but overriding `tick` REPLACES Mantine's default — which sets
+ * `fill: 'currentColor'`. Without it recharts falls back to a hardcoded dark
+ * grey that's unreadable in dark mode. Re-adding `fill: 'currentColor'` lets the
+ * ticks inherit Mantine's chart text colour, which adapts to the colour scheme.
+ */
+export const chartXAxisProps = { tick: { fontSize: 10, fill: 'currentColor' } }

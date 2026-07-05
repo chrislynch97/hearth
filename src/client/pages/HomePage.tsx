@@ -13,12 +13,13 @@ import {
   Text,
   Title,
 } from '@mantine/core'
+import { BarChart } from '@mantine/charts'
 import { Link } from 'react-router-dom'
 import { trpc } from '../trpc'
 import { formatMoney } from '../../shared/money'
 import { periodForDate, shiftPeriod } from '../../shared/period'
 import { useMoney, useFormatDate } from '../useMoney'
-import { hearthTokens } from '../theme'
+import { hearthTokens, chartXAxisProps } from '../theme'
 import type { MoneyFormat } from '../useMoney'
 
 function getGreeting(): string {
@@ -288,32 +289,25 @@ function AllocationCard({
 // ---------------------------------------------------------------------------
 
 function TrendCard({ trend, money }: { trend: Array<{ month: string; net: number }>; money: MoneyFormat }) {
-  const max = Math.max(1, ...trend.map((m) => m.net))
   const hasData = trend.some((m) => m.net > 0)
   if (!hasData) return null
+  // Show just the month (MM); 12 consecutive months are each distinct.
+  const data = trend.map((m) => ({ month: m.month.slice(5), net: m.net }))
   return (
     <Card withBorder padding="md" radius="md">
       <Title order={4} mb="sm">
         Net income · last 12 months
       </Title>
-      <Group gap={6} align="flex-end" h={72} wrap="nowrap">
-        {trend.map((m) => (
-          <Box key={m.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-            <Box
-              title={`${m.month}: ${formatMoney(m.net, money)}`}
-              style={{
-                width: '100%',
-                height: `${Math.max(2, (m.net / max) * 56)}px`,
-                borderRadius: 3,
-                backgroundColor: m.net > 0 ? hearthTokens.brand.moss : 'var(--mantine-color-gray-4)',
-              }}
-            />
-            <Text size="9px" c="dimmed">
-              {m.month.slice(5)}
-            </Text>
-          </Box>
-        ))}
-      </Group>
+      <BarChart
+        h={150}
+        data={data}
+        dataKey="month"
+        withYAxis={false}
+        series={[{ name: 'net', label: 'Net income', color: hearthTokens.brand.moss }]}
+        valueFormatter={(v) => formatMoney(v, money)}
+        xAxisProps={chartXAxisProps}
+        gridAxis="none"
+      />
     </Card>
   )
 }
