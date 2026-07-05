@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Alert, Badge, Button, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { Alert, Button, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { trpc } from '../trpc'
 import { formatMoney } from '../../shared/money'
 import type { MoneyFormat } from '../useMoney'
@@ -158,14 +158,7 @@ export function FundingPage() {
                     <Stack gap={2}>
                       {pots.map((p) => (
                         <Group key={p.potId} justify="space-between" px="xs" py={4}>
-                          <Group gap="xs">
-                            <Text size="sm">{p.name}</Text>
-                            {p.isDrawdown && (
-                              <Badge size="sm" color="sand" variant="light">
-                                savings
-                              </Badge>
-                            )}
-                          </Group>
+                          <Text size="sm">{p.name}</Text>
                           <Text size="sm">{formatMoney(p.fundingPerMonth, money)}/mo</Text>
                         </Group>
                       ))}

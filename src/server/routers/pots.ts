@@ -35,7 +35,6 @@ export const potsRouter = router({
         name: z.string().min(1),
         categoryId: z.string().nullable().optional(),
         ownerId: z.string(),
-        isDrawdown: z.boolean().optional(),
         note: z.string().optional(),
       }),
     )
@@ -57,7 +56,6 @@ export const potsRouter = router({
         name: input.name,
         categoryId: input.categoryId ?? null,
         ownerId: input.ownerId,
-        isDrawdown: input.isDrawdown ? 1 : 0,
         sortOrder: nextOrder,
         note: input.note ?? null,
         createdAt: now,
@@ -80,13 +78,12 @@ export const potsRouter = router({
         name: z.string().min(1).optional(),
         categoryId: z.string().nullable().optional(),
         ownerId: z.string().optional(),
-        isDrawdown: z.boolean().optional(),
         note: z.string().optional(),
         sortOrder: z.number().int().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, isDrawdown, ownerId, ...rest } = input
+      const { id, ownerId, ...rest } = input
       const now = Date.now()
 
       // Validate ownerId if provided
@@ -99,7 +96,6 @@ export const potsRouter = router({
 
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (ownerId !== undefined) setFields['ownerId'] = ownerId
-      if (isDrawdown !== undefined) setFields['isDrawdown'] = isDrawdown ? 1 : 0
 
       await ctx.db.update(pot).set(setFields).where(eq(pot.id, id))
 

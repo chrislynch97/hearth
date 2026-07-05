@@ -17,7 +17,6 @@ export interface FundingPotInput {
   id: string
   name: string
   ownerId: string
-  isDrawdown: boolean
 }
 
 export interface FundingMemberInput {
@@ -33,7 +32,6 @@ export interface PotFunding {
   potId: string
   name: string
   ownerId: string
-  isDrawdown: boolean
   fundingPerMonth: number
 }
 
@@ -82,7 +80,6 @@ export function computeFundingPlan(input: {
       potId: pot.id,
       name: pot.name,
       ownerId: pot.ownerId,
-      isDrawdown: pot.isDrawdown,
       fundingPerMonth,
     }
   })
@@ -95,14 +92,14 @@ export function computeFundingPlan(input: {
   const personalPotFundingByMemberId = new Map<string, number>()
   for (const person of persons) {
     const total = pots
-      .filter((p) => p.ownerId === person.id && !p.isDrawdown)
+      .filter((p) => p.ownerId === person.id)
       .reduce((acc, p) => acc + (potFundingById.get(p.id) ?? 0), 0)
     personalPotFundingByMemberId.set(person.id, total)
   }
 
   const jointPotFundingTotal = jointMember
     ? pots
-        .filter((p) => p.ownerId === jointMember.id && !p.isDrawdown)
+        .filter((p) => p.ownerId === jointMember.id)
         .reduce((acc, p) => acc + (potFundingById.get(p.id) ?? 0), 0)
     : 0
 

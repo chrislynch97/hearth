@@ -43,7 +43,6 @@ export const planRouter = router({
         id: p.id,
         name: p.name,
         ownerId: p.ownerId,
-        isDrawdown: p.isDrawdown === 1,
       })),
       expenses: expenseInputs,
       members: members.map((m) => ({

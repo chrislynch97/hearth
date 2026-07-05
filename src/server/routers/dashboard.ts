@@ -50,7 +50,7 @@ export const dashboardRouter = router({
 
       // B / C — funding plan (per-person set-aside, remainder, income share).
       const funding = computeFundingPlan({
-        pots: pots.map((p) => ({ id: p.id, name: p.name, ownerId: p.ownerId, isDrawdown: p.isDrawdown === 1 })),
+        pots: pots.map((p) => ({ id: p.id, name: p.name, ownerId: p.ownerId })),
         expenses: expenses.map((e) => ({
           recurrence: e.recurrence as Recurrence,
           active: true,

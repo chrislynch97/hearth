@@ -39,33 +39,6 @@ describe('pots router', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
 
-  it('isDrawdown boolean persists correctly', async () => {
-    const db = await makeTestDb()
-    await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
-
-    const members = await caller.members.list()
-    const joint = members.find((m) => m.kind === 'joint')!
-
-    const drawdown = await caller.pots.create({ name: 'Holiday', ownerId: joint.id, isDrawdown: true })
-    const regular = await caller.pots.create({ name: 'Savings', ownerId: joint.id, isDrawdown: false })
-
-    expect(drawdown.isDrawdown).toBe(1)
-    expect(regular.isDrawdown).toBe(0)
-  })
-
-  it('create without isDrawdown defaults to 0', async () => {
-    const db = await makeTestDb()
-    await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
-
-    const members = await caller.members.list()
-    const joint = members.find((m) => m.kind === 'joint')!
-
-    const p = await caller.pots.create({ name: 'Default Pot', ownerId: joint.id })
-    expect(p.isDrawdown).toBe(0)
-  })
-
   it('create sets categoryId and note', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
@@ -166,21 +139,6 @@ describe('pots router', () => {
     await expect(caller.pots.update({ id: p.id, ownerId: 'bad-id' })).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     })
-  })
-
-  it('update can flip isDrawdown', async () => {
-    const db = await makeTestDb()
-    await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
-
-    const members = await caller.members.list()
-    const joint = members.find((m) => m.kind === 'joint')!
-
-    const p = await caller.pots.create({ name: 'Flip', ownerId: joint.id, isDrawdown: false })
-    expect(p.isDrawdown).toBe(0)
-
-    const updated = await caller.pots.update({ id: p.id, isDrawdown: true })
-    expect(updated.isDrawdown).toBe(1)
   })
 
   it('archive removes from list', async () => {

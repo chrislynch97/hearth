@@ -10,9 +10,9 @@ describe('computeFundingPlan', () => {
     ]
 
     const pots = [
-      { id: 'alice-pot', name: 'Alice Personal', ownerId: 'alice', isDrawdown: false },
-      { id: 'bob-pot', name: 'Bob Personal', ownerId: 'bob', isDrawdown: false },
-      { id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint', isDrawdown: false },
+      { id: 'alice-pot', name: 'Alice Personal', ownerId: 'alice' },
+      { id: 'bob-pot', name: 'Bob Personal', ownerId: 'bob' },
+      { id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint' },
     ]
 
     const expenses = [
@@ -78,7 +78,7 @@ describe('computeFundingPlan', () => {
       { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
     ]
 
-    const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint', isDrawdown: false }]
+    const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint' }]
 
     const expenses = [
       {
@@ -113,7 +113,7 @@ describe('computeFundingPlan', () => {
       { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 0 },
       { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
     ]
-    const pots = [{ id: 'alice-pot', name: 'Alice Personal', ownerId: 'alice', isDrawdown: false }]
+    const pots = [{ id: 'alice-pot', name: 'Alice Personal', ownerId: 'alice' }]
     const expenses = [
       {
         recurrence: 'monthly' as const,
@@ -128,32 +128,31 @@ describe('computeFundingPlan', () => {
     expect(plan.unassignedFundingPerMonth).toBe(0)
   })
 
-  it('drawdown pots do not count toward personalPotFunding or jointPotFundingTotal', () => {
+  it('every funded pot counts toward personalPotFunding and jointPotFundingTotal', () => {
+    // Savings pots you fund monthly (e.g. cash savings) must be part of the plan.
     const members = [
       { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 0 },
       { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
     ]
     const pots = [
-      { id: 'alice-drawdown', name: 'Alice Drawdown', ownerId: 'alice', isDrawdown: true },
-      { id: 'joint-drawdown', name: 'Joint Drawdown', ownerId: 'joint', isDrawdown: true },
+      { id: 'alice-savings', name: 'Alice Savings', ownerId: 'alice' },
+      { id: 'joint-savings', name: 'Joint Savings', ownerId: 'joint' },
     ]
     const expenses = [
       {
         recurrence: 'monthly' as const,
         active: true,
         shares: [
-          { ownerId: 'alice', amount: 5000, potId: 'alice-drawdown' },
-          { ownerId: 'joint', amount: 3000, potId: 'joint-drawdown' },
+          { ownerId: 'alice', amount: 5000, potId: 'alice-savings' },
+          { ownerId: 'joint', amount: 3000, potId: 'joint-savings' },
         ],
       },
     ]
 
     const plan = computeFundingPlan({ pots, expenses, members, jointContributionBasis: 'equal' })
-    // The pot itself still reports fundingPerMonth...
-    expect(plan.pots.find((p) => p.potId === 'alice-drawdown')!.fundingPerMonth).toBe(5000)
-    // ...but it's excluded from personalPotFunding / jointPotFundingTotal.
-    expect(plan.perPerson.find((p) => p.memberId === 'alice')!.personalPotFunding).toBe(0)
-    expect(plan.jointPotFundingTotal).toBe(0)
+    expect(plan.pots.find((p) => p.potId === 'alice-savings')!.fundingPerMonth).toBe(5000)
+    expect(plan.perPerson.find((p) => p.memberId === 'alice')!.personalPotFunding).toBe(5000)
+    expect(plan.jointPotFundingTotal).toBe(3000)
   })
 
   it('income_proportional basis falls back to equal split (no income data yet)', () => {
@@ -162,7 +161,7 @@ describe('computeFundingPlan', () => {
       { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: null, monthlyIncome: 0 },
       { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
     ]
-    const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint', isDrawdown: false }]
+    const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint' }]
     const expenses = [
       {
         recurrence: 'monthly' as const,
@@ -190,7 +189,7 @@ describe('computeFundingPlan', () => {
       { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: 0, monthlyIncome: 0 },
       { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
     ]
-    const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint', isDrawdown: false }]
+    const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint' }]
     const expenses = [
       {
         recurrence: 'monthly' as const,
@@ -212,7 +211,7 @@ describe('computeFundingPlan', () => {
       { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: null, monthlyIncome: 100000 },
       { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
     ]
-    const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint', isDrawdown: false }]
+    const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint' }]
     const expenses = [
       {
         recurrence: 'monthly' as const,
@@ -236,8 +235,8 @@ describe('computeFundingPlan', () => {
       { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
     ]
     const pots = [
-      { id: 'alice-pot', name: 'Alice Personal', ownerId: 'alice', isDrawdown: false },
-      { id: 'joint-pot', name: 'Joint', ownerId: 'joint', isDrawdown: false },
+      { id: 'alice-pot', name: 'Alice Personal', ownerId: 'alice' },
+      { id: 'joint-pot', name: 'Joint', ownerId: 'joint' },
     ]
     const expenses = [
       {
@@ -260,7 +259,7 @@ describe('computeFundingPlan', () => {
 
   it('no persons yields empty perPerson split', () => {
     const members = [{ id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 }]
-    const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint', isDrawdown: false }]
+    const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint' }]
     const expenses = [
       {
         recurrence: 'monthly' as const,

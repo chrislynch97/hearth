@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Alert,
   Badge,
@@ -14,6 +14,7 @@ import {
   Title,
   ActionIcon,
 } from '@mantine/core'
+import { useMediaQuery } from '@mantine/hooks'
 import { trpc } from '../trpc'
 import { CURRENCIES, findCurrency } from './currencies'
 
@@ -282,6 +283,57 @@ function FinishStep({ householdName, onBack }: FinishStepProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Restore from backup (skips the wizard entirely)
+// ---------------------------------------------------------------------------
+
+function RestoreBackupControl() {
+  const utils = trpc.useUtils()
+  const importMut = trpc.data.import.useMutation()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [error, setError] = useState('')
+
+  async function handleFile(file: File) {
+    setError('')
+    try {
+      const parsed = JSON.parse(await file.text())
+      await importMut.mutateAsync(parsed)
+      await utils.invalidate()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Restore failed — is this a valid Hearth backup?')
+    }
+  }
+
+  return (
+    <Stack gap={4} align="flex-end">
+      <Button
+        variant="subtle"
+        size="xs"
+        loading={importMut.isPending}
+        onClick={() => fileRef.current?.click()}
+      >
+        Restore from backup
+      </Button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/json,.json"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.currentTarget.files?.[0]
+          if (file) void handleFile(file)
+          e.currentTarget.value = ''
+        }}
+      />
+      {error && (
+        <Text size="xs" c="red" ta="right">
+          {error}
+        </Text>
+      )}
+    </Stack>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // SetupWizard
 // ---------------------------------------------------------------------------
 
@@ -294,11 +346,15 @@ export function SetupWizard({ householdName, currencyCode }: SetupWizardProps) {
   const [active, setActive] = useState(0)
   // Track the live name as the user edits in step 1 so the finish step shows it
   const [liveHouseholdName, setLiveHouseholdName] = useState(householdName)
+  const isMobile = useMediaQuery('(max-width: 48em)')
 
   return (
-    <Stack gap="xl" maw={640} mx="auto" mt="xl">
-      <Title order={2}>Set up Hearth</Title>
-      <Stepper active={active} allowNextStepsSelect={false}>
+    <Stack gap="xl" maw={640} mx="auto" mt="xl" px="md">
+      <Group justify="space-between" align="flex-start" wrap="nowrap">
+        <Title order={2}>Set up Hearth</Title>
+        <RestoreBackupControl />
+      </Group>
+      <Stepper active={active} allowNextStepsSelect={false} orientation={isMobile ? 'vertical' : 'horizontal'}>
         <Stepper.Step label="Household" description="Name & currency">
           <HouseholdStep
             initialName={householdName}

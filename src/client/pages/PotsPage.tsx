@@ -12,7 +12,6 @@ import {
   Modal,
   Select,
   Stack,
-  Switch,
   Text,
   TextInput,
   Title,
@@ -217,7 +216,6 @@ function PotRow({ pot, members, categories, unused }: PotRowProps) {
   const [name, setName] = useState(pot.name)
   const [ownerId, setOwnerId] = useState<string>(pot.ownerId)
   const [categoryId, setCategoryId] = useState<string | null>(pot.categoryId)
-  const [isDrawdown, setIsDrawdown] = useState(pot.isDrawdown === 1)
   const [note, setNote] = useState(pot.note ?? '')
 
   const update = trpc.pots.update.useMutation()
@@ -232,7 +230,6 @@ function PotRow({ pot, members, categories, unused }: PotRowProps) {
     setName(pot.name)
     setOwnerId(pot.ownerId)
     setCategoryId(pot.categoryId)
-    setIsDrawdown(pot.isDrawdown === 1)
     setNote(pot.note ?? '')
   }
 
@@ -244,7 +241,6 @@ function PotRow({ pot, members, categories, unused }: PotRowProps) {
       name: trimmed,
       ownerId,
       categoryId: categoryId,
-      isDrawdown,
       note: note.trim(),
     })
     await utils.pots.list.invalidate()
@@ -287,12 +283,6 @@ function PotRow({ pot, members, categories, unused }: PotRowProps) {
               placeholder="Uncategorised"
             />
           </Group>
-          <Switch
-            label="Savings / drawdown pot"
-            size="sm"
-            checked={isDrawdown}
-            onChange={(e) => setIsDrawdown(e.currentTarget.checked)}
-          />
           <TextInput
             label="Note"
             size="xs"
@@ -356,11 +346,6 @@ function PotRow({ pot, members, categories, unused }: PotRowProps) {
               }
             >
               {owner.displayName}
-            </Badge>
-          )}
-          {pot.isDrawdown === 1 && (
-            <Badge size="sm" color="sand" variant="light">
-              savings
             </Badge>
           )}
           {unused && (
@@ -435,7 +420,6 @@ function AddPotForm({ members, categories }: AddPotFormProps) {
   const [name, setName] = useState('')
   const [ownerId, setOwnerId] = useState<string | null>(null)
   const [categoryId, setCategoryId] = useState<string | null>(null)
-  const [isDrawdown, setIsDrawdown] = useState(false)
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
 
@@ -457,13 +441,11 @@ function AddPotForm({ members, categories }: AddPotFormProps) {
       name: trimmed,
       ownerId,
       categoryId: categoryId ?? undefined,
-      isDrawdown,
       note: note.trim() || undefined,
     })
     await utils.pots.list.invalidate()
     setName('')
     setCategoryId(null)
-    setIsDrawdown(false)
     setNote('')
   }
 
@@ -506,12 +488,6 @@ function AddPotForm({ members, categories }: AddPotFormProps) {
           value={note}
           onChange={(e) => setNote(e.currentTarget.value)}
           style={{ flex: 1 }}
-        />
-        <Switch
-          label="Savings / drawdown pot"
-          checked={isDrawdown}
-          onChange={(e) => setIsDrawdown(e.currentTarget.checked)}
-          ml="md"
         />
         <Button onClick={() => void handleAdd()} loading={create.isPending} ml="md">
           Add pot

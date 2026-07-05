@@ -53,7 +53,6 @@ export const pot = sqliteTable('pot', {
   ownerId: text('owner_id')
     .notNull()
     .references(() => member.id),
-  isDrawdown: integer('is_drawdown').notNull().default(0),
   sortOrder: integer('sort_order').notNull().default(0),
   note: text('note'),
   archivedAt: integer('archived_at'),
