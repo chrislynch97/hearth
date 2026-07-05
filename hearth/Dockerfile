@@ -12,8 +12,11 @@ RUN apt-get update \
 ARG APP_REF=main
 
 WORKDIR /app
+# `npm install` (not `npm ci`) so the on-device build tolerates cross-platform
+# lockfile drift — `npm ci` is strict and fails (EUSAGE) when the lockfile was
+# generated on a different OS/arch (e.g. Windows dev) than this arm64 build.
 RUN git clone --depth 1 --branch "${APP_REF}" https://github.com/chrislynch97/hearth.git . \
-  && npm ci \
+  && npm install --no-audit --no-fund \
   && npm run build \
   && npm cache clean --force
 

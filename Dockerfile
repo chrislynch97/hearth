@@ -2,8 +2,11 @@ FROM node:24-slim
 WORKDIR /app
 
 # Install all deps (incl. dev: tsx runs the server, vite builds the client).
+# `npm install` (not `npm ci`) so the build tolerates cross-platform lockfile
+# drift — `npm ci` is strict and fails (EUSAGE) when the lockfile was generated
+# on a different OS/arch than the build host (e.g. Windows dev -> arm64 Pi).
 COPY package*.json ./
-RUN npm ci
+RUN npm install --no-audit --no-fund
 
 COPY . .
 RUN npm run build        # builds the client into dist/client
