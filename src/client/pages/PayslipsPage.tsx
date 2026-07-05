@@ -3,7 +3,6 @@ import {
   ActionIcon,
   Alert,
   Badge,
-  Box,
   Button,
   Card,
   Center,
@@ -22,6 +21,7 @@ import {
   TextInput,
   Title,
 } from '@mantine/core'
+import { BarChart } from '@mantine/charts'
 import { trpc } from '../trpc'
 import { formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { subtractMonths } from '../../shared/dates'
@@ -407,38 +407,39 @@ function NetTrendCard({ payslips, money }: { payslips: PayslipWithLines[]; money
   const activeRange = rangeOptions.some((r) => r.value === range) ? range : 'all'
   const limit = activeRange === 'all' ? allChronological.length : Number(activeRange)
   const chronological = allChronological.slice(-limit)
-  const max = Math.max(1, ...chronological.map((p) => p.totals.effectiveNet))
+
+  // One bar per payslip. Variable-pay months (bonus / overtime) render in
+  // apricot via a second stacked series that's zero the rest of the time, so
+  // each month shows a single full-width bar in the right colour.
+  const data = chronological.map((p) => ({
+    label: p.periodLabel || p.payDate.slice(0, 7),
+    net: p.hasVariablePay ? 0 : p.totals.effectiveNet,
+    netVariable: p.hasVariablePay ? p.totals.effectiveNet : 0,
+  }))
 
   return (
     <Card withBorder padding="md" radius="md">
-      <Group justify="space-between" mb="sm" wrap="nowrap">
+      <Group justify="space-between" mb="md" wrap="nowrap">
         <Title order={4}>Net pay over time</Title>
         {rangeOptions.length > 1 && (
           <SegmentedControl size="xs" value={activeRange} onChange={setRange} data={[...rangeOptions]} />
         )}
       </Group>
-      <Group gap={6} align="flex-end" h={110} wrap="nowrap">
-        {chronological.map((p) => (
-          <Box key={p.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-            <Box
-              title={`${p.periodLabel || p.payDate}: ${formatMoney(p.totals.effectiveNet, money)}`}
-              style={{
-                width: '100%',
-                maxWidth: 40,
-                height: `${Math.max(2, (p.totals.effectiveNet / max) * 84)}px`,
-                borderRadius: 3,
-                backgroundColor: p.hasVariablePay ? hearthTokens.brand.apricot : hearthTokens.brand.moss,
-              }}
-            />
-            <Text size="9px" c="dimmed">
-              {p.payDate.slice(2, 7)}
-            </Text>
-          </Box>
-        ))}
-      </Group>
-      <Text size="xs" c="dimmed" mt={4}>
-        Apricot bars include variable pay (bonus / overtime).
-      </Text>
+      <BarChart
+        h={240}
+        data={data}
+        dataKey="label"
+        type="stacked"
+        withLegend
+        series={[
+          { name: 'net', label: 'Net pay', color: hearthTokens.brand.moss },
+          { name: 'netVariable', label: 'Incl. variable', color: hearthTokens.brand.apricot },
+        ]}
+        valueFormatter={(v) => formatMoney(v, money)}
+        yAxisProps={{ width: 76 }}
+        xAxisProps={{ tick: { fontSize: 10 } }}
+        gridAxis="y"
+      />
     </Card>
   )
 }

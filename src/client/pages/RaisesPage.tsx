@@ -2,7 +2,6 @@ import { useState } from 'react'
 import {
   ActionIcon,
   Alert,
-  Box,
   Button,
   Card,
   Center,
@@ -17,6 +16,7 @@ import {
   TextInput,
   Title,
 } from '@mantine/core'
+import { LineChart } from '@mantine/charts'
 import { trpc } from '../trpc'
 import { formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { useMoney, useFormatDate } from '../useMoney'
@@ -39,35 +39,26 @@ function SalaryTrendCard({
   fmt: (date: string) => string
 }) {
   if (raises.length < 2) return null
-  const max = Math.max(1, ...raises.map((r) => r.newSalary))
+  const data = raises.map((r) => ({ date: fmt(r.effectiveDate), salary: r.newSalary }))
 
   return (
     <Card withBorder padding="md" radius="md">
-      <Title order={4} mb="sm">
+      <Title order={4} mb="md">
         Salary over time
       </Title>
-      <Group gap={8} align="flex-end" h={120} wrap="nowrap">
-        {raises.map((r) => (
-          <Box key={r.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-            <Box
-              title={`${fmt(r.effectiveDate)}: ${formatMoney(r.newSalary, money)}`}
-              style={{
-                width: '100%',
-                maxWidth: 48,
-                height: `${Math.max(2, (r.newSalary / max) * 90)}px`,
-                borderRadius: 3,
-                backgroundColor: hearthTokens.brand.moss,
-              }}
-            />
-            <Text size="9px" c="dimmed">
-              {r.effectiveDate.slice(0, 4)}
-            </Text>
-          </Box>
-        ))}
-      </Group>
-      <Text size="xs" c="dimmed" mt={4}>
-        Annual salary at each raise.
-      </Text>
+      <LineChart
+        h={240}
+        data={data}
+        dataKey="date"
+        // Salary holds steady between raises, so step the line at each change.
+        curveType="stepAfter"
+        withDots
+        series={[{ name: 'salary', label: 'Annual salary', color: hearthTokens.brand.moss }]}
+        valueFormatter={(v) => formatMoney(v, money)}
+        yAxisProps={{ width: 76 }}
+        xAxisProps={{ tick: { fontSize: 10 } }}
+        gridAxis="xy"
+      />
     </Card>
   )
 }
