@@ -2,6 +2,9 @@
 
 Private household finance tracker, running as a Home Assistant add-on.
 
+> Full deployment guide (standalone and HA):
+> https://github.com/chrislynch97/hearth/blob/main/docs/deployment.md
+
 ## Install
 
 1. In Home Assistant, go to **Settings → Add-ons → Add-on Store**.
