@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   Badge,
-  Box,
+  Button,
   Card,
   Center,
   Group,
@@ -11,10 +11,10 @@ import {
   Text,
   Title,
 } from '@mantine/core'
+import { DatesProvider, Month } from '@mantine/dates'
 import { trpc } from '../trpc'
 import { formatMoney } from '../../shared/money'
 import { useMoney, useFormatDate, useWeekStart } from '../useMoney'
-import type { MoneyFormat } from '../useMoney'
 import { hearthTokens } from '../theme'
 
 interface Payment {
@@ -26,8 +26,6 @@ interface Payment {
   dueSoon: boolean
 }
 
-const WEEKDAYS_MON = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const WEEKDAYS_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -49,86 +47,12 @@ function monthsBetween(from: string, to: string): Array<{ year: number; month: n
   return result
 }
 
-function CalendarMonth({
-  year,
-  month,
-  byDate,
-  money,
-  weekStart,
-}: {
-  year: number
-  month: number
-  byDate: Map<string, Payment[]>
-  money: MoneyFormat
-  weekStart: 'monday' | 'sunday'
-}) {
-  const weekdays = weekStart === 'sunday' ? WEEKDAYS_SUN : WEEKDAYS_MON
-  const dow = new Date(Date.UTC(year, month, 1)).getUTCDay() // 0 = Sun
-  const firstWeekday = weekStart === 'sunday' ? dow : (dow + 6) % 7
-  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
-  // Always render 6 week rows (42 cells) so every month is the same height.
-  const days: Array<number | null> = [
-    ...Array(firstWeekday).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ]
-  const cells: Array<number | null> = [...days, ...Array(Math.max(0, 42 - days.length)).fill(null)]
-
-  return (
-    <Card withBorder padding="sm" radius="md">
-      <Text fw={600} size="sm" mb="xs">
-        {MONTH_NAMES[month]} {year}
-      </Text>
-      <Box style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
-        {weekdays.map((d) => (
-          <Text key={d} size="9px" c="dimmed" ta="center" fw={700}>
-            {d}
-          </Text>
-        ))}
-      </Box>
-      <Box style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: '40px', gap: 4 }}>
-        {cells.map((day, i) => {
-          if (day === null) return <div key={`b${i}`} />
-          const dateStr = `${year}-${pad(month + 1)}-${pad(day)}`
-          const payments = byDate.get(dateStr)
-          const dueSoon = payments?.some((p) => p.dueSoon)
-          const total = payments?.reduce((acc, p) => acc + p.amount, 0) ?? 0
-          return (
-            <Box
-              key={dateStr}
-              title={payments ? payments.map((p) => `${p.name}: ${formatMoney(p.amount, money)}`).join('\n') : undefined}
-              style={{
-                borderRadius: 6,
-                padding: 3,
-                fontSize: 10,
-                backgroundColor: payments
-                  ? dueSoon
-                    ? `light-dark(${hearthTokens.surface.warmTint}, rgba(217,140,95,0.14))`
-                    : 'light-dark(var(--mantine-color-moss-0), rgba(106,145,87,0.14))'
-                  : 'transparent',
-                border: payments ? `1px solid ${dueSoon ? hearthTokens.brand.apricot : hearthTokens.brand.moss}44` : '1px solid transparent',
-              }}
-            >
-              <Text size="10px" c={payments ? undefined : 'dimmed'} fw={payments ? 600 : 400}>
-                {day}
-              </Text>
-              {payments && (
-                <Text size="9px" c="dimmed" style={{ lineHeight: 1.1 }}>
-                  {formatMoney(total, money)}
-                </Text>
-              )}
-            </Box>
-          )
-        })}
-      </Box>
-    </Card>
-  )
-}
-
 export function UpcomingPage() {
   const money = useMoney()
   const fmt = useFormatDate()
   const weekStart = useWeekStart()
   const [horizon, setHorizon] = useState('60')
+  const [selected, setSelected] = useState<string | null>(null)
   const query = trpc.plan.upcoming.useQuery({ horizonDays: Number(horizon) })
   const data = query.data
   const payments = (data?.payments ?? []) as Payment[]
@@ -142,6 +66,59 @@ export function UpcomingPage() {
   const total = payments.reduce((acc, p) => acc + p.amount, 0)
   const months = data ? monthsBetween(data.from, data.to) : []
 
+  // A payment day renders the date number plus a coloured dot (apricot = due
+  // soon, moss otherwise). renderDay REPLACES the default number, so we draw it.
+  const renderDay = (dateStr: string) => {
+    const day = Number(dateStr.slice(8, 10))
+    const dayPayments = byDate.get(dateStr)
+    if (!dayPayments) return day
+    const dueSoon = dayPayments.some((p) => p.dueSoon)
+    const isSelected = dateStr === selected
+    const dotColor = isSelected ? 'white' : dueSoon ? hearthTokens.brand.apricot : hearthTokens.brand.moss
+    return (
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+        <span style={{ fontWeight: 600 }}>{day}</span>
+        <span
+          style={{
+            position: 'absolute',
+            bottom: 3,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 5,
+            height: 5,
+            borderRadius: '50%',
+            backgroundColor: dotColor,
+          }}
+        />
+      </div>
+    )
+  }
+
+  // Only payment days are interactive: clicking one selects it (filtering the
+  // schedule below); clicking again clears. Non-payment days get no props.
+  const getDayProps = (dateStr: string) => {
+    const dayPayments = byDate.get(dateStr)
+    if (!dayPayments) return {}
+    const dueSoon = dayPayments.some((p) => p.dueSoon)
+    const isSelected = dateStr === selected
+    return {
+      selected: isSelected,
+      onClick: () => setSelected((cur) => (cur === dateStr ? null : dateStr)),
+      title: dayPayments.map((p) => `${p.name}: ${formatMoney(p.amount, money)}`).join('\n'),
+      style: isSelected
+        ? undefined
+        : {
+            backgroundColor: dueSoon
+              ? `light-dark(${hearthTokens.surface.warmTint}, rgba(217,140,95,0.14))`
+              : 'light-dark(var(--mantine-color-moss-0), rgba(106,145,87,0.14))',
+            border: `1px solid ${dueSoon ? hearthTokens.brand.apricot : hearthTokens.brand.moss}44`,
+          },
+    }
+  }
+
+  const selectedPayments = selected ? byDate.get(selected) ?? [] : []
+  const selectedTotal = selectedPayments.reduce((acc, p) => acc + p.amount, 0)
+
   return (
     <Stack gap="lg" maw={900} mx="auto">
       <Group justify="space-between" align="center">
@@ -149,7 +126,10 @@ export function UpcomingPage() {
         <SegmentedControl
           size="xs"
           value={horizon}
-          onChange={setHorizon}
+          onChange={(v) => {
+            setHorizon(v)
+            setSelected(null)
+          }}
           data={[
             { value: '30', label: '30d' },
             { value: '60', label: '60d' },
@@ -176,18 +156,61 @@ export function UpcomingPage() {
             {formatMoney(total, money)} across {payments.length} payment{payments.length === 1 ? '' : 's'} in the next {horizon} days.
           </Text>
 
-          <Group grow align="flex-start" wrap="wrap">
-            {months.map((m) => (
-              <CalendarMonth
-                key={`${m.year}-${m.month}`}
-                year={m.year}
-                month={m.month}
-                byDate={byDate}
-                money={money}
-                weekStart={weekStart}
-              />
-            ))}
-          </Group>
+          <DatesProvider settings={{ consistentWeeks: true }}>
+            <Group grow align="flex-start" wrap="wrap">
+              {months.map((m) => (
+                <Card key={`${m.year}-${m.month}`} withBorder padding="sm" radius="md">
+                  <Text fw={600} size="sm" mb="xs">
+                    {MONTH_NAMES[m.month]} {m.year}
+                  </Text>
+                  <Month
+                    month={`${m.year}-${pad(m.month + 1)}-01`}
+                    firstDayOfWeek={weekStart === 'sunday' ? 0 : 1}
+                    hideOutsideDates
+                    highlightToday
+                    fullWidth
+                    size="md"
+                    renderDay={renderDay}
+                    getDayProps={getDayProps}
+                  />
+                </Card>
+              ))}
+            </Group>
+          </DatesProvider>
+
+          {selected && (
+            <Card withBorder padding="md" radius="md" style={{ borderColor: hearthTokens.brand.moss }}>
+              <Group justify="space-between" mb="xs">
+                <Text fw={600}>{fmt(selected)}</Text>
+                <Button variant="subtle" size="xs" onClick={() => setSelected(null)}>
+                  Clear
+                </Button>
+              </Group>
+              <Stack gap={4}>
+                {selectedPayments.map((p, i) => (
+                  <Group key={`${p.expenseId}-${i}`} justify="space-between" px="xs" py={4}>
+                    <Group gap="xs">
+                      <Text size="sm">{p.name}</Text>
+                      <Badge size="sm" variant="light" color={p.dueSoon ? 'apricot' : 'gray'}>
+                        {p.daysUntil === 0 ? 'today' : `in ${p.daysUntil}d`}
+                      </Badge>
+                    </Group>
+                    <Text size="sm">{formatMoney(p.amount, money)}</Text>
+                  </Group>
+                ))}
+              </Stack>
+              {selectedPayments.length > 1 && (
+                <Group justify="space-between" px="xs" mt={4}>
+                  <Text size="sm" c="dimmed">
+                    Total
+                  </Text>
+                  <Text size="sm" fw={600}>
+                    {formatMoney(selectedTotal, money)}
+                  </Text>
+                </Group>
+              )}
+            </Card>
+          )}
 
           <Card withBorder padding="md" radius="md">
             <Title order={4} mb="sm">
