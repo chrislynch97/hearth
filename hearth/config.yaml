@@ -2,7 +2,7 @@
 # not affect the default `docker compose` deployment (which uses the repo-root
 # Dockerfile). See ./Dockerfile for how the app is built inside the add-on.
 name: Hearth
-version: "1.0.1"
+version: "1.0.2"
 slug: hearth
 description: Private household finance tracker
 url: https://github.com/chrislynch97/hearth
@@ -13,6 +13,12 @@ arch:
   - amd64
 # Our CMD is the long-running process; no s6 init wrapper needed.
 init: false
+# Default "Start on boot" to ON, so Hearth comes back after HA restarts, host
+# reboots, and HA OS/Core updates. (User can still toggle it in the add-on page.)
+boot: auto
+# Default "Watchdog" to ON: Supervisor polls this URL and restarts Hearth if it
+# stops responding. `/` serves the app (200) even when the password gate is on.
+watchdog: http://[HOST]:[PORT:8787]/
 # Expose the web UI on its own port, like Home Assistant's own port.
 ports:
   8787/tcp: 8787
