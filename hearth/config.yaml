@@ -2,7 +2,7 @@
 # not affect the default `docker compose` deployment (which uses the repo-root
 # Dockerfile). See ./Dockerfile for how the app is built inside the add-on.
 name: Hearth
-version: "1.0.9"
+version: "1.0.10"
 slug: hearth
 description: Private household finance tracker
 url: https://github.com/chrislynch97/hearth
@@ -17,10 +17,10 @@ init: true
 # Default "Start on boot" to ON, so Hearth comes back after HA restarts, host
 # reboots, and HA OS/Core updates. (User can still toggle it in the add-on page.)
 boot: auto
-# NOTE: no `watchdog` on purpose. HA resets add-on toggles to config defaults on
-# every update, so defining a watchdog silently re-enabled it after each update;
-# its probe was failing here and restart-looped the add-on. HA still restarts the
-# add-on if the container actually crashes, so this only drops the HTTP health poll.
+# Restart the add-on if it stops responding on its port. NOTE: this is itself a
+# restart trigger — while you're debugging spurious restarts, consider toggling
+# Watchdog OFF in the add-on UI so it doesn't add noise to the investigation.
+watchdog: http://[HOST]:[PORT:8787]/
 # Expose the web UI on its own port, like Home Assistant's own port.
 ports:
   8787/tcp: 8787
@@ -28,7 +28,7 @@ ports_description:
   8787/tcp: Hearth web UI
 # Adds an "Open Web UI" button in the add-on page.
 webui: http://[HOST]:[PORT:8787]
-# NOTE: intentionally NOT `backup: cold`. Cold backups stop the add-on while HA
-# snapshots it — with frequent HA backups that turns into repeated outages. Hot
-# (the default) keeps Hearth running during backups. The in-app JSON Export
-# (Settings -> Data) remains the consistent, restore-safe backup path.
+# Stop the add-on while HA backs up /data so the SQLite file is copied cleanly
+# (a hot copy of a live DB can be torn). One brief pause per backup — negligible
+# with a once-a-day backup.
+backup: cold
