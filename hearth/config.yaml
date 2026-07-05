@@ -2,7 +2,7 @@
 # not affect the default `docker compose` deployment (which uses the repo-root
 # Dockerfile). See ./Dockerfile for how the app is built inside the add-on.
 name: Hearth
-version: "1.0.0"
+version: "1.0.1"
 slug: hearth
 description: Private household finance tracker
 url: https://github.com/chrislynch97/hearth
@@ -20,3 +20,6 @@ ports_description:
   8787/tcp: Hearth web UI
 # Adds an "Open Web UI" button in the add-on page.
 webui: http://[HOST]:[PORT:8787]
+# Stop the add-on while HA backs up /data, so the SQLite DB is copied cleanly
+# (a "hot" copy of a live DB can be torn). Costs a few seconds' downtime per backup.
+backup: cold
