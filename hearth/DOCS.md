@@ -1,4 +1,4 @@
-# Hearthledger
+# Hearth
 
 Private household finance tracker, running as a Home Assistant add-on.
 
@@ -6,7 +6,7 @@ Private household finance tracker, running as a Home Assistant add-on.
 
 1. In Home Assistant, go to **Settings → Add-ons → Add-on Store**.
 2. Top-right **⋮ → Repositories**, paste `https://github.com/chrislynch97/hearth`, and **Add**.
-3. Find **Hearthledger** in the store and click **Install**. The first build takes
+3. Find **Hearth** in the store and click **Install**. The first build takes
    a few minutes (it compiles the app on-device).
 4. **Start** the add-on. Use **Open Web UI**, or browse to `http://<ha-host>:8787`.
 
