@@ -21,6 +21,8 @@ import { trpc } from '../trpc'
 import type { Expense, ExpenseShare, Member, Pot } from '../../server/db/schema'
 import { fromMinor, formatMoney, toMinor } from '../../shared/money'
 import { normaliseToMonthly, roundMinor, type Recurrence } from '../../shared/recurrence'
+import { addMonths, todayIso } from '../../shared/dates'
+import { useFormatDate } from '../useMoney'
 
 type ExpenseRecurrence = 'monthly' | 'quarterly' | 'yearly'
 
@@ -37,6 +39,20 @@ const RECURRENCE_OPTIONS = [
   { value: 'quarterly', label: 'Quarterly' },
   { value: 'yearly', label: 'Yearly' },
 ]
+
+const INTERVAL_MONTHS: Record<ExpenseRecurrence, number> = { monthly: 1, quarterly: 3, yearly: 12 }
+
+/** The next occurrence of a due anchor on or after today, stepping by the
+ *  recurrence interval (mirrors the projection used on the Upcoming page). */
+function nextDueDate(anchor: string, recurrence: ExpenseRecurrence): string {
+  const interval = INTERVAL_MONTHS[recurrence]
+  const today = todayIso()
+  const at = (n: number) => addMonths(anchor, n * interval)
+  let n = 0
+  while (at(n) > today) n -= 1
+  while (at(n) < today) n += 1
+  return at(n)
+}
 
 function orderMembers(members: Member[]): Member[] {
   const persons = members
@@ -296,6 +312,7 @@ function ExpenseRow({
   onEdit: () => void
 }) {
   const utils = trpc.useUtils()
+  const fmtDate = useFormatDate()
   const [confirmArchive, setConfirmArchive] = useState(false)
   const archive = trpc.expenses.archive.useMutation()
 
@@ -328,6 +345,11 @@ function ExpenseRow({
               <Text size="sm" c="dimmed">
                 {formatMoney(monthlyTotal, money)}/mo
               </Text>
+              {expense.dueAnchor && (
+                <Text size="sm" c="dimmed">
+                  · due {fmtDate(nextDueDate(expense.dueAnchor, expense.recurrence as ExpenseRecurrence))}
+                </Text>
+              )}
             </Group>
             <Group gap={4}>
               <ActionIcon variant="subtle" size="sm" aria-label={`Edit ${expense.name}`} onClick={onEdit}>

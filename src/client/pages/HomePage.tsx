@@ -296,14 +296,14 @@ function TrendCard({ trend, money }: { trend: Array<{ month: string; net: number
       <Title order={4} mb="sm">
         Net income · last 12 months
       </Title>
-      <Group gap={6} align="flex-end" h={90} wrap="nowrap">
+      <Group gap={6} align="flex-end" h={72} wrap="nowrap">
         {trend.map((m) => (
           <Box key={m.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
             <Box
               title={`${m.month}: ${formatMoney(m.net, money)}`}
               style={{
                 width: '100%',
-                height: `${Math.max(2, (m.net / max) * 70)}px`,
+                height: `${Math.max(2, (m.net / max) * 56)}px`,
                 borderRadius: 3,
                 backgroundColor: m.net > 0 ? hearthTokens.brand.moss : 'var(--mantine-color-gray-4)',
               }}
@@ -512,7 +512,7 @@ export function HomePage() {
             money={money}
           />
           {accountsSummary.data && <NetWorthTile data={accountsSummary.data} money={money} />}
-          <Group grow align="stretch" wrap="wrap">
+          <Group grow align="flex-start" wrap="wrap">
             <AllocationCard allocation={summary.allocation} householdIncome={summary.householdMonthlyIncome} money={money} />
             <TrendCard trend={summary.incomeTrend} money={money} />
           </Group>

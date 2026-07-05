@@ -290,11 +290,14 @@ export function AppLayout() {
               aria-label="Toggle navigation"
             />
             <Text
+              component={Link}
+              to="/"
               size="lg"
               fw={500}
               style={{
                 fontFamily: 'var(--mantine-font-family-headings)',
                 color: hearthTokens.brand.linen,
+                textDecoration: 'none',
               }}
             >
               Hearth
@@ -317,20 +320,22 @@ export function AppLayout() {
 
       <AppShell.Navbar>
         <AppShell.Section px="md" pt="xl" pb="md">
-          <Group gap={8} align="center" mb="md">
-            <HearthMark />
-            <Text
-              size="xl"
-              fw={500}
-              lh={1}
-              style={{
-                fontFamily: 'var(--mantine-font-family-headings)',
-                color: hearthTokens.brand.linen,
-              }}
-            >
-              Hearth
-            </Text>
-          </Group>
+          <Link to="/" style={{ textDecoration: 'none' }}>
+            <Group gap={8} align="center" mb="md" style={{ cursor: 'pointer' }}>
+              <HearthMark />
+              <Text
+                size="xl"
+                fw={500}
+                lh={1}
+                style={{
+                  fontFamily: 'var(--mantine-font-family-headings)',
+                  color: hearthTokens.brand.linen,
+                }}
+              >
+                Hearth
+              </Text>
+            </Group>
+          </Link>
           <Button
             fullWidth
             size="xs"
