@@ -1,0 +1,22 @@
+# Home Assistant add-on manifest. This is ONLY read by HA's Supervisor — it does
+# not affect the default `docker compose` deployment (which uses the repo-root
+# Dockerfile). See ./Dockerfile for how the app is built inside the add-on.
+name: Hearthledger
+version: "1.0.0"
+slug: hearth
+description: Private household finance tracker
+url: https://github.com/chrislynch97/hearth
+# node:24-slim (the add-on's base) is multi-arch, so both a Pi 5 and an x86 HAOS
+# box are covered.
+arch:
+  - aarch64
+  - amd64
+# Our CMD is the long-running process; no s6 init wrapper needed.
+init: false
+# Expose the web UI on its own port, like Home Assistant's own port.
+ports:
+  8787/tcp: 8787
+ports_description:
+  8787/tcp: Hearthledger web UI
+# Adds an "Open Web UI" button in the add-on page.
+webui: http://[HOST]:[PORT:8787]
