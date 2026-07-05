@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   ActionIcon,
   Alert,
+  Box,
   Button,
   Card,
   Center,
@@ -19,8 +20,57 @@ import {
 import { trpc } from '../trpc'
 import { formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { useMoney, useFormatDate } from '../useMoney'
+import type { MoneyFormat } from '../useMoney'
+import { hearthTokens } from '../theme'
 import type { Member } from '../../server/db/schema'
 import type { RaiseWithIncrease } from '../../server/routers/raises'
+
+// ---------------------------------------------------------------------------
+// Salary-over-time chart
+// ---------------------------------------------------------------------------
+
+function SalaryTrendCard({
+  raises,
+  money,
+  fmt,
+}: {
+  raises: RaiseWithIncrease[] // chronological (oldest first)
+  money: MoneyFormat
+  fmt: (date: string) => string
+}) {
+  if (raises.length < 2) return null
+  const max = Math.max(1, ...raises.map((r) => r.newSalary))
+
+  return (
+    <Card withBorder padding="md" radius="md">
+      <Title order={4} mb="sm">
+        Salary over time
+      </Title>
+      <Group gap={8} align="flex-end" h={120} wrap="nowrap">
+        {raises.map((r) => (
+          <Box key={r.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <Box
+              title={`${fmt(r.effectiveDate)}: ${formatMoney(r.newSalary, money)}`}
+              style={{
+                width: '100%',
+                maxWidth: 48,
+                height: `${Math.max(2, (r.newSalary / max) * 90)}px`,
+                borderRadius: 3,
+                backgroundColor: hearthTokens.brand.moss,
+              }}
+            />
+            <Text size="9px" c="dimmed">
+              {r.effectiveDate.slice(0, 4)}
+            </Text>
+          </Box>
+        ))}
+      </Group>
+      <Text size="xs" c="dimmed" mt={4}>
+        Annual salary at each raise.
+      </Text>
+    </Card>
+  )
+}
 
 interface RaiseModalProps {
   opened: boolean
@@ -187,6 +237,8 @@ export function RaisesPage() {
       {activeOwner && !raisesQuery.isLoading && raises.length === 0 && (
         <Text c="dimmed">No raises recorded yet. Add the starting salary as the first entry.</Text>
       )}
+
+      <SalaryTrendCard raises={raisesQuery.data ?? []} money={money} fmt={fmt} />
 
       {raises.length > 0 && (
         <Card withBorder padding="md">

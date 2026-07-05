@@ -384,16 +384,39 @@ function PayslipModal({ opened, onClose, ownerId, components, lastPayslip, paysl
 // Net-pay trend
 // ---------------------------------------------------------------------------
 
+const TREND_RANGES = [
+  { value: '12', label: '1y' },
+  { value: '24', label: '2y' },
+  { value: '60', label: '5y' },
+  { value: 'all', label: 'All' },
+] as const
+
 function NetTrendCard({ payslips, money }: { payslips: PayslipWithLines[]; money: MoneyFormat }) {
-  const chronological = [...payslips].sort((a, b) => a.payDate.localeCompare(b.payDate))
-  if (chronological.length < 2) return null
+  const allChronological = [...payslips].sort((a, b) => a.payDate.localeCompare(b.payDate))
+  const [range, setRange] = useState<string>('24')
+
+  if (allChronological.length < 2) return null
+
+  // Cap how many bars we render — six years of monthly payslips is unreadable.
+  // Show the most recent N; the full table below still lists every payslip.
+  // Only offer ranges that would actually hide something, and fall back to
+  // "All" when the chosen range no longer fits the data.
+  const rangeOptions = TREND_RANGES.filter(
+    (r) => r.value === 'all' || Number(r.value) < allChronological.length,
+  )
+  const activeRange = rangeOptions.some((r) => r.value === range) ? range : 'all'
+  const limit = activeRange === 'all' ? allChronological.length : Number(activeRange)
+  const chronological = allChronological.slice(-limit)
   const max = Math.max(1, ...chronological.map((p) => p.totals.effectiveNet))
 
   return (
     <Card withBorder padding="md" radius="md">
-      <Title order={4} mb="sm">
-        Net pay over time
-      </Title>
+      <Group justify="space-between" mb="sm" wrap="nowrap">
+        <Title order={4}>Net pay over time</Title>
+        {rangeOptions.length > 1 && (
+          <SegmentedControl size="xs" value={activeRange} onChange={setRange} data={[...rangeOptions]} />
+        )}
+      </Group>
       <Group gap={6} align="flex-end" h={110} wrap="nowrap">
         {chronological.map((p) => (
           <Box key={p.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
