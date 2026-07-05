@@ -59,6 +59,34 @@ describe('reconcile router', () => {
     expect(spendsAfterUndo.every((s) => s.reconciliationBatchId === null)).toBe(true)
   })
 
+  it('deleting the last spend of a batch removes the batch; deleting one of several keeps it with recomputed totals', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db })
+
+    const members = await caller.members.list()
+    const joint = members.find((m) => m.kind === 'joint')!
+    const pot = await caller.pots.create({ name: 'Groceries', ownerId: joint.id })
+
+    const tesco = await caller.spends.add({ description: 'Tesco', amount: 2500, ownerId: joint.id, potId: pot.id })
+    const sains = await caller.spends.add({ description: 'Sainsburys', amount: 1500, ownerId: joint.id, potId: pot.id })
+
+    const batch = await caller.reconcile.markPotMoved({ potId: pot.id })
+    expect(batch.transactionCount).toBe(2)
+
+    // Delete one of two — batch survives with updated totals.
+    await caller.spends.remove({ id: tesco.id })
+    const afterOne = await caller.reconcile.batches()
+    const stillThere = afterOne.find((b) => b.id === batch.id)
+    expect(stillThere?.transactionCount).toBe(1)
+    expect(stillThere?.totalAmount).toBe(1500)
+
+    // Delete the last one — batch is gone entirely.
+    await caller.spends.remove({ id: sains.id })
+    const afterAll = await caller.reconcile.batches()
+    expect(afterAll.find((b) => b.id === batch.id)).toBeUndefined()
+  })
+
   it('markPotMoved on a pot with nothing unreconciled throws BAD_REQUEST', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)

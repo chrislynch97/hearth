@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
-import { spendTransaction, member, pot, category } from '../db/schema'
+import { spendTransaction, member, pot, category, reconciliationBatch } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { suggestPot } from '../spending/suggest'
 import type { DB } from '../db/client'
@@ -149,7 +149,34 @@ export const spendsRouter = router({
   remove: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const [target] = await ctx.db.select().from(spendTransaction).where(eq(spendTransaction.id, input.id))
       await ctx.db.delete(spendTransaction).where(eq(spendTransaction.id, input.id))
+
+      // If this spend was part of a reconciliation batch, keep that batch honest.
+      // Recompute its totals from what's left, and delete it entirely once its
+      // last transaction is gone — otherwise the batch lingers forever in the
+      // Catch-up history with nothing behind it and no way to clear it.
+      if (target?.reconciliationBatchId) {
+        const remaining = await ctx.db
+          .select()
+          .from(spendTransaction)
+          .where(eq(spendTransaction.reconciliationBatchId, target.reconciliationBatchId))
+        if (remaining.length === 0) {
+          await ctx.db
+            .delete(reconciliationBatch)
+            .where(eq(reconciliationBatch.id, target.reconciliationBatchId))
+        } else {
+          await ctx.db
+            .update(reconciliationBatch)
+            .set({
+              totalAmount: remaining.reduce((sum, r) => sum + r.amount, 0),
+              transactionCount: remaining.length,
+              updatedAt: Date.now(),
+            })
+            .where(eq(reconciliationBatch.id, target.reconciliationBatchId))
+        }
+      }
+
       return { id: input.id }
     }),
 
