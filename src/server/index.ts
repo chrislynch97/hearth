@@ -1,4 +1,4 @@
-import Fastify from 'fastify'
+import Fastify, { type FastifyInstance } from 'fastify'
 import fastifyStatic from '@fastify/static'
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify'
 import type { FastifyTRPCPluginOptions } from '@trpc/server/adapters/fastify'
@@ -23,13 +23,55 @@ const PUBLIC_PROCEDURES = new Set(['auth.status', 'auth.login', 'auth.logout'])
 
 const PORT = Number(process.env.PORT ?? 8787)
 
+// A rejected promise or thrown error *outside* a request would otherwise take the
+// whole process down with no explanation — the exact shape of "ran fine, then
+// randomly stopped". Log the reason so it lands in the add-on's Log tab. A stray
+// background rejection shouldn't be fatal for a self-hosted app, so we keep
+// running; an uncaughtException can leave us in an unknown state, so we log and
+// exit (the container manager then restarts us).
+process.on('unhandledRejection', (reason) => {
+  console.error('[hearth] unhandledRejection:', reason)
+})
+process.on('uncaughtException', (err) => {
+  console.error('[hearth] uncaughtException:', err)
+  process.exit(1)
+})
+
 async function main() {
+  // Register the shutdown handlers BEFORE migrate + seed (which can be slow on a
+  // Raspberry Pi). A stop requested mid-startup then still closes cleanly and
+  // exits 0, instead of a hard kill that HA reads as a crash and restart-loops.
+  let app: FastifyInstance | undefined
+  let closing = false
+  const shutdown = async (signal: string) => {
+    if (closing) return
+    closing = true
+    console.log(`[hearth] received ${signal}, shutting down`)
+    try {
+      await app?.close()
+      // Release the SQLite file cleanly once requests have drained, so an
+      // in-flight write can't leave a stale rollback journal that blocks the
+      // next boot (journal_mode=delete leaves a `-journal` on an unclean kill).
+      db.$client.close()
+    } catch (err) {
+      console.error(err)
+    }
+    process.exit(0)
+  }
+  process.on('SIGTERM', () => void shutdown('SIGTERM'))
+  process.on('SIGINT', () => void shutdown('SIGINT'))
+
   await runMigrations()
   await ensureSeed(db)
   startBackupScheduler(db)
 
   // 64 MB body limit so restoring a large JSON export isn't rejected (default 1 MB).
-  const app = Fastify({ logger: true, bodyLimit: 64 * 1024 * 1024 })
+  app = Fastify({ logger: true, bodyLimit: 64 * 1024 * 1024 })
+
+  // Cheap liveness probe for the HA watchdog — returns 200 as soon as we're
+  // listening, without touching the DB or serving the SPA. The add-on watchdog
+  // points at /health (see hearth/config.yaml).
+  app.get('/health', async () => ({ status: 'ok' }))
 
   // Shared-password gate: when a password is set, block every tRPC call except
   // the auth endpoints unless the request carries a valid session cookie.
@@ -64,27 +106,10 @@ async function main() {
   }
 
   await app.listen({ port: PORT, host: '0.0.0.0' })
-
-  // Graceful shutdown: when the process manager (e.g. the HA Supervisor / Docker)
-  // stops the container it sends SIGTERM. Close the server and exit 0 so the stop
-  // is clean — a non-zero exit is read as a crash and triggers a restart loop.
-  let closing = false
-  const shutdown = async (signal: string) => {
-    if (closing) return
-    closing = true
-    app.log.info(`Received ${signal}, shutting down`)
-    try {
-      await app.close()
-    } catch (err) {
-      app.log.error(err)
-    }
-    process.exit(0)
-  }
-  process.on('SIGTERM', () => void shutdown('SIGTERM'))
-  process.on('SIGINT', () => void shutdown('SIGINT'))
+  console.log(`[hearth] listening on :${PORT}`)
 }
 
 main().catch((err) => {
-  console.error(err)
+  console.error('[hearth] fatal error during startup:', err)
   process.exit(1)
 })

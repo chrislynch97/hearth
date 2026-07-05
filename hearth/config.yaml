@@ -2,7 +2,7 @@
 # not affect the default `docker compose` deployment (which uses the repo-root
 # Dockerfile). See ./Dockerfile for how the app is built inside the add-on.
 name: Hearth
-version: "1.0.11"
+version: "1.0.12"
 slug: hearth
 description: Private household finance tracker
 url: https://github.com/chrislynch97/hearth
@@ -17,10 +17,12 @@ init: true
 # Default "Start on boot" to ON, so Hearth comes back after HA restarts, host
 # reboots, and HA OS/Core updates. (User can still toggle it in the add-on page.)
 boot: auto
-# Restart the add-on if it stops responding on its port. NOTE: this is itself a
-# restart trigger — while you're debugging spurious restarts, consider toggling
-# Watchdog OFF in the add-on UI so it doesn't add noise to the investigation.
-watchdog: http://[HOST]:[PORT:8787]/
+# Restart the add-on if it stops responding. Points at /health — a cheap route
+# that returns 200 as soon as the server is listening (no DB, no SPA), so the
+# probe only fails when Hearth is genuinely down. NOTE: the watchdog is itself a
+# restart trigger; if you're chasing spurious restarts, toggle Watchdog OFF in
+# the add-on UI to take it out of the picture.
+watchdog: http://[HOST]:[PORT:8787]/health
 # Expose the web UI on its own port, like Home Assistant's own port.
 ports:
   8787/tcp: 8787
