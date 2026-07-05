@@ -150,9 +150,16 @@ to copy a consistent database — see [Data & backups](#data--backups).
 
 ### Update
 
-Push to `main`, then open the add-on and click **Rebuild** (re-clones `main`).
-Bump `version` in [hearth/config.yaml](../hearth/config.yaml) to get HA's proper
-**Update** button instead.
+Releases are driven by the `version` in [hearth/config.yaml](../hearth/config.yaml):
+
+1. Push your app changes to `main`.
+2. Bump `version` and push.
+3. In the Add-on Store, **⋮ → Reload** so HA re-reads the repo and sees the new
+   version, then click **Update** on the add-on (or enable **Auto update**).
+
+The build re-clones the latest `main`, and the version bump busts the Docker
+layer cache (via the `BUILD_VERSION` build arg), so an Update always picks up your
+newest commits. Pushing code **without** bumping `version` shows no Update prompt.
 
 ---
 
@@ -219,7 +226,7 @@ Notes:
 | Restart on crash | `restart: unless-stopped` (compose) | `Restart=always` (systemd) | **Watchdog** toggle |
 | Start after reboot | `restart: unless-stopped` | `systemctl enable` | **Start on boot** toggle |
 | Survives host/OS update | n/a | n/a | Yes, via Start on boot (brief outage during the update) |
-| Update Hearth | `git pull && docker compose up -d --build` | `git pull && npm install && npm run build && systemctl restart hearth` | **Rebuild** in the add-on (or bump `version` for the Update button) |
+| Update Hearth | `git pull && docker compose up -d --build` | `git pull && npm install && npm run build && systemctl restart hearth` | Bump `version` → **⋮ → Reload** → **Update** |
 
 For the HA add-on, an **HA OS/Core update reboots the whole box**, so Hearth is
 briefly down during the update and then comes back automatically.

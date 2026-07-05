@@ -10,12 +10,18 @@ RUN apt-get update \
 
 # Override to build a different branch/tag if ever needed.
 ARG APP_REF=main
+# HA passes the add-on version here (--build-arg BUILD_VERSION=<version>).
+# Referencing it in the clone step below invalidates the Docker layer cache on
+# every version bump, so an Update always re-clones the latest `main` instead of
+# reusing a stale cached layer.
+ARG BUILD_VERSION=dev
 
 WORKDIR /app
 # `npm install` (not `npm ci`) so the on-device build tolerates cross-platform
 # lockfile drift — `npm ci` is strict and fails (EUSAGE) when the lockfile was
 # generated on a different OS/arch (e.g. Windows dev) than this arm64 build.
-RUN git clone --depth 1 --branch "${APP_REF}" https://github.com/chrislynch97/hearth.git . \
+RUN echo "Building Hearth ${BUILD_VERSION} from ${APP_REF}" \
+  && git clone --depth 1 --branch "${APP_REF}" https://github.com/chrislynch97/hearth.git . \
   && npm install --no-audit --no-fund \
   && npm run build \
   && npm cache clean --force

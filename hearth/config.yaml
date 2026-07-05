@@ -2,7 +2,7 @@
 # not affect the default `docker compose` deployment (which uses the repo-root
 # Dockerfile). See ./Dockerfile for how the app is built inside the add-on.
 name: Hearth
-version: "1.0.3"
+version: "1.0.4"
 slug: hearth
 description: Private household finance tracker
 url: https://github.com/chrislynch97/hearth
