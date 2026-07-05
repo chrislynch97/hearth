@@ -2,7 +2,7 @@
 # not affect the default `docker compose` deployment (which uses the repo-root
 # Dockerfile). See ./Dockerfile for how the app is built inside the add-on.
 name: Hearth
-version: "1.0.5"
+version: "1.0.6"
 slug: hearth
 description: Private household finance tracker
 url: https://github.com/chrislynch97/hearth
@@ -11,8 +11,9 @@ url: https://github.com/chrislynch97/hearth
 arch:
   - aarch64
   - amd64
-# Our CMD is the long-running process; no s6 init wrapper needed.
-init: false
+# Use the tini init (PID 1) so signals are forwarded to node and zombies are
+# reaped — required for clean SIGTERM shutdown / no restart loop.
+init: true
 # Default "Start on boot" to ON, so Hearth comes back after HA restarts, host
 # reboots, and HA OS/Core updates. (User can still toggle it in the add-on page.)
 boot: auto

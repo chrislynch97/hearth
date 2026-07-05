@@ -64,6 +64,24 @@ async function main() {
   }
 
   await app.listen({ port: PORT, host: '0.0.0.0' })
+
+  // Graceful shutdown: when the process manager (e.g. the HA Supervisor / Docker)
+  // stops the container it sends SIGTERM. Close the server and exit 0 so the stop
+  // is clean — a non-zero exit is read as a crash and triggers a restart loop.
+  let closing = false
+  const shutdown = async (signal: string) => {
+    if (closing) return
+    closing = true
+    app.log.info(`Received ${signal}, shutting down`)
+    try {
+      await app.close()
+    } catch (err) {
+      app.log.error(err)
+    }
+    process.exit(0)
+  }
+  process.on('SIGTERM', () => void shutdown('SIGTERM'))
+  process.on('SIGINT', () => void shutdown('SIGINT'))
 }
 
 main().catch((err) => {

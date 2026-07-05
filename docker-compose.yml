@@ -9,4 +9,6 @@ services:
       - PORT=8787
       - DATABASE_URL=file:/data/app.db
       - CLIENT_DIR=/app/dist/client
+    # Proper PID 1 (tini) so SIGTERM reaches node for a clean shutdown.
+    init: true
     restart: unless-stopped

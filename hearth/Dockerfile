@@ -34,4 +34,7 @@ ENV CLIENT_DIR=/app/dist/client
 EXPOSE 8787
 
 # Applies migrations + seed on boot, then serves API + built client on one port.
-CMD ["npm", "run", "start"]
+# Run node directly (not via `npm run start`) so SIGTERM reaches the process and
+# the graceful-shutdown handler exits cleanly — npm as PID/child swallows the
+# signal and exits non-zero, which HA reads as a crash and restart-loops.
+CMD ["node", "--import", "tsx", "src/server/index.ts"]

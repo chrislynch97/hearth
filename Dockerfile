@@ -16,5 +16,8 @@ ENV DATABASE_URL=file:/data/app.db
 ENV CLIENT_DIR=/app/dist/client
 EXPOSE 8787
 
-# Server runs via tsx; applies migrations + seed on boot, then serves API + built client.
-CMD ["npm", "run", "start"]
+# Run node directly (not via `npm run start`) so SIGTERM reaches the process and
+# the graceful-shutdown handler exits cleanly. Pair with `init: true` in
+# docker-compose so a proper PID 1 forwards the signal.
+# Applies migrations + seed on boot, then serves API + built client.
+CMD ["node", "--import", "tsx", "src/server/index.ts"]
