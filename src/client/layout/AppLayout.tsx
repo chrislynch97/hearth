@@ -264,7 +264,7 @@ export function AppLayout() {
   return (
     <AppShell
       header={{ height: { base: 52, sm: 0 } }}
-      navbar={{ width: 210, breakpoint: 'sm', collapsed: { mobile: !mobileOpened } }}
+      navbar={{ width: 300, breakpoint: 'sm', collapsed: { mobile: !mobileOpened } }}
       padding="xl"
       styles={{
         header: {
@@ -353,7 +353,7 @@ export function AppLayout() {
           </Button>
         </AppShell.Section>
 
-        <AppShell.Section grow px="xs" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
+        <AppShell.Section grow px="xs" pt="sm" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
           {NAV_SECTIONS.map((section, i) => (
             <div key={section.title ?? `group-${i}`} style={{ marginBottom: 4 }}>
               {section.title && (
@@ -422,6 +422,7 @@ export function AppLayout() {
                     height: 28,
                     borderRadius: '50%',
                     backgroundColor: m.color ?? hearthTokens.ownerPalette[i % hearthTokens.ownerPalette.length],
+                    boxShadow: 'inset 0 0 0 1.5px rgba(239, 237, 227, 0.55)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
