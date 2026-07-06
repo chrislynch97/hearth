@@ -25,7 +25,7 @@ const PORT = Number(process.env.PORT ?? 8787)
 
 // A rejected promise or thrown error *outside* a request would otherwise take the
 // whole process down with no explanation — the exact shape of "ran fine, then
-// randomly stopped". Log the reason so it lands in the add-on's Log tab. A stray
+// randomly stopped". Log the reason so it lands in the container logs. A stray
 // background rejection shouldn't be fatal for a self-hosted app, so we keep
 // running; an uncaughtException can leave us in an unknown state, so we log and
 // exit (the container manager then restarts us).
@@ -40,7 +40,8 @@ process.on('uncaughtException', (err) => {
 async function main() {
   // Register the shutdown handlers BEFORE migrate + seed (which can be slow on a
   // Raspberry Pi). A stop requested mid-startup then still closes cleanly and
-  // exits 0, instead of a hard kill that HA reads as a crash and restart-loops.
+  // exits 0, instead of a hard kill that a container manager reads as a crash and
+  // restart-loops.
   let app: FastifyInstance | undefined
   let closing = false
   const shutdown = async (signal: string) => {
@@ -77,9 +78,9 @@ async function main() {
     trustProxy: process.env.HEARTH_TRUST_PROXY === '1',
   })
 
-  // Cheap liveness probe for the HA watchdog — returns 200 as soon as we're
-  // listening, without touching the DB or serving the SPA. The add-on watchdog
-  // points at /health (see hearth/config.yaml).
+  // Cheap liveness probe — returns 200 as soon as we're listening, without
+  // touching the DB or serving the SPA. Suitable as a Docker/orchestrator health
+  // check target.
   app.get('/health', async () => ({ status: 'ok' }))
 
   // Shared-password gate: when a password is set, block every tRPC call except

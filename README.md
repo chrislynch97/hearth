@@ -52,17 +52,16 @@ like your real `app.db` (pass `--force` to override).
 
 ## Deploy
 
-Two supported ways — see **[docs/deployment.md](docs/deployment.md)** for the full guide.
+See **[docs/deployment.md](docs/deployment.md)** for the full guide.
 
-- **Standalone** (any PC / VM / Raspberry Pi with Docker):
+- **Docker** (any PC / VM / Raspberry Pi):
   ```bash
   docker compose up -d      # → http://localhost:8787
   ```
-- **Home Assistant OS add-on**: in HA, **Settings → Add-ons → Add-on Store → ⋮ →
-  Repositories**, add `https://github.com/chrislynch97/hearth`, then install **Hearth**.
+- **Node directly** (no Docker) — see the deployment guide.
 
-Your entire state lives in one folder (`./data` standalone, the add-on's `/data`
-on HA). Back it up by copying it, or via **Settings → Data → Export** in the app.
+Your entire state lives in one folder (`./data`, bind-mounted to `/data` in the
+container). Back it up by copying it, or via **Settings → Data → Export** in the app.
 
 ## Configuration
 
