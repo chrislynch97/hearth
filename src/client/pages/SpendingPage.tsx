@@ -20,9 +20,11 @@ import {
   TextInput,
   Title,
 } from '@mantine/core'
+import { DatePickerInput } from '@mantine/dates'
 import { trpc } from '../trpc'
 import type { Member, Pot, SpendTransaction } from '../../server/db/schema'
 import { allocate, formatMoney, fromMinor, toMinor } from '../../shared/money'
+import { todayIso } from '../../shared/dates'
 import { useFormatDate } from '../useMoney'
 
 interface MoneyFormat {
@@ -44,10 +46,17 @@ function potOptions(pots: Pot[]) {
 }
 
 // ---------------------------------------------------------------------------
-// Quick-add form
+// Add-spend form
 // ---------------------------------------------------------------------------
 
-function QuickAddForm({
+/** Format a due date relative to today for the outgoings picker. */
+function dueLabel(daysUntil: number): string {
+  if (daysUntil === 0) return 'due today'
+  if (daysUntil > 0) return `due in ${daysUntil}d`
+  return `due ${-daysUntil}d ago`
+}
+
+function AddSpendForm({
   members,
   pots,
   money,
@@ -58,16 +67,33 @@ function QuickAddForm({
 }) {
   const utils = trpc.useUtils()
   const add = trpc.spends.add.useMutation()
+  const updateExpense = trpc.expenses.update.useMutation()
+  const outgoingsQuery = trpc.plan.recentlyDue.useQuery()
 
   const orderedMembers = orderMembers(members)
   const [amountMajor, setAmountMajor] = useState<string>('')
   const [kind, setKind] = useState<'spend' | 'refund'>('spend')
   const [description, setDescription] = useState('')
+  const [date, setDate] = useState<string | null>(todayIso())
   const [ownerId, setOwnerId] = useState<string | null>(orderedMembers[0]?.id ?? null)
   const [potId, setPotId] = useState<string | null>(null)
   const [potManuallyChosen, setPotManuallyChosen] = useState(false)
+  // The outgoing this entry was prefilled from (drives the "update it going
+  // forward?" prompt), and a hint when that outgoing is split across people.
+  const [outgoingKey, setOutgoingKey] = useState<string | null>(null)
+  const [multiShareHint, setMultiShareHint] = useState(false)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const [pendingUpdate, setPendingUpdate] = useState<null | {
+    expenseId: string
+    name: string
+    from: number
+    to: number
+    share: { ownerId: string; amount: number; potId: string | null }
+  }>(null)
+
+  const outgoings = outgoingsQuery.data ?? []
+  const selectedOutgoing = outgoings.find((o) => o.key === outgoingKey) ?? null
 
   // A pot belongs to exactly one member, so the pot field must only ever offer
   // — and hold — pots the currently selected owner owns.
@@ -95,10 +121,45 @@ function QuickAddForm({
     setAmountMajor('')
     setKind('spend')
     setDescription('')
+    setDate(todayIso())
     setPotId(null)
     setPotManuallyChosen(false)
+    setOutgoingKey(null)
+    setMultiShareHint(false)
     setError('')
     setOwnerId(keepOwner)
+  }
+
+  // Prefill the form from a recently-due outgoing. A single-share outgoing maps
+  // straight onto one spend; a split one prefills the total on the primary
+  // owner and nudges the user toward Split.
+  function selectOutgoing(key: string | null) {
+    setOutgoingKey(key)
+    setMultiShareHint(false)
+    setError('')
+    setSuccessMessage('')
+    if (!key) return
+    const o = outgoings.find((x) => x.key === key)
+    if (!o) return
+    setDescription(o.name)
+    setDate(o.date)
+    setKind('spend')
+    if (o.shares.length === 1) {
+      const s = o.shares[0]!
+      setOwnerId(s.ownerId)
+      setPotId(s.potId)
+      setAmountMajor(String(fromMinor(s.amount, money.decimalPlaces)))
+    } else {
+      const jointShare = o.shares.find((s) => members.find((m) => m.id === s.ownerId)?.kind === 'joint')
+      const primary = jointShare ?? o.shares[0]
+      setOwnerId(primary?.ownerId ?? ownerId)
+      setPotId(null)
+      setAmountMajor(String(fromMinor(o.totalAmount, money.decimalPlaces)))
+      setMultiShareHint(true)
+    }
+    // Picking an outgoing is an explicit pot choice; don't let the description
+    // suggestion overwrite it.
+    setPotManuallyChosen(true)
   }
 
   async function handleSubmit() {
@@ -123,6 +184,7 @@ function QuickAddForm({
     const amount = kind === 'refund' ? -minor : minor
 
     const inserted = await add.mutateAsync({
+      date: date ?? undefined,
       description: trimmedDescription,
       amount,
       ownerId,
@@ -130,6 +192,26 @@ function QuickAddForm({
     })
 
     await Promise.all([utils.spends.list.invalidate(), utils.reconcile.backlog.invalidate()])
+
+    // If this was logged from a single-share outgoing and what we recorded
+    // differs from its expected share, offer to update the outgoing going
+    // forward. (Refunds never redefine an expected cost.)
+    let nextUpdate: typeof pendingUpdate = null
+    if (kind === 'spend' && selectedOutgoing && selectedOutgoing.shares.length === 1) {
+      const ref = selectedOutgoing.shares[0]!
+      const changed =
+        minor !== ref.amount || ownerId !== ref.ownerId || (potId || null) !== (ref.potId ?? null)
+      if (changed) {
+        nextUpdate = {
+          expenseId: selectedOutgoing.expenseId,
+          name: selectedOutgoing.name,
+          from: ref.amount,
+          to: minor,
+          share: { ownerId, amount: minor, potId: potId || null },
+        }
+      }
+    }
+    setPendingUpdate(nextUpdate)
 
     const potName = inserted.potId ? potById.get(inserted.potId)?.name : null
     setSuccessMessage(
@@ -141,10 +223,46 @@ function QuickAddForm({
     resetForm(ownerId)
   }
 
+  async function applyOutgoingUpdate() {
+    if (!pendingUpdate) return
+    await updateExpense.mutateAsync({
+      id: pendingUpdate.expenseId,
+      shares: [pendingUpdate.share],
+    })
+    await Promise.all([
+      utils.plan.recentlyDue.invalidate(),
+      utils.plan.upcoming.invalidate(),
+      utils.plan.funding.invalidate(),
+      utils.expenses.list.invalidate(),
+    ])
+    setPendingUpdate(null)
+    setSuccessMessage(`Updated ${pendingUpdate.name} going forward.`)
+  }
+
   return (
     <Card withBorder padding="md">
       <Stack gap="sm">
-        <Title order={4}>Quick add</Title>
+        <Title order={4}>Add spending</Title>
+        {outgoings.length > 0 && (
+          <Select
+            label="Log a regular outgoing"
+            placeholder="Search recent bills to prefill…"
+            data={outgoings.map((o) => ({
+              value: o.key,
+              label: `${o.name} · ${formatMoney(o.totalAmount, money)} · ${dueLabel(o.daysUntil)}`,
+            }))}
+            value={outgoingKey}
+            searchable
+            clearable
+            onChange={selectOutgoing}
+          />
+        )}
+        {multiShareHint && (
+          <Alert color="sand" title="Split outgoing">
+            This outgoing is shared across people. The total is filled in — add it, then use{' '}
+            <strong>Split</strong> on its row to divide it between pots.
+          </Alert>
+        )}
         <Group grow align="flex-end" wrap="wrap">
           <NumberInput
             label="Amount"
@@ -155,6 +273,14 @@ function QuickAddForm({
             value={amountMajor}
             onChange={(v) => setAmountMajor(v === '' ? '' : String(v))}
             leftSection={<Text size="sm">{money.symbol}</Text>}
+          />
+          <DatePickerInput
+            label="Date"
+            value={date}
+            onChange={setDate}
+            valueFormat="DD MMM YYYY"
+            maxDate={todayIso()}
+            popoverProps={{ withinPortal: true }}
           />
           <div>
             <Text size="sm" fw={500} mb={4}>
@@ -216,6 +342,29 @@ function QuickAddForm({
         {successMessage && !error && (
           <Alert color="moss" title="Logged">
             {successMessage}
+          </Alert>
+        )}
+        {pendingUpdate && (
+          <Alert color="apricot" title="Update this outgoing?">
+            <Stack gap="xs">
+              <Text size="sm">
+                You logged a different amount than {pendingUpdate.name}'s expected{' '}
+                {formatMoney(pendingUpdate.from, money)}. Update it to{' '}
+                {formatMoney(pendingUpdate.to, money)} going forward?
+              </Text>
+              <Group gap="xs">
+                <Button
+                  size="xs"
+                  onClick={() => void applyOutgoingUpdate()}
+                  loading={updateExpense.isPending}
+                >
+                  Update {pendingUpdate.name}
+                </Button>
+                <Button size="xs" variant="default" onClick={() => setPendingUpdate(null)}>
+                  Keep as is
+                </Button>
+              </Group>
+            </Stack>
           </Alert>
         )}
         <Group justify="flex-end">
@@ -421,6 +570,159 @@ function AssignPotCell({ spend, pots }: { spend: SpendTransaction; pots: Pot[] }
   )
 }
 
+// ---------------------------------------------------------------------------
+// Edit modal — change a pending spend's details before it's reconciled
+// ---------------------------------------------------------------------------
+
+function EditSpendModal({
+  spend,
+  members,
+  pots,
+  money,
+  opened,
+  onClose,
+}: {
+  spend: SpendTransaction
+  members: Member[]
+  pots: Pot[]
+  money: MoneyFormat
+  opened: boolean
+  onClose: () => void
+}) {
+  const utils = trpc.useUtils()
+  const update = trpc.spends.update.useMutation()
+  const orderedMembers = orderMembers(members)
+
+  const [amountMajor, setAmountMajor] = useState<string>(
+    String(fromMinor(Math.abs(spend.amount), money.decimalPlaces)),
+  )
+  const [kind, setKind] = useState<'spend' | 'refund'>(spend.amount < 0 ? 'refund' : 'spend')
+  const [description, setDescription] = useState(spend.description)
+  const [date, setDate] = useState<string | null>(spend.date)
+  const [ownerId, setOwnerId] = useState<string | null>(spend.ownerId)
+  const [potId, setPotId] = useState<string | null>(spend.potId)
+  const [error, setError] = useState('')
+
+  const ownerPots = useMemo(() => pots.filter((p) => p.ownerId === ownerId), [pots, ownerId])
+
+  async function handleSave() {
+    const trimmed = description.trim()
+    if (!trimmed) {
+      setError('Please enter a description.')
+      return
+    }
+    if (!ownerId) {
+      setError('Please choose who this is for.')
+      return
+    }
+    const majorValue = Number(amountMajor)
+    if (amountMajor === '' || Number.isNaN(majorValue) || majorValue <= 0) {
+      setError('Please enter an amount greater than zero.')
+      return
+    }
+    setError('')
+
+    const minor = toMinor(majorValue, money.decimalPlaces)
+    try {
+      await update.mutateAsync({
+        id: spend.id,
+        date: date ?? undefined,
+        description: trimmed,
+        amount: kind === 'refund' ? -minor : minor,
+        ownerId,
+        potId: potId || null,
+      })
+      await Promise.all([utils.spends.list.invalidate(), utils.reconcile.backlog.invalidate()])
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save changes.')
+    }
+  }
+
+  return (
+    <Modal opened={opened} onClose={onClose} title="Edit spend" size="md">
+      <Stack gap="sm">
+        <Group grow align="flex-end" wrap="wrap">
+          <NumberInput
+            label="Amount"
+            placeholder="0.00"
+            decimalScale={money.decimalPlaces}
+            fixedDecimalScale
+            min={0}
+            value={amountMajor}
+            onChange={(v) => setAmountMajor(v === '' ? '' : String(v))}
+            leftSection={<Text size="sm">{money.symbol}</Text>}
+          />
+          <DatePickerInput
+            label="Date"
+            value={date}
+            onChange={setDate}
+            valueFormat="DD MMM YYYY"
+            maxDate={todayIso()}
+            popoverProps={{ withinPortal: true }}
+          />
+        </Group>
+        <div>
+          <Text size="sm" fw={500} mb={4}>
+            Type
+          </Text>
+          <SegmentedControl
+            fullWidth
+            value={kind}
+            onChange={(v) => setKind(v as 'spend' | 'refund')}
+            data={[
+              { value: 'spend', label: 'Spend' },
+              { value: 'refund', label: 'Refund' },
+            ]}
+          />
+        </div>
+        <TextInput
+          label="Description"
+          value={description}
+          onChange={(e) => setDescription(e.currentTarget.value)}
+        />
+        <div>
+          <Text size="sm" fw={500} mb={4}>
+            Who's this for?
+          </Text>
+          <SegmentedControl
+            fullWidth
+            value={ownerId ?? ''}
+            onChange={(v) => {
+              setOwnerId(v || null)
+              // A pot belongs to one owner; clear it when the owner changes.
+              setPotId(null)
+            }}
+            data={orderedMembers.map((m) => ({ value: m.id, label: m.displayName }))}
+          />
+        </div>
+        <Select
+          label="Pot"
+          placeholder="No pot (assign later)"
+          data={potOptions(ownerPots)}
+          value={potId}
+          searchable
+          clearable
+          onChange={(v) => setPotId(v || null)}
+        />
+        {(error || update.error) && (
+          <Alert color="red" title="Error">
+            {error || update.error?.message}
+          </Alert>
+        )}
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={() => void handleSave()} loading={update.isPending}>
+            Save changes
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
+  )
+}
+
 function SpendRow({
   spend,
   members,
@@ -437,6 +739,7 @@ function SpendRow({
   const remove = trpc.spends.remove.useMutation()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [splitOpen, setSplitOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
 
   const owner = members.find((m) => m.id === spend.ownerId)
   const pot = spend.potId ? pots.find((p) => p.id === spend.potId) : null
@@ -498,6 +801,16 @@ function SpendRow({
               <Button
                 size="compact-xs"
                 variant="subtle"
+                aria-label={`Edit ${spend.description}`}
+                onClick={() => setEditOpen(true)}
+              >
+                Edit
+              </Button>
+            )}
+            {spend.reconciled === 0 && (
+              <Button
+                size="compact-xs"
+                variant="subtle"
                 aria-label={`Split ${spend.description}`}
                 onClick={() => setSplitOpen(true)}
               >
@@ -516,6 +829,16 @@ function SpendRow({
           </Group>
         </Table.Td>
       </Table.Tr>
+      {editOpen && (
+        <EditSpendModal
+          spend={spend}
+          members={members}
+          pots={pots}
+          money={money}
+          opened={editOpen}
+          onClose={() => setEditOpen(false)}
+        />
+      )}
       {splitOpen && (
         <SplitModal
           spend={spend}
@@ -683,7 +1006,7 @@ export function SpendingPage() {
 
       {!isLoading && (
         <>
-          <QuickAddForm members={members} pots={pots} money={money} />
+          <AddSpendForm members={members} pots={pots} money={money} />
           <Divider />
           <Register members={members} pots={pots} money={money} />
         </>
