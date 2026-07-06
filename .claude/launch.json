@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:server"],
       "port": 8787
+    },
+    {
+      "name": "demo-server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "demo"],
+      "port": 8787
     }
   ]
 }

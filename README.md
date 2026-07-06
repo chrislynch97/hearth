@@ -26,6 +26,30 @@ npm run dev:client   # UI on :5173 (proxies /trpc to the API)
 - `npm test` — run the test suite
 - `npm run typecheck` — type-check the whole project
 
+## Demo mode
+
+For development against fake data (so you never work over your real household) and
+for showing the app to other people, seed a **separate** demo database. It lives in
+its own file (`./data/demo.db`) — your real `app.db` is never touched.
+
+```bash
+npm run demo         # seed ./data/demo.db (first run) + serve it on :8787
+npm run dev:client   # UI on :5173, in another terminal
+```
+
+- `npm run demo -- --seed` — force a fresh re-seed before serving.
+- `npm run demo:seed` — just (re)generate the demo data, without starting the server.
+
+The dataset is a coherent, fictional household ("Maple Street" — two people plus a
+joint entity): categories, pots and recurring bills; months of spending with a live
+catch-up backlog, refunds, a split, imported rows and reconciled batches; a year-plus
+of payslips with a raise and a bonus month; and asset/liability balances trending
+toward a rising net worth. It's **deterministic** (a fixed seed) and **anchored to the
+current month**, so re-runs are identical and the trend charts always look current.
+The generator lives in [`src/server/db/demo.ts`](src/server/db/demo.ts); tweak it to
+change what the demo shows. The seed script refuses to write to a database that looks
+like your real `app.db` (pass `--force` to override).
+
 ## Deploy
 
 Two supported ways — see **[docs/deployment.md](docs/deployment.md)** for the full guide.
