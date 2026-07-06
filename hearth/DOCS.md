@@ -40,4 +40,9 @@ prompt instead.
 
 ## Security
 
-Set a shared password in **Settings → Security** once you're up and running.
+Set a shared password in **Settings → Security** once you're up and running (at
+least 10 characters). For access beyond your trusted network, also turn on
+**two-factor authentication** in **Settings → Two-factor authentication** — a TOTP
+code from an authenticator app plus one-time recovery codes (save them). If you
+front the add-on with a reverse proxy or tunnel, set `HEARTH_TRUST_PROXY=1` so the
+login rate limiter sees the real client IP.

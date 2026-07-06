@@ -13,7 +13,7 @@ file** — which makes it easy to self-host and trivial to back up (copy one fol
 - **Accounts & net worth** — asset/liability balances over time.
 - **Reports** — spend-vs-allocation, fairness, month-over-month; CSV/JSON export.
 - **Monzo CSV import** — review-before-commit importer.
-- **One shared password** (optional) and **automatic backups**.
+- **Shared password with optional two-factor (TOTP)** and **automatic backups**.
 
 ## Quick start (development)
 
@@ -50,6 +50,16 @@ All configuration is via environment variables:
 | `DATABASE_URL` | `file:./data/app.db` | SQLite location (libsql). Can point at a [Turso](https://turso.tech) URL. |
 | `CLIENT_DIR` | `../client` (source) | Where the built UI is served from. **Set to `./dist/client` for a non-Docker production run.** |
 | `HEARTH_SECURE_COOKIES` | unset | Set to `1` to force `Secure` session cookies when behind a reverse proxy that doesn't send `x-forwarded-proto: https`. |
+| `HEARTH_TRUST_PROXY` | unset | Set to `1` **only when behind a reverse proxy / tunnel** so the login rate limiter keys on the real client IP (`X-Forwarded-For`). Leave unset when directly exposed, or clients could spoof that header. |
+
+## Security
+
+An optional **shared household password** (**Settings → Security**) gates the whole
+app; passwords must be at least 10 characters. On top of it you can enable
+**two-factor authentication** (TOTP — Google Authenticator, 1Password, Aegis…) with
+one-time recovery codes. With no password set, the instance is open — fine on a
+trusted LAN, not for public exposure. See
+[docs/deployment.md](docs/deployment.md#https--security).
 
 ## Tech
 

@@ -66,7 +66,16 @@ async function main() {
   startBackupScheduler(db)
 
   // 64 MB body limit so restoring a large JSON export isn't rejected (default 1 MB).
-  app = Fastify({ logger: true, bodyLimit: 64 * 1024 * 1024 })
+  // `trustProxy` is opt-in (HEARTH_TRUST_PROXY=1): only enable it when a reverse
+  // proxy / tunnel sits in front, so the login rate limiter keys on the real
+  // client IP (X-Forwarded-For) instead of the proxy. Enabling it while directly
+  // exposed would let clients spoof that header and evade the limiter, so it
+  // defaults off.
+  app = Fastify({
+    logger: true,
+    bodyLimit: 64 * 1024 * 1024,
+    trustProxy: process.env.HEARTH_TRUST_PROXY === '1',
+  })
 
   // Cheap liveness probe for the HA watchdog — returns 200 as soon as we're
   // listening, without touching the DB or serving the SPA. The add-on watchdog

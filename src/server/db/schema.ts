@@ -9,6 +9,13 @@ export const household = sqliteTable('household', {
   locale: text('locale').notNull().default('en-GB'),
   budgetPeriodStartDay: integer('budget_period_start_day').notNull().default(1),
   passwordHash: text('password_hash'),
+  // TOTP MFA (opt-in, layered on top of the shared password). `mfaSecret` is the
+  // base32 seed; `mfaEnabledAt` gates enforcement (a secret can exist mid-enrolment
+  // before it's confirmed); `mfaRecoveryCodes` is a JSON array of scrypt-hashed
+  // single-use codes.
+  mfaSecret: text('mfa_secret'),
+  mfaEnabledAt: integer('mfa_enabled_at'),
+  mfaRecoveryCodes: text('mfa_recovery_codes'),
   themePreference: text('theme_preference').notNull().default('system'),
   weekStart: text('week_start').notNull().default('monday'),   // 'monday' | 'sunday'
   dateFormat: text('date_format').notNull().default('medium'), // 'iso' | 'numeric' | 'medium' | 'long'

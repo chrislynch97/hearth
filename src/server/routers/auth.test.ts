@@ -2,7 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
 import { appRouter } from '../trpc/router'
+import { generateTotp } from '../auth/totp'
 import type { DB } from '../db/client'
+
+// A password comfortably clearing the strength policy (>= 10 chars, not common).
+const PW = 'correct-horse-staple'
 
 /** A caller with a cookie spy so we can assert session cookies get set/cleared. */
 function makeCaller(db: DB, sessionToken?: string) {
@@ -21,7 +25,7 @@ describe('auth router', () => {
     await ensureSeed(db)
     const { caller } = makeCaller(db)
     const status = await caller.auth.status()
-    expect(status).toEqual({ passwordSet: false, authenticated: true })
+    expect(status).toEqual({ passwordSet: false, mfaEnabled: false, authenticated: true })
   })
 
   it('setPassword locks the instance; wrong login is rejected, correct login sets a cookie', async () => {
@@ -29,7 +33,7 @@ describe('auth router', () => {
     await ensureSeed(db)
 
     const set = makeCaller(db)
-    await set.caller.auth.setPassword({ newPassword: 'hunter2' })
+    await set.caller.auth.setPassword({ newPassword: PW })
     // Setting a password logs the setter in (cookie issued).
     expect(set.cookies.at(-1)).toBeTruthy()
 
@@ -38,10 +42,13 @@ describe('auth router', () => {
     expect(status.passwordSet).toBe(true)
     expect(status.authenticated).toBe(false)
 
-    await expect(anon.caller.auth.login({ password: 'wrong' })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+    await expect(anon.caller.auth.login({ password: 'wrong-password-x' })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
 
     const login = makeCaller(db)
-    await login.caller.auth.login({ password: 'hunter2' })
+    const result = await login.caller.auth.login({ password: PW })
+    expect(result).toEqual({ ok: true })
     const issued = login.cookies.at(-1)
     expect(issued).toBeTruthy()
 
@@ -50,18 +57,34 @@ describe('auth router', () => {
     expect((await authed.caller.auth.status()).authenticated).toBe(true)
   })
 
+  it('rejects weak passwords', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const c = makeCaller(db)
+    // Too short.
+    await expect(c.caller.auth.setPassword({ newPassword: 'short' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+    // Common.
+    await expect(c.caller.auth.setPassword({ newPassword: 'password123' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+    // No password should have been set.
+    expect((await c.caller.auth.status()).passwordSet).toBe(false)
+  })
+
   it('changing the password requires the current one and invalidates old sessions', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
     const setup = makeCaller(db)
-    await setup.caller.auth.setPassword({ newPassword: 'first' })
+    await setup.caller.auth.setPassword({ newPassword: PW })
     const oldToken = setup.cookies.at(-1) as string
 
     await expect(
-      setup.caller.auth.setPassword({ currentPassword: 'nope', newPassword: 'second' }),
+      setup.caller.auth.setPassword({ currentPassword: 'nope-nope-nope', newPassword: 'second-strong-pw' }),
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
 
-    await setup.caller.auth.setPassword({ currentPassword: 'first', newPassword: 'second' })
+    await setup.caller.auth.setPassword({ currentPassword: PW, newPassword: 'second-strong-pw' })
 
     // The old cookie no longer authenticates.
     const withOld = makeCaller(db, oldToken)
@@ -72,13 +95,113 @@ describe('auth router', () => {
     const db = await makeTestDb()
     await ensureSeed(db)
     const c = makeCaller(db)
-    await c.caller.auth.setPassword({ newPassword: 'secret' })
+    await c.caller.auth.setPassword({ newPassword: PW })
 
-    await expect(c.caller.auth.clearPassword({ currentPassword: 'wrong' })).rejects.toMatchObject({
+    await expect(c.caller.auth.clearPassword({ currentPassword: 'wrong-password-x' })).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
     })
 
-    await c.caller.auth.clearPassword({ currentPassword: 'secret' })
+    await c.caller.auth.clearPassword({ currentPassword: PW })
     expect((await c.caller.auth.status()).passwordSet).toBe(false)
+  })
+})
+
+describe('MFA', () => {
+  /** Set a password and return a caller holding the resulting session. */
+  async function withPassword(db: DB) {
+    const setup = makeCaller(db)
+    await setup.caller.auth.setPassword({ newPassword: PW })
+    const token = setup.cookies.at(-1) as string
+    return { token, authed: makeCaller(db, token) }
+  }
+
+  it('requires an authenticated session to enrol', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    await withPassword(db)
+    const anon = makeCaller(db)
+    await expect(anon.caller.auth.enrollMfa()).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+  })
+
+  it('enrol → confirm turns MFA on and yields recovery codes', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { authed } = await withPassword(db)
+
+    const enroll = await authed.caller.auth.enrollMfa()
+    expect(enroll.secret).toBeTruthy()
+    expect(enroll.qrSvg).toContain('<svg')
+
+    // Not enabled until confirmed.
+    expect((await authed.caller.auth.status()).mfaEnabled).toBe(false)
+
+    // A wrong code doesn't enable it.
+    await expect(authed.caller.auth.confirmMfa({ code: '000000' })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+
+    const confirm = await authed.caller.auth.confirmMfa({ code: generateTotp(enroll.secret) })
+    expect(confirm.recoveryCodes).toHaveLength(10)
+    expect((await authed.caller.auth.status()).mfaEnabled).toBe(true)
+  })
+
+  it('login demands a code once MFA is on, accepts a TOTP', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { authed } = await withPassword(db)
+    const enroll = await authed.caller.auth.enrollMfa()
+    await authed.caller.auth.confirmMfa({ code: generateTotp(enroll.secret) })
+
+    // Password alone: prompted for a code, no cookie issued.
+    const step1 = makeCaller(db)
+    expect(await step1.caller.auth.login({ password: PW })).toEqual({ ok: false, mfaRequired: true })
+    expect(step1.cookies).toHaveLength(0)
+
+    // Wrong code is rejected.
+    await expect(
+      makeCaller(db).caller.auth.login({ password: PW, code: '000000' }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+
+    // Correct TOTP logs in.
+    const step2 = makeCaller(db)
+    const ok = await step2.caller.auth.login({ password: PW, code: generateTotp(enroll.secret) })
+    expect(ok).toEqual({ ok: true })
+    expect(step2.cookies.at(-1)).toBeTruthy()
+  })
+
+  it('a recovery code logs in once, then is spent', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { authed } = await withPassword(db)
+    const enroll = await authed.caller.auth.enrollMfa()
+    const { recoveryCodes } = await authed.caller.auth.confirmMfa({ code: generateTotp(enroll.secret) })
+    const code = recoveryCodes[0]!
+
+    const first = makeCaller(db)
+    expect(await first.caller.auth.login({ password: PW, code })).toEqual({ ok: true })
+
+    // Same recovery code is now useless.
+    await expect(makeCaller(db).caller.auth.login({ password: PW, code })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+  })
+
+  it('disableMfa needs the password and turns MFA back off', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { authed } = await withPassword(db)
+    const enroll = await authed.caller.auth.enrollMfa()
+    await authed.caller.auth.confirmMfa({ code: generateTotp(enroll.secret) })
+
+    await expect(authed.caller.auth.disableMfa({ currentPassword: 'wrong-password-x' })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+
+    await authed.caller.auth.disableMfa({ currentPassword: PW })
+    expect((await authed.caller.auth.status()).mfaEnabled).toBe(false)
+
+    // And login no longer asks for a code.
+    const login = makeCaller(db)
+    expect(await login.caller.auth.login({ password: PW })).toEqual({ ok: true })
   })
 })

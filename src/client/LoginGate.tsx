@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Card, Center, Group, PasswordInput, Stack, Text } from '@mantine/core'
+import { Button, Card, Center, Group, PasswordInput, Stack, Text, TextInput } from '@mantine/core'
 import { trpc } from './trpc'
 import { hearthTokens } from './theme'
 
@@ -8,16 +8,31 @@ export function LoginGate() {
   const utils = trpc.useUtils()
   const login = trpc.auth.login.useMutation()
   const [password, setPassword] = useState('')
+  const [code, setCode] = useState('')
+  const [mfaRequired, setMfaRequired] = useState(false)
   const [error, setError] = useState('')
 
   async function submit() {
     setError('')
     try {
-      await login.mutateAsync({ password })
-      await utils.auth.status.invalidate()
+      const result = await login.mutateAsync({
+        password,
+        code: mfaRequired ? code : undefined,
+      })
+      if (result.ok) {
+        await utils.auth.status.invalidate()
+        return
+      }
+      // Password accepted; server now wants the second factor.
+      setMfaRequired(true)
     } catch {
-      setError('Incorrect password')
-      setPassword('')
+      if (mfaRequired) {
+        setError('Incorrect code')
+        setCode('')
+      } else {
+        setError('Incorrect password')
+        setPassword('')
+      }
     }
   }
 
@@ -36,16 +51,32 @@ export function LoginGate() {
             </Text>
           </Group>
           <Text size="sm" c="dimmed" ta="center">
-            This household is password protected.
+            {mfaRequired
+              ? 'Enter the code from your authenticator app.'
+              : 'This household is password protected.'}
           </Text>
-          <PasswordInput
-            label="Password"
-            value={password}
-            onChange={(e) => setPassword(e.currentTarget.value)}
-            onKeyDown={(e) => e.key === 'Enter' && void submit()}
-            error={error || undefined}
-            autoFocus
-          />
+          {mfaRequired ? (
+            <TextInput
+              label="Authentication code"
+              description="6-digit code, or one of your recovery codes"
+              value={code}
+              onChange={(e) => setCode(e.currentTarget.value)}
+              onKeyDown={(e) => e.key === 'Enter' && void submit()}
+              error={error || undefined}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+            />
+          ) : (
+            <PasswordInput
+              label="Password"
+              value={password}
+              onChange={(e) => setPassword(e.currentTarget.value)}
+              onKeyDown={(e) => e.key === 'Enter' && void submit()}
+              error={error || undefined}
+              autoFocus
+            />
+          )}
           <Button onClick={() => void submit()} loading={login.isPending} fullWidth>
             Unlock
           </Button>

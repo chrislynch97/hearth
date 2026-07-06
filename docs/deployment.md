@@ -182,10 +182,13 @@ newest commits. Pushing code **without** bumping `version` shows no Update promp
 | `DATABASE_URL` | `file:./data/app.db` | SQLite location (libsql `file:` URL). Can also point at a [Turso](https://turso.tech) remote URL to decouple data from local disk. |
 | `CLIENT_DIR` | `../client` (source) | Directory of the built UI. Set to `./dist/client` for a non-Docker production run. Docker/add-on images set this for you. |
 | `HEARTH_SECURE_COOKIES` | unset | Set to `1` to force `Secure` session cookies when behind a reverse proxy that terminates TLS but doesn't forward `x-forwarded-proto: https`. |
+| `HEARTH_TRUST_PROXY` | unset | Set to `1` **only when a reverse proxy / tunnel sits in front** so Fastify reads the real client IP from `X-Forwarded-For` and the login rate limiter throttles per-client. Leave unset when directly exposed — otherwise a client could spoof `X-Forwarded-For` to dodge the limiter. |
 
 Hearth auto-detects HTTPS from `x-forwarded-proto: https` (or a direct HTTPS
 connection) and marks the session cookie `Secure` accordingly; `HEARTH_SECURE_COOKIES=1`
-is the manual override for proxies that don't set that header.
+is the manual override for proxies that don't set that header. When you front Hearth
+with a proxy or tunnel, also set `HEARTH_TRUST_PROXY=1` so the rate limiter sees the
+real client IP rather than the proxy's.
 
 ---
 
@@ -266,12 +269,23 @@ Assistant itself and Ingress add-ons. Good options instead:
 
 - **Set a password** (**Settings → Security**). With no password set, the instance
   is open (fine on a trusted LAN; not for public exposure). A single shared password
-  is the v1 auth model.
+  gates the whole app; it must be at least 10 characters and very common passwords
+  are rejected.
+- **Enable two-factor authentication** (**Settings → Two-factor authentication**) for
+  anything reachable beyond a trusted network. It adds a TOTP code (Google
+  Authenticator, 1Password, Aegis…) on top of the password, with one-time recovery
+  codes shown once at enrolment — **save them**, they're your way back in if you lose
+  the authenticator.
 - **HTTPS matters for the cookie.** The session cookie is only marked `Secure` over
   HTTPS. Terminate TLS at a reverse proxy / tunnel and, if it doesn't forward
   `x-forwarded-proto: https`, set `HEARTH_SECURE_COOKIES=1`.
 - **Login is rate-limited** (10 attempts / 15 min per client, then a 15-minute
-  block) to slow brute-forcing.
+  block) to slow brute-forcing. Behind a proxy, set `HEARTH_TRUST_PROXY=1` so the
+  limit is per real client IP, not per proxy.
+- **The database is not encrypted at rest.** The password hash, TOTP secret and
+  recovery-code hashes live in the same SQLite file as your data, so two-factor
+  protects the *login path*, not someone who already has the file. Keep the data
+  directory (and your backups) on trusted storage.
 - **Financial data on a device you own** is the intended posture — prefer a VPN over
   a public URL for remote access.
 
