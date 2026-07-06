@@ -319,7 +319,12 @@ export function AppLayout() {
       </AppShell.Header>
 
       <AppShell.Navbar>
-        <AppShell.Section px="md" pt="xl" pb="md">
+        <AppShell.Section
+          px="md"
+          pt="xl"
+          pb="md"
+          style={{ borderBottom: '1px solid rgba(239, 237, 227, 0.14)' }}
+        >
           <Link to="/" style={{ textDecoration: 'none' }}>
             <Group gap={8} align="center" mb="md" style={{ cursor: 'pointer' }}>
               <HearthMark />
@@ -348,7 +353,7 @@ export function AppLayout() {
           </Button>
         </AppShell.Section>
 
-        <AppShell.Section grow px="xs" style={{ overflowY: 'auto' }}>
+        <AppShell.Section grow px="xs" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
           {NAV_SECTIONS.map((section, i) => (
             <div key={section.title ?? `group-${i}`} style={{ marginBottom: 4 }}>
               {section.title && (
@@ -401,7 +406,12 @@ export function AppLayout() {
           ))}
         </AppShell.Section>
 
-        <AppShell.Section px="md" pb="md" pt="sm">
+        <AppShell.Section
+          px="md"
+          pb="md"
+          pt="sm"
+          style={{ borderTop: '1px solid rgba(239, 237, 227, 0.14)' }}
+        >
           <Group gap={8} justify="space-between">
             <Group gap={8}>
               {people.slice(0, 4).map((m, i) => (

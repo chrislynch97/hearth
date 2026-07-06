@@ -493,9 +493,9 @@ function AccountGroup({
           <Table verticalSpacing="xs" horizontalSpacing="md">
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Account</Table.Th>
+                <Table.Th style={{ whiteSpace: 'nowrap' }}>Account</Table.Th>
                 <Table.Th>Owner</Table.Th>
-                <Table.Th>As of</Table.Th>
+                <Table.Th style={{ whiteSpace: 'nowrap' }}>As of</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Value</Table.Th>
                 <Table.Th />
               </Table.Tr>
@@ -505,7 +505,7 @@ function AccountGroup({
                 <Table.Tr key={a.id}>
                   <Table.Td>
                     <Group gap={6} wrap="nowrap">
-                      <Text size="sm">{a.name}</Text>
+                      <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{a.name}</Text>
                       {subtypeLabel(a.kind, a.subtype) && (
                         <Badge size="xs" variant="light" color="gray">
                           {subtypeLabel(a.kind, a.subtype)}

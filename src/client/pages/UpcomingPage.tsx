@@ -7,6 +7,7 @@ import {
   Group,
   Loader,
   SegmentedControl,
+  SimpleGrid,
   Stack,
   Text,
   Title,
@@ -157,7 +158,7 @@ export function UpcomingPage() {
           </Text>
 
           <DatesProvider settings={{ consistentWeeks: true }}>
-            <Group grow align="flex-start" wrap="wrap">
+            <SimpleGrid cols={{ base: 1, xs: 2, md: 3 }} spacing="md">
               {months.map((m) => (
                 <Card key={`${m.year}-${m.month}`} withBorder padding="sm" radius="md">
                   <Text fw={600} size="sm" mb="xs">
@@ -175,7 +176,7 @@ export function UpcomingPage() {
                   />
                 </Card>
               ))}
-            </Group>
+            </SimpleGrid>
           </DatesProvider>
 
           {selected && (

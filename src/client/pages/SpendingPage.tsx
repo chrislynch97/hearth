@@ -431,7 +431,7 @@ function SpendRow({
   return (
     <>
       <Table.Tr>
-        <Table.Td>{fmt(spend.date)}</Table.Td>
+        <Table.Td style={{ whiteSpace: 'nowrap' }}>{fmt(spend.date)}</Table.Td>
         <Table.Td>
           <Group gap={6} wrap="nowrap">
             {spend.description}
@@ -607,7 +607,7 @@ function Register({ members, pots, money }: { members: Member[]; pots: Pot[]; mo
             <Table verticalSpacing="xs">
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Date</Table.Th>
+                  <Table.Th style={{ whiteSpace: 'nowrap' }}>Date</Table.Th>
                   <Table.Th>Description</Table.Th>
                   <Table.Th>Owner</Table.Th>
                   <Table.Th>Amount</Table.Th>

@@ -557,7 +557,7 @@ export function PayslipsPage() {
           <Table verticalSpacing="xs" horizontalSpacing="md">
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Pay date</Table.Th>
+                <Table.Th style={{ whiteSpace: 'nowrap' }}>Pay date</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Gross</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Deductions</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Net</Table.Th>
@@ -572,8 +572,8 @@ export function PayslipsPage() {
                 return (
                   <Table.Tr key={p.id}>
                     <Table.Td>
-                      <Group gap="xs">
-                        <Text size="sm">{p.periodLabel || fmt(p.payDate)}</Text>
+                      <Group gap="xs" wrap="nowrap">
+                        <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{p.periodLabel || fmt(p.payDate)}</Text>
                         {p.hasVariablePay && (
                           <Badge size="xs" variant="light" color="apricot">
                             variable

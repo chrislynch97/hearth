@@ -203,7 +203,7 @@ export function ImportPage() {
                 <Table.Thead>
                   <Table.Tr>
                     <Table.Th w={40} />
-                    <Table.Th>Date</Table.Th>
+                    <Table.Th style={{ whiteSpace: 'nowrap' }}>Date</Table.Th>
                     <Table.Th>Description</Table.Th>
                     <Table.Th style={{ textAlign: 'right' }}>Amount</Table.Th>
                     <Table.Th>Status</Table.Th>
@@ -225,7 +225,7 @@ export function ImportPage() {
                           />
                         </Table.Td>
                         <Table.Td>
-                          <Text size="sm">{r.date ? fmt(r.date) : '—'}</Text>
+                          <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{r.date ? fmt(r.date) : '—'}</Text>
                         </Table.Td>
                         <Table.Td>
                           <Text size="sm">{r.description}</Text>

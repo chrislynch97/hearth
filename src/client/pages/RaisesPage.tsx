@@ -237,7 +237,7 @@ export function RaisesPage() {
           <Table verticalSpacing="xs" horizontalSpacing="md">
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Effective</Table.Th>
+                <Table.Th style={{ whiteSpace: 'nowrap' }}>Effective</Table.Th>
                 <Table.Th>Salary</Table.Th>
                 <Table.Th>Increase</Table.Th>
                 <Table.Th>Position</Table.Th>
@@ -248,7 +248,7 @@ export function RaisesPage() {
             <Table.Tbody>
               {raises.map((r) => (
                 <Table.Tr key={r.id}>
-                  <Table.Td>{fmt(r.effectiveDate)}</Table.Td>
+                  <Table.Td style={{ whiteSpace: 'nowrap' }}>{fmt(r.effectiveDate)}</Table.Td>
                   <Table.Td>{formatMoney(r.newSalary, money)}</Table.Td>
                   <Table.Td>
                     {r.percentIncrease === null ? '—' : `${r.percentIncrease > 0 ? '+' : ''}${r.percentIncrease.toFixed(1)}%`}

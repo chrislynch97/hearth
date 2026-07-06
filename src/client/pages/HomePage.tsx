@@ -9,6 +9,7 @@ import {
   Group,
   Loader,
   Select,
+  SimpleGrid,
   Stack,
   Text,
   Title,
@@ -119,7 +120,7 @@ function SnapshotSection({
   }
   return (
     <Stack gap="sm">
-      <Group grow align="stretch">
+      <SimpleGrid cols={{ base: 1, xs: perPerson.length > 1 ? 2 : 1 }} spacing="sm">
         {perPerson.map((p) => (
           <Card key={p.memberId} withBorder padding="md" radius="md">
             <Text size="xs" fw={700} tt="uppercase" c="dimmed" ff="monospace" lts="0.05em" mb={6}>
@@ -147,7 +148,7 @@ function SnapshotSection({
             </Group>
           </Card>
         ))}
-      </Group>
+      </SimpleGrid>
       <Group justify="space-between" px="xs">
         <Text size="sm" c="dimmed">
           Joint pots total {formatMoney(jointPotFundingTotal, money)}
@@ -506,10 +507,10 @@ export function HomePage() {
             money={money}
           />
           {accountsSummary.data && <NetWorthTile data={accountsSummary.data} money={money} />}
-          <Group grow align="flex-start" wrap="wrap">
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
             <AllocationCard allocation={summary.allocation} householdIncome={summary.householdMonthlyIncome} money={money} />
             <TrendCard trend={summary.incomeTrend} money={money} />
-          </Group>
+          </SimpleGrid>
           <UpcomingCard upcoming={summary.upcoming} money={money} />
           <RecentActivityCard recent={summary.recentActivity} money={money} />
           <Group justify="flex-end">
