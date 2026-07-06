@@ -40,6 +40,21 @@ npm run dev:client   # UI on :5173, in another terminal
 - `npm run demo -- --seed` — force a fresh re-seed before serving.
 - `npm run demo:seed` — just (re)generate the demo data, without starting the server.
 
+**Or via Docker** (serves the built UI too, so it's a single command on :8787 — no
+separate dev client):
+
+```bash
+docker compose -f docker-compose.demo.yml up --build   # → http://localhost:8787
+```
+
+This runs against `./data/demo.db`, so your real `app.db` is untouched. Force a
+fresh re-seed with:
+
+```bash
+docker compose -f docker-compose.demo.yml run --rm --service-ports \
+  hearth-demo node --import tsx scripts/demo-server.ts --seed
+```
+
 The dataset is a coherent, fictional household ("Maple Street" — two people plus a
 joint entity): categories, pots and recurring bills; months of spending with a live
 catch-up backlog, refunds, a split, imported rows and reconciled batches; a year-plus

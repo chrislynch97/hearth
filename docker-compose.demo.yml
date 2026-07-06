@@ -1,0 +1,30 @@
+# Demo environment. Runs Hearth against a SEPARATE, disposable demo database
+# (./data/demo.db) full of deterministic fake data — the real app.db is never
+# touched. Unlike `npm run demo` (which needs a separate Vite dev client), this
+# serves the built UI too, so the whole demo is one command on :8787.
+#
+#   docker compose -f docker-compose.demo.yml up --build     # → http://localhost:8787
+#   docker compose -f docker-compose.demo.yml down           # stop it
+#
+# Force a fresh re-seed (wipe + repopulate the demo data) before serving:
+#   docker compose -f docker-compose.demo.yml run --rm --service-ports \
+#     hearth-demo node --import tsx scripts/demo-server.ts --seed
+services:
+  hearth-demo:
+    build: .
+    ports:
+      - "8787:8787"
+    volumes:
+      - ./data:/data
+    environment:
+      - PORT=8787
+      # Demo file, NOT app.db. demo-server.ts seeds this on first run.
+      - DATABASE_URL=file:/data/demo.db
+      - CLIENT_DIR=/app/dist/client
+    # Seed the demo db (idempotent) then serve it. Run node directly (not `npm run
+    # demo`) so SIGTERM reaches the process and the graceful-shutdown handler
+    # closes SQLite cleanly — npm as the child swallows the signal.
+    command: ["node", "--import", "tsx", "scripts/demo-server.ts"]
+    # Proper PID 1 (tini) so SIGTERM reaches node for a clean shutdown.
+    init: true
+    restart: unless-stopped
