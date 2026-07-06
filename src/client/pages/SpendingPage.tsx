@@ -69,6 +69,10 @@ function QuickAddForm({
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
 
+  // A pot belongs to exactly one member, so the pot field must only ever offer
+  // — and hold — pots the currently selected owner owns.
+  const ownerPots = useMemo(() => pots.filter((p) => p.ownerId === ownerId), [pots, ownerId])
+
   const suggestQuery = trpc.spends.suggestPot.useQuery(
     { description: description.trim(), ownerId: ownerId ?? '' },
     { enabled: description.trim().length > 0 && !!ownerId },
@@ -77,8 +81,13 @@ function QuickAddForm({
   useEffect(() => {
     if (potManuallyChosen) return
     const suggested = suggestQuery.data?.potId
-    if (suggested) setPotId(suggested)
-  }, [suggestQuery.data, potManuallyChosen])
+    // Only apply a suggestion the selected owner can actually use. This rejects
+    // both cross-owner matches and the stale suggestion React Query returns for
+    // a just-changed owner — in either case we show no pot rather than a hidden,
+    // invalid value.
+    const valid = suggested != null && ownerPots.some((p) => p.id === suggested)
+    setPotId(valid ? suggested : null)
+  }, [suggestQuery.data, potManuallyChosen, ownerPots])
 
   const potById = new Map(pots.map((p) => [p.id, p]))
 
@@ -176,14 +185,21 @@ function QuickAddForm({
           <SegmentedControl
             fullWidth
             value={ownerId ?? ''}
-            onChange={(v) => setOwnerId(v || null)}
+            onChange={(v) => {
+              setOwnerId(v || null)
+              // Pots belong to a single owner, so a pot picked for one person
+              // is meaningless for another — clear it and let the suggestion
+              // re-run for the newly selected owner.
+              setPotId(null)
+              setPotManuallyChosen(false)
+            }}
             data={orderedMembers.map((m) => ({ value: m.id, label: m.displayName }))}
           />
         </div>
         <Select
           label="Pot"
           placeholder="No pot (assign later)"
-          data={potOptions(pots)}
+          data={potOptions(ownerPots)}
           value={potId}
           searchable
           clearable
@@ -315,14 +331,14 @@ function SplitModal({
               label={i === 0 ? 'Who' : undefined}
               data={orderedMembers.map((m) => ({ value: m.id, label: m.displayName }))}
               value={p.ownerId}
-              onChange={(v) => update(i, { ownerId: v ?? p.ownerId })}
+              onChange={(v) => update(i, { ownerId: v ?? p.ownerId, potId: null })}
               allowDeselect={false}
               w={130}
             />
             <Select
               label={i === 0 ? 'Pot' : undefined}
               placeholder="No pot (assign later)"
-              data={potOptions(pots)}
+              data={potOptions(pots.filter((pt) => pt.ownerId === p.ownerId))}
               value={p.potId}
               searchable
               clearable
