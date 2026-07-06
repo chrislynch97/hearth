@@ -141,11 +141,12 @@ export function QuickAddSpend({ opened, onClose }: { opened: boolean; onClose: (
             placeholder="Suggested / assign later"
             data={pots.map((p) => ({ value: p.id, label: p.name }))}
             value={potId}
+            searchable
+            clearable
             onChange={(v) => {
               setPotId(v)
               setPotManuallyChosen(true)
             }}
-            clearable
           />
         </Group>
         {error && (

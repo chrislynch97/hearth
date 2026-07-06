@@ -40,10 +40,7 @@ function orderMembers(members: Member[]): Member[] {
 }
 
 function potOptions(pots: Pot[]) {
-  return [
-    { value: '', label: 'No pot (assign later)' },
-    ...pots.map((p) => ({ value: p.id, label: p.name })),
-  ]
+  return pots.map((p) => ({ value: p.id, label: p.name }))
 }
 
 // ---------------------------------------------------------------------------
@@ -185,8 +182,11 @@ function QuickAddForm({
         </div>
         <Select
           label="Pot"
+          placeholder="No pot (assign later)"
           data={potOptions(pots)}
-          value={potId ?? ''}
+          value={potId}
+          searchable
+          clearable
           onChange={(v) => {
             setPotId(v || null)
             setPotManuallyChosen(true)
@@ -321,8 +321,11 @@ function SplitModal({
             />
             <Select
               label={i === 0 ? 'Pot' : undefined}
+              placeholder="No pot (assign later)"
               data={potOptions(pots)}
-              value={p.potId ?? ''}
+              value={p.potId}
+              searchable
+              clearable
               onChange={(v) => update(i, { potId: v || null })}
               style={{ flex: 1 }}
             />
@@ -394,6 +397,7 @@ function AssignPotCell({ spend, pots }: { spend: SpendTransaction; pots: Pot[] }
       placeholder="Assign a pot"
       data={pots.map((p) => ({ value: p.id, label: p.name }))}
       value={value || null}
+      searchable
       onChange={(v) => void handleSave(v)}
       disabled={update.isPending}
       w={180}
@@ -567,6 +571,7 @@ function Register({ members, pots, money }: { members: Member[]; pots: Pot[]; mo
             data={pots.map((p) => ({ value: p.id, label: p.name }))}
             value={potFilter}
             onChange={setPotFilter}
+            searchable
             clearable
             size="xs"
           />

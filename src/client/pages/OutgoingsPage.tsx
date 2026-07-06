@@ -110,10 +110,7 @@ function ShareRowEditor({
       {rows.map((row) => {
         const member = memberById.get(row.ownerId)
         const ownerPots = pots.filter((p) => p.ownerId === row.ownerId)
-        const potOptions = [
-          { value: '', label: 'No pot' },
-          ...ownerPots.map((p) => ({ value: p.id, label: p.name })),
-        ]
+        const potOptions = ownerPots.map((p) => ({ value: p.id, label: p.name }))
         return (
           <Group key={row.ownerId} grow align="flex-end" wrap="nowrap">
             <Text size="sm" fw={500} style={{ flex: '0 0 120px' }}>
@@ -130,8 +127,11 @@ function ShareRowEditor({
             />
             <Select
               size="xs"
+              placeholder="No pot"
               data={potOptions}
-              value={row.potId ?? ''}
+              value={row.potId}
+              searchable
+              clearable
               onChange={(v) => updateRow(row.ownerId, { potId: v || null })}
             />
           </Group>

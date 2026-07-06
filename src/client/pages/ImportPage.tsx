@@ -45,10 +45,7 @@ export function ImportPage() {
 
   const members = (membersQuery.data ?? []).filter((m) => m.archivedAt === null)
   const pots = potsQuery.data ?? []
-  const potData = [
-    { value: '', label: 'No pot (assign later)' },
-    ...pots.map((p) => ({ value: p.id, label: p.name })),
-  ]
+  const potData = pots.map((p) => ({ value: p.id, label: p.name }))
 
   const [ownerId, setOwnerId] = useState<string | null>(null)
   const [csvText, setCsvText] = useState('')
@@ -256,8 +253,11 @@ export function ImportPage() {
                             <Select
                               size="xs"
                               w={170}
+                              placeholder="No pot (assign later)"
                               data={potData}
-                              value={decision?.potId ?? ''}
+                              value={decision?.potId ?? null}
+                              searchable
+                              clearable
                               onChange={(v) => setDecision(r.index, { potId: v || null })}
                               disabled={!decision?.included}
                             />

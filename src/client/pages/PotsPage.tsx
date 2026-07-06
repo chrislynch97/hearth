@@ -279,6 +279,7 @@ function PotRow({ pot, members, categories, unused }: PotRowProps) {
               data={categoryOptions}
               value={categoryId}
               onChange={(v) => setCategoryId(v)}
+              searchable
               clearable
               placeholder="Uncategorised"
             />
@@ -478,6 +479,7 @@ function AddPotForm({ members, categories }: AddPotFormProps) {
           data={categoryOptions}
           value={categoryId}
           onChange={setCategoryId}
+          searchable
           clearable
         />
       </Group>

@@ -411,6 +411,7 @@ function RecentActivityCard({
                   placeholder="Assign a pot"
                   w={160}
                   data={pots.filter((p) => p.ownerId === r.ownerId).map((p) => ({ value: p.id, label: p.name }))}
+                  searchable
                   onChange={(v) => void assign(r.id, v)}
                 />
               )}

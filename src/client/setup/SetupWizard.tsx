@@ -59,6 +59,7 @@ function HouseholdStep({ initialName, initialCurrencyCode, onNext }: HouseholdSt
         label="Currency"
         data={currencyOptions}
         value={currencyCode}
+        searchable
         onChange={(v) => setCurrencyCode(v ?? 'GBP')}
         allowDeselect={false}
       />
