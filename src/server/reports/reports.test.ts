@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   categoryBreakdown,
+  monthlyTotals,
   monthOverMonth,
   perMemberVsJoint,
   spendCategory,
@@ -93,6 +94,36 @@ describe('perMemberVsJoint', () => {
     expect(rows.find((r) => r.ownerId === 'alice')?.monthlyCost).toBe(5000)
     expect(rows.find((r) => r.ownerId === 'bob')?.monthlyCost).toBe(1000)
     expect(rows.find((r) => r.ownerId === 'joint')?.monthlyCost).toBe(3000)
+  })
+})
+
+describe('monthlyTotals', () => {
+  it('totals spend and counts per month, with change vs the prior month and avg/high/low', () => {
+    const result = monthlyTotals({
+      spends: [
+        { date: '2026-05-10', amount: 100 },
+        { date: '2026-07-01', amount: 200 },
+        { date: '2026-07-02', amount: 50 },
+      ],
+      asOf: '2026-07-03',
+      months: 3,
+    })
+    expect(result.rows).toEqual([
+      { month: '2026-05', total: 100, count: 1, change: null },
+      { month: '2026-06', total: 0, count: 0, change: -100 },
+      { month: '2026-07', total: 250, count: 2, change: 250 },
+    ])
+    expect(result.average).toBe(117) // round((100 + 0 + 250) / 3)
+    // Empty months are excluded from the high/low ranking.
+    expect(result.highest?.month).toBe('2026-07')
+    expect(result.lowest?.month).toBe('2026-05')
+  })
+
+  it('reports no high/low when there is no spend in the window', () => {
+    const result = monthlyTotals({ spends: [], asOf: '2026-07-03', months: 3 })
+    expect(result.average).toBe(0)
+    expect(result.highest).toBeNull()
+    expect(result.lowest).toBeNull()
   })
 })
 

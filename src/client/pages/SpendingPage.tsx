@@ -784,13 +784,13 @@ function SpendRow({
             </Group>
           )}
         </Table.Td>
-        <Table.Td>
+        <Table.Td style={{ whiteSpace: 'nowrap' }}>
           {spend.reconciled === 1 ? (
-            <Badge size="sm" color="moss" variant="light">
+            <Badge size="sm" color="moss" variant="light" styles={{ root: { maxWidth: 'none' }, label: { overflow: 'visible' } }}>
               Reconciled
             </Badge>
           ) : (
-            <Badge size="sm" color="sand" variant="light">
+            <Badge size="sm" color="sand" variant="light" styles={{ root: { maxWidth: 'none' }, label: { overflow: 'visible' } }}>
               Pending
             </Badge>
           )}
@@ -956,7 +956,7 @@ function Register({ members, pots, money }: { members: Member[]; pots: Pot[]; mo
                   <Table.Th>Owner</Table.Th>
                   <Table.Th>Amount</Table.Th>
                   <Table.Th>Pot</Table.Th>
-                  <Table.Th>Status</Table.Th>
+                  <Table.Th style={{ whiteSpace: 'nowrap' }}>Status</Table.Th>
                   <Table.Th />
                 </Table.Tr>
               </Table.Thead>

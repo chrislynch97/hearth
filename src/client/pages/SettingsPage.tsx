@@ -323,7 +323,9 @@ function DataSection() {
   async function handleExport() {
     setError('')
     const data = await utils.data.export.fetch()
-    const stamp = new Date().toISOString().slice(0, 10)
+    // Date + time (to the second) so multiple backups on the same day don't collide
+    // and sort chronologically. e.g. hearth-backup-2026-07-07-143005.json
+    const stamp = new Date().toISOString().slice(0, 19).replace('T', '-').replace(/:/g, '')
     downloadJson(`hearth-backup-${stamp}.json`, data)
     setMessage('Backup downloaded.')
   }

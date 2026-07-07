@@ -103,6 +103,58 @@ export function perMemberVsJoint(input: {
   }))
 }
 
+export interface MonthlyTotalsRow {
+  month: string // YYYY-MM
+  total: number // total spend (net of refunds) in minor units
+  count: number // number of transactions counted
+  change: number | null // signed change vs the previous month; null for the first month
+}
+
+export interface MonthlyTotals {
+  rows: MonthlyTotalsRow[]
+  average: number // mean monthly total across the window
+  highest: MonthlyTotalsRow | null
+  lowest: MonthlyTotalsRow | null
+}
+
+/** Total spend (and transaction count) per month over the trailing `months`
+ *  months ending at asOf, with each month's change vs the prior month and
+ *  window-level average/high/low — the headline trend. */
+export function monthlyTotals(input: {
+  spends: Array<{ date: string; amount: number }>
+  asOf: string
+  months: number
+}): MonthlyTotals {
+  const months: string[] = []
+  for (let i = input.months - 1; i >= 0; i -= 1) months.push(subtractMonths(input.asOf, i).slice(0, 7))
+  const monthIndex = new Map(months.map((m, i) => [m, i]))
+
+  const totals = new Array(months.length).fill(0)
+  const counts = new Array(months.length).fill(0)
+  for (const s of input.spends) {
+    const idx = monthIndex.get(s.date.slice(0, 7))
+    if (idx === undefined) continue
+    totals[idx] += s.amount
+    counts[idx] += 1
+  }
+
+  const rows: MonthlyTotalsRow[] = months.map((month, i) => ({
+    month,
+    total: totals[i],
+    count: counts[i],
+    change: i === 0 ? null : totals[i] - totals[i - 1],
+  }))
+
+  const average = rows.length === 0 ? 0 : Math.round(totals.reduce((a, b) => a + b, 0) / rows.length)
+  // Only rank months that actually have spend, so an all-zero leading month
+  // isn't reported as the "lowest".
+  const spent = rows.filter((r) => r.count > 0)
+  const highest = spent.length ? spent.reduce((a, b) => (b.total > a.total ? b : a)) : null
+  const lowest = spent.length ? spent.reduce((a, b) => (b.total < a.total ? b : a)) : null
+
+  return { rows, average, highest, lowest }
+}
+
 export interface MonthOverMonth {
   months: string[] // YYYY-MM, chronological
   rows: Array<{ categoryId: string | null; name: string; byMonth: number[] }>

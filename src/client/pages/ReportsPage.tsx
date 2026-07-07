@@ -8,6 +8,7 @@ import {
   Loader,
   SegmentedControl,
   Select,
+  SimpleGrid,
   Stack,
   Table,
   Text,
@@ -111,6 +112,7 @@ export function ReportsPage() {
 
       {report && (
         <>
+          <MonthlySpending report={report} money={money} dp={dp} />
           <SpendVsAllocation report={report} money={money} dp={dp} />
           <CategoryBreakdown report={report} money={money} dp={dp} />
           <PerMemberVsJoint report={report} money={money} dp={dp} />
@@ -122,6 +124,135 @@ export function ReportsPage() {
 }
 
 type Report = inferRouterOutputs<AppRouter>['reports']['overview']
+
+function monthLabel(month: string): string {
+  // 'YYYY-MM' → 'Mon YY' (e.g. '2026-07' → 'Jul 26')
+  const [y = '', m = ''] = month.split('-')
+  const name = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(m)] ?? m
+  return `${name} ${y.slice(2)}`
+}
+
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <Card withBorder padding="sm" radius="md">
+      <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+        {label}
+      </Text>
+      <Text size="xl" fw={700}>
+        {value}
+      </Text>
+      {sub && (
+        <Text size="xs" c="dimmed">
+          {sub}
+        </Text>
+      )}
+    </Card>
+  )
+}
+
+function MonthlySpending({ report, money, dp }: { report: Report; money: MoneyFormat; dp: number }) {
+  const { rows, average, highest, lowest } = report.monthlyTotals
+  const max = Math.max(1, ...rows.map((r) => r.total))
+  return (
+    <Card withBorder padding="md" radius="md">
+      <Group justify="space-between" mb="sm">
+        <Title order={4}>Monthly spending</Title>
+        <ExportButton
+          onClick={() =>
+            downloadCsv('monthly-spending.csv', [
+              ['Month', 'Total', 'Transactions', 'Change vs prev'],
+              ...rows.map((r) => [
+                r.month,
+                fromMinor(r.total, dp),
+                r.count,
+                r.change === null ? '' : fromMinor(r.change, dp),
+              ]),
+            ])
+          }
+        />
+      </Group>
+
+      <SimpleGrid cols={{ base: 1, xs: 3 }} spacing="sm" mb="md">
+        <Stat label="Avg / month" value={formatMoney(average, money)} sub="over the window" />
+        <Stat
+          label="Highest"
+          value={highest ? formatMoney(highest.total, money) : '—'}
+          sub={highest ? monthLabel(highest.month) : undefined}
+        />
+        <Stat
+          label="Lowest"
+          value={lowest ? formatMoney(lowest.total, money) : '—'}
+          sub={lowest ? monthLabel(lowest.month) : undefined}
+        />
+      </SimpleGrid>
+
+      {rows.every((r) => r.count === 0) ? (
+        <Text size="sm" c="dimmed">
+          No spending in this window.
+        </Text>
+      ) : (
+        <>
+          <Stack gap={6} mb="md">
+            {rows.map((r) => (
+              <Group key={r.month} gap="sm" wrap="nowrap">
+                <Text size="xs" c="dimmed" w={52} style={{ flexShrink: 0 }}>
+                  {monthLabel(r.month)}
+                </Text>
+                <div
+                  style={{
+                    flex: 1,
+                    height: 18,
+                    borderRadius: 4,
+                    background: 'var(--mantine-color-default-hover)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${(r.total / max) * 100}%`,
+                      height: '100%',
+                      background: 'var(--mantine-color-moss-5, var(--mantine-primary-color-filled))',
+                    }}
+                  />
+                </div>
+                <Text size="xs" ta="right" w={90} style={{ flexShrink: 0 }}>
+                  {r.total === 0 ? '—' : formatMoney(r.total, money)}
+                </Text>
+              </Group>
+            ))}
+          </Stack>
+
+          <Table verticalSpacing="xs">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Month</Table.Th>
+                <Table.Th ta="right">Total</Table.Th>
+                <Table.Th ta="right">Transactions</Table.Th>
+                <Table.Th ta="right">Change</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {rows.map((r) => (
+                <Table.Tr key={r.month}>
+                  <Table.Td>{monthLabel(r.month)}</Table.Td>
+                  <Table.Td ta="right">{r.total === 0 ? '—' : formatMoney(r.total, money)}</Table.Td>
+                  <Table.Td ta="right" c="dimmed">
+                    {r.count}
+                  </Table.Td>
+                  <Table.Td ta="right" c={r.change === null || r.change === 0 ? 'dimmed' : r.change > 0 ? 'red' : 'moss'}>
+                    {r.change === null
+                      ? '—'
+                      : `${r.change > 0 ? '+' : r.change < 0 ? '−' : ''}${formatMoney(Math.abs(r.change), money)}`}
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </>
+      )}
+    </Card>
+  )
+}
 
 function SpendVsAllocation({ report, money, dp }: { report: Report; money: MoneyFormat; dp: number }) {
   const rows = report.spendVsAllocation

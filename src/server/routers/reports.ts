@@ -5,7 +5,7 @@ import { category, expense, expenseShare, household, member, pot, spendTransacti
 import { computeFundingPlan } from '../plan/funding'
 import { computeIncomeByMember } from '../income/service'
 import { allocationByCategory } from '../dashboard/summary'
-import { categoryBreakdown, monthOverMonth, perMemberVsJoint, spendVsAllocation } from '../reports/reports'
+import { categoryBreakdown, monthlyTotals, monthOverMonth, perMemberVsJoint, spendVsAllocation } from '../reports/reports'
 import { periodForDate } from '../../shared/period'
 import { todayIso } from '../../shared/dates'
 import type { Recurrence } from '../../shared/recurrence'
@@ -106,6 +106,11 @@ export const reportsRouter = router({
             recurrence: e.recurrence as Recurrence,
             shares: sharesByExpense.get(e.id) ?? [],
           })),
+        }),
+        monthlyTotals: monthlyTotals({
+          spends: scoped.map((s) => ({ date: s.date, amount: s.amount })),
+          asOf: today,
+          months,
         }),
         monthOverMonth: monthOverMonth({
           spends: scoped.map((s) => ({ date: s.date, potId: s.potId, categoryId: s.categoryId, amount: s.amount })),
