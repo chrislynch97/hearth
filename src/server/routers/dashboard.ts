@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import { router, publicProcedure } from '../trpc/trpc'
-import { category, expense, expenseShare, household, member, pot, spendTransaction } from '../db/schema'
+import { category, expense, setAside, household, member, pot, spendTransaction } from '../db/schema'
 import { computeBacklog } from '../spending/backlog'
 import { computeFundingPlan } from '../plan/funding'
 import { computeIncomeByMember, loadPayslipSummaries } from '../income/service'
@@ -37,24 +37,29 @@ export const dashboardRouter = router({
         .from(expense)
         .where(and(isNull(expense.archivedAt), eq(expense.active, 1)))
 
-      const sharesByExpense = new Map<string, Array<{ ownerId: string; amount: number; potId: string | null }>>()
-      for (const e of expenses) {
-        const shares = await ctx.db.select().from(expenseShare).where(eq(expenseShare.expenseId, e.id))
-        sharesByExpense.set(
-          e.id,
-          shares.map((s) => ({ ownerId: s.ownerId, amount: s.amount, potId: s.potId })),
-        )
-      }
+      const setAsides = await ctx.db
+        .select()
+        .from(setAside)
+        .where(and(isNull(setAside.archivedAt), eq(setAside.active, 1)))
 
       const incomeByMember = await computeIncomeByMember(ctx.db)
 
       // B / C — funding plan (per-person set-aside, remainder, income share).
       const funding = computeFundingPlan({
         pots: pots.map((p) => ({ id: p.id, name: p.name, ownerId: p.ownerId })),
-        expenses: expenses.map((e) => ({
+        bills: expenses.map((e) => ({
           recurrence: e.recurrence as Recurrence,
           active: true,
-          shares: sharesByExpense.get(e.id) ?? [],
+          funding: (e.funding ?? 'pot_manual') as 'pot_manual' | 'pot_auto' | 'main',
+          potId: e.potId,
+          categoryId: e.categoryId,
+          amount: e.amount ?? 0,
+        })),
+        setAsides: setAsides.map((s) => ({
+          recurrence: s.recurrence as Recurrence,
+          active: true,
+          potId: s.potId,
+          amount: s.amount,
         })),
         members: members.map((m) => ({
           id: m.id,
@@ -73,9 +78,13 @@ export const dashboardRouter = router({
         .where(eq(spendTransaction.reconciled, 0))
       const backlog = computeBacklog({
         transactions: unreconciled.map((t) => ({
+          id: t.id,
+          date: t.date,
+          description: t.description,
           potId: t.potId,
           amount: t.amount,
           reconciled: false,
+          settledAtSource: t.settledAtSource === 1,
           ownerId: t.ownerId,
         })),
         pots: pots.map((p) => ({ id: p.id, name: p.name, ownerId: p.ownerId })),
@@ -126,7 +135,7 @@ export const dashboardRouter = router({
         name: e.name,
         recurrence: e.recurrence as 'monthly' | 'quarterly' | 'yearly',
         dueAnchor: e.dueAnchor,
-        amount: (sharesByExpense.get(e.id) ?? []).reduce((acc, s) => acc + s.amount, 0),
+        amount: e.amount ?? 0,
         reminderDays: e.dueReminderDays,
       }))
       const upcoming = projectUpcoming({ expenses: upcomingExpenses, from: today, to: addDays(today, UPCOMING_HORIZON_DAYS) })

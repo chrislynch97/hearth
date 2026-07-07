@@ -256,6 +256,21 @@ function PotRow({ pot, members, categories, unused }: PotRowProps) {
   if (editing) {
     return (
       <Card withBorder padding="sm">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            void handleSave()
+          }}
+          onKeyDown={(e) => {
+            // Escape cancels the edit — but let an open Select swallow its own
+            // Escape (closing the dropdown) rather than bailing out of the edit.
+            if (e.key === 'Escape' && !e.defaultPrevented) {
+              e.preventDefault()
+              resetEdits()
+              setEditing(false)
+            }
+          }}
+        >
         <Stack gap="xs">
           <TextInput
             label="Name"
@@ -298,6 +313,7 @@ function PotRow({ pot, members, categories, unused }: PotRowProps) {
           <Group justify="flex-end">
             <Button
               size="xs"
+              type="button"
               variant="default"
               onClick={() => {
                 resetEdits()
@@ -306,11 +322,12 @@ function PotRow({ pot, members, categories, unused }: PotRowProps) {
             >
               Cancel
             </Button>
-            <Button size="xs" onClick={() => void handleSave()} loading={update.isPending}>
+            <Button size="xs" type="submit" loading={update.isPending}>
               Save
             </Button>
           </Group>
         </Stack>
+        </form>
       </Card>
     )
   }
@@ -522,7 +539,8 @@ function PotsPanel({
   const groups = new Map<string | null, Pot[]>()
   for (const c of categories) groups.set(c.id, [])
   groups.set(null, [])
-  for (const p of pots) {
+  // Sort alphabetically before grouping so each category's pots are A–Z.
+  for (const p of [...pots].sort((a, b) => a.name.localeCompare(b.name))) {
     const key = p.categoryId && groups.has(p.categoryId) ? p.categoryId : null
     groups.get(key)!.push(p)
   }

@@ -23,7 +23,7 @@ import {
   category,
   pot,
   expense,
-  expenseShare,
+  setAside,
   reconciliationBatch,
   importBatch,
   spendTransaction,
@@ -223,49 +223,77 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
   // Anchor recurring bills to a plausible day-of-month in the current month.
   const anchorDay = (day: number): string => ymd(thisMonth.year, thisMonth.month, Math.min(day, daysInMonth(thisMonth.year, thisMonth.month)))
 
-  interface ExpDef {
+  // Bills = money out, single pot (or main account). `funding`:
+  //   pot_manual → you move it out of the pot (shows on Catch-up)
+  //   pot_auto   → the pot self-deducts (no catch-up)
+  //   main       → paid from the main account under a category (no pot, no catch-up)
+  interface BillDef {
     name: string
     recurrence: 'monthly' | 'quarterly' | 'yearly'
     dueDay: number
     reminderDays?: number
-    shares: Array<{ owner: string; amount: number; pot: string }>
+    amount: number
+    funding: 'pot_manual' | 'pot_auto' | 'main'
+    pot?: string
+    category?: string
   }
-  const expenseDefs: ExpDef[] = [
-    { name: 'Rent', recurrence: 'monthly', dueDay: 1, reminderDays: 3, shares: [{ owner: joint, amount: gbp(1500), pot: 'rent' }] },
-    { name: 'Council Tax', recurrence: 'monthly', dueDay: 5, reminderDays: 3, shares: [{ owner: joint, amount: gbp(182), pot: 'council_tax' }] },
-    { name: 'Energy', recurrence: 'monthly', dueDay: 15, shares: [{ owner: joint, amount: gbp(138), pot: 'energy' }] },
-    { name: 'Broadband', recurrence: 'monthly', dueDay: 20, shares: [{ owner: joint, amount: gbp(32), pot: 'broadband' }] },
-    { name: 'Mobile Phones', recurrence: 'monthly', dueDay: 12, shares: [{ owner: ava, amount: gbp(18), pot: 'mobiles' }, { owner: ben, amount: gbp(15), pot: 'mobiles' }] },
-    { name: 'Streaming Bundle', recurrence: 'monthly', dueDay: 8, shares: [{ owner: ava, amount: gbp(9), pot: 'streaming' }, { owner: ben, amount: gbp(9), pot: 'streaming' }] },
-    { name: 'Cloud Storage', recurrence: 'monthly', dueDay: 22, shares: [{ owner: joint, amount: gbp(8), pot: 'cloud' }] },
-    { name: 'Ava Gym', recurrence: 'monthly', dueDay: 2, shares: [{ owner: ava, amount: gbp(32), pot: 'ava_gym' }] },
-    { name: 'Ben Gym', recurrence: 'monthly', dueDay: 2, shares: [{ owner: ben, amount: gbp(28), pot: 'ben_gym' }] },
-    { name: 'Rail Season Ticket', recurrence: 'monthly', dueDay: 28, shares: [{ owner: ava, amount: gbp(155), pot: 'ava_rail' }] },
-    { name: 'Water', recurrence: 'quarterly', dueDay: 18, reminderDays: 7, shares: [{ owner: joint, amount: gbp(138), pot: 'water' }] },
-    { name: 'Home Insurance', recurrence: 'yearly', dueDay: 9, reminderDays: 14, shares: [{ owner: joint, amount: gbp(276), pot: 'home_ins' }] },
-    // A recurring transfer into a savings goal — funds the Holiday pot each month.
-    { name: 'Holiday Fund', recurrence: 'monthly', dueDay: 1, shares: [{ owner: joint, amount: gbp(200), pot: 'holiday' }] },
-    { name: 'Emergency Fund', recurrence: 'monthly', dueDay: 1, shares: [{ owner: joint, amount: gbp(150), pot: 'emergency' }] },
+  const billDefs: BillDef[] = [
+    { name: 'Rent', recurrence: 'monthly', dueDay: 1, reminderDays: 3, amount: gbp(1500), funding: 'pot_manual', pot: 'rent' },
+    { name: 'Council Tax', recurrence: 'monthly', dueDay: 5, reminderDays: 3, amount: gbp(182), funding: 'pot_manual', pot: 'council_tax' },
+    { name: 'Energy', recurrence: 'monthly', dueDay: 15, amount: gbp(138), funding: 'pot_manual', pot: 'energy' },
+    { name: 'Broadband', recurrence: 'monthly', dueDay: 20, amount: gbp(32), funding: 'pot_manual', pot: 'broadband' },
+    { name: 'Mobile Phones', recurrence: 'monthly', dueDay: 12, amount: gbp(33), funding: 'pot_manual', pot: 'mobiles' },
+    { name: 'Streaming Bundle', recurrence: 'monthly', dueDay: 8, amount: gbp(18), funding: 'pot_manual', pot: 'streaming' },
+    // A Monzo-style pot that auto-deducts — never needs catch-up.
+    { name: 'Cloud Storage', recurrence: 'monthly', dueDay: 22, amount: gbp(8), funding: 'pot_auto', pot: 'cloud' },
+    { name: 'Ava Gym', recurrence: 'monthly', dueDay: 2, amount: gbp(32), funding: 'pot_manual', pot: 'ava_gym' },
+    { name: 'Ben Gym', recurrence: 'monthly', dueDay: 2, amount: gbp(28), funding: 'pot_manual', pot: 'ben_gym' },
+    { name: 'Rail Season Ticket', recurrence: 'monthly', dueDay: 28, amount: gbp(155), funding: 'pot_manual', pot: 'ava_rail' },
+    { name: 'Water', recurrence: 'quarterly', dueDay: 18, reminderDays: 7, amount: gbp(138), funding: 'pot_manual', pot: 'water' },
+    { name: 'Home Insurance', recurrence: 'yearly', dueDay: 9, reminderDays: 14, amount: gbp(276), funding: 'pot_manual', pot: 'home_ins' },
+    // Paid straight from the main joint account (can't be put on a pot) — categorised, no catch-up.
+    { name: 'Spotify', recurrence: 'monthly', dueDay: 6, amount: gbp(12), funding: 'main', category: 'subs' },
   ]
-  const expenses: Array<Record<string, unknown>> = []
-  const expenseShares: Array<Record<string, unknown>> = []
-  for (const def of expenseDefs) {
-    const eid = id()
-    expenses.push({
-      id: eid,
-      name: def.name,
-      recurrence: def.recurrence,
-      note: null,
-      active: 1,
-      dueAnchor: anchorDay(def.dueDay),
-      dueReminderDays: def.reminderDays ?? null,
-      archivedAt: null,
-      ...ts,
-    })
-    for (const s of def.shares) {
-      expenseShares.push({ id: id(), expenseId: eid, ownerId: s.owner, amount: s.amount, potId: potId[s.pot]!, ...ts })
-    }
-  }
+  const expenses: Array<Record<string, unknown>> = billDefs.map((def) => ({
+    id: id(),
+    name: def.name,
+    recurrence: def.recurrence,
+    amount: def.amount,
+    funding: def.funding,
+    potId: def.pot ? potId[def.pot]! : null,
+    categoryId: def.category ? catId[def.category]! : null,
+    note: null,
+    active: 1,
+    dueAnchor: anchorDay(def.dueDay),
+    dueReminderDays: def.reminderDays ?? null,
+    archivedAt: null,
+    ...ts,
+  }))
+
+  // Set-asides = money in, filling a pot. One owner → one pot. Never on Spending/Catch-up.
+  interface SetAsideDef { name: string; owner: string; pot: string; amount: number; group?: string }
+  const setAsideDefs: SetAsideDef[] = [
+    { name: 'Holiday Fund', owner: joint, pot: 'holiday', amount: gbp(200) },
+    { name: 'Emergency Fund', owner: joint, pot: 'emergency', amount: gbp(150) },
+    // A per-person set-aside sharing one label — the classic "Treat Yo Self".
+    { name: 'Treat Yo Self — Ava', owner: ava, pot: 'ava_spend', amount: gbp(40), group: 'Treat Yo Self' },
+    { name: 'Treat Yo Self — Ben', owner: ben, pot: 'ben_spend', amount: gbp(40), group: 'Treat Yo Self' },
+    { name: 'ISA', owner: ava, pot: 'ava_isa', amount: gbp(120) },
+  ]
+  const setAsides: Array<Record<string, unknown>> = setAsideDefs.map((def, i) => ({
+    id: id(),
+    name: def.name,
+    groupLabel: def.group ?? null,
+    ownerId: def.owner,
+    potId: potId[def.pot]!,
+    amount: def.amount,
+    recurrence: 'monthly',
+    note: null,
+    active: 1,
+    sortOrder: i,
+    archivedAt: null,
+    ...ts,
+  }))
 
   // -- income: payslip components ------------------------------------------
   // Per-person line-item definitions. Ava carries a student loan; Ben doesn't.
@@ -599,7 +627,7 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     category: categories,
     pot: pots,
     expense: expenses,
-    expenseShare: expenseShares,
+    setAside: setAsides,
     reconciliationBatch: reconciliationBatches,
     importBatch: importBatches,
     spendTransaction: spends,

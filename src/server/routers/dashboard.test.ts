@@ -14,10 +14,7 @@ describe('dashboard.summary', () => {
     const pot = await caller.pots.create({ name: 'Rent Pot', ownerId: alice.id, categoryId: cat.id })
 
     await caller.expenses.create({
-      name: 'Rent',
-      recurrence: 'monthly',
-      dueAnchor: '2026-01-15',
-      shares: [{ ownerId: alice.id, amount: 100000, potId: pot.id }],
+      name: 'Rent', recurrence: 'monthly', dueAnchor: '2026-01-15', amount: 100000, funding: 'pot_manual', potId: pot.id,
     })
 
     // A spend that lands in the backlog + recent activity.

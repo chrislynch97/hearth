@@ -74,6 +74,9 @@ export const spendsRouter = router({
         ownerId: z.string(),
         potId: z.string().nullable().optional(),
         categoryId: z.string().nullable().optional(),
+        // "Already came out / no transfer needed" — a pot auto-deduction (Monzo)
+        // or a main-account spend. Keeps it off the catch-up backlog.
+        settledAtSource: z.boolean().optional(),
         note: z.string().optional(),
       }),
     )
@@ -91,6 +94,7 @@ export const spendsRouter = router({
         ownerId: input.ownerId,
         potId: input.potId ?? null,
         categoryId: input.categoryId ?? null,
+        settledAtSource: input.settledAtSource ? 1 : 0,
         reconciled: 0,
         source: 'manual',
         note: input.note ?? null,
@@ -115,11 +119,12 @@ export const spendsRouter = router({
         ownerId: z.string().optional(),
         potId: z.string().nullable().optional(),
         categoryId: z.string().nullable().optional(),
+        settledAtSource: z.boolean().optional(),
         note: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, ...rest } = input
+      const { id, settledAtSource, ...rest } = input
       const now = Date.now()
 
       const [target] = await ctx.db.select().from(spendTransaction).where(eq(spendTransaction.id, id))
@@ -136,7 +141,7 @@ export const spendsRouter = router({
 
       await ctx.db
         .update(spendTransaction)
-        .set({ ...rest, updatedAt: now })
+        .set({ ...rest, ...(settledAtSource !== undefined ? { settledAtSource: settledAtSource ? 1 : 0 } : {}), updatedAt: now })
         .where(eq(spendTransaction.id, id))
 
       const [updated] = await ctx.db.select().from(spendTransaction).where(eq(spendTransaction.id, id))

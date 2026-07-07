@@ -8,6 +8,7 @@ import { AppLayout } from './layout/AppLayout'
 import { HomePage } from './pages/HomePage'
 import { PotsPage } from './pages/PotsPage'
 import { OutgoingsPage } from './pages/OutgoingsPage'
+import { SetAsidePage } from './pages/SetAsidePage'
 import { FundingPage } from './pages/FundingPage'
 import { SpendingPage } from './pages/SpendingPage'
 import { CatchupPage } from './pages/CatchupPage'
@@ -72,6 +73,7 @@ function AuthedApp() {
         <Route index element={<HomePage />} />
         <Route path="pots" element={<PotsPage />} />
         <Route path="outgoings" element={<OutgoingsPage />} />
+        <Route path="set-aside" element={<SetAsidePage />} />
         <Route path="funding" element={<FundingPage />} />
         <Route path="upcoming" element={<UpcomingPage />} />
         <Route path="spending" element={<SpendingPage />} />

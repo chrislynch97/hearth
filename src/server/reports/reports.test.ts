@@ -70,25 +70,17 @@ describe('spendVsAllocation', () => {
 })
 
 describe('perMemberVsJoint', () => {
-  it('sums each owner\'s monthly outgoing cost from their expense shares (fairness lens)', () => {
+  it('sums each owner\'s monthly outgoing cost from attributed costs (fairness lens)', () => {
     const rows = perMemberVsJoint({
       members: [
         { id: 'alice', displayName: 'Alice', kind: 'person' },
         { id: 'bob', displayName: 'Bob', kind: 'person' },
         { id: 'joint', displayName: 'Joint', kind: 'joint' },
       ],
-      expenses: [
-        {
-          recurrence: 'monthly',
-          shares: [
-            { ownerId: 'alice', amount: 5000 },
-            { ownerId: 'joint', amount: 3000 },
-          ],
-        },
-        {
-          recurrence: 'yearly',
-          shares: [{ ownerId: 'bob', amount: 12000 }], // 1000/mo
-        },
+      costs: [
+        { recurrence: 'monthly', amount: 5000, ownerId: 'alice' },
+        { recurrence: 'monthly', amount: 3000, ownerId: 'joint' },
+        { recurrence: 'yearly', amount: 12000, ownerId: 'bob' }, // 1000/mo
       ],
     })
     expect(rows.find((r) => r.ownerId === 'alice')?.monthlyCost).toBe(5000)

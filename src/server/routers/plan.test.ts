@@ -19,21 +19,17 @@ describe('plan router', () => {
     const bobPot = await caller.pots.create({ name: 'Bob Personal', ownerId: bob.id })
     const jointPot = await caller.pots.create({ name: 'Joint Savings', ownerId: joint.id })
 
-    // Monthly: alice 5000 -> alicePot
+    // Monthly bill 5000 -> alicePot
     await caller.expenses.create({
-      name: 'Phone',
-      recurrence: 'monthly',
-      shares: [{ ownerId: alice.id, amount: 5000, potId: alicePot.id }],
+      name: 'Phone', recurrence: 'monthly', amount: 5000, funding: 'pot_manual', potId: alicePot.id,
     })
 
-    // Yearly: bob 12000/yr (=1000/mo) -> bobPot; joint 24000/yr (=2000/mo) -> jointPot
+    // Yearly: 12000/yr (=1000/mo) -> bobPot; a separate bill 24000/yr (=2000/mo) -> jointPot
     await caller.expenses.create({
-      name: 'Car Insurance',
-      recurrence: 'yearly',
-      shares: [
-        { ownerId: bob.id, amount: 12000, potId: bobPot.id },
-        { ownerId: joint.id, amount: 24000, potId: jointPot.id },
-      ],
+      name: 'Car Insurance', recurrence: 'yearly', amount: 12000, funding: 'pot_manual', potId: bobPot.id,
+    })
+    await caller.expenses.create({
+      name: 'Joint Insurance', recurrence: 'yearly', amount: 24000, funding: 'pot_manual', potId: jointPot.id,
     })
 
     const plan = await caller.plan.funding()
@@ -71,9 +67,7 @@ describe('plan router', () => {
     const pot = await caller.pots.create({ name: 'Joint Pot', ownerId: joint.id })
 
     const expense = await caller.expenses.create({
-      name: 'Streaming',
-      recurrence: 'monthly',
-      shares: [{ ownerId: joint.id, amount: 1000, potId: pot.id }],
+      name: 'Streaming', recurrence: 'monthly', amount: 1000, funding: 'pot_manual', potId: pot.id,
     })
     await caller.expenses.archive({ id: expense.id })
 
@@ -82,7 +76,7 @@ describe('plan router', () => {
     expect(potFunding.fundingPerMonth).toBe(0)
   })
 
-  it('recentlyDue lists dated outgoings near today, nearest first, with shares', async () => {
+  it('recentlyDue lists dated bills near today, nearest first, with funding', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
     const caller = appRouter.createCaller({ db })
@@ -94,22 +88,14 @@ describe('plan router', () => {
     const today = todayIso()
 
     await caller.expenses.create({
-      name: 'Soon',
-      recurrence: 'monthly',
-      dueAnchor: addDays(today, 3),
-      shares: [{ ownerId: joint.id, amount: 800, potId: pot.id }],
+      name: 'Soon', recurrence: 'monthly', dueAnchor: addDays(today, 3), amount: 800, funding: 'pot_manual', potId: pot.id,
     })
     await caller.expenses.create({
-      name: 'Recent',
-      recurrence: 'monthly',
-      dueAnchor: addDays(today, -10),
-      shares: [{ ownerId: joint.id, amount: 500, potId: pot.id }],
+      name: 'Recent', recurrence: 'monthly', dueAnchor: addDays(today, -10), amount: 500, funding: 'pot_manual', potId: pot.id,
     })
     // No due date -> never projected onto a concrete day.
     await caller.expenses.create({
-      name: 'Undated',
-      recurrence: 'monthly',
-      shares: [{ ownerId: joint.id, amount: 100, potId: pot.id }],
+      name: 'Undated', recurrence: 'monthly', amount: 100, funding: 'pot_manual', potId: pot.id,
     })
 
     const due = await caller.plan.recentlyDue()
@@ -121,7 +107,9 @@ describe('plan router', () => {
     const soon = due.find((d) => d.name === 'Soon')!
     expect(soon.totalAmount).toBe(800)
     expect(soon.daysUntil).toBe(3)
-    expect(soon.shares).toEqual([{ ownerId: joint.id, amount: 800, potId: pot.id }])
+    expect(soon.potId).toBe(pot.id)
+    expect(soon.funding).toBe('pot_manual')
+    expect(soon.settledAtSource).toBe(false)
 
     // Nearest-to-today first: Soon (3d away) ranks above Recent (10d away).
     expect(due.findIndex((d) => d.name === 'Soon')).toBeLessThan(

@@ -101,6 +101,54 @@ describe('reconcile router', () => {
     })
   })
 
+  it('settled-at-source spends never appear on the backlog', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db })
+
+    const members = await caller.members.list()
+    const joint = members.find((m) => m.kind === 'joint')!
+    const pot = await caller.pots.create({ name: 'Cloud', ownerId: joint.id })
+
+    await caller.spends.add({ description: 'Auto sub', amount: 800, ownerId: joint.id, potId: pot.id, settledAtSource: true })
+
+    const backlog = await caller.reconcile.backlog()
+    expect(backlog.perPot.find((p) => p.potId === pot.id)).toBeUndefined()
+  })
+
+  it('backlog breaks a pot down by payer, and markPotMoved settles just one payer', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db })
+
+    const members = await caller.members.list()
+    const joint = members.find((m) => m.kind === 'joint')!
+    const alice = await caller.members.addPerson({ displayName: 'Alice' })
+    const bob = await caller.members.addPerson({ displayName: 'Bob' })
+    const pot = await caller.pots.create({ name: 'Eating Out', ownerId: joint.id })
+
+    // Two payers spending from the same joint pot.
+    await caller.spends.add({ description: 'Dinner', amount: 2000, ownerId: alice.id, potId: pot.id })
+    await caller.spends.add({ description: 'Lunch', amount: 1400, ownerId: bob.id, potId: pot.id })
+
+    const backlog = await caller.reconcile.backlog()
+    const group = backlog.perPot.find((p) => p.potId === pot.id)!
+    expect(group.total).toBe(3400)
+    expect(group.payers).toHaveLength(2)
+
+    // Settle only Alice's slice.
+    const batch = await caller.reconcile.markPotMoved({ potId: pot.id, ownerId: alice.id })
+    expect(batch.totalAmount).toBe(2000)
+    expect(batch.ownerId).toBe(alice.id)
+
+    // Bob's slice remains on the backlog.
+    const after = await caller.reconcile.backlog()
+    const groupAfter = after.perPot.find((p) => p.potId === pot.id)!
+    expect(groupAfter.total).toBe(1400)
+    expect(groupAfter.payers).toHaveLength(1)
+    expect(groupAfter.payers[0]!.ownerId).toBe(bob.id)
+  })
+
   it('batches lists reconciliation batches ordered by createdAt desc', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)

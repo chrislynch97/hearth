@@ -37,6 +37,7 @@ export function FundingPage() {
   const ctxQuery = trpc.bootstrap.context.useQuery()
   const fundingQuery = trpc.plan.funding.useQuery()
   const membersQuery = trpc.members.list.useQuery()
+  const categoriesQuery = trpc.categories.list.useQuery()
 
   const household = ctxQuery.data?.household
   const money = {
@@ -49,6 +50,7 @@ export function FundingPage() {
   const plan = fundingQuery.data
   const members = membersQuery.data ?? []
   const memberById = new Map(members.map((m) => [m.id, m]))
+  const categoryById = new Map((categoriesQuery.data ?? []).map((c) => [c.id, c]))
 
   const hasAnything = plan ? plan.perPerson.length > 0 || plan.pots.length > 0 : false
 
@@ -144,6 +146,31 @@ export function FundingPage() {
               <Text fw={600}>{formatMoney(plan.jointPotFundingTotal, money)}</Text>
             </Group>
           </Card>
+
+          {plan.mainAccountFundingPerMonth > 0 && (
+            <Card withBorder padding="md">
+              <Stack gap="sm">
+                <div>
+                  <Title order={4}>Paid from the main account</Title>
+                  <Text size="xs" c="dimmed">
+                    Bills with no pot — leave this much in the main account each month to cover them.
+                  </Text>
+                </div>
+                <Stack gap={2}>
+                  {plan.mainAccountByCategory.map((row) => (
+                    <Group key={row.categoryId ?? 'none'} justify="space-between" px="xs" py={4}>
+                      <Text size="sm">{row.categoryId ? categoryById.get(row.categoryId)?.name ?? 'Uncategorised' : 'Uncategorised'}</Text>
+                      <Text size="sm">{formatMoney(row.fundingPerMonth, money)}/mo</Text>
+                    </Group>
+                  ))}
+                </Stack>
+                <Group justify="space-between" pt={4} style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
+                  <Text fw={600}>Main account total</Text>
+                  <Text fw={600}>{formatMoney(plan.mainAccountFundingPerMonth, money)}/mo</Text>
+                </Group>
+              </Stack>
+            </Card>
+          )}
 
           <Card withBorder padding="md">
             <Stack gap="sm">

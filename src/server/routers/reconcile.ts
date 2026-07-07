@@ -17,22 +17,36 @@ export const reconcileRouter = router({
 
     return computeBacklog({
       transactions: transactions.map((t) => ({
+        id: t.id,
+        date: t.date,
+        description: t.description,
         potId: t.potId,
         amount: t.amount,
         reconciled: t.reconciled === 1,
+        settledAtSource: t.settledAtSource === 1,
         ownerId: t.ownerId,
       })),
       pots: pots.map((p) => ({ id: p.id, name: p.name, ownerId: p.ownerId })),
     })
   }),
 
+  /**
+   * Mark a pot's outstanding spends as moved. Scopes to a single payer when
+   * `ownerId` is given (the per-payer catch-up row — "→ Ava £20"), else settles
+   * the whole pot. Never touches `settledAtSource` rows: those needed no transfer.
+   */
   markPotMoved: publicProcedure
-    .input(z.object({ potId: z.string() }))
+    .input(z.object({ potId: z.string(), ownerId: z.string().nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const rows = await ctx.db
-        .select()
-        .from(spendTransaction)
-        .where(and(eq(spendTransaction.potId, input.potId), eq(spendTransaction.reconciled, 0)))
+      const scope = () =>
+        and(
+          eq(spendTransaction.potId, input.potId),
+          eq(spendTransaction.reconciled, 0),
+          eq(spendTransaction.settledAtSource, 0),
+          ...(input.ownerId ? [eq(spendTransaction.ownerId, input.ownerId)] : []),
+        )
+
+      const rows = await ctx.db.select().from(spendTransaction).where(scope())
 
       if (rows.length === 0) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'No unreconciled transactions for this pot' })
@@ -47,6 +61,7 @@ export const reconcileRouter = router({
       await ctx.db.insert(reconciliationBatch).values({
         id: batchId,
         potId: input.potId,
+        ownerId: input.ownerId ?? null,
         totalAmount,
         transactionCount,
         createdAt: now,
@@ -56,7 +71,7 @@ export const reconcileRouter = router({
       await ctx.db
         .update(spendTransaction)
         .set({ reconciled: 1, reconciledAt: now, reconciliationBatchId: batchId, updatedAt: now })
-        .where(and(eq(spendTransaction.potId, input.potId), eq(spendTransaction.reconciled, 0)))
+        .where(scope())
 
       const [batch] = await ctx.db.select().from(reconciliationBatch).where(eq(reconciliationBatch.id, batchId))
       if (!batch) {

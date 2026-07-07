@@ -48,9 +48,7 @@ describe('income router', () => {
 
     const pot = await caller.pots.create({ name: 'Alice Bills', ownerId: alice.id })
     await caller.expenses.create({
-      name: 'Broadband',
-      recurrence: 'monthly',
-      shares: [{ ownerId: alice.id, amount: 40000, potId: pot.id }],
+      name: 'Broadband', recurrence: 'monthly', amount: 40000, funding: 'pot_manual', potId: pot.id,
     })
 
     const plan = await caller.plan.funding()

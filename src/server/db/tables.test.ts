@@ -13,6 +13,7 @@ describe('MONEY_COLUMNS (derived from schema)', () => {
     expect(pairs).toEqual(
       [
         'accountBalance.value',
+        'expense.amount',
         'expenseShare.amount',
         'incomeSource.amount',
         'payslip.netPay',
@@ -20,6 +21,7 @@ describe('MONEY_COLUMNS (derived from schema)', () => {
         'raise.bonus',
         'raise.newSalary',
         'reconciliationBatch.totalAmount',
+        'setAside.amount',
         'spendTransaction.amount',
       ].sort(),
     )

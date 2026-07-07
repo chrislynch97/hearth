@@ -1,5 +1,22 @@
 import { describe, it, expect } from 'vitest'
-import { computeFundingPlan } from './funding'
+import { computeFundingPlan, type FundingBillInput } from './funding'
+import type { Recurrence } from '../../shared/recurrence'
+
+/** Adapt the old per-share expense fixtures to single-pot bills (one bill per share). */
+function toBills(
+  expenses: Array<{ recurrence: Recurrence; active: boolean; shares: Array<{ ownerId: string; amount: number; potId: string | null }> }>,
+): FundingBillInput[] {
+  return expenses.flatMap((e) =>
+    e.shares.map((s) => ({
+      recurrence: e.recurrence,
+      active: e.active,
+      funding: 'pot_manual' as const,
+      potId: s.potId,
+      categoryId: null,
+      amount: s.amount,
+    })),
+  )
+}
 
 describe('computeFundingPlan', () => {
   it('computes pot funding, per-person split, joint contribution, and unassigned (equal basis)', () => {
@@ -38,7 +55,8 @@ describe('computeFundingPlan', () => {
 
     const plan = computeFundingPlan({
       pots,
-      expenses,
+      bills: toBills(expenses),
+      setAsides: [],
       members,
       jointContributionBasis: 'equal',
     })
@@ -90,7 +108,8 @@ describe('computeFundingPlan', () => {
 
     const plan = computeFundingPlan({
       pots,
-      expenses,
+      bills: toBills(expenses),
+      setAsides: [],
       members,
       jointContributionBasis: 'custom',
     })
@@ -122,7 +141,7 @@ describe('computeFundingPlan', () => {
       },
     ]
 
-    const plan = computeFundingPlan({ pots, expenses, members, jointContributionBasis: 'equal' })
+    const plan = computeFundingPlan({ pots, bills: toBills(expenses), setAsides: [], members, jointContributionBasis: 'equal' })
     const alicePot = plan.pots.find((p) => p.potId === 'alice-pot')!
     expect(alicePot.fundingPerMonth).toBe(0)
     expect(plan.unassignedFundingPerMonth).toBe(0)
@@ -149,7 +168,7 @@ describe('computeFundingPlan', () => {
       },
     ]
 
-    const plan = computeFundingPlan({ pots, expenses, members, jointContributionBasis: 'equal' })
+    const plan = computeFundingPlan({ pots, bills: toBills(expenses), setAsides: [], members, jointContributionBasis: 'equal' })
     expect(plan.pots.find((p) => p.potId === 'alice-savings')!.fundingPerMonth).toBe(5000)
     expect(plan.perPerson.find((p) => p.memberId === 'alice')!.personalPotFunding).toBe(5000)
     expect(plan.jointPotFundingTotal).toBe(3000)
@@ -172,7 +191,8 @@ describe('computeFundingPlan', () => {
 
     const plan = computeFundingPlan({
       pots,
-      expenses,
+      bills: toBills(expenses),
+      setAsides: [],
       members,
       jointContributionBasis: 'income_proportional',
     })
@@ -198,7 +218,7 @@ describe('computeFundingPlan', () => {
       },
     ]
 
-    const plan = computeFundingPlan({ pots, expenses, members, jointContributionBasis: 'custom' })
+    const plan = computeFundingPlan({ pots, bills: toBills(expenses), setAsides: [], members, jointContributionBasis: 'custom' })
     const alice = plan.perPerson.find((p) => p.memberId === 'alice')!
     const bob = plan.perPerson.find((p) => p.memberId === 'bob')!
     expect(alice.jointContribution).toBe(2500)
@@ -220,7 +240,7 @@ describe('computeFundingPlan', () => {
       },
     ]
 
-    const plan = computeFundingPlan({ pots, expenses, members, jointContributionBasis: 'income_proportional' })
+    const plan = computeFundingPlan({ pots, bills: toBills(expenses), setAsides: [], members, jointContributionBasis: 'income_proportional' })
     const alice = plan.perPerson.find((p) => p.memberId === 'alice')!
     const bob = plan.perPerson.find((p) => p.memberId === 'bob')!
     // 3:1 income → 3000 / 1000 of the 4000 joint total
@@ -249,7 +269,7 @@ describe('computeFundingPlan', () => {
       },
     ]
 
-    const plan = computeFundingPlan({ pots, expenses, members, jointContributionBasis: 'equal' })
+    const plan = computeFundingPlan({ pots, bills: toBills(expenses), setAsides: [], members, jointContributionBasis: 'equal' })
     const alice = plan.perPerson.find((p) => p.memberId === 'alice')!
     // set-aside = 40000 personal + 20000 joint (only person) = 60000; remainder = 250000 − 60000
     expect(alice.setAside).toBe(60000)
@@ -268,7 +288,7 @@ describe('computeFundingPlan', () => {
       },
     ]
 
-    const plan = computeFundingPlan({ pots, expenses, members, jointContributionBasis: 'equal' })
+    const plan = computeFundingPlan({ pots, bills: toBills(expenses), setAsides: [], members, jointContributionBasis: 'equal' })
     expect(plan.perPerson).toEqual([])
     expect(plan.jointPotFundingTotal).toBe(5000)
   })

@@ -70,10 +70,21 @@ export const pot = sqliteTable('pot', {
 export type Category = typeof category.$inferSelect
 export type Pot = typeof pot.$inferSelect
 
+// A "bill" — a recurring payment that drains a single pot (or the main account)
+// and gets logged as a spend + reconciled on catch-up. Who actually pays lives on
+// the spend, not here. `funding` decides the shape:
+//   'pot_manual' — potId set; money moved out of the pot manually → shows on catch-up
+//   'pot_auto'   — potId set; the pot auto-deducts (e.g. Monzo) → no catch-up
+//   'main'       — potId null; paid from the main account under categoryId → no catch-up
+// (The legacy per-owner `expense_share` model was retired; see the 001x migration.)
 export const expense = sqliteTable('expense', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   recurrence: text('recurrence').notNull(), // 'monthly' | 'quarterly' | 'yearly'
+  amount: integer('amount'),                // minor units, per-recurrence; null on un-migrated legacy rows
+  funding: text('funding').notNull().default('pot_manual'), // 'pot_manual' | 'pot_auto' | 'main'
+  potId: text('pot_id').references(() => pot.id),           // the pot it drains; null when funding = 'main'
+  categoryId: text('category_id').references(() => category.id), // required when funding = 'main'
   note: text('note'),
   active: integer('active').notNull().default(1),
   dueAnchor: text('due_anchor'),            // YYYY-MM-DD of one known occurrence
@@ -83,6 +94,9 @@ export const expense = sqliteTable('expense', {
   updatedAt: integer('updated_at').notNull(),
 })
 
+// DEPRECATED — retired in favour of single-pot bills (above) + the `set_aside`
+// table. Kept defined so migrations can read legacy rows out of it; do not write
+// new rows. A later migration drops it once every household has migrated.
 export const expenseShare = sqliteTable('expense_share', {
   id: text('id').primaryKey(),
   expenseId: text('expense_id').notNull().references(() => expense.id, { onDelete: 'cascade' }),
@@ -98,9 +112,32 @@ export const expenseShare = sqliteTable('expense_share', {
 export type Expense = typeof expense.$inferSelect
 export type ExpenseShare = typeof expenseShare.$inferSelect
 
+// A "set aside" — a recurring contribution that *fills* a pot (money in), as
+// opposed to a bill that drains one (money out). Always one owner into one pot;
+// never appears on the spending screen or catch-up. `groupLabel` lets several
+// set-asides share a display name (e.g. "Treat Yo Self" = one per person).
+export const setAside = sqliteTable('set_aside', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  groupLabel: text('group_label'),          // optional shared label across per-person rows
+  ownerId: text('owner_id').notNull().references(() => member.id),
+  potId: text('pot_id').notNull().references(() => pot.id),
+  amount: integer('amount').notNull(),      // minor units, per-recurrence
+  recurrence: text('recurrence').notNull(), // 'monthly' | 'quarterly' | 'yearly'
+  note: text('note'),
+  active: integer('active').notNull().default(1),
+  sortOrder: integer('sort_order').notNull().default(0),
+  archivedAt: integer('archived_at'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+export type SetAside = typeof setAside.$inferSelect
+
 export const reconciliationBatch = sqliteTable('reconciliation_batch', {
   id: text('id').primaryKey(),
   potId: text('pot_id').references(() => pot.id), // null = mixed/multi-pot
+  ownerId: text('owner_id').references(() => member.id), // the payer this batch settled; null = whole-pot / legacy
   totalAmount: integer('total_amount').notNull(),
   transactionCount: integer('transaction_count').notNull(),
   reversedAt: integer('reversed_at'),
@@ -130,8 +167,13 @@ export const spendTransaction = sqliteTable('spend_transaction', {
   description: text('description').notNull(),
   amount: integer('amount').notNull(), // minor units; + = spend, - = refund
   ownerId: text('owner_id').notNull().references(() => member.id),
-  potId: text('pot_id').references(() => pot.id), // null = needs a pot
-  categoryId: text('category_id').references(() => category.id), // used only when potId is null
+  potId: text('pot_id').references(() => pot.id), // null = needs a pot, or a main-account spend (see settledAtSource)
+  categoryId: text('category_id').references(() => category.id), // used when potId is null (unassigned or main-account)
+  // "No pot transfer needed": the money already left the right place, so this
+  // spend never appears on catch-up. True for pot auto-deductions (Monzo pots)
+  // and for main-account spends (potId null + categoryId set). A genuinely
+  // un-assigned spend is potId null AND settledAtSource 0.
+  settledAtSource: integer('settled_at_source').notNull().default(0),
   reconciled: integer('reconciled').notNull().default(0),
   reconciledAt: integer('reconciled_at'),
   reconciliationBatchId: text('reconciliation_batch_id').references(() => reconciliationBatch.id),

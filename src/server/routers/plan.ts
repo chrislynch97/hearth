@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { and, eq, isNull } from 'drizzle-orm'
 import { router, publicProcedure } from '../trpc/trpc'
-import { expense, expenseShare, household, member, pot } from '../db/schema'
+import { expense, setAside, household, member, pot } from '../db/schema'
 import { computeFundingPlan } from '../plan/funding'
 import { computeIncomeByMember } from '../income/service'
 import { projectUpcoming, type UpcomingExpenseInput } from '../plan/upcoming'
@@ -35,15 +35,10 @@ export const planRouter = router({
       | 'income_proportional'
       | 'custom'
 
-    const expenseInputs = []
-    for (const e of expenses) {
-      const shares = await ctx.db.select().from(expenseShare).where(eq(expenseShare.expenseId, e.id))
-      expenseInputs.push({
-        recurrence: e.recurrence as Recurrence,
-        active: e.active === 1,
-        shares: shares.map((s) => ({ ownerId: s.ownerId, amount: s.amount, potId: s.potId })),
-      })
-    }
+    const setAsides = await ctx.db
+      .select()
+      .from(setAside)
+      .where(and(isNull(setAside.archivedAt), eq(setAside.active, 1)))
 
     return computeFundingPlan({
       pots: pots.map((p) => ({
@@ -51,7 +46,20 @@ export const planRouter = router({
         name: p.name,
         ownerId: p.ownerId,
       })),
-      expenses: expenseInputs,
+      bills: expenses.map((e) => ({
+        recurrence: e.recurrence as Recurrence,
+        active: e.active === 1,
+        funding: (e.funding ?? 'pot_manual') as 'pot_manual' | 'pot_auto' | 'main',
+        potId: e.potId,
+        categoryId: e.categoryId,
+        amount: e.amount ?? 0,
+      })),
+      setAsides: setAsides.map((s) => ({
+        recurrence: s.recurrence as Recurrence,
+        active: s.active === 1,
+        potId: s.potId,
+        amount: s.amount,
+      })),
       members: members.map((m) => ({
         id: m.id,
         kind: m.kind as 'person' | 'joint',
@@ -75,18 +83,14 @@ export const planRouter = router({
         .from(expense)
         .where(and(isNull(expense.archivedAt), eq(expense.active, 1)))
 
-      const upcomingExpenses: UpcomingExpenseInput[] = []
-      for (const e of expenses) {
-        const shares = await ctx.db.select().from(expenseShare).where(eq(expenseShare.expenseId, e.id))
-        upcomingExpenses.push({
-          id: e.id,
-          name: e.name,
-          recurrence: e.recurrence as 'monthly' | 'quarterly' | 'yearly',
-          dueAnchor: e.dueAnchor,
-          amount: shares.reduce((acc, s) => acc + s.amount, 0),
-          reminderDays: e.dueReminderDays,
-        })
-      }
+      const upcomingExpenses: UpcomingExpenseInput[] = expenses.map((e) => ({
+        id: e.id,
+        name: e.name,
+        recurrence: e.recurrence as 'monthly' | 'quarterly' | 'yearly',
+        dueAnchor: e.dueAnchor,
+        amount: e.amount ?? 0,
+        reminderDays: e.dueReminderDays,
+      }))
 
       return {
         from: today,
@@ -118,34 +122,35 @@ export const planRouter = router({
         .from(expense)
         .where(and(isNull(expense.archivedAt), eq(expense.active, 1)))
 
-      const sharesByExpense = new Map<string, Array<{ ownerId: string; potId: string | null; amount: number }>>()
-      const upcomingExpenses: UpcomingExpenseInput[] = []
-      for (const e of expenses) {
-        const shares = await ctx.db.select().from(expenseShare).where(eq(expenseShare.expenseId, e.id))
-        sharesByExpense.set(
-          e.id,
-          shares.map((s) => ({ ownerId: s.ownerId, potId: s.potId, amount: s.amount })),
-        )
-        upcomingExpenses.push({
-          id: e.id,
-          name: e.name,
-          recurrence: e.recurrence as 'monthly' | 'quarterly' | 'yearly',
-          dueAnchor: e.dueAnchor,
-          amount: shares.reduce((acc, s) => acc + s.amount, 0),
-          reminderDays: e.dueReminderDays,
-        })
-      }
+      const billById = new Map(expenses.map((e) => [e.id, e]))
+      const upcomingExpenses: UpcomingExpenseInput[] = expenses.map((e) => ({
+        id: e.id,
+        name: e.name,
+        recurrence: e.recurrence as 'monthly' | 'quarterly' | 'yearly',
+        dueAnchor: e.dueAnchor,
+        amount: e.amount ?? 0,
+        reminderDays: e.dueReminderDays,
+      }))
 
       return projectUpcoming({ expenses: upcomingExpenses, from, to })
-        .map((o) => ({
-          key: `${o.expenseId}:${o.date}`,
-          expenseId: o.expenseId,
-          name: o.name,
-          date: o.date,
-          daysUntil: daysBetweenIso(today, o.date),
-          totalAmount: o.amount,
-          shares: sharesByExpense.get(o.expenseId) ?? [],
-        }))
+        .map((o) => {
+          const bill = billById.get(o.expenseId)
+          // A bill is single-pot now; prefilling a spend needs its funding shape, not owner shares.
+          // funding 'pot_auto' or 'main' → the spend is settled at source (no catch-up).
+          const funding = (bill?.funding ?? 'pot_manual') as 'pot_manual' | 'pot_auto' | 'main'
+          return {
+            key: `${o.expenseId}:${o.date}`,
+            expenseId: o.expenseId,
+            name: o.name,
+            date: o.date,
+            daysUntil: daysBetweenIso(today, o.date),
+            totalAmount: o.amount,
+            funding,
+            potId: bill?.potId ?? null,
+            categoryId: bill?.categoryId ?? null,
+            settledAtSource: funding !== 'pot_manual',
+          }
+        })
         .sort((a, b) => Math.abs(a.daysUntil) - Math.abs(b.daysUntil) || a.name.localeCompare(b.name))
     }),
 })

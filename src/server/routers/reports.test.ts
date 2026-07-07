@@ -17,9 +17,7 @@ describe('reports.overview', () => {
 
     // Plan £100/mo of Bills funding.
     await caller.expenses.create({
-      name: 'Rent',
-      recurrence: 'monthly',
-      shares: [{ ownerId: alice.id, amount: 10000, potId: pot.id }],
+      name: 'Rent', recurrence: 'monthly', amount: 10000, funding: 'pot_manual', potId: pot.id,
     })
 
     // Spend £60 against it, dated inside the current period.

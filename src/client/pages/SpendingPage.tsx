@@ -26,23 +26,12 @@ import type { Member, Pot, SpendTransaction } from '../../server/db/schema'
 import { allocate, formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { todayIso } from '../../shared/dates'
 import { useFormatDate } from '../useMoney'
+import { groupedPotOptions, orderMembers } from '../potOptions'
 
 interface MoneyFormat {
   symbol: string
   decimalPlaces: number
   locale: string
-}
-
-function orderMembers(members: Member[]): Member[] {
-  const persons = members
-    .filter((m) => m.kind === 'person')
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-  const joint = members.filter((m) => m.kind === 'joint')
-  return [...persons, ...joint]
-}
-
-function potOptions(pots: Pot[]) {
-  return pots.map((p) => ({ value: p.id, label: p.name }))
 }
 
 // ---------------------------------------------------------------------------
@@ -75,13 +64,17 @@ function AddSpendForm({
   const [kind, setKind] = useState<'spend' | 'refund'>('spend')
   const [description, setDescription] = useState('')
   const [date, setDate] = useState<string | null>(todayIso())
+  // Owner = who *paid* (the person to repay). The pot it draws from is chosen
+  // independently now, so we never filter pots by owner.
   const [ownerId, setOwnerId] = useState<string | null>(orderedMembers[0]?.id ?? null)
   const [potId, setPotId] = useState<string | null>(null)
   const [potManuallyChosen, setPotManuallyChosen] = useState(false)
-  // The outgoing this entry was prefilled from (drives the "update it going
-  // forward?" prompt), and a hint when that outgoing is split across people.
+  // "Already came out / no transfer needed" — auto-pot deduction or main account.
+  const [settledAtSource, setSettledAtSource] = useState(false)
+  // Category carried from a main-account bill prefill (recorded when there's no pot).
+  const [categoryId, setCategoryId] = useState<string | null>(null)
+  // The bill this entry was prefilled from (drives the "update it going forward?" prompt).
   const [outgoingKey, setOutgoingKey] = useState<string | null>(null)
-  const [multiShareHint, setMultiShareHint] = useState(false)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [pendingUpdate, setPendingUpdate] = useState<null | {
@@ -89,15 +82,12 @@ function AddSpendForm({
     name: string
     from: number
     to: number
-    share: { ownerId: string; amount: number; potId: string | null }
+    amount: number
   }>(null)
 
   const outgoings = outgoingsQuery.data ?? []
   const selectedOutgoing = outgoings.find((o) => o.key === outgoingKey) ?? null
-
-  // A pot belongs to exactly one member, so the pot field must only ever offer
-  // — and hold — pots the currently selected owner owns.
-  const ownerPots = useMemo(() => pots.filter((p) => p.ownerId === ownerId), [pots, ownerId])
+  const potGroups = useMemo(() => groupedPotOptions(pots, members), [pots, members])
 
   const suggestQuery = trpc.spends.suggestPot.useQuery(
     { description: description.trim(), ownerId: ownerId ?? '' },
@@ -107,13 +97,9 @@ function AddSpendForm({
   useEffect(() => {
     if (potManuallyChosen) return
     const suggested = suggestQuery.data?.potId
-    // Only apply a suggestion the selected owner can actually use. This rejects
-    // both cross-owner matches and the stale suggestion React Query returns for
-    // a just-changed owner — in either case we show no pot rather than a hidden,
-    // invalid value.
-    const valid = suggested != null && ownerPots.some((p) => p.id === suggested)
+    const valid = suggested != null && pots.some((p) => p.id === suggested)
     setPotId(valid ? suggested : null)
-  }, [suggestQuery.data, potManuallyChosen, ownerPots])
+  }, [suggestQuery.data, potManuallyChosen, pots])
 
   const potById = new Map(pots.map((p) => [p.id, p]))
 
@@ -124,40 +110,35 @@ function AddSpendForm({
     setDate(todayIso())
     setPotId(null)
     setPotManuallyChosen(false)
+    setSettledAtSource(false)
+    setCategoryId(null)
     setOutgoingKey(null)
-    setMultiShareHint(false)
     setError('')
     setOwnerId(keepOwner)
   }
 
-  // Prefill the form from a recently-due outgoing. A single-share outgoing maps
-  // straight onto one spend; a split one prefills the total on the primary
-  // owner and nudges the user toward Split.
+  // Prefill the form from a recently-due bill. A bill is single-pot now, so it
+  // maps straight onto one spend; its funding decides whether the spend is
+  // settled at source (auto-pot / main account → no catch-up).
   function selectOutgoing(key: string | null) {
     setOutgoingKey(key)
-    setMultiShareHint(false)
     setError('')
     setSuccessMessage('')
-    if (!key) return
+    if (!key) {
+      setSettledAtSource(false)
+      setCategoryId(null)
+      return
+    }
     const o = outgoings.find((x) => x.key === key)
     if (!o) return
     setDescription(o.name)
     setDate(o.date)
     setKind('spend')
-    if (o.shares.length === 1) {
-      const s = o.shares[0]!
-      setOwnerId(s.ownerId)
-      setPotId(s.potId)
-      setAmountMajor(String(fromMinor(s.amount, money.decimalPlaces)))
-    } else {
-      const jointShare = o.shares.find((s) => members.find((m) => m.id === s.ownerId)?.kind === 'joint')
-      const primary = jointShare ?? o.shares[0]
-      setOwnerId(primary?.ownerId ?? ownerId)
-      setPotId(null)
-      setAmountMajor(String(fromMinor(o.totalAmount, money.decimalPlaces)))
-      setMultiShareHint(true)
-    }
-    // Picking an outgoing is an explicit pot choice; don't let the description
+    setPotId(o.potId)
+    setCategoryId(o.categoryId)
+    setSettledAtSource(o.settledAtSource)
+    setAmountMajor(String(fromMinor(o.totalAmount, money.decimalPlaces)))
+    // Picking a bill is an explicit pot choice; don't let the description
     // suggestion overwrite it.
     setPotManuallyChosen(true)
   }
@@ -189,35 +170,31 @@ function AddSpendForm({
       amount,
       ownerId,
       potId: potId || null,
+      categoryId: potId ? null : categoryId,
+      settledAtSource,
     })
 
     await Promise.all([utils.spends.list.invalidate(), utils.reconcile.backlog.invalidate()])
 
-    // If this was logged from a single-share outgoing and what we recorded
-    // differs from its expected share, offer to update the outgoing going
-    // forward. (Refunds never redefine an expected cost.)
+    // If this was logged from a bill and the amount differs, offer to update the
+    // bill going forward. (Refunds never redefine an expected cost.)
     let nextUpdate: typeof pendingUpdate = null
-    if (kind === 'spend' && selectedOutgoing && selectedOutgoing.shares.length === 1) {
-      const ref = selectedOutgoing.shares[0]!
-      const changed =
-        minor !== ref.amount || ownerId !== ref.ownerId || (potId || null) !== (ref.potId ?? null)
-      if (changed) {
-        nextUpdate = {
-          expenseId: selectedOutgoing.expenseId,
-          name: selectedOutgoing.name,
-          from: ref.amount,
-          to: minor,
-          share: { ownerId, amount: minor, potId: potId || null },
-        }
+    if (kind === 'spend' && selectedOutgoing && minor !== selectedOutgoing.totalAmount) {
+      nextUpdate = {
+        expenseId: selectedOutgoing.expenseId,
+        name: selectedOutgoing.name,
+        from: selectedOutgoing.totalAmount,
+        to: minor,
+        amount: minor,
       }
     }
     setPendingUpdate(nextUpdate)
 
     const potName = inserted.potId ? potById.get(inserted.potId)?.name : null
     setSuccessMessage(
-      `Logged ${formatMoney(Math.abs(inserted.amount), money)}${
-        potName ? ` — take from ${potName}` : ' — needs a pot'
-      }`,
+      settledAtSource
+        ? `Logged ${formatMoney(Math.abs(inserted.amount), money)} — already settled, no catch-up needed`
+        : `Logged ${formatMoney(Math.abs(inserted.amount), money)}${potName ? ` — take from ${potName}` : ' — needs a pot'}`,
     )
 
     resetForm(ownerId)
@@ -227,7 +204,7 @@ function AddSpendForm({
     if (!pendingUpdate) return
     await updateExpense.mutateAsync({
       id: pendingUpdate.expenseId,
-      shares: [pendingUpdate.share],
+      amount: pendingUpdate.amount,
     })
     await Promise.all([
       utils.plan.recentlyDue.invalidate(),
@@ -256,12 +233,6 @@ function AddSpendForm({
             clearable
             onChange={selectOutgoing}
           />
-        )}
-        {multiShareHint && (
-          <Alert color="sand" title="Split outgoing">
-            This outgoing is shared across people. The total is filled in — add it, then use{' '}
-            <strong>Split</strong> on its row to divide it between pots.
-          </Alert>
         )}
         <Group grow align="flex-end" wrap="wrap">
           <NumberInput
@@ -306,26 +277,20 @@ function AddSpendForm({
         />
         <div>
           <Text size="sm" fw={500} mb={4}>
-            Who's this for?
+            Who paid?
           </Text>
           <SegmentedControl
             fullWidth
             value={ownerId ?? ''}
-            onChange={(v) => {
-              setOwnerId(v || null)
-              // Pots belong to a single owner, so a pot picked for one person
-              // is meaningless for another — clear it and let the suggestion
-              // re-run for the newly selected owner.
-              setPotId(null)
-              setPotManuallyChosen(false)
-            }}
+            onChange={(v) => setOwnerId(v || null)}
             data={orderedMembers.map((m) => ({ value: m.id, label: m.displayName }))}
           />
         </div>
         <Select
           label="Pot"
-          placeholder="No pot (assign later)"
-          data={potOptions(ownerPots)}
+          description="Which budget it draws from — any owner's pot, or leave empty for the main account / assign later."
+          placeholder="No pot"
+          data={potGroups}
           value={potId}
           searchable
           clearable
@@ -333,6 +298,12 @@ function AddSpendForm({
             setPotId(v || null)
             setPotManuallyChosen(true)
           }}
+        />
+        <Switch
+          label="Already came out — no transfer needed"
+          description="Tick for a pot that auto-deducts (e.g. Monzo) or a payment straight from the main account. Keeps it off Catch-up."
+          checked={settledAtSource}
+          onChange={(e) => setSettledAtSource(e.currentTarget.checked)}
         />
         {(error || add.error) && (
           <Alert color="red" title="Error">
@@ -477,17 +448,17 @@ function SplitModal({
               onChange={(v) => update(i, { amountMajor: v })}
             />
             <Select
-              label={i === 0 ? 'Who' : undefined}
+              label={i === 0 ? 'Who paid' : undefined}
               data={orderedMembers.map((m) => ({ value: m.id, label: m.displayName }))}
               value={p.ownerId}
-              onChange={(v) => update(i, { ownerId: v ?? p.ownerId, potId: null })}
+              onChange={(v) => update(i, { ownerId: v ?? p.ownerId })}
               allowDeselect={false}
               w={130}
             />
             <Select
               label={i === 0 ? 'Pot' : undefined}
               placeholder="No pot (assign later)"
-              data={potOptions(pots.filter((pt) => pt.ownerId === p.ownerId))}
+              data={groupedPotOptions(pots, members)}
               value={p.potId}
               searchable
               clearable
@@ -601,9 +572,8 @@ function EditSpendModal({
   const [date, setDate] = useState<string | null>(spend.date)
   const [ownerId, setOwnerId] = useState<string | null>(spend.ownerId)
   const [potId, setPotId] = useState<string | null>(spend.potId)
+  const [settledAtSource, setSettledAtSource] = useState(spend.settledAtSource === 1)
   const [error, setError] = useState('')
-
-  const ownerPots = useMemo(() => pots.filter((p) => p.ownerId === ownerId), [pots, ownerId])
 
   async function handleSave() {
     const trimmed = description.trim()
@@ -631,6 +601,7 @@ function EditSpendModal({
         amount: kind === 'refund' ? -minor : minor,
         ownerId,
         potId: potId || null,
+        settledAtSource,
       })
       await Promise.all([utils.spends.list.invalidate(), utils.reconcile.backlog.invalidate()])
       onClose()
@@ -683,27 +654,28 @@ function EditSpendModal({
         />
         <div>
           <Text size="sm" fw={500} mb={4}>
-            Who's this for?
+            Who paid?
           </Text>
           <SegmentedControl
             fullWidth
             value={ownerId ?? ''}
-            onChange={(v) => {
-              setOwnerId(v || null)
-              // A pot belongs to one owner; clear it when the owner changes.
-              setPotId(null)
-            }}
+            onChange={(v) => setOwnerId(v || null)}
             data={orderedMembers.map((m) => ({ value: m.id, label: m.displayName }))}
           />
         </div>
         <Select
           label="Pot"
           placeholder="No pot (assign later)"
-          data={potOptions(ownerPots)}
+          data={groupedPotOptions(pots, members)}
           value={potId}
           searchable
           clearable
           onChange={(v) => setPotId(v || null)}
+        />
+        <Switch
+          label="Already came out — no transfer needed"
+          checked={settledAtSource}
+          onChange={(e) => setSettledAtSource(e.currentTarget.checked)}
         />
         {(error || update.error) && (
           <Alert color="red" title="Error">

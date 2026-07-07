@@ -83,17 +83,16 @@ export interface MemberCostRow {
   monthlyCost: number
 }
 
-/** Each owner's monthly-equivalent outgoing cost from their expense shares — the
- *  fairness lens (spec §6.5: ExpenseShare.owner_id drives fairness reporting). */
+/** Each owner's monthly-equivalent outgoing cost — the fairness lens (spec §6.5).
+ *  Bills are single-pot now, so the caller attributes each cost to an owner: a
+ *  bill to its pot's owner (main-account bills to joint), a set-aside to its owner. */
 export function perMemberVsJoint(input: {
   members: Array<{ id: string; displayName: string; kind: 'person' | 'joint' }>
-  expenses: Array<{ recurrence: Recurrence; shares: Array<{ ownerId: string; amount: number }> }>
+  costs: Array<{ recurrence: Recurrence; amount: number; ownerId: string }>
 }): MemberCostRow[] {
   const byOwner = new Map<string, number>()
-  for (const e of input.expenses) {
-    for (const s of e.shares) {
-      byOwner.set(s.ownerId, (byOwner.get(s.ownerId) ?? 0) + normaliseToMonthly(s.amount, e.recurrence))
-    }
+  for (const c of input.costs) {
+    byOwner.set(c.ownerId, (byOwner.get(c.ownerId) ?? 0) + normaliseToMonthly(c.amount, c.recurrence))
   }
   return input.members.map((m) => ({
     ownerId: m.id,

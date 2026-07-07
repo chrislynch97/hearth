@@ -1,16 +1,22 @@
 import { normaliseToMonthly, roundMinor, type Recurrence } from '../../shared/recurrence'
 import { allocate } from '../../shared/money'
 
-export interface FundingShareInput {
-  ownerId: string
-  amount: number
-  potId: string | null
-}
-
-export interface FundingExpenseInput {
+/** A bill (money out). Pot-funded bills fund their pot; `main` bills are paid from the main account. */
+export interface FundingBillInput {
   recurrence: Recurrence
   active: boolean
-  shares: FundingShareInput[]
+  funding: 'pot_manual' | 'pot_auto' | 'main'
+  potId: string | null
+  categoryId: string | null
+  amount: number
+}
+
+/** A set-aside (money in) — a recurring contribution that fills a single pot. */
+export interface FundingSetAsideInput {
+  recurrence: Recurrence
+  active: boolean
+  potId: string
+  amount: number
 }
 
 export interface FundingPotInput {
@@ -50,41 +56,58 @@ export interface FundingPlan {
   perPerson: PersonFunding[]
   jointPotFundingTotal: number
   unassignedFundingPerMonth: number
+  /** Bills paid straight from the main account (funding = 'main'), monthly. */
+  mainAccountFundingPerMonth: number
+  mainAccountByCategory: Array<{ categoryId: string | null; fundingPerMonth: number }>
 }
 
 export function computeFundingPlan(input: {
   pots: FundingPotInput[]
-  expenses: FundingExpenseInput[]
+  bills: FundingBillInput[]
+  setAsides: FundingSetAsideInput[]
   members: FundingMemberInput[]
   jointContributionBasis: 'equal' | 'income_proportional' | 'custom'
 }): FundingPlan {
-  const { pots, expenses, members, jointContributionBasis } = input
+  const { pots, bills, setAsides, members, jointContributionBasis } = input
 
-  const activeExpenses = expenses.filter((e) => e.active)
+  const activeBills = bills.filter((b) => b.active)
+  const activeSetAsides = setAsides.filter((s) => s.active)
 
-  // Sum monthly-equivalent amounts per potId (null = unassigned) at full precision,
-  // rounding once at the end per pot.
+  // Sum monthly-equivalent inflows per potId at full precision (round once per pot).
+  // A pot is funded by the bills it pays AND the set-asides that fill it.
   const monthlyByPotId = new Map<string | null, number>()
-  for (const expense of activeExpenses) {
-    for (const share of expense.shares) {
-      const monthly = normaliseToMonthly(share.amount, expense.recurrence)
-      monthlyByPotId.set(share.potId, (monthlyByPotId.get(share.potId) ?? 0) + monthly)
+  const addToPot = (potId: string | null, monthly: number): void => {
+    monthlyByPotId.set(potId, (monthlyByPotId.get(potId) ?? 0) + monthly)
+  }
+  const mainByCategory = new Map<string | null, number>()
+  let mainTotal = 0
+
+  for (const bill of activeBills) {
+    const monthly = normaliseToMonthly(bill.amount, bill.recurrence)
+    if (bill.funding === 'main') {
+      mainByCategory.set(bill.categoryId, (mainByCategory.get(bill.categoryId) ?? 0) + monthly)
+      mainTotal += monthly
+    } else {
+      addToPot(bill.potId, monthly)
     }
+  }
+  for (const s of activeSetAsides) {
+    addToPot(s.potId, normaliseToMonthly(s.amount, s.recurrence))
   }
 
   const potFundingById = new Map<string, number>()
   const potFundings: PotFunding[] = pots.map((pot) => {
     const fundingPerMonth = roundMinor(monthlyByPotId.get(pot.id) ?? 0)
     potFundingById.set(pot.id, fundingPerMonth)
-    return {
-      potId: pot.id,
-      name: pot.name,
-      ownerId: pot.ownerId,
-      fundingPerMonth,
-    }
+    return { potId: pot.id, name: pot.name, ownerId: pot.ownerId, fundingPerMonth }
   })
 
   const unassignedFundingPerMonth = roundMinor(monthlyByPotId.get(null) ?? 0)
+  const mainAccountFundingPerMonth = roundMinor(mainTotal)
+  const mainAccountByCategory = [...mainByCategory.entries()].map(([categoryId, m]) => ({
+    categoryId,
+    fundingPerMonth: roundMinor(m),
+  }))
 
   const persons = members.filter((m) => m.kind === 'person')
   const jointMember = members.find((m) => m.kind === 'joint')
@@ -103,14 +126,16 @@ export function computeFundingPlan(input: {
         .reduce((acc, p) => acc + (potFundingById.get(p.id) ?? 0), 0)
     : 0
 
-  // Determine weights for splitting jointPotFundingTotal across persons.
+  // Main-account bills are a shared household cost, split like joint pot funding.
+  const jointSplitBase = jointPotFundingTotal + mainAccountFundingPerMonth
+
+  // Determine weights for splitting the joint base across persons.
   let weights: number[]
   if (jointContributionBasis === 'custom') {
     const customWeights = persons.map((p) => p.jointContributionWeight ?? 0)
     const allZero = customWeights.every((w) => w === 0)
     weights = allZero ? persons.map(() => 1) : customWeights
   } else if (jointContributionBasis === 'income_proportional') {
-    // Split by each person's share of income; fall back to equal until income exists.
     const incomeWeights = persons.map((p) => p.monthlyIncome)
     const allZero = incomeWeights.every((w) => w <= 0)
     weights = allZero ? persons.map(() => 1) : incomeWeights.map((w) => Math.max(w, 0))
@@ -118,7 +143,7 @@ export function computeFundingPlan(input: {
     weights = persons.map(() => 1) // 'equal'
   }
 
-  const jointShares = persons.length > 0 ? allocate(jointPotFundingTotal, weights) : []
+  const jointShares = persons.length > 0 ? allocate(jointSplitBase, weights) : []
 
   const perPerson: PersonFunding[] = persons.map((person, i) => {
     const personalPotFunding = personalPotFundingByMemberId.get(person.id) ?? 0
@@ -140,5 +165,7 @@ export function computeFundingPlan(input: {
     perPerson,
     jointPotFundingTotal,
     unassignedFundingPerMonth,
+    mainAccountFundingPerMonth,
+    mainAccountByCategory,
   }
 }
