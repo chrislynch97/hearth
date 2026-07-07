@@ -30,6 +30,8 @@ import type { MoneyFormat } from '../useMoney'
 import { hearthTokens, chartXAxisProps } from '../theme'
 import type { Member, PayslipComponentType } from '../../server/db/schema'
 import type { PayslipWithLines } from '../../server/routers/payslips'
+import { normalizeComponentDraft } from './payslipDraft'
+import type { ComponentKind } from './payslipDraft'
 
 const KIND_OPTIONS = [
   { value: 'earning', label: 'Earning' },
@@ -41,37 +43,45 @@ const KIND_OPTIONS = [
 // Component management
 // ---------------------------------------------------------------------------
 
-function ComponentManager({ ownerId, components }: { ownerId: string; components: PayslipComponentType[] }) {
+export function ComponentManager({ ownerId, components }: { ownerId: string; components: PayslipComponentType[] }) {
   const utils = trpc.useUtils()
   const create = trpc.payslipComponents.create.useMutation()
   const update = trpc.payslipComponents.update.useMutation()
   const archive = trpc.payslipComponents.archive.useMutation()
 
   const [name, setName] = useState('')
-  const [kind, setKind] = useState<'earning' | 'deduction' | 'employer_info'>('earning')
+  const [kind, setKind] = useState<ComponentKind>('earning')
   const [isVariable, setIsVariable] = useState(false)
   const [error, setError] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
+  const [editKind, setEditKind] = useState<ComponentKind>('earning')
+  const [editIsVariable, setEditIsVariable] = useState(false)
 
   async function invalidate() {
     await Promise.all([utils.payslipComponents.list.invalidate(), utils.income.overview.invalidate()])
   }
 
-  async function handleRename(id: string) {
-    const trimmed = editName.trim()
-    const original = components.find((c) => c.id === id)?.name
-    if (trimmed && trimmed !== original) {
-      await update.mutateAsync({ id, name: trimmed })
-      await invalidate()
-    }
+  function startEdit(c: PayslipComponentType) {
+    setEditingId(c.id)
+    setEditName(c.name)
+    setEditKind(c.kind as ComponentKind)
+    setEditIsVariable(c.isVariable === 1)
+  }
+
+  async function handleSaveEdit(id: string) {
+    const draft = normalizeComponentDraft({ name: editName, kind: editKind, isVariable: editIsVariable })
+    if (!draft) return // empty name — leave the editor open
+    await update.mutateAsync({ id, ...draft })
+    await invalidate()
     setEditingId(null)
   }
 
   async function handleAdd() {
-    if (!name.trim()) return setError('Enter a component name.')
+    const draft = normalizeComponentDraft({ name, kind, isVariable })
+    if (!draft) return setError('Enter a component name.')
     setError('')
-    await create.mutateAsync({ ownerId, name: name.trim(), kind, isVariable })
+    await create.mutateAsync({ ownerId, ...draft })
     await invalidate()
     setName('')
     setIsVariable(false)
@@ -83,20 +93,45 @@ function ComponentManager({ ownerId, components }: { ownerId: string; components
         {components.map((c) => (
           <Group key={c.id} justify="space-between" px="xs" py={4} wrap="nowrap">
             {editingId === c.id ? (
-              <Group gap="xs" style={{ flex: 1 }} wrap="nowrap">
+              <Group gap="xs" style={{ flex: 1 }} wrap="nowrap" role="group" aria-label="Edit component">
                 <TextInput
                   size="xs"
+                  aria-label="Component name"
                   value={editName}
                   onChange={(e) => setEditName(e.currentTarget.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') void handleRename(c.id)
+                    if (e.key === 'Enter') void handleSaveEdit(c.id)
                     if (e.key === 'Escape') setEditingId(null)
                   }}
                   autoFocus
                   style={{ flex: 1 }}
                 />
-                <Button size="xs" onClick={() => void handleRename(c.id)} loading={update.isPending}>
+                <Select
+                  size="xs"
+                  aria-label="Component type"
+                  data={KIND_OPTIONS}
+                  value={editKind}
+                  onChange={(v) => {
+                    const next = (v as ComponentKind) ?? 'earning'
+                    setEditKind(next)
+                    if (next !== 'earning') setEditIsVariable(false)
+                  }}
+                  allowDeselect={false}
+                  w={130}
+                />
+                {editKind === 'earning' && (
+                  <Switch
+                    size="xs"
+                    label="Variable"
+                    checked={editIsVariable}
+                    onChange={(e) => setEditIsVariable(e.currentTarget.checked)}
+                  />
+                )}
+                <Button size="xs" onClick={() => void handleSaveEdit(c.id)} loading={update.isPending}>
                   Save
+                </Button>
+                <Button size="xs" variant="subtle" onClick={() => setEditingId(null)}>
+                  Cancel
                 </Button>
               </Group>
             ) : (
@@ -116,11 +151,8 @@ function ComponentManager({ ownerId, components }: { ownerId: string; components
                   <ActionIcon
                     variant="subtle"
                     size="sm"
-                    aria-label={`Rename ${c.name}`}
-                    onClick={() => {
-                      setEditingId(c.id)
-                      setEditName(c.name)
-                    }}
+                    aria-label={`Edit ${c.name}`}
+                    onClick={() => startEdit(c)}
                   >
                     ✎
                   </ActionIcon>

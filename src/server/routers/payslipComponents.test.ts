@@ -45,4 +45,55 @@ describe('payslipComponents router', () => {
     await caller.payslipComponents.archive({ id: c.id })
     expect(await caller.payslipComponents.list({ ownerId: alice.id })).toEqual([])
   })
+
+  it('update changes name, kind and isVariable together', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db })
+    const alice = await caller.members.addPerson({ displayName: 'Alice' })
+    const c = await caller.payslipComponents.create({
+      ownerId: alice.id,
+      name: 'Bonus',
+      kind: 'earning',
+      isVariable: true,
+    })
+
+    // Reclassify the variable earning as a (fixed) deduction — the whole draft.
+    const updated = await caller.payslipComponents.update({
+      id: c.id,
+      name: 'Salary Sacrifice',
+      kind: 'deduction',
+      isVariable: false,
+    })
+    expect(updated).toMatchObject({ name: 'Salary Sacrifice', kind: 'deduction', isVariable: 0 })
+
+    const [persisted] = await caller.payslipComponents.list({ ownerId: alice.id })
+    expect(persisted).toMatchObject({ name: 'Salary Sacrifice', kind: 'deduction', isVariable: 0 })
+  })
+
+  it('update is a patch — omitted fields are left untouched', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db })
+    const alice = await caller.members.addPerson({ displayName: 'Alice' })
+    const c = await caller.payslipComponents.create({
+      ownerId: alice.id,
+      name: 'Overtime',
+      kind: 'earning',
+      isVariable: true,
+    })
+
+    const updated = await caller.payslipComponents.update({ id: c.id, name: 'Overtime Pay' })
+    expect(updated).toMatchObject({ name: 'Overtime Pay', kind: 'earning', isVariable: 1 })
+  })
+
+  it('update throws NOT_FOUND for an unknown id', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db })
+
+    await expect(
+      caller.payslipComponents.update({ id: 'does-not-exist', name: 'x' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
 })
