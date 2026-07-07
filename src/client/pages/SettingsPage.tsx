@@ -475,7 +475,7 @@ function DataSection() {
             </Text>
           </div>
           <Button color="red" variant="light" onClick={() => setConfirmReset(true)}>
-            Reset…
+            Reset
           </Button>
         </Group>
         {message && (
