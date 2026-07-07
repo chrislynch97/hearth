@@ -53,6 +53,33 @@ describe('setAside router', () => {
     expect(list.find((s) => s.id === created.id)).toBeUndefined()
   })
 
+  it('replaceForPot swaps a pot\'s contribution lines and derives owner from the pot', async () => {
+    const { caller, alice, pot } = await setup()
+
+    // Start with a single unnamed contribution.
+    await caller.setAside.replaceForPot({ potId: pot.id, lines: [{ amount: 5000 }] })
+    let list = await caller.setAside.list()
+    expect(list).toHaveLength(1)
+    expect(list[0]?.ownerId).toBe(alice.id)
+    expect(list[0]?.amount).toBe(5000)
+
+    // Break it into two named parts — replaces the previous line entirely.
+    await caller.setAside.replaceForPot({
+      potId: pot.id,
+      lines: [
+        { label: 'Running', amount: 1000 },
+        { label: 'Squash', amount: 500 },
+      ],
+    })
+    list = await caller.setAside.list()
+    expect(list).toHaveLength(2)
+    expect(list.map((s) => s.name).sort()).toEqual(['Running', 'Squash'])
+
+    // Empty list clears the pot's contribution.
+    await caller.setAside.replaceForPot({ potId: pot.id, lines: [] })
+    expect(await caller.setAside.list()).toHaveLength(0)
+  })
+
   it('feeds pot funding on the plan (money in)', async () => {
     const { caller, alice, pot } = await setup()
     await caller.setAside.create({ name: 'ISA', ownerId: alice.id, potId: pot.id, amount: 10000, recurrence: 'monthly' })

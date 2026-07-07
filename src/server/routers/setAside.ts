@@ -96,4 +96,52 @@ export const setAsideRouter = router({
       const now = Date.now()
       await ctx.db.update(setAside).set({ archivedAt: now, updatedAt: now }).where(eq(setAside.id, input.id))
     }),
+
+  /**
+   * Replace all of a pot's monthly contributions in one shot (used by the Pots
+   * screen). Each line is a named part of the pot's set-aside; a single unnamed
+   * line is the common case, several lines are the "hobbies = running + squash"
+   * breakdown. Owner is taken from the pot. Existing rows for the pot are removed
+   * and replaced, so passing an empty list clears the pot's contribution.
+   */
+  replaceForPot: publicProcedure
+    .input(
+      z.object({
+        potId: z.string(),
+        lines: z.array(
+          z.object({
+            label: z.string().nullable().optional(),
+            amount: z.number().int().min(0),
+            recurrence: recurrenceEnum.optional(),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [p] = await ctx.db.select().from(pot).where(eq(pot.id, input.potId))
+      if (!p) throw new TRPCError({ code: 'BAD_REQUEST', message: 'potId does not refer to an existing pot' })
+
+      const now = Date.now()
+      await ctx.db.delete(setAside).where(eq(setAside.potId, input.potId))
+
+      const kept = input.lines.filter((l) => l.amount > 0)
+      for (const [i, line] of kept.entries()) {
+        await ctx.db.insert(setAside).values({
+          id: newId(),
+          name: line.label?.trim() || p.name,
+          groupLabel: null,
+          ownerId: p.ownerId,
+          potId: input.potId,
+          amount: line.amount,
+          recurrence: line.recurrence ?? 'monthly',
+          note: null,
+          active: 1,
+          sortOrder: i,
+          archivedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        })
+      }
+      return ctx.db.select().from(setAside).where(eq(setAside.potId, input.potId))
+    }),
 })

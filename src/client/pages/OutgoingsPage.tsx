@@ -221,12 +221,14 @@ function BillRow({
   categories,
   money,
   onEdit,
+  hideTarget = false,
 }: {
   expense: Expense
   pots: Pot[]
   categories: Category[]
   money: MoneyFormat
   onEdit: () => void
+  hideTarget?: boolean
 }) {
   const utils = trpc.useUtils()
   const fmtDate = useFormatDate()
@@ -249,55 +251,55 @@ function BillRow({
 
   return (
     <>
-      <Card withBorder padding="sm">
-        <Group justify="space-between" wrap="nowrap">
-          <Stack gap={4}>
-            <Group gap="xs" wrap="wrap">
-              <Text fw={600}>{expense.name}</Text>
-              <Badge size="sm" variant="light">
-                {expense.recurrence}
+      <Group justify="space-between" wrap="nowrap">
+        <Stack gap={4}>
+          <Group gap="xs" wrap="wrap">
+            <Text fw={600}>{expense.name}</Text>
+            <Badge size="sm" variant="light">
+              {expense.recurrence}
+            </Badge>
+            {funding === 'pot_auto' && (
+              <Badge size="sm" variant="light" color="teal">
+                auto
               </Badge>
-              {funding === 'pot_auto' && (
-                <Badge size="sm" variant="light" color="teal">
-                  auto
-                </Badge>
-              )}
-              {funding === 'main' && (
-                <Badge size="sm" variant="light" color="grape">
-                  main account
-                </Badge>
-              )}
-              {expense.dueAnchor && (
-                <Text size="sm" c="dimmed">
-                  · due {fmtDate(nextDueDate(expense.dueAnchor, expense.recurrence as ExpenseRecurrence))}
-                </Text>
-              )}
-            </Group>
-            <Group gap={8} wrap="wrap">
-              <Text size="sm">{formatMoney(expense.amount ?? 0, money)}</Text>
-              <Text size="xs" c="dimmed">
-                {formatMoney(monthly, money)}/mo
+            )}
+            {funding === 'main' && !hideTarget && (
+              <Badge size="sm" variant="light" color="grape">
+                main account
+              </Badge>
+            )}
+            {expense.dueAnchor && (
+              <Text size="sm" c="dimmed">
+                · due {fmtDate(nextDueDate(expense.dueAnchor, expense.recurrence as ExpenseRecurrence))}
               </Text>
+            )}
+          </Group>
+          <Group gap={8} wrap="wrap">
+            <Text size="sm">{formatMoney(expense.amount ?? 0, money)}</Text>
+            <Text size="xs" c="dimmed">
+              {formatMoney(monthly, money)}/mo
+            </Text>
+            {!hideTarget && (
               <Text size="xs" c="dimmed">
                 {target}
               </Text>
-            </Group>
-            {expense.note && (
-              <Text size="xs" c="dimmed">
-                {expense.note}
-              </Text>
             )}
-          </Stack>
-          <Group gap={4}>
-            <ActionIcon variant="subtle" size="sm" aria-label={`Edit ${expense.name}`} onClick={onEdit}>
-              ✎
-            </ActionIcon>
-            <ActionIcon variant="subtle" color="red" size="sm" aria-label={`Archive ${expense.name}`} onClick={() => setConfirmArchive(true)}>
-              ×
-            </ActionIcon>
           </Group>
+          {expense.note && (
+            <Text size="xs" c="dimmed">
+              {expense.note}
+            </Text>
+          )}
+        </Stack>
+        <Group gap={4}>
+          <ActionIcon variant="subtle" size="sm" aria-label={`Edit ${expense.name}`} onClick={onEdit}>
+            ✎
+          </ActionIcon>
+          <ActionIcon variant="subtle" color="red" size="sm" aria-label={`Archive ${expense.name}`} onClick={() => setConfirmArchive(true)}>
+            ×
+          </ActionIcon>
         </Group>
-      </Card>
+      </Group>
       <Modal opened={confirmArchive} onClose={() => setConfirmArchive(false)} title="Archive bill?" size="sm">
         <Stack gap="md">
           <Text size="sm">
@@ -345,6 +347,37 @@ export function OutgoingsPage() {
 
   const isLoading = expensesQuery.isLoading || potsQuery.isLoading || membersQuery.isLoading || categoriesQuery.isLoading
 
+  // Group bills by where the money goes: one group per pot, plus a "Main account"
+  // group for bills with no pot. Groups are ordered by name (Main account last).
+  const potById = new Map(pots.map((p) => [p.id, p]))
+  type BillGroup = { key: string; label: string; ownerId: string | null; isMain: boolean; bills: Expense[] }
+  const billGroups: BillGroup[] = (() => {
+    const byKey = new Map<string, BillGroup>()
+    for (const e of expenses) {
+      const isMain = (e.funding ?? 'pot_manual') === 'main' || !e.potId
+      const key = isMain ? 'main' : e.potId!
+      let g = byKey.get(key)
+      if (!g) {
+        const pot = e.potId ? potById.get(e.potId) : null
+        g = {
+          key,
+          label: isMain ? 'Main account' : pot?.name ?? 'No pot',
+          ownerId: isMain ? null : pot?.ownerId ?? null,
+          isMain,
+          bills: [],
+        }
+        byKey.set(key, g)
+      }
+      g.bills.push(e)
+    }
+    return [...byKey.values()].sort((a, b) => {
+      if (a.isMain !== b.isMain) return a.isMain ? 1 : -1
+      return a.label.localeCompare(b.label)
+    })
+  })()
+  const groupMonthly = (bills: Expense[]) =>
+    roundMinor(bills.reduce((acc, e) => acc + normaliseToMonthly(e.amount ?? 0, e.recurrence as Recurrence), 0))
+
   function openAdd() {
     setEditing(null)
     setFormOpened(true)
@@ -377,9 +410,37 @@ export function OutgoingsPage() {
       )}
 
       <Stack gap="sm">
-        {expenses.map((e) => (
-          <BillRow key={e.id} expense={e} pots={pots} categories={categories} money={money} onEdit={() => openEdit(e)} />
-        ))}
+        {billGroups.map((g) => {
+          const owner = g.ownerId ? members.find((m) => m.id === g.ownerId) : null
+          return (
+            <Card key={g.key} withBorder padding="sm">
+              <Stack gap="xs">
+                <Group justify="space-between">
+                  <Group gap="xs">
+                    <Text fw={700}>{g.label}</Text>
+                    {owner && (
+                      <Badge size="sm" variant="light" color={owner.color ?? 'gray'}>
+                        {owner.displayName}
+                      </Badge>
+                    )}
+                  </Group>
+                  <Text size="sm" c="dimmed">
+                    {formatMoney(groupMonthly(g.bills), money)}/mo
+                  </Text>
+                </Group>
+                <Divider />
+                <Stack gap="sm">
+                  {g.bills.map((e, i) => (
+                    <div key={e.id}>
+                      {i > 0 && <Divider mb="sm" />}
+                      <BillRow expense={e} pots={pots} categories={categories} money={money} onEdit={() => openEdit(e)} hideTarget={!g.isMain} />
+                    </div>
+                  ))}
+                </Stack>
+              </Stack>
+            </Card>
+          )
+        })}
       </Stack>
 
       {formOpened && (
