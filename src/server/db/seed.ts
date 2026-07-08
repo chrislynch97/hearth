@@ -7,8 +7,9 @@ import { newId } from '../../shared/ids'
 const HOUSEHOLD_ID = DEFAULT_HOUSEHOLD_ID
 
 /** Ensure the singleton household, the non-deletable joint member, and an owner
- *  user + membership exist. Idempotent. The owner user inherits any shared
- *  household password/MFA so the login keeps working once auth moves to users. */
+ *  user + membership exist. Idempotent. The owner is created password-less (the
+ *  instance is open until they set one); existing installs had their shared
+ *  household password migrated onto the owner user by migration 0017. */
 export async function ensureSeed(database: DB): Promise<void> {
   const now = Date.now()
   const existing = await database.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
@@ -42,10 +43,7 @@ export async function ensureSeed(database: DB): Promise<void> {
       username: 'owner',
       email: null,
       displayName: hh?.displayName || 'Owner',
-      passwordHash: hh?.passwordHash ?? null,
-      mfaSecret: hh?.mfaSecret ?? null,
-      mfaEnabledAt: hh?.mfaEnabledAt ?? null,
-      mfaRecoveryCodes: hh?.mfaRecoveryCodes ?? null,
+      passwordHash: null,
       createdAt: now,
       updatedAt: now,
     })

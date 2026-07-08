@@ -7,7 +7,7 @@ import { and, eq } from 'drizzle-orm'
 import type { DB } from '../db/client'
 import { membership, session, user } from '../db/schema'
 import type { Session, User } from '../db/schema'
-import { DEFAULT_HOUSEHOLD_ID } from '../trpc/tenant'
+import { DEFAULT_HOUSEHOLD_ID, ROLE_RANK, type Role } from '../trpc/tenant'
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days, matching the cookie Max-Age
 
@@ -73,7 +73,7 @@ export async function listMemberships(db: DB, userId: string) {
 /** Where to drop a user after login: their most-privileged accepted household. */
 export async function defaultHouseholdFor(db: DB, userId: string): Promise<string> {
   const rows = await listMemberships(db, userId)
-  const rank: Record<string, number> = { owner: 3, admin: 2, member: 1, viewer: 0 }
-  rows.sort((a, b) => (rank[b.role] ?? -1) - (rank[a.role] ?? -1))
+  const rank = (r: string) => ROLE_RANK[r as Role] ?? -1
+  rows.sort((a, b) => rank(b.role) - rank(a.role))
   return rows[0]?.householdId ?? DEFAULT_HOUSEHOLD_ID
 }

@@ -25,7 +25,6 @@ describe('demo data generator', () => {
     const [hh] = await db.select().from(household)
     expect(hh?.id).toBe('household')
     expect(hh?.setupCompletedAt).not.toBeNull() // past the setup wizard
-    expect(hh?.passwordHash).toBeNull() // open for demoing
 
     const members = await db.select().from(member)
     expect(members).toHaveLength(3)

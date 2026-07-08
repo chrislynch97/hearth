@@ -37,13 +37,9 @@ export const household = sqliteTable('household', {
   currencyDecimalSeparator: text('currency_decimal_separator').notNull().default('.'),
   locale: text('locale').notNull().default('en-GB'),
   budgetPeriodStartDay: integer('budget_period_start_day').notNull().default(1),
-  // NOTE: passwordHash + MFA currently gate the whole household (a single shared
-  // password). They move to `user` when per-user login lands; kept here so the
-  // existing auth keeps working while the tenancy model is built underneath it.
-  passwordHash: text('password_hash'),
-  mfaSecret: text('mfa_secret'),
-  mfaEnabledAt: integer('mfa_enabled_at'),
-  mfaRecoveryCodes: text('mfa_recovery_codes'),
+  // Authentication (password + MFA) now lives on `user`, not the household. The
+  // legacy household columns were migrated onto the owner user and dropped
+  // (migration 0017).
   themePreference: text('theme_preference').notNull().default('system'),
   weekStart: text('week_start').notNull().default('monday'),   // 'monday' | 'sunday'
   dateFormat: text('date_format').notNull().default('medium'), // 'iso' | 'numeric' | 'medium' | 'long'
