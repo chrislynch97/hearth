@@ -1,7 +1,8 @@
 import { z } from 'zod'
-import { and, asc, eq, max } from 'drizzle-orm'
+import { asc, eq, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { account, accountBalance, member } from '../db/schema'
 import type { Account, AccountBalance } from '../db/schema'
 import { newId } from '../../shared/ids'
@@ -11,15 +12,15 @@ import type { DB } from '../db/client'
 
 const KIND = z.enum(['asset', 'liability'])
 
-async function assertMember(db: DB, ownerId: string): Promise<void> {
-  const [owner] = await db.select().from(member).where(eq(member.id, ownerId))
+async function assertMember(db: DB, householdId: string, ownerId: string): Promise<void> {
+  const [owner] = await db.select().from(member).where(scopeWhere(householdId, member.householdId, eq(member.id, ownerId)))
   if (!owner) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
   }
 }
 
-async function getAccount(db: DB, id: string): Promise<Account> {
-  const [row] = await db.select().from(account).where(eq(account.id, id))
+async function getAccount(db: DB, householdId: string, id: string): Promise<Account> {
+  const [row] = await db.select().from(account).where(scopeWhere(householdId, account.householdId, eq(account.id, id)))
   if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found' })
   return row
 }
@@ -39,8 +40,15 @@ function today(): string {
 export const accountsRouter = router({
   /** Non-archived accounts with their current (latest) balance attached. */
   list: publicProcedure.query(async ({ ctx }) => {
-    const accounts = await ctx.db.select().from(account).orderBy(asc(account.sortOrder), asc(account.name))
-    const balances = await ctx.db.select().from(accountBalance)
+    const accounts = await ctx.db
+      .select()
+      .from(account)
+      .where(scopeWhere(ctx.householdId, account.householdId))
+      .orderBy(asc(account.sortOrder), asc(account.name))
+    const balances = await ctx.db
+      .select()
+      .from(accountBalance)
+      .where(scopeWhere(ctx.householdId, accountBalance.householdId))
     const asOf = today()
 
     return accounts
@@ -56,8 +64,13 @@ export const accountsRouter = router({
 
   /** Net-worth headline + per-account current values + the trend series. */
   summary: publicProcedure.query(async ({ ctx }) => {
-    const accounts = (await ctx.db.select().from(account)).filter((a) => a.archivedAt === null)
-    const balances = await ctx.db.select().from(accountBalance)
+    const accounts = (
+      await ctx.db.select().from(account).where(scopeWhere(ctx.householdId, account.householdId))
+    ).filter((a) => a.archivedAt === null)
+    const balances = await ctx.db
+      .select()
+      .from(accountBalance)
+      .where(scopeWhere(ctx.householdId, accountBalance.householdId))
     const asOf = today()
 
     const kinded = accounts.map((a) => ({ id: a.id, kind: a.kind as AccountKind }))
@@ -85,12 +98,16 @@ export const accountsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await assertMember(ctx.db, input.ownerId)
+      await assertMember(ctx.db, ctx.householdId, input.ownerId)
       const now = Date.now()
-      const [result] = await ctx.db.select({ maxOrder: max(account.sortOrder) }).from(account)
+      const [result] = await ctx.db
+        .select({ maxOrder: max(account.sortOrder) })
+        .from(account)
+        .where(scopeWhere(ctx.householdId, account.householdId))
       const id = newId()
       await ctx.db.insert(account).values({
         id,
+        householdId: ctx.householdId,
         name: input.name,
         kind: input.kind,
         subtype: input.subtype ?? null,
@@ -101,7 +118,7 @@ export const accountsRouter = router({
         createdAt: now,
         updatedAt: now,
       })
-      return getAccount(ctx.db, id)
+      return getAccount(ctx.db, ctx.householdId, id)
     }),
 
   update: publicProcedure
@@ -119,27 +136,30 @@ export const accountsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ownerId, ...rest } = input
-      if (ownerId !== undefined) await assertMember(ctx.db, ownerId)
+      if (ownerId !== undefined) await assertMember(ctx.db, ctx.householdId, ownerId)
       const setFields: Record<string, unknown> = { ...rest, updatedAt: Date.now() }
       if (ownerId !== undefined) setFields['ownerId'] = ownerId
-      await ctx.db.update(account).set(setFields).where(eq(account.id, id))
-      return getAccount(ctx.db, id)
+      await ctx.db.update(account).set(setFields).where(scopeWhere(ctx.householdId, account.householdId, eq(account.id, id)))
+      return getAccount(ctx.db, ctx.householdId, id)
     }),
 
   archive: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await getAccount(ctx.db, input.id)
+      await getAccount(ctx.db, ctx.householdId, input.id)
       const now = Date.now()
-      await ctx.db.update(account).set({ archivedAt: now, updatedAt: now }).where(eq(account.id, input.id))
+      await ctx.db
+        .update(account)
+        .set({ archivedAt: now, updatedAt: now })
+        .where(scopeWhere(ctx.householdId, account.householdId, eq(account.id, input.id)))
     }),
 
   /** Hard-delete an account and its balances (cascade). */
   remove: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await getAccount(ctx.db, input.id)
-      await ctx.db.delete(account).where(eq(account.id, input.id))
+      await getAccount(ctx.db, ctx.householdId, input.id)
+      await ctx.db.delete(account).where(scopeWhere(ctx.householdId, account.householdId, eq(account.id, input.id)))
     }),
 
   // -- Balances ------------------------------------------------------------
@@ -151,7 +171,7 @@ export const accountsRouter = router({
       return ctx.db
         .select()
         .from(accountBalance)
-        .where(eq(accountBalance.accountId, input.accountId))
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.accountId, input.accountId)))
         .orderBy(asc(accountBalance.asOfDate))
     }),
 
@@ -166,26 +186,37 @@ export const accountsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await getAccount(ctx.db, input.accountId)
+      await getAccount(ctx.db, ctx.householdId, input.accountId)
       const now = Date.now()
 
       // One snapshot per (account, date): update in place if the date already exists.
       const [match] = await ctx.db
         .select()
         .from(accountBalance)
-        .where(and(eq(accountBalance.accountId, input.accountId), eq(accountBalance.asOfDate, input.asOfDate)))
+        .where(
+          scopeWhere(
+            ctx.householdId,
+            accountBalance.householdId,
+            eq(accountBalance.accountId, input.accountId),
+            eq(accountBalance.asOfDate, input.asOfDate),
+          ),
+        )
       if (match) {
         await ctx.db
           .update(accountBalance)
           .set({ value: input.value, note: input.note ?? null, updatedAt: now })
-          .where(eq(accountBalance.id, match.id))
-        const [updated] = await ctx.db.select().from(accountBalance).where(eq(accountBalance.id, match.id))
+          .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, match.id)))
+        const [updated] = await ctx.db
+          .select()
+          .from(accountBalance)
+          .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, match.id)))
         return updated!
       }
 
       const id = newId()
       await ctx.db.insert(accountBalance).values({
         id,
+        householdId: ctx.householdId,
         accountId: input.accountId,
         asOfDate: input.asOfDate,
         value: input.value,
@@ -193,7 +224,10 @@ export const accountsRouter = router({
         createdAt: now,
         updatedAt: now,
       })
-      const [inserted] = await ctx.db.select().from(accountBalance).where(eq(accountBalance.id, id))
+      const [inserted] = await ctx.db
+        .select()
+        .from(accountBalance)
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, id)))
       return inserted!
     }),
 
@@ -208,8 +242,14 @@ export const accountsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ...rest } = input
-      await ctx.db.update(accountBalance).set({ ...rest, updatedAt: Date.now() }).where(eq(accountBalance.id, id))
-      const [updated] = await ctx.db.select().from(accountBalance).where(eq(accountBalance.id, id))
+      await ctx.db
+        .update(accountBalance)
+        .set({ ...rest, updatedAt: Date.now() })
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, id)))
+      const [updated] = await ctx.db
+        .select()
+        .from(accountBalance)
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, id)))
       if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Balance not found' })
       return updated
     }),
@@ -217,8 +257,13 @@ export const accountsRouter = router({
   removeBalance: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [target] = await ctx.db.select().from(accountBalance).where(eq(accountBalance.id, input.id))
+      const [target] = await ctx.db
+        .select()
+        .from(accountBalance)
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, input.id)))
       if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Balance not found' })
-      await ctx.db.delete(accountBalance).where(eq(accountBalance.id, input.id))
+      await ctx.db
+        .delete(accountBalance)
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, input.id)))
     }),
 })

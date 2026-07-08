@@ -2,12 +2,17 @@ import { z } from 'zod'
 import { eq, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { member } from '../db/schema'
 import { newId } from '../../shared/ids'
 
 export const membersRouter = router({
   list: publicProcedure.query(async ({ ctx }) => {
-    return ctx.db.select().from(member).orderBy(member.sortOrder)
+    return ctx.db
+      .select()
+      .from(member)
+      .where(scopeWhere(ctx.householdId, member.householdId))
+      .orderBy(member.sortOrder)
   }),
 
   addPerson: publicProcedure
@@ -23,12 +28,16 @@ export const membersRouter = router({
       const now = Date.now()
 
       // Compute next sortOrder
-      const [result] = await ctx.db.select({ maxOrder: max(member.sortOrder) }).from(member)
+      const [result] = await ctx.db
+        .select({ maxOrder: max(member.sortOrder) })
+        .from(member)
+        .where(scopeWhere(ctx.householdId, member.householdId))
       const nextOrder = (result?.maxOrder ?? 0) + 1
 
       const id = newId()
       await ctx.db.insert(member).values({
         id,
+        householdId: ctx.householdId,
         kind: 'person',
         displayName: input.displayName,
         shortLabel: input.shortLabel ?? null,
@@ -39,7 +48,10 @@ export const membersRouter = router({
         updatedAt: now,
       })
 
-      const [inserted] = await ctx.db.select().from(member).where(eq(member.id, id))
+      const [inserted] = await ctx.db
+        .select()
+        .from(member)
+        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, id)))
 
       if (!inserted) {
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to insert member' })
@@ -66,9 +78,12 @@ export const membersRouter = router({
       await ctx.db
         .update(member)
         .set({ ...fields, updatedAt: now })
-        .where(eq(member.id, id))
+        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, id)))
 
-      const [updated] = await ctx.db.select().from(member).where(eq(member.id, id))
+      const [updated] = await ctx.db
+        .select()
+        .from(member)
+        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, id)))
 
       if (!updated) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' })
@@ -80,7 +95,10 @@ export const membersRouter = router({
   archive: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [target] = await ctx.db.select().from(member).where(eq(member.id, input.id))
+      const [target] = await ctx.db
+        .select()
+        .from(member)
+        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, input.id)))
 
       if (!target) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' })
@@ -97,9 +115,12 @@ export const membersRouter = router({
       await ctx.db
         .update(member)
         .set({ archivedAt: now, updatedAt: now })
-        .where(eq(member.id, input.id))
+        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, input.id)))
 
-      const [updated] = await ctx.db.select().from(member).where(eq(member.id, input.id))
+      const [updated] = await ctx.db
+        .select()
+        .from(member)
+        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, input.id)))
       return updated
     }),
 })

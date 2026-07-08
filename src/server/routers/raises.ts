@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { asc, eq } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { member, raise } from '../db/schema'
 import type { Raise } from '../db/schema'
 import { newId } from '../../shared/ids'
@@ -12,8 +13,8 @@ export interface RaiseWithIncrease extends Raise {
   percentIncrease: number | null
 }
 
-async function assertPerson(db: DB, ownerId: string): Promise<void> {
-  const [owner] = await db.select().from(member).where(eq(member.id, ownerId))
+async function assertPerson(db: DB, householdId: string, ownerId: string): Promise<void> {
+  const [owner] = await db.select().from(member).where(scopeWhere(householdId, member.householdId, eq(member.id, ownerId)))
   if (!owner) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
   }
@@ -26,7 +27,11 @@ export const raisesRouter = router({
   list: publicProcedure
     .input(z.object({ ownerId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      const rows = await ctx.db.select().from(raise).orderBy(asc(raise.effectiveDate))
+      const rows = await ctx.db
+        .select()
+        .from(raise)
+        .where(scopeWhere(ctx.householdId, raise.householdId))
+        .orderBy(asc(raise.effectiveDate))
       const scoped = input?.ownerId ? rows.filter((r) => r.ownerId === input.ownerId) : rows
 
       // percent_increase is computed per owner against that owner's prior raise.
@@ -48,11 +53,12 @@ export const raisesRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await assertPerson(ctx.db, input.ownerId)
+      await assertPerson(ctx.db, ctx.householdId, input.ownerId)
       const now = Date.now()
       const id = newId()
       await ctx.db.insert(raise).values({
         id,
+        householdId: ctx.householdId,
         ownerId: input.ownerId,
         effectiveDate: input.effectiveDate,
         newSalary: input.newSalary,
@@ -62,7 +68,10 @@ export const raisesRouter = router({
         createdAt: now,
         updatedAt: now,
       })
-      const [inserted] = await ctx.db.select().from(raise).where(eq(raise.id, id))
+      const [inserted] = await ctx.db
+        .select()
+        .from(raise)
+        .where(scopeWhere(ctx.householdId, raise.householdId, eq(raise.id, id)))
       if (!inserted) {
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to insert raise' })
       }
@@ -83,8 +92,14 @@ export const raisesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...rest } = input
       const now = Date.now()
-      await ctx.db.update(raise).set({ ...rest, updatedAt: now }).where(eq(raise.id, id))
-      const [updated] = await ctx.db.select().from(raise).where(eq(raise.id, id))
+      await ctx.db
+        .update(raise)
+        .set({ ...rest, updatedAt: now })
+        .where(scopeWhere(ctx.householdId, raise.householdId, eq(raise.id, id)))
+      const [updated] = await ctx.db
+        .select()
+        .from(raise)
+        .where(scopeWhere(ctx.householdId, raise.householdId, eq(raise.id, id)))
       if (!updated) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Raise not found' })
       }
@@ -94,10 +109,13 @@ export const raisesRouter = router({
   remove: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [target] = await ctx.db.select().from(raise).where(eq(raise.id, input.id))
+      const [target] = await ctx.db
+        .select()
+        .from(raise)
+        .where(scopeWhere(ctx.householdId, raise.householdId, eq(raise.id, input.id)))
       if (!target) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Raise not found' })
       }
-      await ctx.db.delete(raise).where(eq(raise.id, input.id))
+      await ctx.db.delete(raise).where(scopeWhere(ctx.householdId, raise.householdId, eq(raise.id, input.id)))
     }),
 })

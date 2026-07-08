@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { asc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { incomeSource, member } from '../db/schema'
 import { newId } from '../../shared/ids'
 import type { DB } from '../db/client'
@@ -9,8 +10,8 @@ import type { DB } from '../db/client'
 const recurrenceEnum = z.enum(['monthly', 'quarterly', 'yearly', 'weekly', 'fortnightly', 'one_off'])
 const basisEnum = z.enum(['net', 'gross'])
 
-async function assertMember(db: DB, ownerId: string): Promise<void> {
-  const [owner] = await db.select().from(member).where(eq(member.id, ownerId))
+async function assertMember(db: DB, householdId: string, ownerId: string): Promise<void> {
+  const [owner] = await db.select().from(member).where(scopeWhere(householdId, member.householdId, eq(member.id, ownerId)))
   if (!owner) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
   }
@@ -23,7 +24,7 @@ export const incomeSourcesRouter = router({
       const rows = await ctx.db
         .select()
         .from(incomeSource)
-        .where(isNull(incomeSource.archivedAt))
+        .where(scopeWhere(ctx.householdId, incomeSource.householdId, isNull(incomeSource.archivedAt)))
         .orderBy(asc(incomeSource.name))
       return input?.ownerId ? rows.filter((r) => r.ownerId === input.ownerId) : rows
     }),
@@ -40,11 +41,12 @@ export const incomeSourcesRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await assertMember(ctx.db, input.ownerId)
+      await assertMember(ctx.db, ctx.householdId, input.ownerId)
       const now = Date.now()
       const id = newId()
       await ctx.db.insert(incomeSource).values({
         id,
+        householdId: ctx.householdId,
         ownerId: input.ownerId,
         name: input.name,
         amount: input.amount,
@@ -54,7 +56,10 @@ export const incomeSourcesRouter = router({
         createdAt: now,
         updatedAt: now,
       })
-      const [inserted] = await ctx.db.select().from(incomeSource).where(eq(incomeSource.id, id))
+      const [inserted] = await ctx.db
+        .select()
+        .from(incomeSource)
+        .where(scopeWhere(ctx.householdId, incomeSource.householdId, eq(incomeSource.id, id)))
       if (!inserted) {
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to insert income source' })
       }
@@ -79,8 +84,14 @@ export const incomeSourcesRouter = router({
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (active !== undefined) setFields['active'] = active ? 1 : 0
 
-      await ctx.db.update(incomeSource).set(setFields).where(eq(incomeSource.id, id))
-      const [updated] = await ctx.db.select().from(incomeSource).where(eq(incomeSource.id, id))
+      await ctx.db
+        .update(incomeSource)
+        .set(setFields)
+        .where(scopeWhere(ctx.householdId, incomeSource.householdId, eq(incomeSource.id, id)))
+      const [updated] = await ctx.db
+        .select()
+        .from(incomeSource)
+        .where(scopeWhere(ctx.householdId, incomeSource.householdId, eq(incomeSource.id, id)))
       if (!updated) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Income source not found' })
       }
@@ -90,7 +101,10 @@ export const incomeSourcesRouter = router({
   archive: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [target] = await ctx.db.select().from(incomeSource).where(eq(incomeSource.id, input.id))
+      const [target] = await ctx.db
+        .select()
+        .from(incomeSource)
+        .where(scopeWhere(ctx.householdId, incomeSource.householdId, eq(incomeSource.id, input.id)))
       if (!target) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Income source not found' })
       }
@@ -98,6 +112,6 @@ export const incomeSourcesRouter = router({
       await ctx.db
         .update(incomeSource)
         .set({ archivedAt: now, updatedAt: now })
-        .where(eq(incomeSource.id, input.id))
+        .where(scopeWhere(ctx.householdId, incomeSource.householdId, eq(incomeSource.id, input.id)))
     }),
 })

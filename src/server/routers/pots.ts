@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { asc, eq, isNull, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { pot, member, expenseShare, spendTransaction, reconciliationBatch } from '../db/schema'
 import { newId } from '../../shared/ids'
 
@@ -10,7 +11,7 @@ export const potsRouter = router({
     return ctx.db
       .select()
       .from(pot)
-      .where(isNull(pot.archivedAt))
+      .where(scopeWhere(ctx.householdId, pot.householdId, isNull(pot.archivedAt)))
       .orderBy(asc(pot.sortOrder), asc(pot.name))
   }),
 
@@ -18,9 +19,18 @@ export const potsRouter = router({
   // Anything not in this set has never been used and is safe to delete.
   usedIds: publicProcedure.query(async ({ ctx }) => {
     const [shares, spends, batches] = await Promise.all([
-      ctx.db.select({ potId: expenseShare.potId }).from(expenseShare),
-      ctx.db.select({ potId: spendTransaction.potId }).from(spendTransaction),
-      ctx.db.select({ potId: reconciliationBatch.potId }).from(reconciliationBatch),
+      ctx.db
+        .select({ potId: expenseShare.potId })
+        .from(expenseShare)
+        .where(scopeWhere(ctx.householdId, expenseShare.householdId)),
+      ctx.db
+        .select({ potId: spendTransaction.potId })
+        .from(spendTransaction)
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId)),
+      ctx.db
+        .select({ potId: reconciliationBatch.potId })
+        .from(reconciliationBatch)
+        .where(scopeWhere(ctx.householdId, reconciliationBatch.householdId)),
     ])
     const used = new Set<string>()
     for (const row of [...shares, ...spends, ...batches]) {
@@ -41,18 +51,25 @@ export const potsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const now = Date.now()
 
-      // Validate ownerId
-      const [owner] = await ctx.db.select().from(member).where(eq(member.id, input.ownerId))
+      // Validate ownerId — must be a member of THIS household.
+      const [owner] = await ctx.db
+        .select()
+        .from(member)
+        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, input.ownerId)))
       if (!owner) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
       }
 
-      const [result] = await ctx.db.select({ maxOrder: max(pot.sortOrder) }).from(pot)
+      const [result] = await ctx.db
+        .select({ maxOrder: max(pot.sortOrder) })
+        .from(pot)
+        .where(scopeWhere(ctx.householdId, pot.householdId))
       const nextOrder = (result?.maxOrder ?? 0) + 1
 
       const id = newId()
       await ctx.db.insert(pot).values({
         id,
+        householdId: ctx.householdId,
         name: input.name,
         categoryId: input.categoryId ?? null,
         ownerId: input.ownerId,
@@ -62,7 +79,10 @@ export const potsRouter = router({
         updatedAt: now,
       })
 
-      const [inserted] = await ctx.db.select().from(pot).where(eq(pot.id, id))
+      const [inserted] = await ctx.db
+        .select()
+        .from(pot)
+        .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, id)))
 
       if (!inserted) {
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to insert pot' })
@@ -86,9 +106,12 @@ export const potsRouter = router({
       const { id, ownerId, ...rest } = input
       const now = Date.now()
 
-      // Validate ownerId if provided
+      // Validate ownerId if provided — must be a member of THIS household.
       if (ownerId !== undefined) {
-        const [owner] = await ctx.db.select().from(member).where(eq(member.id, ownerId))
+        const [owner] = await ctx.db
+          .select()
+          .from(member)
+          .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, ownerId)))
         if (!owner) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
         }
@@ -97,9 +120,15 @@ export const potsRouter = router({
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (ownerId !== undefined) setFields['ownerId'] = ownerId
 
-      await ctx.db.update(pot).set(setFields).where(eq(pot.id, id))
+      await ctx.db
+        .update(pot)
+        .set(setFields)
+        .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, id)))
 
-      const [updated] = await ctx.db.select().from(pot).where(eq(pot.id, id))
+      const [updated] = await ctx.db
+        .select()
+        .from(pot)
+        .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, id)))
 
       if (!updated) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Pot not found' })
@@ -111,7 +140,10 @@ export const potsRouter = router({
   archive: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [target] = await ctx.db.select().from(pot).where(eq(pot.id, input.id))
+      const [target] = await ctx.db
+        .select()
+        .from(pot)
+        .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, input.id)))
 
       if (!target) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Pot not found' })
@@ -121,6 +153,6 @@ export const potsRouter = router({
       await ctx.db
         .update(pot)
         .set({ archivedAt: now, updatedAt: now })
-        .where(eq(pot.id, input.id))
+        .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, input.id)))
     }),
 })

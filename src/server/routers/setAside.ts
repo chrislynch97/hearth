@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { asc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { setAside, member, pot } from '../db/schema'
 import type { SetAside } from '../db/schema'
 import { newId } from '../../shared/ids'
@@ -19,30 +20,35 @@ const baseInput = z.object({
   note: z.string().nullable().optional(),
 })
 
-async function validateOwnerAndPot(db: DB, ownerId: string, potId: string): Promise<void> {
-  const [owner] = await db.select().from(member).where(eq(member.id, ownerId))
+async function validateOwnerAndPot(db: DB, householdId: string, ownerId: string, potId: string): Promise<void> {
+  const [owner] = await db.select().from(member).where(scopeWhere(householdId, member.householdId, eq(member.id, ownerId)))
   if (!owner) throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
-  const [p] = await db.select().from(pot).where(eq(pot.id, potId))
+  const [p] = await db.select().from(pot).where(scopeWhere(householdId, pot.householdId, eq(pot.id, potId)))
   if (!p) throw new TRPCError({ code: 'BAD_REQUEST', message: 'potId does not refer to an existing pot' })
 }
 
-async function load(db: DB, id: string): Promise<SetAside> {
-  const [row] = await db.select().from(setAside).where(eq(setAside.id, id))
+async function load(db: DB, householdId: string, id: string): Promise<SetAside> {
+  const [row] = await db.select().from(setAside).where(scopeWhere(householdId, setAside.householdId, eq(setAside.id, id)))
   if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Set-aside not found' })
   return row
 }
 
 export const setAsideRouter = router({
   list: publicProcedure.query(async ({ ctx }) => {
-    return ctx.db.select().from(setAside).where(isNull(setAside.archivedAt)).orderBy(asc(setAside.name))
+    return ctx.db
+      .select()
+      .from(setAside)
+      .where(scopeWhere(ctx.householdId, setAside.householdId, isNull(setAside.archivedAt)))
+      .orderBy(asc(setAside.name))
   }),
 
   create: publicProcedure.input(baseInput).mutation(async ({ ctx, input }) => {
-    await validateOwnerAndPot(ctx.db, input.ownerId, input.potId)
+    await validateOwnerAndPot(ctx.db, ctx.householdId, input.ownerId, input.potId)
     const now = Date.now()
     const id = newId()
     await ctx.db.insert(setAside).values({
       id,
+      householdId: ctx.householdId,
       name: input.name,
       groupLabel: input.groupLabel ?? null,
       ownerId: input.ownerId,
@@ -56,7 +62,7 @@ export const setAsideRouter = router({
       createdAt: now,
       updatedAt: now,
     })
-    return load(ctx.db, id)
+    return load(ctx.db, ctx.householdId, id)
   }),
 
   update: publicProcedure
@@ -76,25 +82,28 @@ export const setAsideRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, active, ...rest } = input
       const now = Date.now()
-      const target = await load(ctx.db, id)
+      const target = await load(ctx.db, ctx.householdId, id)
 
       if (rest.ownerId !== undefined || rest.potId !== undefined) {
-        await validateOwnerAndPot(ctx.db, rest.ownerId ?? target.ownerId, rest.potId ?? target.potId)
+        await validateOwnerAndPot(ctx.db, ctx.householdId, rest.ownerId ?? target.ownerId, rest.potId ?? target.potId)
       }
 
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (active !== undefined) setFields['active'] = active ? 1 : 0
 
-      await ctx.db.update(setAside).set(setFields).where(eq(setAside.id, id))
-      return load(ctx.db, id)
+      await ctx.db.update(setAside).set(setFields).where(scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.id, id)))
+      return load(ctx.db, ctx.householdId, id)
     }),
 
   archive: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await load(ctx.db, input.id)
+      await load(ctx.db, ctx.householdId, input.id)
       const now = Date.now()
-      await ctx.db.update(setAside).set({ archivedAt: now, updatedAt: now }).where(eq(setAside.id, input.id))
+      await ctx.db
+        .update(setAside)
+        .set({ archivedAt: now, updatedAt: now })
+        .where(scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.id, input.id)))
     }),
 
   /**
@@ -118,16 +127,22 @@ export const setAsideRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [p] = await ctx.db.select().from(pot).where(eq(pot.id, input.potId))
+      const [p] = await ctx.db
+        .select()
+        .from(pot)
+        .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, input.potId)))
       if (!p) throw new TRPCError({ code: 'BAD_REQUEST', message: 'potId does not refer to an existing pot' })
 
       const now = Date.now()
-      await ctx.db.delete(setAside).where(eq(setAside.potId, input.potId))
+      await ctx.db
+        .delete(setAside)
+        .where(scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.potId, input.potId)))
 
       const kept = input.lines.filter((l) => l.amount > 0)
       for (const [i, line] of kept.entries()) {
         await ctx.db.insert(setAside).values({
           id: newId(),
+          householdId: ctx.householdId,
           name: line.label?.trim() || p.name,
           groupLabel: null,
           ownerId: p.ownerId,
@@ -142,6 +157,9 @@ export const setAsideRouter = router({
           updatedAt: now,
         })
       }
-      return ctx.db.select().from(setAside).where(eq(setAside.potId, input.potId))
+      return ctx.db
+        .select()
+        .from(setAside)
+        .where(scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.potId, input.potId)))
     }),
 })

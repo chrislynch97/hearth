@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { asc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { expense, category, pot } from '../db/schema'
 import type { Expense } from '../db/schema'
 import { newId } from '../../shared/ids'
@@ -25,9 +26,10 @@ const billInput = z.object({
   dueReminderDays: z.number().int().optional(),
 })
 
-/** Validate the funding shape and that potId/categoryId refer to real rows. */
+/** Validate the funding shape and that potId/categoryId refer to real rows in this household. */
 async function validateBill(
   db: DB,
+  householdId: string,
   input: { funding: 'pot_manual' | 'pot_auto' | 'main'; potId?: string | null; categoryId?: string | null },
 ): Promise<void> {
   if (input.funding === 'main') {
@@ -39,11 +41,14 @@ async function validateBill(
   }
 
   if (input.potId) {
-    const [p] = await db.select().from(pot).where(eq(pot.id, input.potId))
+    const [p] = await db.select().from(pot).where(scopeWhere(householdId, pot.householdId, eq(pot.id, input.potId)))
     if (!p) throw new TRPCError({ code: 'BAD_REQUEST', message: 'potId does not refer to an existing pot' })
   }
   if (input.categoryId) {
-    const [c] = await db.select().from(category).where(eq(category.id, input.categoryId))
+    const [c] = await db
+      .select()
+      .from(category)
+      .where(scopeWhere(householdId, category.householdId, eq(category.id, input.categoryId)))
     if (!c) throw new TRPCError({ code: 'BAD_REQUEST', message: 'categoryId does not refer to an existing category' })
   }
 }
@@ -60,25 +65,30 @@ function fundingFields(input: { funding: 'pot_manual' | 'pot_auto' | 'main'; pot
   return { funding: input.funding, potId: input.potId ?? null, categoryId: null }
 }
 
-async function loadExpense(db: DB, id: string): Promise<Expense> {
-  const [row] = await db.select().from(expense).where(eq(expense.id, id))
+async function loadExpense(db: DB, householdId: string, id: string): Promise<Expense> {
+  const [row] = await db.select().from(expense).where(scopeWhere(householdId, expense.householdId, eq(expense.id, id)))
   if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Bill not found' })
   return row
 }
 
 export const expensesRouter = router({
   list: publicProcedure.query(async ({ ctx }) => {
-    return ctx.db.select().from(expense).where(isNull(expense.archivedAt)).orderBy(asc(expense.name))
+    return ctx.db
+      .select()
+      .from(expense)
+      .where(scopeWhere(ctx.householdId, expense.householdId, isNull(expense.archivedAt)))
+      .orderBy(asc(expense.name))
   }),
 
   create: publicProcedure.input(billInput).mutation(async ({ ctx, input }) => {
-    await validateBill(ctx.db, input)
+    await validateBill(ctx.db, ctx.householdId, input)
     const now = Date.now()
     const id = newId()
     const ff = fundingFields(input)
 
     await ctx.db.insert(expense).values({
       id,
+      householdId: ctx.householdId,
       name: input.name,
       recurrence: input.recurrence,
       amount: input.amount,
@@ -92,7 +102,7 @@ export const expensesRouter = router({
       updatedAt: now,
     })
 
-    return loadExpense(ctx.db, id)
+    return loadExpense(ctx.db, ctx.householdId, id)
   }),
 
   update: publicProcedure
@@ -114,7 +124,7 @@ export const expensesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, active, funding, potId, categoryId, ...rest } = input
       const now = Date.now()
-      const target = await loadExpense(ctx.db, id)
+      const target = await loadExpense(ctx.db, ctx.householdId, id)
 
       // Resolve the effective funding shape (partial updates fall back to stored values).
       const effectiveFunding = (funding ?? target.funding) as 'pot_manual' | 'pot_auto' | 'main'
@@ -123,7 +133,7 @@ export const expensesRouter = router({
 
       const fundingTouched = funding !== undefined || potId !== undefined || categoryId !== undefined
       if (fundingTouched) {
-        await validateBill(ctx.db, { funding: effectiveFunding, potId: effectivePot, categoryId: effectiveCat })
+        await validateBill(ctx.db, ctx.householdId, { funding: effectiveFunding, potId: effectivePot, categoryId: effectiveCat })
       }
 
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
@@ -135,15 +145,18 @@ export const expensesRouter = router({
         setFields['categoryId'] = ff.categoryId
       }
 
-      await ctx.db.update(expense).set(setFields).where(eq(expense.id, id))
-      return loadExpense(ctx.db, id)
+      await ctx.db.update(expense).set(setFields).where(scopeWhere(ctx.householdId, expense.householdId, eq(expense.id, id)))
+      return loadExpense(ctx.db, ctx.householdId, id)
     }),
 
   archive: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await loadExpense(ctx.db, input.id)
+      await loadExpense(ctx.db, ctx.householdId, input.id)
       const now = Date.now()
-      await ctx.db.update(expense).set({ archivedAt: now, updatedAt: now }).where(eq(expense.id, input.id))
+      await ctx.db
+        .update(expense)
+        .set({ archivedAt: now, updatedAt: now })
+        .where(scopeWhere(ctx.householdId, expense.householdId, eq(expense.id, input.id)))
     }),
 })
