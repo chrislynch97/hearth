@@ -13,8 +13,10 @@ file** — which makes it easy to self-host and trivial to back up (copy one fol
 - **Accounts & net worth** — asset/liability balances over time.
 - **Reports** — spend-vs-allocation, fairness, month-over-month; CSV/JSON export.
 - **Monzo CSV import** — review-before-commit importer.
-- **User accounts** — per-user login with roles and invite links, optional two-factor
-  (TOTP), and **automatic backups**.
+- **User accounts** — per-user login with roles, invite links, optional two-factor
+  (TOTP), and **automatic backups**. Supports **multiple households** (a switcher
+  in the account menu), mapping an account to a budgeting member, and optional
+  self-service **sign-up**.
 
 ## Quick start (development)
 
@@ -100,7 +102,20 @@ Security**) to turn login on; passwords must be at least 10 characters. From the
 invite others with a single-use link and a **role** (owner / admin / member /
 viewer) under **Settings → Households & access**, and layer on **two-factor
 authentication** (TOTP — Google Authenticator, 1Password, Aegis…) with one-time
-recovery codes. See [docs/deployment.md](docs/deployment.md#https--security).
+recovery codes.
+
+**Roles** — *owner* (full control, incl. billing/reset), *admin* (manage data,
+members and invites), *member* (edit budgeting data), *viewer* (read-only).
+Owners/admins manage who has access — change roles, remove access, or reset a
+locked-out member's password — under **Settings → Households & access**.
+
+**Multiple households & sign-up** — an account can belong to more than one
+household (switch between them from the account menu). The **instance owner** (the
+owner of the first household — the person who set the server up) can turn on
+**open registration** so anyone can create their own account and household from
+the sign-in screen; it's **off by default**, keeping a self-host invite-only.
+Whole-instance tools (data export/import/reset, backups) are reserved for the
+instance owner. See [docs/deployment.md](docs/deployment.md#https--security).
 
 ## Tech
 

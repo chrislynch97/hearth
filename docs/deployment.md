@@ -204,6 +204,20 @@ where you'd add HTTPS with a local certificate. Optional.
   settings & invite), **member** (edit budgeting data), **viewer** (read-only). Only
   the owner can remove the password / reopen the instance, and only while they're the
   sole account.
+- **Manage who has access** from the same screen: change a member's role, revoke
+  access, or reset a locked-out member's password (there's no email-based reset on a
+  self-host). Guardrails apply — you can't change or remove yourself, an admin can
+  only manage members/viewers, the last owner can't be removed, and you can't reset
+  the password of someone who also belongs to another household.
+- **Multiple households & self-registration.** An account can belong to more than one
+  household and switch between them from the account menu. The **instance owner** (the
+  owner of the *first* household — whoever set the server up) can enable **open
+  registration** (**Settings → Households & access → "Allow anyone to register"**),
+  letting anyone create their own account + household from the sign-in screen. It's
+  **off by default** — a self-host stays invite-only until you opt in. Whole-instance
+  tools (**Data** export/import/reset and on-disk backups) are reserved for the
+  instance owner, so a self-registered member can't read or wipe other households'
+  data.
 - **Enable two-factor authentication** (**Settings → Two-factor authentication**) for
   anything reachable beyond a trusted network. It adds a TOTP code (Google
   Authenticator, 1Password, Aegis…) on top of your password, with one-time recovery
@@ -213,8 +227,10 @@ where you'd add HTTPS with a local certificate. Optional.
   and is only marked `Secure` over HTTPS. Terminate TLS at a reverse proxy / tunnel
   and, if it doesn't forward `x-forwarded-proto: https`, set `HEARTH_SECURE_COOKIES=1`.
 - **Login is rate-limited** (10 attempts / 15 min per client, then a 15-minute
-  block) to slow brute-forcing. Behind a proxy, set `HEARTH_TRUST_PROXY=1` so the
-  limit is per real client IP, not per proxy.
+  block) to slow brute-forcing; **self-registration** is likewise capped (10 / hour
+  per client) so an open instance can't be spammed into mass-creating households.
+  Behind a proxy, set `HEARTH_TRUST_PROXY=1` so the limit is per real client IP, not
+  per proxy.
 - **The database is not encrypted at rest.** Password hashes, TOTP secrets and
   recovery-code hashes live in the same SQLite file as your data, so two-factor
   protects the *login path*, not someone who already has the file. Keep the data
