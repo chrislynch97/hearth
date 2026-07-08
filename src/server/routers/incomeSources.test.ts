@@ -7,7 +7,7 @@ describe('incomeSources router', () => {
   it('creates, lists, filters by owner, and defaults basis to net', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
     const bob = await caller.members.addPerson({ displayName: 'Bob' })
@@ -33,7 +33,7 @@ describe('incomeSources router', () => {
   it('rejects a bogus ownerId', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     await expect(
       caller.incomeSources.create({ ownerId: 'nope', name: 'X', amount: 1, recurrence: 'monthly' }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
@@ -42,7 +42,7 @@ describe('incomeSources router', () => {
   it('update toggles active and archive hides from list', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
 
     const src = await caller.incomeSources.create({ ownerId: alice.id, name: 'X', amount: 100, recurrence: 'monthly' })

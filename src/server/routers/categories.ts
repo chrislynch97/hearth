@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { asc, eq, isNull, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { category } from '../db/schema'
 import { newId } from '../../shared/ids'
 
@@ -10,7 +11,7 @@ export const categoriesRouter = router({
     return ctx.db
       .select()
       .from(category)
-      .where(isNull(category.archivedAt))
+      .where(scopeWhere(ctx.householdId, category.householdId, isNull(category.archivedAt)))
       .orderBy(asc(category.sortOrder), asc(category.name))
   }),
 
@@ -19,19 +20,26 @@ export const categoriesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const now = Date.now()
 
-      const [result] = await ctx.db.select({ maxOrder: max(category.sortOrder) }).from(category)
+      const [result] = await ctx.db
+        .select({ maxOrder: max(category.sortOrder) })
+        .from(category)
+        .where(scopeWhere(ctx.householdId, category.householdId))
       const nextOrder = (result?.maxOrder ?? 0) + 1
 
       const id = newId()
       await ctx.db.insert(category).values({
         id,
+        householdId: ctx.householdId,
         name: input.name,
         sortOrder: nextOrder,
         createdAt: now,
         updatedAt: now,
       })
 
-      const [inserted] = await ctx.db.select().from(category).where(eq(category.id, id))
+      const [inserted] = await ctx.db
+        .select()
+        .from(category)
+        .where(scopeWhere(ctx.householdId, category.householdId, eq(category.id, id)))
 
       if (!inserted) {
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to insert category' })
@@ -55,9 +63,12 @@ export const categoriesRouter = router({
       await ctx.db
         .update(category)
         .set({ ...fields, updatedAt: now })
-        .where(eq(category.id, id))
+        .where(scopeWhere(ctx.householdId, category.householdId, eq(category.id, id)))
 
-      const [updated] = await ctx.db.select().from(category).where(eq(category.id, id))
+      const [updated] = await ctx.db
+        .select()
+        .from(category)
+        .where(scopeWhere(ctx.householdId, category.householdId, eq(category.id, id)))
 
       if (!updated) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Category not found' })
@@ -69,7 +80,10 @@ export const categoriesRouter = router({
   archive: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [target] = await ctx.db.select().from(category).where(eq(category.id, input.id))
+      const [target] = await ctx.db
+        .select()
+        .from(category)
+        .where(scopeWhere(ctx.householdId, category.householdId, eq(category.id, input.id)))
 
       if (!target) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Category not found' })
@@ -79,6 +93,6 @@ export const categoriesRouter = router({
       await ctx.db
         .update(category)
         .set({ archivedAt: now, updatedAt: now })
-        .where(eq(category.id, input.id))
+        .where(scopeWhere(ctx.householdId, category.householdId, eq(category.id, input.id)))
     }),
 })

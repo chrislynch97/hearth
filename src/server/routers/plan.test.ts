@@ -8,7 +8,7 @@ describe('plan router', () => {
   it('funding computes pot fundings and per-person setAside from seeded data', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -60,7 +60,7 @@ describe('plan router', () => {
   it('archived expenses and pots are excluded from the plan', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -79,7 +79,7 @@ describe('plan router', () => {
   it('recentlyDue lists dated bills near today, nearest first, with funding', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!

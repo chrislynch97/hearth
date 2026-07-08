@@ -7,7 +7,7 @@ describe('payslipComponents router', () => {
   it('creates components per person with incrementing sortOrder', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
 
     const basic = await caller.payslipComponents.create({ ownerId: alice.id, name: 'Basic Pay', kind: 'earning' })
@@ -28,7 +28,7 @@ describe('payslipComponents router', () => {
   it('rejects the joint member as a component owner', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
 
     await expect(
@@ -39,7 +39,7 @@ describe('payslipComponents router', () => {
   it('archive removes from list', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
     const c = await caller.payslipComponents.create({ ownerId: alice.id, name: 'Basic', kind: 'earning' })
     await caller.payslipComponents.archive({ id: c.id })
@@ -49,7 +49,7 @@ describe('payslipComponents router', () => {
   it('update changes name, kind and isVariable together', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
     const c = await caller.payslipComponents.create({
       ownerId: alice.id,
@@ -74,7 +74,7 @@ describe('payslipComponents router', () => {
   it('update is a patch — omitted fields are left untouched', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
     const c = await caller.payslipComponents.create({
       ownerId: alice.id,
@@ -90,7 +90,7 @@ describe('payslipComponents router', () => {
   it('update throws NOT_FOUND for an unknown id', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     await expect(
       caller.payslipComponents.update({ id: 'does-not-exist', name: 'x' }),

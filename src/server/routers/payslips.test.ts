@@ -7,7 +7,7 @@ import { appRouter } from '../trpc/router'
 async function setup() {
   const db = await makeTestDb()
   await ensureSeed(db)
-  const caller = appRouter.createCaller({ db })
+  const caller = appRouter.createCaller({ db, householdId: 'household' })
   const alice = await caller.members.addPerson({ displayName: 'Alice' })
   const basic = await caller.payslipComponents.create({ ownerId: alice.id, name: 'Basic Pay', kind: 'earning' })
   const bonus = await caller.payslipComponents.create({ ownerId: alice.id, name: 'Bonus', kind: 'earning', isVariable: true })

@@ -8,7 +8,7 @@ describe('pots router', () => {
   it('create with valid ownerId → list returns it', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     // Use the seeded joint member as ownerId
     const members = await caller.members.list()
@@ -29,7 +29,7 @@ describe('pots router', () => {
   it('create with bogus ownerId throws BAD_REQUEST', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     await expect(
       caller.pots.create({ name: 'Bad Pot', ownerId: 'does-not-exist' }),
@@ -42,7 +42,7 @@ describe('pots router', () => {
   it('create sets categoryId and note', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -62,7 +62,7 @@ describe('pots router', () => {
   it('create sets timestamps and sortOrder', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -81,7 +81,7 @@ describe('pots router', () => {
   it('list is ordered by sortOrder asc then name asc', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -98,7 +98,7 @@ describe('pots router', () => {
   it('update renames a pot', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -113,7 +113,7 @@ describe('pots router', () => {
   it('update sets updatedAt', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -130,7 +130,7 @@ describe('pots router', () => {
   it('update with bogus ownerId throws BAD_REQUEST', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -144,7 +144,7 @@ describe('pots router', () => {
   it('archive removes from list', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -159,7 +159,7 @@ describe('pots router', () => {
   it('archive throws NOT_FOUND for unknown id', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     await expect(caller.pots.archive({ id: 'nonexistent' })).rejects.toMatchObject({
       code: 'NOT_FOUND',
@@ -169,7 +169,7 @@ describe('pots router', () => {
   it('usedIds omits pots with no references, includes pots used by a spend', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -190,7 +190,7 @@ describe('pots router', () => {
   it('create with a person member as owner works', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const person = await caller.members.addPerson({ displayName: 'Alice' })
     const p = await caller.pots.create({ name: 'Alice Pot', ownerId: person.id })

@@ -8,7 +8,7 @@ describe('expenses router (bills)', () => {
   async function setup() {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
     const alice = await caller.members.addPerson({ displayName: 'Alice' })

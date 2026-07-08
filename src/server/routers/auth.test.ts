@@ -13,6 +13,7 @@ function makeCaller(db: DB, sessionToken?: string) {
   const cookies: Array<string | null> = []
   const caller = appRouter.createCaller({
     db,
+    householdId: 'household',
     sessionToken,
     setSessionCookie: (t) => cookies.push(t),
   })

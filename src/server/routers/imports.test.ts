@@ -15,7 +15,7 @@ describe('imports router', () => {
   it('previews Monzo CSV with classification and pot suggestions', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
     const groceries = await caller.pots.create({ name: 'Groceries', ownerId: joint.id })
     // A prior Tesco spend trains the suggestion engine.
@@ -34,7 +34,7 @@ describe('imports router', () => {
   it('commits chosen rows and dedups on re-import', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
 
     const preview = await caller.imports.preview({ ownerId: joint.id, csvText: CSV })
@@ -75,7 +75,7 @@ describe('imports router', () => {
   it('records a batch in history', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
     await caller.imports.commit({
       ownerId: joint.id,

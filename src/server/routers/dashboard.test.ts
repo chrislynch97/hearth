@@ -7,7 +7,7 @@ describe('dashboard.summary', () => {
   it('composes period, funding, backlog, allocation, trend, recent activity and upcoming', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
     const cat = await caller.categories.create({ name: 'Bills' })
@@ -50,7 +50,7 @@ describe('dashboard.summary', () => {
   it('is calm and empty on a fresh household', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const summary = await caller.dashboard.summary()
     expect(summary.backlog.grandTotal).toBe(0)

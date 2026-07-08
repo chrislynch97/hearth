@@ -7,7 +7,7 @@ describe('data router', () => {
   it('export → import round-trips the whole database', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
     const pot = await caller.pots.create({ name: 'Rent', ownerId: alice.id })
@@ -34,7 +34,7 @@ describe('data router', () => {
   it('import rejects a snapshot with no household', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     await expect(caller.data.import({ version: 1, tables: { household: [] } })).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     })
@@ -43,7 +43,7 @@ describe('data router', () => {
   it('reset wipes data and returns to a fresh, setup-incomplete household', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     await caller.members.addPerson({ displayName: 'Alice' })
     await caller.household.completeSetup()
@@ -62,7 +62,7 @@ describe('data router', () => {
   it('rescaleCurrency scales every money column and updates the household', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
     const pot = await caller.pots.create({ name: 'Rent', ownerId: alice.id })
@@ -79,7 +79,7 @@ describe('data router', () => {
   it('stats reports per-table counts', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     await caller.members.addPerson({ displayName: 'Alice' })
 
     const stats = await caller.data.stats()

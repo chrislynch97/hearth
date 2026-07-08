@@ -23,7 +23,7 @@ describe('income router', () => {
   it('overview sums salary and active net sources, excluding gross sources', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
 
     await addRegularPayslip(caller, alice.id, '2026-06-30', 300000, 60000) // net 240000
@@ -41,7 +41,7 @@ describe('income router', () => {
   it('funding plan remainder reflects payslip-derived monthly income', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
 
     await addRegularPayslip(caller, alice.id, '2026-06-30', 300000, 60000) // net 240000

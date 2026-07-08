@@ -7,7 +7,7 @@ describe('reconcile router', () => {
   it('backlog shows the per-pot total for unreconciled spends', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -26,7 +26,7 @@ describe('reconcile router', () => {
   it('markPotMoved creates a batch and reconciles the rows; backlog drops; undoBatch reverses it', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -62,7 +62,7 @@ describe('reconcile router', () => {
   it('deleting the last spend of a batch removes the batch; deleting one of several keeps it with recomputed totals', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -90,7 +90,7 @@ describe('reconcile router', () => {
   it('markPotMoved on a pot with nothing unreconciled throws BAD_REQUEST', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -104,7 +104,7 @@ describe('reconcile router', () => {
   it('settled-at-source spends never appear on the backlog', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -119,7 +119,7 @@ describe('reconcile router', () => {
   it('backlog breaks a pot down by payer, and markPotMoved settles just one payer', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -152,7 +152,7 @@ describe('reconcile router', () => {
   it('batches lists reconciliation batches ordered by createdAt desc', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!

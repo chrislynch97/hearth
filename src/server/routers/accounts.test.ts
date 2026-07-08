@@ -7,7 +7,7 @@ describe('accounts router', () => {
   it('creates accounts and reports the latest balance as current value', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
 
     const house = await caller.accounts.create({ name: 'House', kind: 'asset', ownerId: joint.id })
@@ -23,7 +23,7 @@ describe('accounts router', () => {
   it('overwrites the snapshot when the same date is added twice', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
 
     const pot = await caller.accounts.create({ name: 'Savings', kind: 'asset', ownerId: joint.id })
@@ -38,7 +38,7 @@ describe('accounts router', () => {
   it('computes net worth as assets minus liabilities', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
 
     const house = await caller.accounts.create({ name: 'House', kind: 'asset', ownerId: joint.id })
@@ -56,7 +56,7 @@ describe('accounts router', () => {
   it('rejects an unknown owner and hides archived accounts', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
 
     await expect(

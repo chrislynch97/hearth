@@ -7,7 +7,7 @@ describe('setAside router', () => {
   async function setup() {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
     const pot = await caller.pots.create({ name: 'Alice · Spending', ownerId: alice.id })
     return { caller, alice, pot }

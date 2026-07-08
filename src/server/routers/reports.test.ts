@@ -9,7 +9,7 @@ describe('reports.overview', () => {
   it('reports spend vs allocation, category breakdown and fairness', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
     const bills = await caller.categories.create({ name: 'Bills' })
@@ -40,7 +40,7 @@ describe('reports.overview', () => {
   it('owner filter scopes spend-based reports', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
 
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
     const bob = await caller.members.addPerson({ displayName: 'Bob' })

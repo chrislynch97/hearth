@@ -7,7 +7,7 @@ describe('raises router', () => {
   it('lists a person\'s raises oldest-first with computed percentIncrease', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
 
     await caller.raises.create({ ownerId: alice.id, effectiveDate: '2024-06-01', newSalary: 4400000 })
@@ -22,7 +22,7 @@ describe('raises router', () => {
   it('scopes percentIncrease to the same owner', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
     const bob = await caller.members.addPerson({ displayName: 'Bob' })
 
@@ -37,7 +37,7 @@ describe('raises router', () => {
   it('rejects the joint member and edits/removes raises', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db })
+    const caller = appRouter.createCaller({ db, householdId: 'household' })
     const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
     await expect(
       caller.raises.create({ ownerId: joint.id, effectiveDate: '2024-01-01', newSalary: 1 }),
