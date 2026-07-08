@@ -4,13 +4,7 @@ import { Link } from 'react-router-dom'
 import { trpc } from '../trpc'
 import type { Member } from '../../server/db/schema'
 import { formatMoney } from '../../shared/money'
-import { useFormatDate } from '../useMoney'
-
-interface MoneyFormat {
-  symbol: string
-  decimalPlaces: number
-  locale: string
-}
+import { useMoney, useFormatDate, type MoneyFormat } from '../useMoney'
 
 interface BacklogSpend {
   id: string
@@ -249,16 +243,10 @@ function HistorySection({ money }: { money: MoneyFormat }) {
 // ---------------------------------------------------------------------------
 
 export function CatchupPage() {
-  const ctxQuery = trpc.bootstrap.context.useQuery()
   const membersQuery = trpc.members.list.useQuery()
   const backlogQuery = trpc.reconcile.backlog.useQuery()
 
-  const household = ctxQuery.data?.household
-  const money: MoneyFormat = {
-    symbol: household?.currencySymbol ?? '£',
-    decimalPlaces: household?.currencyDecimalPlaces ?? 2,
-    locale: household?.locale ?? 'en-GB',
-  }
+  const money = useMoney()
 
   const members = membersQuery.data ?? []
   const backlog = backlogQuery.data

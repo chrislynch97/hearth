@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Alert, Button, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { trpc } from '../trpc'
 import { formatMoney } from '../../shared/money'
-import type { MoneyFormat } from '../useMoney'
+import { useMoney, type MoneyFormat } from '../useMoney'
 import type { PotFunding } from '../../server/plan/funding'
 
 /** The per-person standing orders as plaintext, ready to paste into a bank. */
@@ -34,17 +34,11 @@ function buildPlanText(
 }
 
 export function FundingPage() {
-  const ctxQuery = trpc.bootstrap.context.useQuery()
   const fundingQuery = trpc.plan.funding.useQuery()
   const membersQuery = trpc.members.list.useQuery()
   const categoriesQuery = trpc.categories.list.useQuery()
 
-  const household = ctxQuery.data?.household
-  const money = {
-    symbol: household?.currencySymbol ?? '£',
-    decimalPlaces: household?.currencyDecimalPlaces ?? 2,
-    locale: household?.locale ?? 'en-GB',
-  }
+  const money = useMoney()
 
   const isLoading = fundingQuery.isLoading || membersQuery.isLoading
   const plan = fundingQuery.data

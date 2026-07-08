@@ -25,14 +25,8 @@ import { trpc } from '../trpc'
 import type { Category, Member, Pot, SpendTransaction } from '../../server/db/schema'
 import { allocate, formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { todayIso } from '../../shared/dates'
-import { useFormatDate } from '../useMoney'
+import { useMoney, useFormatDate, type MoneyFormat } from '../useMoney'
 import { groupedPotOptions, orderMembers } from '../potOptions'
-
-interface MoneyFormat {
-  symbol: string
-  decimalPlaces: number
-  locale: string
-}
 
 // ---------------------------------------------------------------------------
 // Add-spend form
@@ -1058,16 +1052,10 @@ function Register({ members, pots, money }: { members: Member[]; pots: Pot[]; mo
 // ---------------------------------------------------------------------------
 
 export function SpendingPage() {
-  const ctxQuery = trpc.bootstrap.context.useQuery()
   const membersQuery = trpc.members.list.useQuery()
   const potsQuery = trpc.pots.list.useQuery()
 
-  const household = ctxQuery.data?.household
-  const money: MoneyFormat = {
-    symbol: household?.currencySymbol ?? '£',
-    decimalPlaces: household?.currencyDecimalPlaces ?? 2,
-    locale: household?.locale ?? 'en-GB',
-  }
+  const money = useMoney()
 
   const members = (membersQuery.data ?? []).filter((m) => m.archivedAt === null)
   const pots = potsQuery.data ?? []

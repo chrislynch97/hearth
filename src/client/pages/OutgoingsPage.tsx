@@ -23,17 +23,11 @@ import type { Category, Expense, Member, Pot } from '../../server/db/schema'
 import { fromMinor, formatMoney, toMinor } from '../../shared/money'
 import { normaliseToMonthly, roundMinor, type Recurrence } from '../../shared/recurrence'
 import { addMonths, todayIso } from '../../shared/dates'
-import { useFormatDate } from '../useMoney'
+import { useMoney, useFormatDate, type MoneyFormat } from '../useMoney'
 import { groupedPotOptions, orderMembers } from '../potOptions'
 
 type ExpenseRecurrence = 'monthly' | 'quarterly' | 'yearly'
 type Funding = 'pot_manual' | 'pot_auto' | 'main'
-
-interface MoneyFormat {
-  symbol: string
-  decimalPlaces: number
-  locale: string
-}
 
 const RECURRENCE_OPTIONS = [
   { value: 'monthly', label: 'Monthly' },
@@ -324,7 +318,6 @@ function BillRow({
 // ---------------------------------------------------------------------------
 
 export function OutgoingsPage() {
-  const ctxQuery = trpc.bootstrap.context.useQuery()
   const expensesQuery = trpc.expenses.list.useQuery()
   const potsQuery = trpc.pots.list.useQuery()
   const membersQuery = trpc.members.list.useQuery()
@@ -333,12 +326,7 @@ export function OutgoingsPage() {
   const [formOpened, setFormOpened] = useState(false)
   const [editing, setEditing] = useState<Expense | null>(null)
 
-  const household = ctxQuery.data?.household
-  const money: MoneyFormat = {
-    symbol: household?.currencySymbol ?? '£',
-    decimalPlaces: household?.currencyDecimalPlaces ?? 2,
-    locale: household?.locale ?? 'en-GB',
-  }
+  const money = useMoney()
 
   const expenses = (expensesQuery.data ?? []).filter((e) => e.active === 1)
   const pots = potsQuery.data ?? []

@@ -5,6 +5,9 @@ export interface MoneyFormat {
   symbol: string
   decimalPlaces: number
   locale: string
+  symbolPosition: 'prefix' | 'suffix'
+  groupSeparator: string
+  decimalSeparator: string
 }
 
 /** The household's currency formatting, read from bootstrap context. */
@@ -15,6 +18,9 @@ export function useMoney(): MoneyFormat {
     symbol: h?.currencySymbol ?? '£',
     decimalPlaces: h?.currencyDecimalPlaces ?? 2,
     locale: h?.locale ?? 'en-GB',
+    symbolPosition: (h?.currencySymbolPosition as 'prefix' | 'suffix') ?? 'prefix',
+    groupSeparator: h?.currencyGroupSeparator ?? ',',
+    decimalSeparator: h?.currencyDecimalSeparator ?? '.',
   }
 }
 

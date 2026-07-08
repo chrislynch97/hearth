@@ -22,12 +22,7 @@ import type { Category, Member, Pot, SetAside } from '../../server/db/schema'
 import { formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { normaliseToMonthly, roundMinor, type Recurrence } from '../../shared/recurrence'
 import { orderMembers } from '../potOptions'
-
-interface MoneyFormat {
-  symbol: string
-  decimalPlaces: number
-  locale: string
-}
+import { useMoney, type MoneyFormat } from '../useMoney'
 
 /** Monthly-equivalent total of a pot's contribution lines. */
 function contributionMonthly(lines: SetAside[]): number {
@@ -500,7 +495,6 @@ function PotsPanel({
 // ---------------------------------------------------------------------------
 
 export function PotsPage() {
-  const ctxQuery = trpc.bootstrap.context.useQuery()
   const categoriesQuery = trpc.categories.list.useQuery()
   const potsQuery = trpc.pots.list.useQuery()
   const membersQuery = trpc.members.list.useQuery()
@@ -512,12 +506,7 @@ export function PotsPage() {
   const members = (membersQuery.data ?? []).filter((m) => m.archivedAt === null)
   const usedIds = new Set(usedIdsQuery.data ?? [])
 
-  const household = ctxQuery.data?.household
-  const money: MoneyFormat = {
-    symbol: household?.currencySymbol ?? '£',
-    decimalPlaces: household?.currencyDecimalPlaces ?? 2,
-    locale: household?.locale ?? 'en-GB',
-  }
+  const money = useMoney()
 
   const setAsidesByPot = new Map<string, SetAside[]>()
   for (const s of setAsidesQuery.data ?? []) {

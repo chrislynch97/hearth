@@ -49,6 +49,39 @@ describe('formatMoney', () => {
     expect(formatMoney(-123456, { symbol: '£', decimalPlaces: 2, locale: 'en-GB' })).toBe('-£1,234.56')
     expect(formatMoney(100000, { symbol: '£', decimalPlaces: 0, locale: 'en-GB' })).toBe('£100,000')
   })
+
+  it('places the symbol after the number (with a non-breaking space) when suffixed', () => {
+    expect(
+      formatMoney(123456, { symbol: '€', decimalPlaces: 2, symbolPosition: 'suffix' }),
+    ).toBe('1,234.56 €')
+  })
+
+  it('honours custom group and decimal separators (German shape)', () => {
+    expect(
+      formatMoney(1234567, {
+        symbol: '€',
+        decimalPlaces: 2,
+        symbolPosition: 'suffix',
+        groupSeparator: '.',
+        decimalSeparator: ',',
+      }),
+    ).toBe('12.345,67 €')
+  })
+
+  it('supports a space group separator and no separator', () => {
+    expect(
+      formatMoney(123456, { symbol: '', decimalPlaces: 2, groupSeparator: ' ', decimalSeparator: ',' }),
+    ).toBe('1 234,56')
+    expect(
+      formatMoney(123456, { symbol: '$', decimalPlaces: 2, groupSeparator: '' }),
+    ).toBe('$1234.56')
+  })
+
+  it('keeps the minus sign leading regardless of symbol position', () => {
+    expect(
+      formatMoney(-500, { symbol: 'kr', decimalPlaces: 2, symbolPosition: 'suffix' }),
+    ).toBe('-5.00 kr')
+  })
 })
 
 describe('allocate', () => {

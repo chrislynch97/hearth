@@ -23,10 +23,27 @@ import { trpc } from '../trpc'
 import { downloadBlob, downloadJson, toCsv } from '../csv'
 import { zipStore } from '../zip'
 import { MIN_PASSWORD_LENGTH, validatePassword } from '../../shared/password-policy'
+import { formatMoney } from '../../shared/money'
 
 // ---------------------------------------------------------------------------
 // General household settings
 // ---------------------------------------------------------------------------
+
+// Thousands/decimal separator presets. Stored as two explicit characters on the
+// household so a Euro household can pick the German 1.234,56 shape; the key here
+// is only for the Settings dropdown.
+const NUMBER_FORMATS = [
+  { value: 'comma_dot', group: ',', decimal: '.', label: '1,234.56' },
+  { value: 'dot_comma', group: '.', decimal: ',', label: '1.234,56' },
+  { value: 'space_comma', group: ' ', decimal: ',', label: '1 234,56' },
+  { value: 'none_dot', group: '', decimal: '.', label: '1234.56' },
+] as const
+
+function numberFormatKey(group: string, decimal: string): string {
+  return (
+    NUMBER_FORMATS.find((f) => f.group === group && f.decimal === decimal)?.value ?? 'comma_dot'
+  )
+}
 
 function GeneralSection() {
   const utils = trpc.useUtils()
@@ -41,6 +58,8 @@ function GeneralSection() {
   const [jointBasis, setJointBasis] = useState('equal')
   const [incomeBasis, setIncomeBasis] = useState('regular_net')
   const [decimalPlaces, setDecimalPlaces] = useState<number | string>(2)
+  const [symbolPosition, setSymbolPosition] = useState('prefix')
+  const [numberFormat, setNumberFormat] = useState('comma_dot')
   const [weekStart, setWeekStart] = useState('monday')
   const [dateFormat, setDateFormat] = useState('medium')
   const [emergencyMonths, setEmergencyMonths] = useState<number | string>(3)
@@ -54,15 +73,23 @@ function GeneralSection() {
     setJointBasis(hh.jointContributionBasis)
     setIncomeBasis(hh.incomeBasisDefault)
     setDecimalPlaces(hh.currencyDecimalPlaces)
+    setSymbolPosition(hh.currencySymbolPosition)
+    setNumberFormat(numberFormatKey(hh.currencyGroupSeparator, hh.currencyDecimalSeparator))
     setWeekStart(hh.weekStart)
     setDateFormat(hh.dateFormat)
     setEmergencyMonths(hh.emergencyFundMonths)
   }, [hh])
 
+  const selectedFormat =
+    NUMBER_FORMATS.find((f) => f.value === numberFormat) ?? NUMBER_FORMATS[0]
+
   async function handleSave() {
     await update.mutateAsync({
       displayName: displayName.trim() || undefined,
       currencySymbol: currencySymbol || undefined,
+      currencySymbolPosition: symbolPosition as 'prefix' | 'suffix',
+      currencyGroupSeparator: selectedFormat.group,
+      currencyDecimalSeparator: selectedFormat.decimal,
       budgetPeriodStartDay: Number(startDay),
       jointContributionBasis: jointBasis as 'equal' | 'income_proportional' | 'custom',
       incomeBasisDefault: incomeBasis as 'regular_net' | 'latest_payslip' | 'rolling_12m',
@@ -107,6 +134,37 @@ function GeneralSection() {
             onChange={setDecimalPlaces}
           />
         </Group>
+        <Group grow align="flex-end">
+          <Select
+            label="Currency symbol position"
+            data={[
+              { value: 'prefix', label: `Before (${currencySymbol || '£'}100)` },
+              { value: 'suffix', label: `After (100 ${currencySymbol || '£'})` },
+            ]}
+            value={symbolPosition}
+            onChange={(v) => setSymbolPosition(v ?? 'prefix')}
+            allowDeselect={false}
+          />
+          <Select
+            label="Number format"
+            data={NUMBER_FORMATS.map((f) => ({ value: f.value, label: f.label }))}
+            value={numberFormat}
+            onChange={(v) => setNumberFormat(v ?? 'comma_dot')}
+            allowDeselect={false}
+          />
+        </Group>
+        <Text size="xs" c="dimmed">
+          Preview:{' '}
+          <Text span ff="monospace" fz="sm" fw={500}>
+            {formatMoney(123456, {
+              symbol: currencySymbol || '£',
+              decimalPlaces: Number(decimalPlaces) || 0,
+              symbolPosition: symbolPosition as 'prefix' | 'suffix',
+              groupSeparator: selectedFormat.group,
+              decimalSeparator: selectedFormat.decimal,
+            })}
+          </Text>
+        </Text>
         <Group grow>
           <Select
             label="Joint contribution basis"

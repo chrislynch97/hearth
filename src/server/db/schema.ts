@@ -6,6 +6,13 @@ export const household = sqliteTable('household', {
   currencyCode: text('currency_code').notNull().default('GBP'),
   currencySymbol: text('currency_symbol').notNull().default('£'),
   currencyDecimalPlaces: integer('currency_decimal_places').notNull().default(2),
+  // How the symbol and number are laid out — independent of `locale`, which only
+  // drives date formatting. 'prefix' = £1,234.56; 'suffix' = 1.234,56 € (with a
+  // space). Separators are stored explicitly so a Euro household can pick the
+  // German 1.234,56 shape without us guessing from locale.
+  currencySymbolPosition: text('currency_symbol_position').notNull().default('prefix'), // 'prefix' | 'suffix'
+  currencyGroupSeparator: text('currency_group_separator').notNull().default(','),      // thousands separator ('' = none)
+  currencyDecimalSeparator: text('currency_decimal_separator').notNull().default('.'),
   locale: text('locale').notNull().default('en-GB'),
   budgetPeriodStartDay: integer('budget_period_start_day').notNull().default(1),
   passwordHash: text('password_hash'),
