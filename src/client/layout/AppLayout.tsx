@@ -6,11 +6,13 @@ import {
   Button,
   Group,
   Kbd,
+  Menu,
   Modal,
   NavLink,
   Stack,
   Text,
   TextInput,
+  UnstyledButton,
   useMantineColorScheme,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
@@ -121,6 +123,85 @@ function ThemeToggle({ visibleFrom }: { visibleFrom?: string }) {
     >
       {isDark ? '☀' : '☾'}
     </ActionIcon>
+  )
+}
+
+/** Signed-in identity in the sidebar footer: who you are, which household is
+ *  active, and a menu to reach account settings or log out. On an open
+ *  (password-less) instance the resolved owner shows and log-out is hidden. */
+function UserMenu() {
+  const navigate = useNavigate()
+  const utils = trpc.useUtils()
+  const me = trpc.users.me.useQuery()
+  const status = trpc.auth.status.useQuery()
+  const logout = trpc.auth.logout.useMutation()
+
+  const name = me.data?.displayName || me.data?.username || 'You'
+  const active = me.data?.memberships.find((m) => m.householdId === me.data?.activeHouseholdId)
+  const canLogOut = status.data?.passwordSet ?? false
+
+  async function handleLogout() {
+    await logout.mutateAsync()
+    // Invalidate ONLY auth.status: it re-fetches alone and returns 200
+    // (authenticated: false), flipping the app to the login screen. Invalidating
+    // everything would re-fire the protected queries — still mounted for a tick —
+    // which the locked HTTP gate 401s as a batch, erroring auth.status with them
+    // and surfacing the connection-error screen instead of the login gate.
+    await utils.auth.status.invalidate()
+  }
+
+  return (
+    <Menu position="top-start" width={230} withinPortal shadow="md">
+      <Menu.Target>
+        <UnstyledButton style={{ width: '100%', borderRadius: 8, padding: 4 }} aria-label="Account menu">
+          <Group gap={8} wrap="nowrap">
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                backgroundColor: hearthTokens.ownerPalette[0],
+                boxShadow: 'inset 0 0 0 1.5px rgba(239, 237, 227, 0.55)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 12,
+                fontWeight: 600,
+                color: hearthTokens.brand.linen,
+                flexShrink: 0,
+              }}
+            >
+              {name.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <Text size="sm" truncate style={{ color: hearthTokens.brand.linen, lineHeight: 1.2 }}>
+                {name}
+              </Text>
+              {active && (
+                <Text size="xs" truncate style={{ color: hearthTokens.brand.linen, opacity: 0.6, lineHeight: 1.2 }}>
+                  {active.householdName}
+                </Text>
+              )}
+            </div>
+            <Text size="xs" style={{ color: hearthTokens.brand.linen, opacity: 0.5 }}>
+              ⌄
+            </Text>
+          </Group>
+        </UnstyledButton>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Label>
+          {me.data?.username ? `@${me.data.username}` : 'Account'}
+          {me.data?.role ? ` · ${me.data.role}` : ''}
+        </Menu.Label>
+        <Menu.Item onClick={() => navigate('/settings')}>Account &amp; settings</Menu.Item>
+        {canLogOut && (
+          <Menu.Item color="red" onClick={() => void handleLogout()}>
+            Log out
+          </Menu.Item>
+        )}
+      </Menu.Dropdown>
+    </Menu>
   )
 }
 
@@ -446,7 +527,9 @@ export function AppLayout() {
           pt="sm"
           style={{ borderTop: '1px solid rgba(239, 237, 227, 0.14)' }}
         >
-          <Group gap={8} justify="space-between">
+          <Stack gap={8}>
+            <UserMenu />
+            <Group gap={8} justify="space-between">
             <Group gap={8}>
               {people.slice(0, 4).map((m, i) => (
                 <div
@@ -474,7 +557,8 @@ export function AppLayout() {
               </Text>
             </Group>
             <ThemeToggle />
-          </Group>
+            </Group>
+          </Stack>
         </AppShell.Section>
       </AppShell.Navbar>
 

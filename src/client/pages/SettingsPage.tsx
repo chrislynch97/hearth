@@ -591,7 +591,6 @@ function SecuritySection() {
   const statusQuery = trpc.auth.status.useQuery()
   const setPassword = trpc.auth.setPassword.useMutation()
   const clearPassword = trpc.auth.clearPassword.useMutation()
-  const logout = trpc.auth.logout.useMutation()
 
   const passwordSet = statusQuery.data?.passwordSet ?? false
 
@@ -636,21 +635,11 @@ function SecuritySection() {
     }
   }
 
-  async function handleLogout() {
-    await logout.mutateAsync()
-    await utils.auth.status.invalidate()
-  }
-
   return (
     <Card withBorder padding="md" radius="md">
-      <Group justify="space-between" mb="sm">
-        <Title order={4}>Security</Title>
-        {passwordSet && (
-          <Button size="xs" variant="default" onClick={() => void handleLogout()}>
-            Log out
-          </Button>
-        )}
-      </Group>
+      <Title order={4} mb="sm">
+        Security
+      </Title>
       <Text size="xs" c="dimmed" mb="sm">
         Your account password. While it&apos;s unset the app is open on your network; setting one turns on
         login (anyone you invite signs in with their own account). For internet exposure, also put it
