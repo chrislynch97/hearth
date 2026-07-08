@@ -90,6 +90,23 @@ export const membership = sqliteTable('membership', {
   uniqUserHousehold: uniqueIndex('membership_user_household').on(t.userId, t.householdId),
 }))
 
+// A logged-in session. The cookie holds this row's id; each request resolves the
+// user and their active household from it. Server-side (unlike the old stateless
+// shared-password token) so it carries user identity and supports logout,
+// multiple users, and a per-session active household. Not part of the data
+// portability contract — deliberately excluded from ALL_TABLES.
+export const session = sqliteTable('session', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  activeHouseholdId: text('active_household_id')
+    .notNull()
+    .references(() => household.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+})
+
+export type Session = typeof session.$inferSelect
+
 // A budgeting participant within a household: a person, or the shared 'joint'
 // entity. `userId` optionally links a participant to a login identity.
 export const member = sqliteTable('member', {

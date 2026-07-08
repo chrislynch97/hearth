@@ -18,6 +18,7 @@ import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type { DB } from './client'
 import { ALL_TABLES } from './tables'
 import { household } from './schema'
+import { ensureSeed } from './seed'
 
 // --- deterministic randomness ---------------------------------------------
 
@@ -651,6 +652,9 @@ export async function seedDemo(db: DB, opts: DemoOptions = {}): Promise<Record<s
     }
   }
   await db.batch(statements as unknown as BatchArg)
+  // Provision the owner user + membership for the demo household (the wipe above
+  // clears them; the demo dataset itself carries no login identities).
+  await ensureSeed(db)
   return counts
 }
 
