@@ -2,6 +2,8 @@ import { getTableColumns } from 'drizzle-orm'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import {
   household,
+  user,
+  membership,
   member,
   category,
   pot,
@@ -24,6 +26,8 @@ import {
  *  the list for deletes. Single source of truth for export / import / reset. */
 export const ALL_TABLES: ReadonlyArray<readonly [string, SQLiteTable]> = [
   ['household', household],
+  ['user', user],
+  ['membership', membership],
   ['member', member],
   ['category', category],
   ['pot', pot],

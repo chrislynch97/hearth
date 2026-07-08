@@ -34,6 +34,7 @@ import { ComponentManager } from './PayslipsPage'
 function comp(over: Partial<PayslipComponentType>): PayslipComponentType {
   return {
     id: 'c1',
+    householdId: 'household',
     ownerId: 'owner-1',
     name: 'Basic Pay',
     kind: 'earning',
