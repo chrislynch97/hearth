@@ -1029,6 +1029,178 @@ function AccountSection() {
 // Households & people you share with (switcher + invitations)
 // ---------------------------------------------------------------------------
 
+/** The people with accepted access to the active household: change a role,
+ *  reset a locked-out member's password, or revoke access. Admin+ only; the
+ *  server enforces that only owners touch owners/admins. */
+function AccessList({ isOwner }: { isOwner: boolean }) {
+  const utils = trpc.useUtils()
+  const list = trpc.access.list.useQuery()
+  const setRole = trpc.access.setRole.useMutation()
+  const remove = trpc.access.remove.useMutation()
+  const resetPassword = trpc.access.resetPassword.useMutation()
+
+  const [pendingRemove, setPendingRemove] = useState<string | null>(null)
+  const [resetFor, setResetFor] = useState<{ userId: string; name: string } | null>(null)
+  const [newPw, setNewPw] = useState('')
+  const [resetMsg, setResetMsg] = useState('')
+  const [error, setError] = useState('')
+
+  const roleOptions = [
+    { value: 'viewer', label: 'Viewer' },
+    { value: 'member', label: 'Member' },
+    ...(isOwner
+      ? [
+          { value: 'admin', label: 'Admin' },
+          { value: 'owner', label: 'Owner' },
+        ]
+      : []),
+  ]
+
+  async function changeRole(userId: string, role: string) {
+    setError('')
+    try {
+      await setRole.mutateAsync({ userId, role: role as 'owner' | 'admin' | 'member' | 'viewer' })
+      await utils.access.list.invalidate()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not change the role.')
+    }
+  }
+
+  async function confirmRemove(userId: string) {
+    setError('')
+    try {
+      await remove.mutateAsync({ userId })
+      setPendingRemove(null)
+      await utils.access.list.invalidate()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove access.')
+    }
+  }
+
+  async function submitReset() {
+    if (!resetFor) return
+    setError('')
+    const weak = validatePassword(newPw)
+    if (weak) return setError(weak)
+    try {
+      await resetPassword.mutateAsync({ userId: resetFor.userId, newPassword: newPw })
+      setResetMsg(`Password reset for ${resetFor.name}. Share it with them; they'll be signed out.`)
+      setResetFor(null)
+      setNewPw('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not reset the password.')
+    }
+  }
+
+  const rows = list.data ?? []
+
+  return (
+    <>
+      <Divider label="People with access" labelPosition="left" />
+      {error && (
+        <Alert color="red" title="Error">
+          {error}
+        </Alert>
+      )}
+      {resetMsg && (
+        <Alert color="moss" variant="light" withCloseButton onClose={() => setResetMsg('')}>
+          {resetMsg}
+        </Alert>
+      )}
+      <Stack gap={6}>
+        {rows.map((r) => {
+          const elevated = r.role === 'admin' || r.role === 'owner'
+          const canManage = !r.isYou && (elevated ? isOwner : true)
+          return (
+            <Group key={r.userId} justify="space-between" wrap="nowrap" px="xs" py={4}>
+              <div style={{ minWidth: 0 }}>
+                <Text size="sm" truncate>
+                  {r.displayName}
+                  {r.isYou && (
+                    <Text span size="xs" c="dimmed">
+                      {' '}
+                      (you)
+                    </Text>
+                  )}
+                </Text>
+                <Text size="xs" c="dimmed" truncate>
+                  @{r.username} · {r.role}
+                  {r.mfaEnabled ? ' · 2FA on' : ''}
+                </Text>
+              </div>
+              {canManage ? (
+                <Group gap={6} wrap="nowrap">
+                  <Select
+                    size="xs"
+                    w={116}
+                    data={roleOptions}
+                    value={r.role}
+                    allowDeselect={false}
+                    onChange={(v) => v && v !== r.role && void changeRole(r.userId, v)}
+                  />
+                  <Button
+                    size="compact-xs"
+                    variant="subtle"
+                    onClick={() => {
+                      setResetMsg('')
+                      setResetFor({ userId: r.userId, name: r.displayName })
+                    }}
+                  >
+                    Reset password
+                  </Button>
+                  {pendingRemove === r.userId ? (
+                    <Button
+                      size="compact-xs"
+                      color="red"
+                      loading={remove.isPending}
+                      onClick={() => void confirmRemove(r.userId)}
+                    >
+                      Confirm
+                    </Button>
+                  ) : (
+                    <Button size="compact-xs" variant="subtle" color="red" onClick={() => setPendingRemove(r.userId)}>
+                      Remove
+                    </Button>
+                  )}
+                </Group>
+              ) : (
+                !r.isYou && (
+                  <Text size="xs" c="dimmed">
+                    owner-managed
+                  </Text>
+                )
+              )}
+            </Group>
+          )
+        })}
+      </Stack>
+
+      <Modal opened={resetFor !== null} onClose={() => setResetFor(null)} title={`Reset password — ${resetFor?.name ?? ''}`} size="sm">
+        <Stack gap="sm">
+          <Text size="xs" c="dimmed">
+            Set a new password for this member, then share it with them out-of-band. They&apos;ll be signed out of any
+            active sessions.
+          </Text>
+          <PasswordInput
+            label="New password"
+            value={newPw}
+            onChange={(e) => setNewPw(e.currentTarget.value)}
+            description={`At least ${MIN_PASSWORD_LENGTH} characters.`}
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setResetFor(null)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void submitReset()} loading={resetPassword.isPending}>
+              Reset password
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </>
+  )
+}
+
 function HouseholdAccessSection() {
   const utils = trpc.useUtils()
   const me = trpc.users.me.useQuery()
@@ -1099,6 +1271,7 @@ function HouseholdAccessSection() {
 
         {isAdmin && (
           <>
+            <AccessList isOwner={isOwner} />
             <Divider label="Invite someone" labelPosition="left" />
             <Group align="flex-end">
               <Select

@@ -1,0 +1,161 @@
+import { describe, it, expect } from 'vitest'
+import { makeTestDb } from '../db/testdb'
+import { ensureSeed } from '../db/seed'
+import { appRouter } from '../trpc/router'
+import { getOwnerUser } from '../auth/session'
+import { membership, session, user } from '../db/schema'
+import { hashPassword } from '../auth/password'
+import { newId } from '../../shared/ids'
+import type { DB } from '../db/client'
+import { eq } from 'drizzle-orm'
+
+function caller(db: DB, opts: { role?: string; userId?: string; sessionToken?: string } = {}) {
+  const cookies: Array<string | null> = []
+  const c = appRouter.createCaller({
+    db,
+    householdId: 'household',
+    role: opts.role,
+    userId: opts.userId,
+    sessionToken: opts.sessionToken,
+    setSessionCookie: (t) => cookies.push(t),
+  })
+  return { c, cookies }
+}
+
+/** Insert an accepted member of the default household and return its user id. */
+async function addMember(db: DB, username: string, role: string): Promise<string> {
+  const uid = newId()
+  const now = Date.now()
+  await db.insert(user).values({
+    id: uid,
+    username,
+    displayName: username,
+    passwordHash: hashPassword('their-strong-pw'),
+    createdAt: now,
+    updatedAt: now,
+  })
+  await db.insert(membership).values({
+    id: newId(),
+    userId: uid,
+    householdId: 'household',
+    role,
+    invitedAt: now,
+    acceptedAt: now,
+    createdAt: now,
+    updatedAt: now,
+  })
+  return uid
+}
+
+describe('access.list', () => {
+  it('needs admin, and returns every accepted member', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    await addMember(db, 'ben', 'member')
+
+    await expect(caller(db, { role: 'member' }).c.access.list()).rejects.toMatchObject({ code: 'FORBIDDEN' })
+
+    const rows = await caller(db, { role: 'admin' }).c.access.list()
+    expect(rows.map((r) => r.username).sort()).toEqual(['ben', 'owner'])
+    expect(rows.find((r) => r.username === 'ben')?.role).toBe('member')
+  })
+})
+
+describe('access.setRole', () => {
+  it('admins manage member/viewer only; owner needed for admin/owner', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const ben = await addMember(db, 'ben', 'member')
+    const ada = await addMember(db, 'ada', 'admin')
+
+    // admin can retune a member/viewer
+    await expect(caller(db, { role: 'admin' }).c.access.setRole({ userId: ben, role: 'viewer' })).resolves.toEqual({
+      ok: true,
+    })
+    // ...but can't mint an admin, nor touch an existing admin
+    await expect(caller(db, { role: 'admin' }).c.access.setRole({ userId: ben, role: 'admin' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    await expect(caller(db, { role: 'admin' }).c.access.setRole({ userId: ada, role: 'member' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    // owner can
+    await expect(caller(db, { role: 'owner' }).c.access.setRole({ userId: ben, role: 'admin' })).resolves.toEqual({
+      ok: true,
+    })
+  })
+
+  it('you cannot change your own role', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+    await expect(
+      caller(db, { role: 'owner', userId: owner!.id }).c.access.setRole({ userId: owner!.id, role: 'admin' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+})
+
+describe('access.remove', () => {
+  it('revokes access and ends the member’s sessions', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const ben = await addMember(db, 'ben', 'member')
+    // give ben a live session
+    await db.insert(session).values({
+      id: newId(),
+      userId: ben,
+      activeHouseholdId: 'household',
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 1_000_000,
+    })
+
+    await expect(caller(db, { role: 'admin' }).c.access.remove({ userId: ben })).resolves.toEqual({ ok: true })
+    expect(await db.select().from(membership).where(eq(membership.userId, ben))).toHaveLength(0)
+    expect(await db.select().from(session).where(eq(session.userId, ben))).toHaveLength(0)
+  })
+
+  it('admins cannot remove an owner/admin, and no one removes themselves', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+    const ada = await addMember(db, 'ada', 'admin')
+
+    await expect(caller(db, { role: 'admin' }).c.access.remove({ userId: ada })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    await expect(
+      caller(db, { role: 'owner', userId: owner!.id }).c.access.remove({ userId: owner!.id }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+})
+
+describe('access.resetPassword', () => {
+  it('sets a working new password, ends sessions, and respects the policy', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+    const ben = await addMember(db, 'ben', 'member')
+    // lock the instance so login is live
+    await caller(db, { role: 'owner', userId: owner!.id }).c.auth.setPassword({ newPassword: 'owner-strong-pw' })
+
+    await expect(
+      caller(db, { role: 'admin' }).c.access.resetPassword({ userId: ben, newPassword: 'short' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+
+    await expect(
+      caller(db, { role: 'admin' }).c.access.resetPassword({ userId: ben, newPassword: 'brand-new-strong-pw' }),
+    ).resolves.toEqual({ ok: true })
+
+    // The new password works.
+    expect(await caller(db).c.auth.login({ username: 'ben', password: 'brand-new-strong-pw' })).toEqual({ ok: true })
+  })
+
+  it('admins cannot reset an owner/admin password', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const ada = await addMember(db, 'ada', 'admin')
+    await expect(
+      caller(db, { role: 'admin' }).c.access.resetPassword({ userId: ada, newPassword: 'brand-new-strong-pw' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+  })
+})
