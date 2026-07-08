@@ -1,6 +1,7 @@
 import { z } from 'zod'
-import { and, eq, isNull } from 'drizzle-orm'
+import { eq, isNull } from 'drizzle-orm'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { category, expense, setAside, household, member, pot, spendTransaction } from '../db/schema'
 import { computeFundingPlan } from '../plan/funding'
 import { computeIncomeByMember } from '../income/service'
@@ -9,8 +10,6 @@ import { categoryBreakdown, monthlyTotals, monthOverMonth, perMemberVsJoint, spe
 import { periodForDate } from '../../shared/period'
 import { todayIso } from '../../shared/dates'
 import type { Recurrence } from '../../shared/recurrence'
-
-const HOUSEHOLD_ID = 'household'
 
 export const reportsRouter = router({
   /** All reports for a period (spec §5.6), with an optional owner filter on
@@ -27,7 +26,7 @@ export const reportsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const today = todayIso()
-      const [householdRow] = await ctx.db.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
+      const [householdRow] = await ctx.db.select().from(household).where(eq(household.id, ctx.householdId))
       const startDay = householdRow?.budgetPeriodStartDay ?? 1
       const jointBasis = (householdRow?.jointContributionBasis ?? 'equal') as
         | 'equal'
@@ -36,20 +35,29 @@ export const reportsRouter = router({
       const period = periodForDate(input?.periodStart ?? today, startDay)
       const months = input?.months ?? 6
 
-      const members = await ctx.db.select().from(member).where(isNull(member.archivedAt))
-      const pots = await ctx.db.select().from(pot).where(isNull(pot.archivedAt))
-      const categories = await ctx.db.select().from(category).where(isNull(category.archivedAt))
+      const members = await ctx.db
+        .select()
+        .from(member)
+        .where(scopeWhere(ctx.householdId, member.householdId, isNull(member.archivedAt)))
+      const pots = await ctx.db
+        .select()
+        .from(pot)
+        .where(scopeWhere(ctx.householdId, pot.householdId, isNull(pot.archivedAt)))
+      const categories = await ctx.db
+        .select()
+        .from(category)
+        .where(scopeWhere(ctx.householdId, category.householdId, isNull(category.archivedAt)))
       const expenses = await ctx.db
         .select()
         .from(expense)
-        .where(and(isNull(expense.archivedAt), eq(expense.active, 1)))
+        .where(scopeWhere(ctx.householdId, expense.householdId, isNull(expense.archivedAt), eq(expense.active, 1)))
 
       const setAsides = await ctx.db
         .select()
         .from(setAside)
-        .where(and(isNull(setAside.archivedAt), eq(setAside.active, 1)))
+        .where(scopeWhere(ctx.householdId, setAside.householdId, isNull(setAside.archivedAt), eq(setAside.active, 1)))
 
-      const incomeByMember = await computeIncomeByMember(ctx.db)
+      const incomeByMember = await computeIncomeByMember(ctx.db, ctx.householdId)
       const householdMonthlyIncome = [...incomeByMember.values()].reduce((acc, i) => acc + i.monthlyIncome, 0)
 
       const billInputs = expenses.map((e) => ({
@@ -92,7 +100,10 @@ export const reportsRouter = router({
       })
 
       // Spends, optionally filtered to one owner.
-      const allSpends = await ctx.db.select().from(spendTransaction)
+      const allSpends = await ctx.db
+        .select()
+        .from(spendTransaction)
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId))
       const scoped = input?.ownerId ? allSpends.filter((s) => s.ownerId === input.ownerId) : allSpends
       const inPeriod = scoped.filter((s) => s.date >= period.start && s.date <= period.end)
 

@@ -1,6 +1,7 @@
 import { z } from 'zod'
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { desc, eq, isNull } from 'drizzle-orm'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { category, expense, setAside, household, member, pot, spendTransaction } from '../db/schema'
 import { computeBacklog } from '../spending/backlog'
 import { computeFundingPlan } from '../plan/funding'
@@ -11,7 +12,6 @@ import { periodForDate } from '../../shared/period'
 import { addDays, todayIso } from '../../shared/dates'
 import type { Recurrence } from '../../shared/recurrence'
 
-const HOUSEHOLD_ID = 'household'
 const UPCOMING_HORIZON_DAYS = 30
 
 export const dashboardRouter = router({
@@ -21,7 +21,7 @@ export const dashboardRouter = router({
     .query(async ({ ctx, input }) => {
       const today = todayIso()
 
-      const [householdRow] = await ctx.db.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
+      const [householdRow] = await ctx.db.select().from(household).where(eq(household.id, ctx.householdId))
       const startDay = householdRow?.budgetPeriodStartDay ?? 1
       const jointBasis = (householdRow?.jointContributionBasis ?? 'equal') as
         | 'equal'
@@ -29,20 +29,29 @@ export const dashboardRouter = router({
         | 'custom'
       const period = periodForDate(input?.periodStart ?? today, startDay)
 
-      const members = await ctx.db.select().from(member).where(isNull(member.archivedAt))
-      const pots = await ctx.db.select().from(pot).where(isNull(pot.archivedAt))
-      const categories = await ctx.db.select().from(category).where(isNull(category.archivedAt))
+      const members = await ctx.db
+        .select()
+        .from(member)
+        .where(scopeWhere(ctx.householdId, member.householdId, isNull(member.archivedAt)))
+      const pots = await ctx.db
+        .select()
+        .from(pot)
+        .where(scopeWhere(ctx.householdId, pot.householdId, isNull(pot.archivedAt)))
+      const categories = await ctx.db
+        .select()
+        .from(category)
+        .where(scopeWhere(ctx.householdId, category.householdId, isNull(category.archivedAt)))
       const expenses = await ctx.db
         .select()
         .from(expense)
-        .where(and(isNull(expense.archivedAt), eq(expense.active, 1)))
+        .where(scopeWhere(ctx.householdId, expense.householdId, isNull(expense.archivedAt), eq(expense.active, 1)))
 
       const setAsides = await ctx.db
         .select()
         .from(setAside)
-        .where(and(isNull(setAside.archivedAt), eq(setAside.active, 1)))
+        .where(scopeWhere(ctx.householdId, setAside.householdId, isNull(setAside.archivedAt), eq(setAside.active, 1)))
 
-      const incomeByMember = await computeIncomeByMember(ctx.db)
+      const incomeByMember = await computeIncomeByMember(ctx.db, ctx.householdId)
 
       // B / C — funding plan (per-person set-aside, remainder, income share).
       const funding = computeFundingPlan({
@@ -75,7 +84,7 @@ export const dashboardRouter = router({
       const unreconciled = await ctx.db
         .select()
         .from(spendTransaction)
-        .where(eq(spendTransaction.reconciled, 0))
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.reconciled, 0)))
       const backlog = computeBacklog({
         transactions: unreconciled.map((t) => ({
           id: t.id,
@@ -102,7 +111,7 @@ export const dashboardRouter = router({
       })
 
       // E — 12-month household net trend.
-      const payslipSummaries = await loadPayslipSummaries(ctx.db)
+      const payslipSummaries = await loadPayslipSummaries(ctx.db, ctx.householdId)
       const incomeTrend = monthlyNetTrend(
         payslipSummaries.map((p) => ({ payDate: p.payDate, effectiveNet: p.effectiveNet })),
         today,
@@ -115,6 +124,7 @@ export const dashboardRouter = router({
       const recentRows = await ctx.db
         .select()
         .from(spendTransaction)
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId))
         .orderBy(desc(spendTransaction.date), desc(spendTransaction.createdAt))
         .limit(10)
       const recentActivity = recentRows.map((r) => ({

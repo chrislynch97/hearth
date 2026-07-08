@@ -1,14 +1,13 @@
 import { z } from 'zod'
-import { and, eq, isNull } from 'drizzle-orm'
+import { eq, isNull } from 'drizzle-orm'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { expense, setAside, household, member, pot } from '../db/schema'
 import { computeFundingPlan } from '../plan/funding'
 import { computeIncomeByMember } from '../income/service'
 import { projectUpcoming, type UpcomingExpenseInput } from '../plan/upcoming'
 import { addDays, todayIso } from '../../shared/dates'
 import type { Recurrence } from '../../shared/recurrence'
-
-const HOUSEHOLD_ID = 'household'
 
 /** Whole days from `from` to `to` (both `YYYY-MM-DD`); negative when `to` is earlier. */
 function daysBetweenIso(from: string, to: string): number {
@@ -19,17 +18,23 @@ function daysBetweenIso(from: string, to: string): number {
 
 export const planRouter = router({
   funding: publicProcedure.query(async ({ ctx }) => {
-    const pots = await ctx.db.select().from(pot).where(isNull(pot.archivedAt))
+    const pots = await ctx.db
+      .select()
+      .from(pot)
+      .where(scopeWhere(ctx.householdId, pot.householdId, isNull(pot.archivedAt)))
 
     const expenses = await ctx.db
       .select()
       .from(expense)
-      .where(and(isNull(expense.archivedAt), eq(expense.active, 1)))
+      .where(scopeWhere(ctx.householdId, expense.householdId, isNull(expense.archivedAt), eq(expense.active, 1)))
 
-    const members = await ctx.db.select().from(member).where(isNull(member.archivedAt))
-    const incomeByMember = await computeIncomeByMember(ctx.db)
+    const members = await ctx.db
+      .select()
+      .from(member)
+      .where(scopeWhere(ctx.householdId, member.householdId, isNull(member.archivedAt)))
+    const incomeByMember = await computeIncomeByMember(ctx.db, ctx.householdId)
 
-    const [householdRow] = await ctx.db.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
+    const [householdRow] = await ctx.db.select().from(household).where(eq(household.id, ctx.householdId))
     const jointContributionBasis = (householdRow?.jointContributionBasis ?? 'equal') as
       | 'equal'
       | 'income_proportional'
@@ -38,7 +43,7 @@ export const planRouter = router({
     const setAsides = await ctx.db
       .select()
       .from(setAside)
-      .where(and(isNull(setAside.archivedAt), eq(setAside.active, 1)))
+      .where(scopeWhere(ctx.householdId, setAside.householdId, isNull(setAside.archivedAt), eq(setAside.active, 1)))
 
     return computeFundingPlan({
       pots: pots.map((p) => ({
@@ -82,7 +87,7 @@ export const planRouter = router({
       const expenses = await ctx.db
         .select()
         .from(expense)
-        .where(and(isNull(expense.archivedAt), eq(expense.active, 1)))
+        .where(scopeWhere(ctx.householdId, expense.householdId, isNull(expense.archivedAt), eq(expense.active, 1)))
 
       const upcomingExpenses: UpcomingExpenseInput[] = expenses.map((e) => ({
         id: e.id,
@@ -121,7 +126,7 @@ export const planRouter = router({
       const expenses = await ctx.db
         .select()
         .from(expense)
-        .where(and(isNull(expense.archivedAt), eq(expense.active, 1)))
+        .where(scopeWhere(ctx.householdId, expense.householdId, isNull(expense.archivedAt), eq(expense.active, 1)))
 
       const billById = new Map(expenses.map((e) => [e.id, e]))
       const upcomingExpenses: UpcomingExpenseInput[] = expenses.map((e) => ({
