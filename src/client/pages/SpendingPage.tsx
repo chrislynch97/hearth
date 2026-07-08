@@ -22,7 +22,7 @@ import {
 } from '@mantine/core'
 import { DatePickerInput } from '@mantine/dates'
 import { trpc } from '../trpc'
-import type { Member, Pot, SpendTransaction } from '../../server/db/schema'
+import type { Category, Member, Pot, SpendTransaction } from '../../server/db/schema'
 import { allocate, formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { todayIso } from '../../shared/dates'
 import { useFormatDate } from '../useMoney'
@@ -45,6 +45,98 @@ function dueLabel(daysUntil: number): string {
   return `due ${-daysUntil}d ago`
 }
 
+/** The pot / category / settlement of a spend, as one value. */
+export interface SpendFunding {
+  potId: string | null
+  categoryId: string | null
+  settledAtSource: boolean
+}
+
+/**
+ * The "where did this come from?" control, shared by the add form and the edit
+ * modal so they can never drift. Two mutually-exclusive sources:
+ *   - A pot: pick one (or leave empty = "needs a pot", shows on Catch-up); the
+ *     "already came out" toggle marks an auto-deducting pot (settled, no catch-up).
+ *   - Main account: pick a category; always settled, never on Catch-up.
+ * This makes "needs a pot" vs "main account" an explicit choice rather than an
+ * ambiguous combination of a blank pot + a toggle.
+ */
+function SpendFundingFields({
+  value,
+  onChange,
+  pots,
+  members,
+  categories,
+}: {
+  value: SpendFunding
+  onChange: (next: SpendFunding) => void
+  pots: Pot[]
+  members: Member[]
+  categories: Category[]
+}) {
+  const { potId, categoryId, settledAtSource } = value
+  // Main account = no pot but settled at source; everything else is "a pot"
+  // (including an empty pot, i.e. needs-a-pot).
+  const source: 'pot' | 'main' = potId == null && settledAtSource ? 'main' : 'pot'
+  const potGroups = groupedPotOptions(pots, members)
+
+  return (
+    <Stack gap="sm">
+      <div>
+        <Text size="sm" fw={500} mb={4}>
+          Comes from
+        </Text>
+        <SegmentedControl
+          fullWidth
+          value={source}
+          onChange={(v) =>
+            v === 'main'
+              ? onChange({ potId: null, categoryId, settledAtSource: true })
+              : onChange({ potId: null, categoryId: null, settledAtSource: false })
+          }
+          data={[
+            { value: 'pot', label: 'A pot' },
+            { value: 'main', label: 'Main account' },
+          ]}
+        />
+      </div>
+
+      {source === 'pot' ? (
+        <>
+          <Select
+            label="Pot"
+            placeholder="No pot (assign later)"
+            description="Leave empty to sort the pot out later — it'll show on Catch-up as needing a pot."
+            data={potGroups}
+            value={potId}
+            searchable
+            clearable
+            onChange={(v) => onChange({ potId: v || null, categoryId: null, settledAtSource: v ? settledAtSource : false })}
+          />
+          {potId && (
+            <Switch
+              label="Already came out — no transfer needed"
+              description="Tick for a pot that auto-deducts (e.g. Monzo). Keeps it off Catch-up."
+              checked={settledAtSource}
+              onChange={(e) => onChange({ potId, categoryId: null, settledAtSource: e.currentTarget.checked })}
+            />
+          )}
+        </>
+      ) : (
+        <Select
+          label="Category"
+          placeholder="Pick a category"
+          description="Paid straight from the main account — won't show on Catch-up."
+          data={categories.map((c) => ({ value: c.id, label: c.name }))}
+          value={categoryId}
+          searchable
+          onChange={(v) => onChange({ potId: null, categoryId: v, settledAtSource: true })}
+        />
+      )}
+    </Stack>
+  )
+}
+
 function AddSpendForm({
   members,
   pots,
@@ -58,6 +150,7 @@ function AddSpendForm({
   const add = trpc.spends.add.useMutation()
   const updateExpense = trpc.expenses.update.useMutation()
   const outgoingsQuery = trpc.plan.recentlyDue.useQuery()
+  const categories = trpc.categories.list.useQuery().data ?? []
 
   const orderedMembers = orderMembers(members)
   const [amountMajor, setAmountMajor] = useState<string>('')
@@ -87,7 +180,6 @@ function AddSpendForm({
 
   const outgoings = outgoingsQuery.data ?? []
   const selectedOutgoing = outgoings.find((o) => o.key === outgoingKey) ?? null
-  const potGroups = useMemo(() => groupedPotOptions(pots, members), [pots, members])
 
   const suggestQuery = trpc.spends.suggestPot.useQuery(
     { description: description.trim(), ownerId: ownerId ?? '' },
@@ -286,24 +378,18 @@ function AddSpendForm({
             data={orderedMembers.map((m) => ({ value: m.id, label: m.displayName }))}
           />
         </div>
-        <Select
-          label="Pot"
-          description="Which budget it draws from — any owner's pot, or leave empty for the main account / assign later."
-          placeholder="No pot"
-          data={potGroups}
-          value={potId}
-          searchable
-          clearable
-          onChange={(v) => {
-            setPotId(v || null)
+        <SpendFundingFields
+          value={{ potId, categoryId, settledAtSource }}
+          onChange={(f) => {
+            setPotId(f.potId)
+            setCategoryId(f.categoryId)
+            setSettledAtSource(f.settledAtSource)
+            // Any explicit funding choice stops the description-based pot suggestion.
             setPotManuallyChosen(true)
           }}
-        />
-        <Switch
-          label="Already came out — no transfer needed"
-          description="Tick for a pot that auto-deducts (e.g. Monzo) or a payment straight from the main account. Keeps it off Catch-up."
-          checked={settledAtSource}
-          onChange={(e) => setSettledAtSource(e.currentTarget.checked)}
+          pots={pots}
+          members={members}
+          categories={categories}
         />
         {(error || add.error) && (
           <Alert color="red" title="Error">
@@ -562,6 +648,7 @@ function EditSpendModal({
 }) {
   const utils = trpc.useUtils()
   const update = trpc.spends.update.useMutation()
+  const categories = trpc.categories.list.useQuery().data ?? []
   const orderedMembers = orderMembers(members)
 
   const [amountMajor, setAmountMajor] = useState<string>(
@@ -572,6 +659,7 @@ function EditSpendModal({
   const [date, setDate] = useState<string | null>(spend.date)
   const [ownerId, setOwnerId] = useState<string | null>(spend.ownerId)
   const [potId, setPotId] = useState<string | null>(spend.potId)
+  const [categoryId, setCategoryId] = useState<string | null>(spend.categoryId)
   const [settledAtSource, setSettledAtSource] = useState(spend.settledAtSource === 1)
   const [error, setError] = useState('')
 
@@ -601,6 +689,7 @@ function EditSpendModal({
         amount: kind === 'refund' ? -minor : minor,
         ownerId,
         potId: potId || null,
+        categoryId: potId ? null : categoryId,
         settledAtSource,
       })
       await Promise.all([utils.spends.list.invalidate(), utils.reconcile.backlog.invalidate()])
@@ -663,19 +752,16 @@ function EditSpendModal({
             data={orderedMembers.map((m) => ({ value: m.id, label: m.displayName }))}
           />
         </div>
-        <Select
-          label="Pot"
-          placeholder="No pot (assign later)"
-          data={groupedPotOptions(pots, members)}
-          value={potId}
-          searchable
-          clearable
-          onChange={(v) => setPotId(v || null)}
-        />
-        <Switch
-          label="Already came out — no transfer needed"
-          checked={settledAtSource}
-          onChange={(e) => setSettledAtSource(e.currentTarget.checked)}
+        <SpendFundingFields
+          value={{ potId, categoryId, settledAtSource }}
+          onChange={(f) => {
+            setPotId(f.potId)
+            setCategoryId(f.categoryId)
+            setSettledAtSource(f.settledAtSource)
+          }}
+          pots={pots}
+          members={members}
+          categories={categories}
         />
         {(error || update.error) && (
           <Alert color="red" title="Error">
@@ -709,6 +795,7 @@ function SpendRow({
   const utils = trpc.useUtils()
   const fmt = useFormatDate()
   const remove = trpc.spends.remove.useMutation()
+  const categories = trpc.categories.list.useQuery().data ?? []
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [splitOpen, setSplitOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -716,6 +803,9 @@ function SpendRow({
   const owner = members.find((m) => m.id === spend.ownerId)
   const pot = spend.potId ? pots.find((p) => p.id === spend.potId) : null
   const isRefund = spend.amount < 0
+  // No pot + settled = a main-account spend (not "needs a pot").
+  const isMainAccount = !spend.potId && spend.settledAtSource === 1
+  const categoryName = spend.categoryId ? categories.find((c) => c.id === spend.categoryId)?.name : null
 
   async function handleDelete() {
     await remove.mutateAsync({ id: spend.id })
@@ -747,6 +837,10 @@ function SpendRow({
         <Table.Td>
           {pot ? (
             <Text size="sm">{pot.name}</Text>
+          ) : isMainAccount ? (
+            <Text size="sm" c="dimmed">
+              Main account{categoryName ? ` · ${categoryName}` : ''}
+            </Text>
           ) : (
             <Group gap="xs" wrap="nowrap">
               <Badge size="sm" color="apricot" variant="light">
@@ -760,6 +854,10 @@ function SpendRow({
           {spend.reconciled === 1 ? (
             <Badge size="sm" color="moss" variant="light" styles={{ root: { maxWidth: 'none' }, label: { overflow: 'visible' } }}>
               Reconciled
+            </Badge>
+          ) : spend.settledAtSource === 1 ? (
+            <Badge size="sm" color="teal" variant="light" styles={{ root: { maxWidth: 'none' }, label: { overflow: 'visible' } }}>
+              Settled
             </Badge>
           ) : (
             <Badge size="sm" color="sand" variant="light" styles={{ root: { maxWidth: 'none' }, label: { overflow: 'visible' } }}>

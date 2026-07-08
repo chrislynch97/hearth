@@ -4,6 +4,31 @@ import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
 import { appRouter } from '../trpc/router'
 
+describe('spends router — needsPot filter', () => {
+  it('excludes main-account (settled, pot-less) spends from "needs a pot"', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db })
+    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
+    const cat = await caller.categories.create({ name: 'Subscriptions' })
+
+    // Genuinely unassigned — should be flagged.
+    await caller.spends.add({ description: 'Cash', amount: 4000, ownerId: joint.id, potId: null })
+    // Main account — pot-less but settled at source; must NOT be flagged.
+    await caller.spends.add({
+      description: 'Spotify',
+      amount: 1200,
+      ownerId: joint.id,
+      potId: null,
+      categoryId: cat.id,
+      settledAtSource: true,
+    })
+
+    const needsPot = await caller.spends.list({ needsPot: true })
+    expect(needsPot.map((s) => s.description)).toEqual(['Cash'])
+  })
+})
+
 describe('spends router — split', () => {
   it('splits a spend into rows that sum to the original, sharing a group id', async () => {
     const db = await makeTestDb()

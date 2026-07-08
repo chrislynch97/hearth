@@ -54,7 +54,12 @@ export const spendsRouter = router({
       if (input?.reconciled !== undefined) {
         conditions.push(eq(spendTransaction.reconciled, input.reconciled ? 1 : 0))
       }
-      if (input?.needsPot) conditions.push(isNull(spendTransaction.potId))
+      // "Needs a pot" = genuinely unassigned, i.e. no pot AND not settled at source.
+      // A main-account spend (potId null, settledAtSource=1) is deliberately pot-less.
+      if (input?.needsPot) {
+        conditions.push(isNull(spendTransaction.potId))
+        conditions.push(eq(spendTransaction.settledAtSource, 0))
+      }
 
       const where = conditions.length > 0 ? and(...conditions) : undefined
 
