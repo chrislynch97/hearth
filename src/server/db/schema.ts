@@ -24,6 +24,8 @@ export const household = sqliteTable('household', {
   setupCompletedAt: integer('setup_completed_at'),
   incomeBasisDefault: text('income_basis_default').notNull().default('regular_net'),
   jointContributionBasis: text('joint_contribution_basis').notNull().default('equal'),
+  // Emergency fund target = this many months of essential bills (spec: 3 months rule of thumb).
+  emergencyFundMonths: integer('emergency_fund_months').notNull().default(3),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 })

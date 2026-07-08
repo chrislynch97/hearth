@@ -24,7 +24,7 @@ import { fromMinor, formatMoney, toMinor } from '../../shared/money'
 import { normaliseToMonthly, roundMinor, type Recurrence } from '../../shared/recurrence'
 import { addMonths, todayIso } from '../../shared/dates'
 import { useFormatDate } from '../useMoney'
-import { groupedPotOptions } from '../potOptions'
+import { groupedPotOptions, orderMembers } from '../potOptions'
 
 type ExpenseRecurrence = 'monthly' | 'quarterly' | 'yearly'
 type Funding = 'pot_manual' | 'pot_auto' | 'main'
@@ -347,36 +347,54 @@ export function OutgoingsPage() {
 
   const isLoading = expensesQuery.isLoading || potsQuery.isLoading || membersQuery.isLoading || categoriesQuery.isLoading
 
-  // Group bills by where the money goes: one group per pot, plus a "Main account"
-  // group for bills with no pot. Groups are ordered by name (Main account last).
+  // Group bills by the account they draw from — one card per owner (whoever owns
+  // the pot), plus a Main account card — and within each, sub-sections per
+  // category. A bill's category is its pot's category (or, for a main-account
+  // bill, its own category).
   const potById = new Map(pots.map((p) => [p.id, p]))
-  type BillGroup = { key: string; label: string; ownerId: string | null; isMain: boolean; bills: Expense[] }
-  const billGroups: BillGroup[] = (() => {
-    const byKey = new Map<string, BillGroup>()
-    for (const e of expenses) {
-      const isMain = (e.funding ?? 'pot_manual') === 'main' || !e.potId
-      const key = isMain ? 'main' : e.potId!
-      let g = byKey.get(key)
-      if (!g) {
-        const pot = e.potId ? potById.get(e.potId) : null
-        g = {
-          key,
-          label: isMain ? 'Main account' : pot?.name ?? 'No pot',
-          ownerId: isMain ? null : pot?.ownerId ?? null,
-          isMain,
-          bills: [],
-        }
-        byKey.set(key, g)
-      }
-      g.bills.push(e)
-    }
-    return [...byKey.values()].sort((a, b) => {
-      if (a.isMain !== b.isMain) return a.isMain ? 1 : -1
-      return a.label.localeCompare(b.label)
-    })
-  })()
+  const categoryById = new Map(categories.map((c) => [c.id, c]))
+  const orderedCategoryIds = categories.map((c) => c.id)
   const groupMonthly = (bills: Expense[]) =>
     roundMinor(bills.reduce((acc, e) => acc + normaliseToMonthly(e.amount ?? 0, e.recurrence as Recurrence), 0))
+
+  const isMainBill = (e: Expense) => (e.funding ?? 'pot_manual') === 'main' || !e.potId
+  const billOwnerKey = (e: Expense) => (isMainBill(e) ? 'main' : potById.get(e.potId!)?.ownerId ?? 'main')
+  const billCategoryId = (e: Expense) => (isMainBill(e) ? e.categoryId : potById.get(e.potId!)?.categoryId ?? null)
+
+  interface BillSection { catId: string | null; name: string; bills: Expense[] }
+  function sectionsFor(bills: Expense[]): BillSection[] {
+    const byCat = new Map<string | null, Expense[]>()
+    for (const e of [...bills].sort((a, b) => a.name.localeCompare(b.name))) {
+      const key = billCategoryId(e)
+      const arr = byCat.get(key) ?? []
+      arr.push(e)
+      byCat.set(key, arr)
+    }
+    const out: BillSection[] = []
+    for (const catId of orderedCategoryIds) {
+      const items = byCat.get(catId)
+      if (items?.length) out.push({ catId, name: categoryById.get(catId)?.name ?? '', bills: items })
+    }
+    const uncat = byCat.get(null)
+    if (uncat?.length) out.push({ catId: null, name: 'Uncategorised', bills: uncat })
+    return out
+  }
+
+  const billsByOwner = new Map<string, Expense[]>()
+  for (const e of expenses) {
+    const key = billOwnerKey(e)
+    const arr = billsByOwner.get(key) ?? []
+    arr.push(e)
+    billsByOwner.set(key, arr)
+  }
+  interface OwnerGroup { key: string; label: string; isMain: boolean; color: string | null; sections: BillSection[]; bills: Expense[] }
+  const ownerGroups: OwnerGroup[] = []
+  for (const owner of orderMembers(members)) {
+    const bills = billsByOwner.get(owner.id)
+    if (bills?.length) ownerGroups.push({ key: owner.id, label: owner.displayName, isMain: false, color: owner.color, sections: sectionsFor(bills), bills })
+  }
+  const mainBills = billsByOwner.get('main')
+  if (mainBills?.length) ownerGroups.push({ key: 'main', label: 'Main account', isMain: true, color: null, sections: sectionsFor(mainBills), bills: mainBills })
 
   function openAdd() {
     setEditing(null)
@@ -409,38 +427,41 @@ export function OutgoingsPage() {
         <Text c="dimmed">No bills yet — add one to start building your funding plan.</Text>
       )}
 
-      <Stack gap="sm">
-        {billGroups.map((g) => {
-          const owner = g.ownerId ? members.find((m) => m.id === g.ownerId) : null
-          return (
-            <Card key={g.key} withBorder padding="sm">
-              <Stack gap="xs">
-                <Group justify="space-between">
-                  <Group gap="xs">
-                    <Text fw={700}>{g.label}</Text>
-                    {owner && (
-                      <Badge size="sm" variant="light" color={owner.color ?? 'gray'}>
-                        {owner.displayName}
-                      </Badge>
-                    )}
-                  </Group>
-                  <Text size="sm" c="dimmed">
-                    {formatMoney(groupMonthly(g.bills), money)}/mo
-                  </Text>
+      <Stack gap="md">
+        {ownerGroups.map((g) => (
+          <Card key={g.key} withBorder padding="md">
+            <Stack gap="sm">
+              <Group justify="space-between">
+                <Group gap="xs">
+                  <Title order={4}>{g.label}</Title>
+                  {!g.isMain && (
+                    <Badge size="sm" variant="light" color={g.color ?? 'gray'}>
+                      account
+                    </Badge>
+                  )}
                 </Group>
-                <Divider />
-                <Stack gap="sm">
-                  {g.bills.map((e, i) => (
-                    <div key={e.id}>
-                      {i > 0 && <Divider mb="sm" />}
-                      <BillRow expense={e} pots={pots} categories={categories} money={money} onEdit={() => openEdit(e)} hideTarget={!g.isMain} />
-                    </div>
-                  ))}
+                <Text size="sm" c="dimmed">
+                  {formatMoney(groupMonthly(g.bills), money)}/mo
+                </Text>
+              </Group>
+              {g.sections.map((section) => (
+                <Stack key={section.catId ?? 'none'} gap={4}>
+                  <Text size="xs" fw={700} c="dimmed" tt="uppercase">
+                    {section.name}
+                  </Text>
+                  <Stack gap="sm">
+                    {section.bills.map((e, i) => (
+                      <div key={e.id}>
+                        {i > 0 && <Divider mb="sm" />}
+                        <BillRow expense={e} pots={pots} categories={categories} money={money} onEdit={() => openEdit(e)} hideTarget={g.isMain} />
+                      </div>
+                    ))}
+                  </Stack>
                 </Stack>
-              </Stack>
-            </Card>
-          )
-        })}
+              ))}
+            </Stack>
+          </Card>
+        ))}
       </Stack>
 
       {formOpened && (

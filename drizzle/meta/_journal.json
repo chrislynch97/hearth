@@ -85,6 +85,13 @@
       "when": 1783456663726,
       "tag": "0011_goofy_maverick",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1783496881015,
+      "tag": "0012_pale_living_tribunal",
+      "breakpoints": true
     }
   ]
 }

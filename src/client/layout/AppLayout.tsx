@@ -18,7 +18,6 @@ import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { trpc } from '../trpc'
 import { hearthTokens } from '../theme'
-import { QuickAddSpend } from '../QuickAddSpend'
 import './nav.css'
 
 // `g` then one of these navigates (spec §7).
@@ -37,7 +36,6 @@ const GO_TO: Record<string, string> = {
 
 function ShortcutsHelp({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const rows: [string, string][] = [
-    ['n', 'Add a spend'],
     ['/', 'Go to page…'],
     ['[ ]', 'Previous / next period'],
     ['g then d', 'Go to Overview'],
@@ -138,6 +136,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
     title: 'Plan',
     items: [
       { to: '/pots', label: 'Pots' },
+      { to: '/categories', label: 'Categories' },
       { to: '/outgoings', label: 'Bills' },
       { to: '/funding', label: 'Funding' },
       { to: '/upcoming', label: 'Upcoming' },
@@ -201,7 +200,6 @@ export function AppLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure()
-  const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
 
@@ -209,7 +207,7 @@ export function AppLayout() {
     closeMobile()
   }, [location.pathname])
 
-  // Global keyboard shortcuts (spec §7): n = add spend, g+letter = navigate, ? = help.
+  // Global keyboard shortcuts (spec §7): g+letter = navigate, ? = help.
   useEffect(() => {
     let gPending = false
     let gTimer: ReturnType<typeof setTimeout> | undefined
@@ -238,9 +236,6 @@ export function AppLayout() {
         // Prev/next budget period — period-aware pages listen for this.
         e.preventDefault()
         window.dispatchEvent(new CustomEvent('hearth:period', { detail: e.key === '[' ? -1 : 1 }))
-      } else if (e.key === 'n' || e.key === 'N') {
-        e.preventDefault()
-        setQuickAddOpen(true)
       } else if (e.key === 'g') {
         gPending = true
         gTimer = setTimeout(() => {
@@ -303,18 +298,7 @@ export function AppLayout() {
               Hearth
             </Text>
           </Group>
-          <Group gap={4}>
-            <ActionIcon
-              variant="subtle"
-              size="sm"
-              onClick={() => setQuickAddOpen(true)}
-              aria-label="Add spend"
-              style={{ color: hearthTokens.brand.linen }}
-            >
-              ＋
-            </ActionIcon>
-            <ThemeToggle />
-          </Group>
+          <ThemeToggle />
         </Group>
       </AppShell.Header>
 
@@ -341,16 +325,6 @@ export function AppLayout() {
               </Text>
             </Group>
           </Link>
-          <Button
-            fullWidth
-            size="xs"
-            color="apricot"
-            variant="filled"
-            onClick={() => setQuickAddOpen(true)}
-            styles={{ label: { color: hearthTokens.brand.ink } }}
-          >
-            + Add spend
-          </Button>
         </AppShell.Section>
 
         <AppShell.Section grow px="xs" pt="sm" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
@@ -449,7 +423,6 @@ export function AppLayout() {
         <Outlet />
       </AppShell.Main>
 
-      <QuickAddSpend opened={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
       <ShortcutsHelp opened={helpOpen} onClose={() => setHelpOpen(false)} />
       <NavPalette opened={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </AppShell>

@@ -7,6 +7,7 @@ import { SetupWizard } from './setup/SetupWizard'
 import { AppLayout } from './layout/AppLayout'
 import { HomePage } from './pages/HomePage'
 import { PotsPage } from './pages/PotsPage'
+import { CategoriesPage } from './pages/CategoriesPage'
 import { OutgoingsPage } from './pages/OutgoingsPage'
 import { FundingPage } from './pages/FundingPage'
 import { SpendingPage } from './pages/SpendingPage'
@@ -71,6 +72,7 @@ function AuthedApp() {
       <Route element={<AppLayout />}>
         <Route index element={<HomePage />} />
         <Route path="pots" element={<PotsPage />} />
+        <Route path="categories" element={<CategoriesPage />} />
         <Route path="outgoings" element={<OutgoingsPage />} />
         <Route path="funding" element={<FundingPage />} />
         <Route path="upcoming" element={<UpcomingPage />} />

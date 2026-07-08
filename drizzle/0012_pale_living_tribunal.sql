@@ -1,0 +1,1 @@
+ALTER TABLE `household` ADD `emergency_fund_months` integer DEFAULT 3 NOT NULL;

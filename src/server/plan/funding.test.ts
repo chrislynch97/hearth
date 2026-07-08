@@ -277,6 +277,45 @@ describe('computeFundingPlan', () => {
     expect(alice.remainder).toBe(190000)
   })
 
+  it('emergency fund = monthly bills × months, attributed to the pot owner (main → joint)', () => {
+    const members = [
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 0 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
+    ]
+    const pots = [
+      { id: 'alice-pot', name: 'Alice Bills', ownerId: 'alice' },
+      { id: 'joint-pot', name: 'Joint Bills', ownerId: 'joint' },
+    ]
+    const bills = [
+      { recurrence: 'monthly' as const, active: true, funding: 'pot_manual' as const, potId: 'alice-pot', categoryId: null, amount: 30000 },
+      { recurrence: 'monthly' as const, active: true, funding: 'pot_manual' as const, potId: 'joint-pot', categoryId: null, amount: 20000 },
+      // A main-account bill is attributed to the joint member.
+      { recurrence: 'monthly' as const, active: true, funding: 'main' as const, potId: null, categoryId: 'c1', amount: 1000 },
+    ]
+
+    const plan = computeFundingPlan({ pots, bills, setAsides: [], members, jointContributionBasis: 'equal', emergencyFundMonths: 6 })
+    const ef = plan.emergencyFund
+
+    expect(ef.months).toBe(6)
+    const alice = ef.perOwner.find((o) => o.memberId === 'alice')!
+    const joint = ef.perOwner.find((o) => o.memberId === 'joint')!
+    expect(alice.monthlyBills).toBe(30000)
+    expect(alice.target).toBe(180000) // 30000 × 6
+    expect(joint.monthlyBills).toBe(21000) // 20000 pot + 1000 main
+    expect(joint.target).toBe(126000)
+    expect(ef.totalMonthlyBills).toBe(51000)
+    expect(ef.total).toBe(306000)
+  })
+
+  it('emergency fund defaults to 3 months when unset', () => {
+    const members = [{ id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 }]
+    const pots = [{ id: 'joint-pot', name: 'Joint', ownerId: 'joint' }]
+    const bills = [{ recurrence: 'monthly' as const, active: true, funding: 'pot_manual' as const, potId: 'joint-pot', categoryId: null, amount: 10000 }]
+    const plan = computeFundingPlan({ pots, bills, setAsides: [], members, jointContributionBasis: 'equal' })
+    expect(plan.emergencyFund.months).toBe(3)
+    expect(plan.emergencyFund.total).toBe(30000)
+  })
+
   it('no persons yields empty perPerson split', () => {
     const members = [{ id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 }]
     const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint' }]

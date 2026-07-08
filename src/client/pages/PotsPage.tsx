@@ -21,6 +21,7 @@ import { trpc } from '../trpc'
 import type { Category, Member, Pot, SetAside } from '../../server/db/schema'
 import { formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { normaliseToMonthly, roundMinor, type Recurrence } from '../../shared/recurrence'
+import { orderMembers } from '../potOptions'
 
 interface MoneyFormat {
   symbol: string
@@ -31,184 +32,6 @@ interface MoneyFormat {
 /** Monthly-equivalent total of a pot's contribution lines. */
 function contributionMonthly(lines: SetAside[]): number {
   return roundMinor(lines.reduce((acc, s) => acc + normaliseToMonthly(s.amount, s.recurrence as Recurrence), 0))
-}
-
-// ---------------------------------------------------------------------------
-// Categories panel
-// ---------------------------------------------------------------------------
-
-function CategoryRow({ category }: { category: Category }) {
-  const utils = trpc.useUtils()
-  const [editing, setEditing] = useState(false)
-  const [name, setName] = useState(category.name)
-  const [confirmArchive, setConfirmArchive] = useState(false)
-  const update = trpc.categories.update.useMutation()
-  const archive = trpc.categories.archive.useMutation()
-
-  async function handleSave() {
-    const trimmed = name.trim()
-    if (!trimmed || trimmed === category.name) {
-      setEditing(false)
-      setName(category.name)
-      return
-    }
-    await update.mutateAsync({ id: category.id, name: trimmed })
-    await utils.categories.list.invalidate()
-    setEditing(false)
-  }
-
-  async function handleArchive() {
-    await archive.mutateAsync({ id: category.id })
-    await utils.categories.list.invalidate()
-    await utils.pots.list.invalidate()
-    setConfirmArchive(false)
-  }
-
-  return (
-    <>
-      <Group justify="space-between" px="xs" py={6} wrap="nowrap">
-        {editing ? (
-          <Group gap="xs" style={{ flex: 1 }} wrap="nowrap">
-            <TextInput
-              size="xs"
-              value={name}
-              onChange={(e) => setName(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void handleSave()
-                if (e.key === 'Escape') {
-                  setName(category.name)
-                  setEditing(false)
-                }
-              }}
-              autoFocus
-              style={{ flex: 1 }}
-            />
-            <Button size="xs" onClick={() => void handleSave()} loading={update.isPending}>
-              Save
-            </Button>
-            <Button
-              size="xs"
-              variant="default"
-              onClick={() => {
-                setName(category.name)
-                setEditing(false)
-              }}
-            >
-              Cancel
-            </Button>
-          </Group>
-        ) : (
-          <>
-            <Text size="sm" fw={500}>
-              {category.name}
-            </Text>
-            <Group gap={4}>
-              <ActionIcon
-                variant="subtle"
-                size="sm"
-                aria-label={`Rename ${category.name}`}
-                onClick={() => setEditing(true)}
-              >
-                ✎
-              </ActionIcon>
-              <ActionIcon
-                variant="subtle"
-                color="red"
-                size="sm"
-                aria-label={`Archive ${category.name}`}
-                onClick={() => setConfirmArchive(true)}
-              >
-                ×
-              </ActionIcon>
-            </Group>
-          </>
-        )}
-      </Group>
-      <Modal
-        opened={confirmArchive}
-        onClose={() => setConfirmArchive(false)}
-        title="Archive category?"
-        size="sm"
-      >
-        <Stack gap="md">
-          <Text size="sm">
-            Archive <strong>{category.name}</strong>? Pots in this category will become
-            uncategorised.
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setConfirmArchive(false)}>
-              Cancel
-            </Button>
-            <Button color="red" onClick={() => void handleArchive()} loading={archive.isPending}>
-              Archive
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
-    </>
-  )
-}
-
-function CategoriesPanel({ categories, isLoading }: { categories: Category[]; isLoading: boolean }) {
-  const utils = trpc.useUtils()
-  const [newName, setNewName] = useState('')
-  const [addError, setAddError] = useState('')
-  const create = trpc.categories.create.useMutation()
-
-  async function handleAdd() {
-    const trimmed = newName.trim()
-    if (!trimmed) {
-      setAddError('Please enter a name.')
-      return
-    }
-    setAddError('')
-    await create.mutateAsync({ name: trimmed })
-    await utils.categories.list.invalidate()
-    setNewName('')
-  }
-
-  return (
-    <Card withBorder padding="md">
-      <Stack gap="sm">
-        <Title order={4}>Categories</Title>
-        {isLoading && (
-          <Center>
-            <Loader size="sm" />
-          </Center>
-        )}
-        {!isLoading && categories.length === 0 && (
-          <Text size="sm" c="dimmed">
-            No categories yet — add one below.
-          </Text>
-        )}
-        <Stack gap={2}>
-          {categories.map((c) => (
-            <CategoryRow key={c.id} category={c} />
-          ))}
-        </Stack>
-        <Divider />
-        <Group gap="sm" align="flex-end">
-          <TextInput
-            label="Add category"
-            placeholder="e.g. Household"
-            value={newName}
-            onChange={(e) => {
-              setNewName(e.currentTarget.value)
-              setAddError('')
-            }}
-            error={addError || (create.error?.message ?? undefined)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void handleAdd()
-            }}
-            style={{ flex: 1 }}
-          />
-          <Button onClick={() => void handleAdd()} loading={create.isPending}>
-            Add
-          </Button>
-        </Group>
-      </Stack>
-    </Card>
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -659,89 +482,90 @@ function PotsPanel({
   setAsidesByPot: Map<string, SetAside[]>
   money: MoneyFormat
 }) {
-  const groups = new Map<string | null, Pot[]>()
-  for (const c of categories) groups.set(c.id, [])
-  groups.set(null, [])
-  // Sort alphabetically before grouping so each category's pots are A–Z.
-  for (const p of [...pots].sort((a, b) => a.name.localeCompare(b.name))) {
-    const key = p.categoryId && groups.has(p.categoryId) ? p.categoryId : null
-    groups.get(key)!.push(p)
-  }
-
+  const orderedOwners = orderMembers(members)
   const orderedCategoryIds = categories.map((c) => c.id)
+  const categoryById = new Map(categories.map((c) => [c.id, c]))
   const unusedCount = usageReady ? pots.filter((p) => !usedIds.has(p.id)).length : 0
 
+  /** Group an owner's pots by category (null bucket last), pots A–Z within. */
+  function potsByCategory(ownerPots: Pot[]): Array<{ catId: string | null; name: string; items: Pot[] }> {
+    const byCat = new Map<string | null, Pot[]>()
+    for (const p of [...ownerPots].sort((a, b) => a.name.localeCompare(b.name))) {
+      const key = p.categoryId && categoryById.has(p.categoryId) ? p.categoryId : null
+      const arr = byCat.get(key) ?? []
+      arr.push(p)
+      byCat.set(key, arr)
+    }
+    const sections: Array<{ catId: string | null; name: string; items: Pot[] }> = []
+    for (const catId of orderedCategoryIds) {
+      const items = byCat.get(catId)
+      if (items?.length) sections.push({ catId, name: categoryById.get(catId)?.name ?? '', items })
+    }
+    const uncat = byCat.get(null)
+    if (uncat?.length) sections.push({ catId: null, name: 'Uncategorised', items: uncat })
+    return sections
+  }
+
   return (
-    <Card withBorder padding="md">
-      <Stack gap="sm">
-        <Group justify="space-between" align="center">
-          <Title order={4}>Pots</Title>
-          {unusedCount > 0 && (
-            <Text size="xs" c="dimmed">
-              {unusedCount} unused — never referenced by an outgoing or spend, safe to delete
-            </Text>
-          )}
-        </Group>
-        {isLoading && (
-          <Center>
-            <Loader size="sm" />
-          </Center>
-        )}
-        {!isLoading && pots.length === 0 && (
-          <Text size="sm" c="dimmed">
-            No pots yet — add one below.
-          </Text>
-        )}
-        <Stack gap="md">
-          {orderedCategoryIds.map((catId) => {
-            const items = groups.get(catId) ?? []
-            if (items.length === 0) return null
-            const category = categories.find((c) => c.id === catId)
-            return (
-              <Stack key={catId} gap={4}>
-                <Text size="xs" fw={700} c="dimmed" tt="uppercase">
-                  {category?.name}
-                </Text>
-                <Stack gap={2}>
-                  {items.map((p) => (
-                    <PotRow
-                      key={p.id}
-                      pot={p}
-                      members={members}
-                      categories={categories}
-                      unused={usageReady && !usedIds.has(p.id)}
-                      setAsides={setAsidesByPot.get(p.id) ?? []}
-                      money={money}
-                    />
-                  ))}
+    <Stack gap="md">
+      {unusedCount > 0 && (
+        <Text size="xs" c="dimmed">
+          {unusedCount} unused pot{unusedCount === 1 ? '' : 's'} — never referenced by a bill or spend, safe to delete.
+        </Text>
+      )}
+      {isLoading && (
+        <Center>
+          <Loader size="sm" />
+        </Center>
+      )}
+      {!isLoading && pots.length === 0 && (
+        <Text size="sm" c="dimmed">
+          No pots yet — add one below.
+        </Text>
+      )}
+
+      {orderedOwners.map((owner) => {
+        const ownerPots = pots.filter((p) => p.ownerId === owner.id)
+        if (ownerPots.length === 0) return null
+        const sections = potsByCategory(ownerPots)
+        return (
+          <Card key={owner.id} withBorder padding="md">
+            <Stack gap="sm">
+              <Group gap="xs">
+                <Title order={4}>{owner.displayName}</Title>
+                <Badge size="sm" variant="light" color={owner.color ?? 'gray'}>
+                  {owner.kind === 'joint' ? 'joint' : 'personal'}
+                </Badge>
+              </Group>
+              {sections.map((section) => (
+                <Stack key={section.catId ?? 'none'} gap={4}>
+                  <Text size="xs" fw={700} c="dimmed" tt="uppercase">
+                    {section.name}
+                  </Text>
+                  <Stack gap={2}>
+                    {section.items.map((p) => (
+                      <PotRow
+                        key={p.id}
+                        pot={p}
+                        members={members}
+                        categories={categories}
+                        unused={usageReady && !usedIds.has(p.id)}
+                        setAsides={setAsidesByPot.get(p.id) ?? []}
+                        money={money}
+                      />
+                    ))}
+                  </Stack>
                 </Stack>
-              </Stack>
-            )
-          })}
-          {(groups.get(null) ?? []).length > 0 && (
-            <Stack gap={4}>
-              <Text size="xs" fw={700} c="dimmed" tt="uppercase">
-                Uncategorised
-              </Text>
-              <Stack gap={2}>
-                {(groups.get(null) ?? []).map((p) => (
-                  <PotRow
-                    key={p.id}
-                    pot={p}
-                    members={members}
-                    categories={categories}
-                    unused={usageReady && !usedIds.has(p.id)}
-                    setAsides={setAsidesByPot.get(p.id) ?? []}
-                    money={money}
-                  />
-                ))}
-              </Stack>
+              ))}
             </Stack>
-          )}
-        </Stack>
+          </Card>
+        )
+      })}
+
+      <Card withBorder padding="md">
         <AddPotForm members={members} categories={categories} />
-      </Stack>
-    </Card>
+      </Card>
+    </Stack>
   )
 }
 
@@ -779,8 +603,7 @@ export function PotsPage() {
 
   return (
     <Stack gap="lg" maw={900} mx="auto">
-      <Title order={2}>Pots &amp; Categories</Title>
-      <CategoriesPanel categories={categories} isLoading={categoriesQuery.isLoading} />
+      <Title order={2}>Pots</Title>
       <PotsPanel
         pots={pots}
         categories={categories}

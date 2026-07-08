@@ -155,6 +155,7 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
       setupCompletedAt: nowMs, // past the setup wizard — go straight to the app
       incomeBasisDefault: 'regular_net',
       jointContributionBasis: 'equal',
+      emergencyFundMonths: 3,
       ...ts,
     },
   ]

@@ -425,6 +425,16 @@ function AddSpendForm({
           </Alert>
         )}
         <Group justify="flex-end">
+          <Button
+            variant="default"
+            onClick={() => {
+              resetForm(ownerId)
+              setSuccessMessage('')
+              setPendingUpdate(null)
+            }}
+          >
+            Reset
+          </Button>
           <Button onClick={() => void handleSubmit()} loading={add.isPending}>
             Add {kind === 'refund' ? 'refund' : 'spend'}
           </Button>

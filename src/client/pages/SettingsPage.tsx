@@ -43,6 +43,7 @@ function GeneralSection() {
   const [decimalPlaces, setDecimalPlaces] = useState<number | string>(2)
   const [weekStart, setWeekStart] = useState('monday')
   const [dateFormat, setDateFormat] = useState('medium')
+  const [emergencyMonths, setEmergencyMonths] = useState<number | string>(3)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
@@ -55,6 +56,7 @@ function GeneralSection() {
     setDecimalPlaces(hh.currencyDecimalPlaces)
     setWeekStart(hh.weekStart)
     setDateFormat(hh.dateFormat)
+    setEmergencyMonths(hh.emergencyFundMonths)
   }, [hh])
 
   async function handleSave() {
@@ -66,6 +68,7 @@ function GeneralSection() {
       incomeBasisDefault: incomeBasis as 'regular_net' | 'latest_payslip' | 'rolling_12m',
       weekStart: weekStart as 'monday' | 'sunday',
       dateFormat: dateFormat as 'iso' | 'numeric' | 'medium' | 'long',
+      emergencyFundMonths: Number(emergencyMonths),
     })
     // Currency decimal-places change rescales every money column, so it goes
     // through the dedicated endpoint.
@@ -151,6 +154,17 @@ function GeneralSection() {
             onChange={(v) => setDateFormat(v ?? 'medium')}
             allowDeselect={false}
           />
+        </Group>
+        <Group grow>
+          <NumberInput
+            label="Emergency fund (months of bills)"
+            description="Target cushion shown on the Funding page — typically 3–6 months."
+            min={0}
+            max={24}
+            value={emergencyMonths}
+            onChange={setEmergencyMonths}
+          />
+          <div />
         </Group>
         {(update.error || rescale.error) && (
           <Alert color="red" title="Error">

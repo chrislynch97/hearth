@@ -26,6 +26,7 @@ export const householdRouter = router({
         jointContributionBasis: z
           .enum(['equal', 'income_proportional', 'custom'])
           .optional(),
+        emergencyFundMonths: z.number().int().min(0).max(24).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

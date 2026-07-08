@@ -172,6 +172,39 @@ export function FundingPage() {
             </Card>
           )}
 
+          {plan.emergencyFund.total > 0 && (
+            <Card withBorder padding="md">
+              <Stack gap="sm">
+                <div>
+                  <Title order={4}>Emergency fund</Title>
+                  <Text size="xs" c="dimmed">
+                    A cushion of {plan.emergencyFund.months} month{plan.emergencyFund.months === 1 ? '' : 's'} of essential bills to
+                    hold in easy-access savings. Set the months in Settings.
+                  </Text>
+                </div>
+                <Stack gap={2}>
+                  {plan.emergencyFund.perOwner
+                    .filter((o) => o.target > 0)
+                    .map((o) => (
+                      <Group key={o.memberId} justify="space-between" px="xs" py={4}>
+                        <Text size="sm">{o.displayName}</Text>
+                        <Group gap={12}>
+                          <Text size="xs" c="dimmed">
+                            {formatMoney(o.monthlyBills, money)}/mo bills
+                          </Text>
+                          <Text size="sm">{formatMoney(o.target, money)}</Text>
+                        </Group>
+                      </Group>
+                    ))}
+                </Stack>
+                <Group justify="space-between" pt={4} style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
+                  <Text fw={600}>Total target</Text>
+                  <Text fw={600}>{formatMoney(plan.emergencyFund.total, money)}</Text>
+                </Group>
+              </Stack>
+            </Card>
+          )}
+
           <Card withBorder padding="md">
             <Stack gap="sm">
               <Title order={4}>Standing orders</Title>

@@ -51,6 +51,14 @@ export interface PersonFunding {
   remainder: number
 }
 
+/** Emergency-fund target = monthly essential bills × months, per account and total. */
+export interface EmergencyFund {
+  months: number
+  totalMonthlyBills: number
+  total: number
+  perOwner: Array<{ memberId: string; displayName: string; kind: 'person' | 'joint'; monthlyBills: number; target: number }>
+}
+
 export interface FundingPlan {
   pots: PotFunding[]
   perPerson: PersonFunding[]
@@ -59,6 +67,7 @@ export interface FundingPlan {
   /** Bills paid straight from the main account (funding = 'main'), monthly. */
   mainAccountFundingPerMonth: number
   mainAccountByCategory: Array<{ categoryId: string | null; fundingPerMonth: number }>
+  emergencyFund: EmergencyFund
 }
 
 export function computeFundingPlan(input: {
@@ -67,8 +76,11 @@ export function computeFundingPlan(input: {
   setAsides: FundingSetAsideInput[]
   members: FundingMemberInput[]
   jointContributionBasis: 'equal' | 'income_proportional' | 'custom'
+  /** How many months of essential bills the emergency fund should cover (default 3). */
+  emergencyFundMonths?: number
 }): FundingPlan {
   const { pots, bills, setAsides, members, jointContributionBasis } = input
+  const emergencyFundMonths = input.emergencyFundMonths ?? 3
 
   const activeBills = bills.filter((b) => b.active)
   const activeSetAsides = setAsides.filter((s) => s.active)
@@ -160,6 +172,34 @@ export function computeFundingPlan(input: {
     }
   })
 
+  // Emergency fund: monthly *bills* (money out) attributed to whoever owns the
+  // pot they drain — main-account bills to the joint member — times the months.
+  const potOwnerById = new Map(pots.map((p) => [p.id, p.ownerId]))
+  const billsMonthlyByOwner = new Map<string, number>()
+  for (const b of activeBills) {
+    const monthly = normaliseToMonthly(b.amount, b.recurrence)
+    const ownerId = b.funding === 'main' ? jointMember?.id : b.potId ? potOwnerById.get(b.potId) : undefined
+    if (ownerId) billsMonthlyByOwner.set(ownerId, (billsMonthlyByOwner.get(ownerId) ?? 0) + monthly)
+  }
+  const emergencyOwners = [...persons, ...(jointMember ? [jointMember] : [])]
+  const emergencyPerOwner = emergencyOwners.map((m) => {
+    const monthlyBills = roundMinor(billsMonthlyByOwner.get(m.id) ?? 0)
+    return {
+      memberId: m.id,
+      displayName: m.displayName,
+      kind: m.kind,
+      monthlyBills,
+      target: roundMinor(monthlyBills * emergencyFundMonths),
+    }
+  })
+  const totalMonthlyBills = emergencyPerOwner.reduce((acc, o) => acc + o.monthlyBills, 0)
+  const emergencyFund: EmergencyFund = {
+    months: emergencyFundMonths,
+    totalMonthlyBills,
+    total: roundMinor(totalMonthlyBills * emergencyFundMonths),
+    perOwner: emergencyPerOwner,
+  }
+
   return {
     pots: potFundings,
     perPerson,
@@ -167,5 +207,6 @@ export function computeFundingPlan(input: {
     unassignedFundingPerMonth,
     mainAccountFundingPerMonth,
     mainAccountByCategory,
+    emergencyFund,
   }
 }

@@ -68,6 +68,7 @@ export const planRouter = router({
         monthlyIncome: incomeByMember.get(m.id)?.monthlyIncome ?? 0,
       })),
       jointContributionBasis,
+      emergencyFundMonths: householdRow?.emergencyFundMonths ?? 3,
     })
   }),
 
