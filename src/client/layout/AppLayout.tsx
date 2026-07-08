@@ -135,9 +135,11 @@ function UserMenu() {
   const me = trpc.users.me.useQuery()
   const status = trpc.auth.status.useQuery()
   const logout = trpc.auth.logout.useMutation()
+  const switchHousehold = trpc.users.switchHousehold.useMutation()
 
   const name = me.data?.displayName || me.data?.username || 'You'
-  const active = me.data?.memberships.find((m) => m.householdId === me.data?.activeHouseholdId)
+  const memberships = me.data?.memberships ?? []
+  const active = memberships.find((m) => m.householdId === me.data?.activeHouseholdId)
   const canLogOut = status.data?.passwordSet ?? false
 
   async function handleLogout() {
@@ -148,6 +150,14 @@ function UserMenu() {
     // which the locked HTTP gate 401s as a batch, erroring auth.status with them
     // and surfacing the connection-error screen instead of the login gate.
     await utils.auth.status.invalidate()
+  }
+
+  async function switchTo(householdId: string) {
+    if (householdId === me.data?.activeHouseholdId) return
+    await switchHousehold.mutateAsync({ householdId })
+    // Everything is scoped to the active household — reload for a clean slate.
+    await utils.invalidate()
+    window.location.reload()
   }
 
   return (
@@ -194,6 +204,21 @@ function UserMenu() {
           {me.data?.username ? `@${me.data.username}` : 'Account'}
           {me.data?.role ? ` · ${me.data.role}` : ''}
         </Menu.Label>
+        {memberships.length > 1 && (
+          <>
+            <Menu.Label>Switch household</Menu.Label>
+            {memberships.map((m) => (
+              <Menu.Item
+                key={m.householdId}
+                onClick={() => void switchTo(m.householdId)}
+                rightSection={m.householdId === me.data?.activeHouseholdId ? '✓' : undefined}
+              >
+                {m.householdName}
+              </Menu.Item>
+            ))}
+            <Menu.Divider />
+          </>
+        )}
         <Menu.Item onClick={() => navigate('/settings')}>Account &amp; settings</Menu.Item>
         {canLogOut && (
           <Menu.Item color="red" onClick={() => void handleLogout()}>

@@ -3,8 +3,12 @@ import { eq } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import QRCode from 'qrcode'
 import { router, publicProcedure } from '../trpc/trpc'
-import { user } from '../db/schema'
+import { assertRole } from '../trpc/tenant'
+import { membership, user } from '../db/schema'
 import type { User } from '../db/schema'
+import { getInstanceSettings, setAllowOpenRegistration } from '../db/instanceSettings'
+import { provisionHousehold } from '../db/seed'
+import { newId } from '../../shared/ids'
 import { hashPassword, verifyPassword } from '../auth/password'
 import {
   createSession,
@@ -108,6 +112,70 @@ export const authRouter = router({
     ctx.setSessionCookie?.(null)
     return { ok: true as const }
   }),
+
+  /** Whether anyone may self-register a new household. Public — the login screen
+   *  reads it to decide whether to offer "create an account". */
+  registrationOpen: publicProcedure.query(async ({ ctx }) => {
+    return await getInstanceSettings(ctx.db)
+  }),
+
+  /** Turn open registration on/off. Instance-wide (self-host: the owner is the
+   *  instance admin), so it's owner-only. */
+  setRegistrationOpen: publicProcedure
+    .input(z.object({ open: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      assertRole(ctx.role, 'owner')
+      await setAllowOpenRegistration(ctx.db, input.open)
+      return { allowOpenRegistration: input.open }
+    }),
+
+  /** Self-register: create an account and a brand-new household you own, then log
+   *  in. Only when open registration is enabled. */
+  register: publicProcedure
+    .input(
+      z.object({
+        username: z.string().min(1),
+        displayName: z.string().min(1),
+        password: z.string(),
+        householdName: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { allowOpenRegistration } = await getInstanceSettings(ctx.db)
+      if (!allowOpenRegistration) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Registration is closed on this instance.' })
+      }
+      const weak = validatePassword(input.password)
+      if (weak) throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
+      if (await getUserByUsername(ctx.db, input.username.trim())) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'That username is taken.' })
+      }
+
+      const now = Date.now()
+      const householdId = await provisionHousehold(ctx.db, { displayName: input.householdName })
+      const userId = newId()
+      await ctx.db.insert(user).values({
+        id: userId,
+        username: input.username.trim(),
+        email: null,
+        displayName: input.displayName.trim(),
+        passwordHash: hashPassword(input.password),
+        createdAt: now,
+        updatedAt: now,
+      })
+      await ctx.db.insert(membership).values({
+        id: newId(),
+        userId,
+        householdId,
+        role: 'owner',
+        acceptedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      })
+
+      ctx.setSessionCookie?.(await createSession(ctx.db, userId, householdId))
+      return { ok: true as const }
+    }),
 
   /** Set or change the current user's password. Requires the current password
    *  if one is set; revokes existing sessions and keeps the setter logged in. */

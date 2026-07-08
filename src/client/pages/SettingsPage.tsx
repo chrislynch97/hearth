@@ -14,6 +14,7 @@ import {
   Select,
   SimpleGrid,
   Stack,
+  Switch,
   Table,
   Text,
   TextInput,
@@ -1253,6 +1254,9 @@ function HouseholdAccessSection() {
   const createInvite = trpc.invitations.create.useMutation()
   const revoke = trpc.invitations.revoke.useMutation()
 
+  const regOpen = trpc.auth.registrationOpen.useQuery(undefined, { enabled: isOwner })
+  const setRegOpen = trpc.auth.setRegistrationOpen.useMutation()
+
   const [inviteRole, setInviteRole] = useState('member')
   const [link, setLink] = useState('')
   const [error, setError] = useState('')
@@ -1298,6 +1302,18 @@ function HouseholdAccessSection() {
             value={me.data.activeHouseholdId}
             onChange={(v) => v && void handleSwitch(v)}
             allowDeselect={false}
+          />
+        )}
+
+        {isOwner && (
+          <Switch
+            label="Allow anyone to register"
+            description="Instance-wide: when on, the sign-in screen lets new people create their own account and household. Leave off to stay invite-only."
+            checked={regOpen.data?.allowOpenRegistration ?? false}
+            onChange={async (e) => {
+              await setRegOpen.mutateAsync({ open: e.currentTarget.checked })
+              await utils.auth.registrationOpen.invalidate()
+            }}
           />
         )}
 

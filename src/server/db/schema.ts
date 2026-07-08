@@ -103,6 +103,21 @@ export const session = sqliteTable('session', {
 
 export type Session = typeof session.$inferSelect
 
+// Instance-wide settings (a single row, id = 'instance'), distinct from the
+// per-household settings on `household`. Governs deployment-level behaviour like
+// whether anyone can self-register a new household. Not part of the data
+// portability contract — deliberately excluded from ALL_TABLES.
+export const instanceSettings = sqliteTable('instance_settings', {
+  id: text('id').primaryKey(),
+  // 0/1: when on, `auth.register` lets anyone create an account + their own
+  // household. Off by default so a self-host stays invite-only until opted in.
+  allowOpenRegistration: integer('allow_open_registration').notNull().default(0),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+export type InstanceSettings = typeof instanceSettings.$inferSelect
+
 // A pending invitation for someone to join a household. The row id is the
 // unguessable invite token; accepting it creates the user + membership.
 export const invitation = sqliteTable('invitation', {

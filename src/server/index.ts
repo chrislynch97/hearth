@@ -22,6 +22,8 @@ const PUBLIC_PROCEDURES = new Set([
   'auth.status',
   'auth.login',
   'auth.logout',
+  'auth.registrationOpen',
+  'auth.register',
   'invitations.info',
   'invitations.accept',
 ])
@@ -91,9 +93,11 @@ async function main() {
   // check target.
   app.get('/health', async () => ({ status: 'ok' }))
 
-  // Auth gate: when the owner account has a password, block every tRPC call
-  // except the auth endpoints unless the request carries a valid session cookie.
-  // No password (or not yet provisioned) = an open instance; everything passes.
+  // Auth gate: when the instance is locked (the primary owner has a password),
+  // block every tRPC call except the public auth endpoints unless the request
+  // carries a valid session — for ANY user, not just the owner, so invited
+  // members and self-registered owners of other households can use the app.
+  // No owner password (or not yet provisioned) = an open instance; all passes.
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/trpc/')) return
     const owner = await getOwnerUser(db)
@@ -105,7 +109,7 @@ async function main() {
 
     const token = parseSessionCookie(req.headers.cookie)
     const session = await getValidSession(db, token)
-    if (session && session.userId === owner.id) return
+    if (session) return
 
     return reply.code(401).send({ error: 'Authentication required' })
   })

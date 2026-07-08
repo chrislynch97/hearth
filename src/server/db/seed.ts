@@ -6,6 +6,34 @@ import { newId } from '../../shared/ids'
 
 const HOUSEHOLD_ID = DEFAULT_HOUSEHOLD_ID
 
+/** Create a fresh household with its non-deletable joint member, returning the
+ *  new id. Used when someone self-registers (M4) — the caller then attaches the
+ *  registrant as owner. `householdId` is set explicitly on the joint member
+ *  because the column defaults to the singleton household. */
+export async function provisionHousehold(
+  db: DB,
+  opts: { displayName?: string } = {},
+): Promise<string> {
+  const now = Date.now()
+  const householdId = newId()
+  await db.insert(household).values({
+    id: householdId,
+    displayName: opts.displayName?.trim() || 'My Household',
+    createdAt: now,
+    updatedAt: now,
+  })
+  await db.insert(member).values({
+    id: newId(),
+    householdId,
+    kind: 'joint',
+    displayName: 'Joint',
+    sortOrder: 100,
+    createdAt: now,
+    updatedAt: now,
+  })
+  return householdId
+}
+
 /** Ensure the singleton household, the non-deletable joint member, and an owner
  *  user + membership exist. Idempotent. The owner is created password-less (the
  *  instance is open until they set one); existing installs had their shared

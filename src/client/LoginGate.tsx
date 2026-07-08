@@ -1,17 +1,27 @@
 import { useState } from 'react'
-import { Button, Card, Center, Group, PasswordInput, Stack, Text, TextInput } from '@mantine/core'
+import { Anchor, Button, Card, Center, Group, PasswordInput, Stack, Text, TextInput } from '@mantine/core'
 import { trpc } from './trpc'
 import { hearthTokens } from './theme'
+import { MIN_PASSWORD_LENGTH, validatePassword } from '../shared/password-policy'
 
-/** Shown when the instance has a shared password and this session isn't authenticated. */
+/** Shown when the instance is locked and this session isn't authenticated. Also
+ *  offers self-registration when the instance has open registration enabled. */
 export function LoginGate() {
   const utils = trpc.useUtils()
   const login = trpc.auth.login.useMutation()
+  const register = trpc.auth.register.useMutation()
+  const regOpen = trpc.auth.registrationOpen.useQuery()
+
+  const [mode, setMode] = useState<'login' | 'register'>('login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [householdName, setHouseholdName] = useState('')
   const [code, setCode] = useState('')
   const [mfaRequired, setMfaRequired] = useState(false)
   const [error, setError] = useState('')
+
+  const canRegister = regOpen.data?.allowOpenRegistration ?? false
 
   async function submit() {
     setError('')
@@ -38,6 +48,23 @@ export function LoginGate() {
     }
   }
 
+  async function submitRegister() {
+    setError('')
+    const weak = validatePassword(password)
+    if (weak) return setError(weak)
+    try {
+      await register.mutateAsync({
+        username: username.trim(),
+        displayName: displayName.trim(),
+        password,
+        householdName: householdName.trim(),
+      })
+      await utils.invalidate()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not create your account.')
+    }
+  }
+
   return (
     <Center h="100vh">
       <Card withBorder padding="xl" radius="lg" w={360}>
@@ -53,22 +80,65 @@ export function LoginGate() {
             </Text>
           </Group>
           <Text size="sm" c="dimmed" ta="center">
-            {mfaRequired
-              ? 'Enter the code from your authenticator app.'
-              : 'Sign in to your household.'}
+            {mode === 'register'
+              ? 'Create your account and household.'
+              : mfaRequired
+                ? 'Enter the code from your authenticator app.'
+                : 'Sign in to your household.'}
           </Text>
-          {mfaRequired ? (
-            <TextInput
-              label="Authentication code"
-              description="6-digit code, or one of your recovery codes"
-              value={code}
-              onChange={(e) => setCode(e.currentTarget.value)}
-              onKeyDown={(e) => e.key === 'Enter' && void submit()}
-              error={error || undefined}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              autoFocus
-            />
+
+          {mode === 'register' ? (
+            <>
+              <TextInput
+                label="Your name"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.currentTarget.value)}
+                autoComplete="name"
+                autoFocus
+              />
+              <TextInput label="Username" value={username} onChange={(e) => setUsername(e.currentTarget.value)} autoComplete="username" />
+              <TextInput
+                label="Household name"
+                description="Your new household — you'll be its owner."
+                value={householdName}
+                onChange={(e) => setHouseholdName(e.currentTarget.value)}
+              />
+              <PasswordInput
+                label="Password"
+                description={`At least ${MIN_PASSWORD_LENGTH} characters.`}
+                value={password}
+                onChange={(e) => setPassword(e.currentTarget.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void submitRegister()}
+                error={error || undefined}
+                autoComplete="new-password"
+              />
+              <Button onClick={() => void submitRegister()} loading={register.isPending} fullWidth>
+                Create account
+              </Button>
+              <Text size="xs" c="dimmed" ta="center">
+                Already have an account?{' '}
+                <Anchor component="button" type="button" size="xs" onClick={() => { setMode('login'); setError('') }}>
+                  Sign in
+                </Anchor>
+              </Text>
+            </>
+          ) : mfaRequired ? (
+            <>
+              <TextInput
+                label="Authentication code"
+                description="6-digit code, or one of your recovery codes"
+                value={code}
+                onChange={(e) => setCode(e.currentTarget.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void submit()}
+                error={error || undefined}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+              />
+              <Button onClick={() => void submit()} loading={login.isPending} fullWidth>
+                Unlock
+              </Button>
+            </>
           ) : (
             <>
               <TextInput
@@ -87,11 +157,19 @@ export function LoginGate() {
                 error={error || undefined}
                 autoComplete="current-password"
               />
+              <Button onClick={() => void submit()} loading={login.isPending} fullWidth>
+                Unlock
+              </Button>
+              {canRegister && (
+                <Text size="xs" c="dimmed" ta="center">
+                  New here?{' '}
+                  <Anchor component="button" type="button" size="xs" onClick={() => { setMode('register'); setError('') }}>
+                    Create an account
+                  </Anchor>
+                </Text>
+              )}
             </>
           )}
-          <Button onClick={() => void submit()} loading={login.isPending} fullWidth>
-            Unlock
-          </Button>
         </Stack>
       </Card>
     </Center>

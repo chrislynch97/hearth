@@ -38,8 +38,8 @@ describe('members.linkUser', () => {
     await asOwner.members.linkUser({ memberId: ben.id, userId: owner!.id })
     const [avaRow] = await db.select().from(member).where(eq(member.id, ava.id))
     const [benRow] = await db.select().from(member).where(eq(member.id, ben.id))
-    expect(avaRow.userId).toBeNull()
-    expect(benRow.userId).toBe(owner!.id)
+    expect(avaRow?.userId).toBeNull()
+    expect(benRow?.userId).toBe(owner!.id)
 
     // Unlink.
     await asOwner.members.linkUser({ memberId: ben.id, userId: null })
