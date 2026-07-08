@@ -68,197 +68,18 @@ function linesFromSetAsides(setAsides: SetAside[], pot: Pot, decimalPlaces: numb
 
 function PotRow({ pot, members, categories, unused, setAsides, money }: PotRowProps) {
   const utils = trpc.useUtils()
-  const [editing, setEditing] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
-
-  const [name, setName] = useState(pot.name)
-  const [ownerId, setOwnerId] = useState<string>(pot.ownerId)
-  const [categoryId, setCategoryId] = useState<string | null>(pot.categoryId)
-  const [note, setNote] = useState(pot.note ?? '')
-  const [lines, setLines] = useState<ContribLine[]>(() => linesFromSetAsides(setAsides, pot, money.decimalPlaces))
-
-  const update = trpc.pots.update.useMutation()
   const archive = trpc.pots.archive.useMutation()
-  const replaceContrib = trpc.setAside.replaceForPot.useMutation()
 
   const owner = members.find((m) => m.id === pot.ownerId)
   const contribTotal = contributionMonthly(setAsides)
   const hasBreakdown = setAsides.length > 1
 
-  const memberOptions = members.map((m) => ({ value: m.id, label: m.displayName }))
-  const categoryOptions = categories.map((c) => ({ value: c.id, label: c.name }))
-
-  function updateLine(i: number, patch: Partial<ContribLine>) {
-    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
-  }
-  function addLine() {
-    setLines((prev) => [...prev, { label: '', amountMajor: '', recurrence: 'monthly' }])
-  }
-  function removeLine(i: number) {
-    setLines((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i)))
-  }
-
-  function resetEdits() {
-    setName(pot.name)
-    setOwnerId(pot.ownerId)
-    setCategoryId(pot.categoryId)
-    setNote(pot.note ?? '')
-    setLines(linesFromSetAsides(setAsides, pot, money.decimalPlaces))
-  }
-
-  async function handleSave() {
-    const trimmed = name.trim()
-    if (!trimmed) return
-    await update.mutateAsync({
-      id: pot.id,
-      name: trimmed,
-      ownerId,
-      categoryId: categoryId,
-      note: note.trim(),
-    })
-    await replaceContrib.mutateAsync({
-      potId: pot.id,
-      lines: lines.map((l) => ({
-        label: l.label.trim() || null,
-        amount: l.amountMajor === '' ? 0 : toMinor(Number(l.amountMajor), money.decimalPlaces),
-        recurrence: l.recurrence,
-      })),
-    })
-    await Promise.all([utils.pots.list.invalidate(), utils.setAside.list.invalidate(), utils.plan.funding.invalidate()])
-    setEditing(false)
-  }
-
   async function handleArchive() {
     await archive.mutateAsync({ id: pot.id })
     await utils.pots.list.invalidate()
     setConfirmArchive(false)
-  }
-
-  if (editing) {
-    return (
-      <Card withBorder padding="sm">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            void handleSave()
-          }}
-          onKeyDown={(e) => {
-            // Escape cancels the edit — but let an open Select swallow its own
-            // Escape (closing the dropdown) rather than bailing out of the edit.
-            if (e.key === 'Escape' && !e.defaultPrevented) {
-              e.preventDefault()
-              resetEdits()
-              setEditing(false)
-            }
-          }}
-        >
-        <Stack gap="xs">
-          <TextInput
-            label="Name"
-            size="xs"
-            value={name}
-            onChange={(e) => setName(e.currentTarget.value)}
-            autoFocus
-          />
-          <Group grow>
-            <Select
-              label="Owner"
-              size="xs"
-              data={memberOptions}
-              value={ownerId}
-              onChange={(v) => setOwnerId(v ?? pot.ownerId)}
-              allowDeselect={false}
-            />
-            <Select
-              label="Category"
-              size="xs"
-              data={categoryOptions}
-              value={categoryId}
-              onChange={(v) => setCategoryId(v)}
-              searchable
-              clearable
-              placeholder="Uncategorised"
-            />
-          </Group>
-          <TextInput
-            label="Note"
-            size="xs"
-            value={note}
-            onChange={(e) => setNote(e.currentTarget.value)}
-          />
-
-          <Divider label="Monthly contribution" labelPosition="left" />
-          <Text size="xs" c="dimmed">
-            How much to move into this pot each month. Add parts to break it down (e.g. Running £10, Squash £5).
-          </Text>
-          <Stack gap="xs">
-            {lines.map((line, i) => (
-              <Group key={i} gap="xs" align="flex-end" wrap="nowrap">
-                {lines.length > 1 && (
-                  <TextInput
-                    size="xs"
-                    placeholder="Part (e.g. Running)"
-                    value={line.label}
-                    onChange={(e) => updateLine(i, { label: e.currentTarget.value })}
-                    style={{ flex: 1 }}
-                  />
-                )}
-                <NumberInput
-                  size="xs"
-                  placeholder="0.00"
-                  prefix={money.symbol}
-                  decimalScale={money.decimalPlaces}
-                  fixedDecimalScale
-                  min={0}
-                  value={line.amountMajor}
-                  onChange={(v) => updateLine(i, { amountMajor: v === '' ? '' : String(v) })}
-                  w={lines.length > 1 ? 120 : undefined}
-                  style={lines.length > 1 ? undefined : { flex: 1 }}
-                />
-                {line.recurrence !== 'monthly' && (
-                  <Text size="xs" c="dimmed">
-                    /{line.recurrence}
-                  </Text>
-                )}
-                {lines.length > 1 && (
-                  <ActionIcon variant="subtle" color="red" size="sm" aria-label="Remove part" onClick={() => removeLine(i)}>
-                    ×
-                  </ActionIcon>
-                )}
-              </Group>
-            ))}
-            <Group>
-              <Button size="xs" variant="subtle" onClick={addLine}>
-                {lines.length > 1 ? '+ Add part' : '+ Break down'}
-              </Button>
-            </Group>
-          </Stack>
-
-          {(update.error || replaceContrib.error) && (
-            <Alert color="red" title="Error">
-              {update.error?.message || replaceContrib.error?.message}
-            </Alert>
-          )}
-          <Group justify="flex-end">
-            <Button
-              size="xs"
-              type="button"
-              variant="default"
-              onClick={() => {
-                resetEdits()
-                setEditing(false)
-              }}
-            >
-              Cancel
-            </Button>
-            <Button size="xs" type="submit" loading={update.isPending || replaceContrib.isPending}>
-              Save
-            </Button>
-          </Group>
-        </Stack>
-        </form>
-      </Card>
-    )
   }
 
   return (
@@ -329,7 +150,7 @@ function PotRow({ pot, members, categories, unused, setAsides, money }: PotRowPr
             variant="subtle"
             size="sm"
             aria-label={`Edit ${pot.name}`}
-            onClick={() => setEditing(true)}
+            onClick={() => setEditOpen(true)}
           >
             ✎
           </ActionIcon>
@@ -364,54 +185,102 @@ function PotRow({ pot, members, categories, unused, setAsides, money }: PotRowPr
           </Group>
         </Stack>
       </Modal>
+      {editOpen && (
+        <PotFormModal
+          opened={editOpen}
+          onClose={() => setEditOpen(false)}
+          members={members}
+          categories={categories}
+          money={money}
+          pot={pot}
+          setAsides={setAsides}
+        />
+      )}
     </>
   )
 }
 
+/** Add or edit a pot — name, owner, category, note, and its monthly contribution
+ *  (a single amount or several named parts). Shared by the page header (add) and
+ *  each pot row (edit) so the two never drift. */
 function PotFormModal({
   opened,
   onClose,
   members,
   categories,
+  money,
+  pot,
+  setAsides = [],
 }: {
   opened: boolean
   onClose: () => void
   members: Member[]
   categories: Category[]
+  money: MoneyFormat
+  pot?: Pot
+  setAsides?: SetAside[]
 }) {
   const utils = trpc.useUtils()
   const create = trpc.pots.create.useMutation()
+  const update = trpc.pots.update.useMutation()
+  const replaceContrib = trpc.setAside.replaceForPot.useMutation()
+  const isEditing = !!pot
 
-  const [name, setName] = useState('')
-  const [ownerId, setOwnerId] = useState<string | null>(null)
-  const [categoryId, setCategoryId] = useState<string | null>(null)
-  const [note, setNote] = useState('')
+  const [name, setName] = useState(pot?.name ?? '')
+  const [ownerId, setOwnerId] = useState<string | null>(pot?.ownerId ?? null)
+  const [categoryId, setCategoryId] = useState<string | null>(pot?.categoryId ?? null)
+  const [note, setNote] = useState(pot?.note ?? '')
+  const [lines, setLines] = useState<ContribLine[]>(() =>
+    pot ? linesFromSetAsides(setAsides, pot, money.decimalPlaces) : [{ label: '', amountMajor: '', recurrence: 'monthly' }],
+  )
   const [error, setError] = useState('')
 
   const memberOptions = orderMembers(members).map((m) => ({ value: m.id, label: m.displayName }))
   const categoryOptions = categories.map((c) => ({ value: c.id, label: c.name }))
+  const pending = create.isPending || update.isPending || replaceContrib.isPending
 
-  async function handleAdd() {
+  function updateLine(i: number, patch: Partial<ContribLine>) {
+    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
+  }
+  function addLine() {
+    setLines((prev) => [...prev, { label: '', amountMajor: '', recurrence: 'monthly' }])
+  }
+  function removeLine(i: number) {
+    setLines((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i)))
+  }
+
+  async function handleSubmit() {
     const trimmed = name.trim()
     if (!trimmed) return setError('Please enter a pot name.')
     if (!ownerId) return setError('Please choose an owner.')
     setError('')
-    await create.mutateAsync({
-      name: trimmed,
-      ownerId,
-      categoryId: categoryId ?? undefined,
-      note: note.trim() || undefined,
+
+    let potId: string
+    if (isEditing) {
+      await update.mutateAsync({ id: pot.id, name: trimmed, ownerId, categoryId, note: note.trim() })
+      potId = pot.id
+    } else {
+      const created = await create.mutateAsync({ name: trimmed, ownerId, categoryId: categoryId ?? undefined, note: note.trim() || undefined })
+      potId = created.id
+    }
+    await replaceContrib.mutateAsync({
+      potId,
+      lines: lines.map((l) => ({
+        label: l.label.trim() || null,
+        amount: l.amountMajor === '' ? 0 : toMinor(Number(l.amountMajor), money.decimalPlaces),
+        recurrence: l.recurrence,
+      })),
     })
-    await utils.pots.list.invalidate()
+    await Promise.all([utils.pots.list.invalidate(), utils.setAside.list.invalidate(), utils.plan.funding.invalidate()])
     onClose()
   }
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Add pot" size="md">
+    <Modal opened={opened} onClose={onClose} title={isEditing ? 'Edit pot' : 'Add pot'} size="md">
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          void handleAdd()
+          void handleSubmit()
         }}
       >
         <Stack gap="sm">
@@ -435,6 +304,7 @@ function PotFormModal({
                 setOwnerId(v)
                 setError('')
               }}
+              allowDeselect={false}
             />
             <Select
               label="Category"
@@ -446,23 +316,64 @@ function PotFormModal({
               clearable
             />
           </Group>
-          <TextInput
-            label="Note (optional)"
-            placeholder="Optional note"
-            value={note}
-            onChange={(e) => setNote(e.currentTarget.value)}
-          />
-          {(error || create.error) && (
+          <TextInput label="Note (optional)" placeholder="Optional note" value={note} onChange={(e) => setNote(e.currentTarget.value)} />
+
+          <Divider label="Monthly contribution" labelPosition="left" />
+          <Text size="xs" c="dimmed">
+            How much to move into this pot each month. Add parts to break it down (e.g. Running £10, Squash £5).
+          </Text>
+          <Stack gap="xs">
+            {lines.map((line, i) => (
+              <Group key={i} gap="xs" align="flex-end" wrap="nowrap">
+                {lines.length > 1 && (
+                  <TextInput
+                    placeholder="Part (e.g. Running)"
+                    value={line.label}
+                    onChange={(e) => updateLine(i, { label: e.currentTarget.value })}
+                    style={{ flex: 1 }}
+                  />
+                )}
+                <NumberInput
+                  placeholder="0.00"
+                  prefix={money.symbol}
+                  decimalScale={money.decimalPlaces}
+                  fixedDecimalScale
+                  min={0}
+                  value={line.amountMajor}
+                  onChange={(v) => updateLine(i, { amountMajor: v === '' ? '' : String(v) })}
+                  w={lines.length > 1 ? 130 : undefined}
+                  style={lines.length > 1 ? undefined : { flex: 1 }}
+                />
+                {line.recurrence !== 'monthly' && (
+                  <Text size="xs" c="dimmed">
+                    /{line.recurrence}
+                  </Text>
+                )}
+                {lines.length > 1 && (
+                  <ActionIcon variant="subtle" color="red" size="lg" aria-label="Remove part" onClick={() => removeLine(i)}>
+                    ×
+                  </ActionIcon>
+                )}
+              </Group>
+            ))}
+            <Group>
+              <Button size="xs" variant="subtle" onClick={addLine}>
+                {lines.length > 1 ? '+ Add part' : '+ Break down'}
+              </Button>
+            </Group>
+          </Stack>
+
+          {(error || create.error || update.error || replaceContrib.error) && (
             <Alert color="red" title="Error">
-              {error || create.error?.message}
+              {error || create.error?.message || update.error?.message || replaceContrib.error?.message}
             </Alert>
           )}
           <Group justify="flex-end">
             <Button type="button" variant="default" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" loading={create.isPending}>
-              Add pot
+            <Button type="submit" loading={pending}>
+              {isEditing ? 'Save' : 'Add pot'}
             </Button>
           </Group>
         </Stack>
@@ -620,14 +531,16 @@ export function PotsPage() {
 
   return (
     <Stack gap="lg" maw={900} mx="auto">
-      <Group justify="space-between">
+      <Group justify="space-between" align="flex-start" wrap="nowrap">
         <div>
           <Title order={2}>Pots</Title>
           <Text size="sm" c="dimmed">
             Buckets you split your money into. Each pot's monthly contribution is set here.
           </Text>
         </div>
-        <Button onClick={() => setFormOpened(true)}>Add pot</Button>
+        <Button onClick={() => setFormOpened(true)} style={{ flexShrink: 0 }}>
+          Add pot
+        </Button>
       </Group>
       <PotsPanel
         pots={pots}
@@ -639,7 +552,9 @@ export function PotsPage() {
         setAsidesByPot={setAsidesByPot}
         money={money}
       />
-      {formOpened && <PotFormModal opened={formOpened} onClose={() => setFormOpened(false)} members={members} categories={categories} />}
+      {formOpened && (
+        <PotFormModal opened={formOpened} onClose={() => setFormOpened(false)} members={members} categories={categories} money={money} />
+      )}
     </Stack>
   )
 }

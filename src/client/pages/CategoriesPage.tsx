@@ -166,14 +166,16 @@ export function CategoriesPage() {
 
   return (
     <Stack gap="lg" maw={700} mx="auto">
-      <Group justify="space-between">
+      <Group justify="space-between" align="flex-start" wrap="nowrap">
         <div>
           <Title order={2}>Categories</Title>
           <Text size="sm" c="dimmed">
             Categories group your pots and bills across the household (e.g. Housing, Food, Subscriptions).
           </Text>
         </div>
-        <Button onClick={() => setFormOpened(true)}>Add category</Button>
+        <Button onClick={() => setFormOpened(true)} style={{ flexShrink: 0 }}>
+          Add category
+        </Button>
       </Group>
       <Card withBorder padding="md">
         <Stack gap="sm">

@@ -407,14 +407,16 @@ export function OutgoingsPage() {
 
   return (
     <Stack gap="lg" maw={900} mx="auto">
-      <Group justify="space-between">
+      <Group justify="space-between" align="flex-start" wrap="nowrap">
         <div>
           <Title order={2}>Bills</Title>
           <Text size="sm" c="dimmed">
             Recurring payments that get spent and reconciled. To set money aside into a pot, use its monthly contribution on the Pots page.
           </Text>
         </div>
-        <Button onClick={openAdd}>Add bill</Button>
+        <Button onClick={openAdd} style={{ flexShrink: 0 }}>
+          Add bill
+        </Button>
       </Group>
 
       {isLoading && (
