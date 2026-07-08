@@ -7,6 +7,7 @@ import { hearthTokens } from './theme'
 export function LoginGate() {
   const utils = trpc.useUtils()
   const login = trpc.auth.login.useMutation()
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [mfaRequired, setMfaRequired] = useState(false)
@@ -16,11 +17,12 @@ export function LoginGate() {
     setError('')
     try {
       const result = await login.mutateAsync({
+        username: username.trim(),
         password,
         code: mfaRequired ? code : undefined,
       })
       if (result.ok) {
-        await utils.auth.status.invalidate()
+        await utils.invalidate()
         return
       }
       // Password accepted; server now wants the second factor.
@@ -30,7 +32,7 @@ export function LoginGate() {
         setError('Incorrect code')
         setCode('')
       } else {
-        setError('Incorrect password')
+        setError('Incorrect username or password')
         setPassword('')
       }
     }
@@ -53,7 +55,7 @@ export function LoginGate() {
           <Text size="sm" c="dimmed" ta="center">
             {mfaRequired
               ? 'Enter the code from your authenticator app.'
-              : 'This household is password protected.'}
+              : 'Sign in to your household.'}
           </Text>
           {mfaRequired ? (
             <TextInput
@@ -68,14 +70,24 @@ export function LoginGate() {
               autoFocus
             />
           ) : (
-            <PasswordInput
-              label="Password"
-              value={password}
-              onChange={(e) => setPassword(e.currentTarget.value)}
-              onKeyDown={(e) => e.key === 'Enter' && void submit()}
-              error={error || undefined}
-              autoFocus
-            />
+            <>
+              <TextInput
+                label="Username"
+                value={username}
+                onChange={(e) => setUsername(e.currentTarget.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void submit()}
+                autoComplete="username"
+                autoFocus
+              />
+              <PasswordInput
+                label="Password"
+                value={password}
+                onChange={(e) => setPassword(e.currentTarget.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void submit()}
+                error={error || undefined}
+                autoComplete="current-password"
+              />
+            </>
           )}
           <Button onClick={() => void submit()} loading={login.isPending} fullWidth>
             Unlock

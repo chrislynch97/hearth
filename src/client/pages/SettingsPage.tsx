@@ -652,8 +652,9 @@ function SecuritySection() {
         )}
       </Group>
       <Text size="xs" c="dimmed" mb="sm">
-        An optional single password for everyone who opens this household. For internet exposure, put
-        it behind a reverse proxy or Tailscale.
+        Your account password. While it&apos;s unset the app is open on your network; setting one turns on
+        login (anyone you invite signs in with their own account). For internet exposure, also put it
+        behind a reverse proxy or Tailscale.
       </Text>
       <Stack gap="sm">
         {passwordSet && (
@@ -959,6 +960,232 @@ function AboutSection() {
 }
 
 // ---------------------------------------------------------------------------
+// Account (the current user)
+// ---------------------------------------------------------------------------
+
+function AccountSection() {
+  const utils = trpc.useUtils()
+  const me = trpc.users.me.useQuery()
+  const update = trpc.users.updateProfile.useMutation()
+
+  const [username, setUsername] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [email, setEmail] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!me.data) return
+    setUsername(me.data.username)
+    setDisplayName(me.data.displayName)
+    setEmail(me.data.email ?? '')
+  }, [me.data])
+
+  if (!me.data) return null
+
+  async function handleSave() {
+    setError('')
+    try {
+      await update.mutateAsync({
+        username: username.trim(),
+        displayName: displayName.trim(),
+        email: email.trim() || null,
+      })
+      await Promise.all([utils.users.me.invalidate(), utils.auth.status.invalidate()])
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save your profile.')
+    }
+  }
+
+  return (
+    <Card withBorder padding="md" radius="md">
+      <Title order={4} mb="sm">
+        Your account
+      </Title>
+      <Stack gap="sm">
+        <Group grow>
+          <TextInput label="Name" value={displayName} onChange={(e) => setDisplayName(e.currentTarget.value)} />
+          <TextInput label="Username" value={username} onChange={(e) => setUsername(e.currentTarget.value)} />
+        </Group>
+        <TextInput
+          label="Email"
+          description="Optional — only used for invitations and (later) password reset."
+          value={email}
+          onChange={(e) => setEmail(e.currentTarget.value)}
+          type="email"
+        />
+        {error && (
+          <Alert color="red" title="Error">
+            {error}
+          </Alert>
+        )}
+        <Group justify="flex-end">
+          {saved && (
+            <Text size="sm" c="dimmed">
+              Saved ✓
+            </Text>
+          )}
+          <Button onClick={() => void handleSave()} loading={update.isPending}>
+            Save
+          </Button>
+        </Group>
+      </Stack>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Households & people you share with (switcher + invitations)
+// ---------------------------------------------------------------------------
+
+function HouseholdAccessSection() {
+  const utils = trpc.useUtils()
+  const me = trpc.users.me.useQuery()
+  const switchHousehold = trpc.users.switchHousehold.useMutation()
+
+  const role = me.data?.role ?? null
+  const isAdmin = role === 'admin' || role === 'owner'
+  const isOwner = role === 'owner'
+  const memberships = me.data?.memberships ?? []
+
+  const invites = trpc.invitations.list.useQuery(undefined, { enabled: isAdmin })
+  const createInvite = trpc.invitations.create.useMutation()
+  const revoke = trpc.invitations.revoke.useMutation()
+
+  const [inviteRole, setInviteRole] = useState('member')
+  const [link, setLink] = useState('')
+  const [error, setError] = useState('')
+
+  if (!me.data) return null
+
+  async function handleSwitch(householdId: string) {
+    if (householdId === me.data?.activeHouseholdId) return
+    await switchHousehold.mutateAsync({ householdId })
+    // Active household changed — everything is scoped to it, so refetch all.
+    await utils.invalidate()
+    window.location.reload()
+  }
+
+  async function handleCreateInvite() {
+    setError('')
+    try {
+      const res = await createInvite.mutateAsync({ role: inviteRole as 'admin' | 'member' | 'viewer' })
+      setLink(`${window.location.origin}/invite/${res.token}`)
+      await utils.invitations.list.invalidate()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not create the invitation.')
+    }
+  }
+
+  const inviteRoleOptions = [
+    { value: 'viewer', label: 'Viewer (read-only)' },
+    { value: 'member', label: 'Member (can edit)' },
+    ...(isOwner ? [{ value: 'admin', label: 'Admin (can manage & invite)' }] : []),
+  ]
+
+  return (
+    <Card withBorder padding="md" radius="md">
+      <Title order={4} mb="sm">
+        Households &amp; access
+      </Title>
+      <Stack gap="sm">
+        {memberships.length > 1 && (
+          <Select
+            label="Active household"
+            description="Switch which household you're viewing."
+            data={memberships.map((m) => ({ value: m.householdId, label: `${m.householdName} · ${m.role}` }))}
+            value={me.data.activeHouseholdId}
+            onChange={(v) => v && void handleSwitch(v)}
+            allowDeselect={false}
+          />
+        )}
+
+        {!isAdmin && (
+          <Text size="sm" c="dimmed">
+            You&apos;re a {role} of this household. Ask an admin to invite others.
+          </Text>
+        )}
+
+        {isAdmin && (
+          <>
+            <Divider label="Invite someone" labelPosition="left" />
+            <Group align="flex-end">
+              <Select
+                label="Role"
+                data={inviteRoleOptions}
+                value={inviteRole}
+                onChange={(v) => setInviteRole(v ?? 'member')}
+                allowDeselect={false}
+                w={220}
+              />
+              <Button onClick={() => void handleCreateInvite()} loading={createInvite.isPending}>
+                Create invite link
+              </Button>
+            </Group>
+            {error && (
+              <Alert color="red" title="Error">
+                {error}
+              </Alert>
+            )}
+            {link && (
+              <Alert color="moss" variant="light" title="Invite link — share it with the person you're inviting">
+                <Group gap="xs" wrap="nowrap">
+                  <Code fz="xs" style={{ overflowX: 'auto', flex: 1 }}>
+                    {link}
+                  </Code>
+                  <CopyButton value={link}>
+                    {({ copied, copy }) => (
+                      <Button size="compact-sm" variant="default" onClick={copy}>
+                        {copied ? 'Copied' : 'Copy'}
+                      </Button>
+                    )}
+                  </CopyButton>
+                </Group>
+                <Text size="xs" c="dimmed" mt={4}>
+                  The link works once and expires in 7 days.
+                </Text>
+              </Alert>
+            )}
+
+            {(invites.data?.length ?? 0) > 0 && (
+              <>
+                <Divider label="Pending invitations" labelPosition="left" />
+                <Stack gap={4}>
+                  {invites.data?.map((inv) => (
+                    <Group key={inv.id} justify="space-between" px="xs" py={4}>
+                      <Text size="sm">
+                        {inv.email ?? 'Invite link'}{' '}
+                        <Text span size="xs" c="dimmed">
+                          · {inv.role} · expires {new Date(inv.expiresAt).toLocaleDateString()}
+                        </Text>
+                      </Text>
+                      <Button
+                        size="compact-xs"
+                        variant="subtle"
+                        color="red"
+                        loading={revoke.isPending}
+                        onClick={async () => {
+                          await revoke.mutateAsync({ id: inv.id })
+                          await utils.invitations.list.invalidate()
+                        }}
+                      >
+                        Revoke
+                      </Button>
+                    </Group>
+                  ))}
+                </Stack>
+              </>
+            )}
+          </>
+        )}
+      </Stack>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // SettingsPage
 // ---------------------------------------------------------------------------
 
@@ -966,8 +1193,10 @@ export function SettingsPage() {
   return (
     <Stack gap="lg" maw={760} mx="auto">
       <Title order={2}>Settings</Title>
+      <AccountSection />
       <GeneralSection />
       <MembersSection />
+      <HouseholdAccessSection />
       <SecuritySection />
       <MfaSection />
       <DataSection />

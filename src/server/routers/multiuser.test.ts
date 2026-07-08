@@ -4,7 +4,6 @@ import { ensureSeed } from '../db/seed'
 import { appRouter } from '../trpc/router'
 import { getOwnerUser } from '../auth/session'
 import { household, membership } from '../db/schema'
-import { newId } from '../../shared/ids'
 import type { DB } from '../db/client'
 
 function caller(db: DB, opts: { role?: string; userId?: string; sessionToken?: string } = {}) {

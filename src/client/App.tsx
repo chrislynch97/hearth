@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router-dom'
 import { trpc } from './trpc'
 import { ConnectionError } from './ErrorState'
 import { LoginGate } from './LoginGate'
+import { AcceptInvite } from './AcceptInvite'
 import { SetupWizard } from './setup/SetupWizard'
 import { AppLayout } from './layout/AppLayout'
 import { HomePage } from './pages/HomePage'
@@ -23,6 +24,13 @@ import { ImportPage } from './pages/ImportPage'
 
 export function App() {
   const authStatus = trpc.auth.status.useQuery()
+
+  // Invite acceptance happens before any auth gate — an invitee has no account
+  // yet. `/invite/<token>` is handled here rather than via the router (which
+  // only mounts once authenticated).
+  if (window.location.pathname.startsWith('/invite/')) {
+    return <AcceptInvite token={decodeURIComponent(window.location.pathname.slice('/invite/'.length))} />
+  }
 
   if (authStatus.isLoading) {
     return (
