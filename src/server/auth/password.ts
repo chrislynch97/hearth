@@ -1,13 +1,9 @@
-/** Shared-password hashing + stateless session tokens.
- *
- * Uses Node's built-in scrypt (no native dependency). This is a single
- * household-level password (spec §3/§5.7), not per-user accounts. The session
- * token is a keyed HMAC of the stored hash, so it needs no server-side session
- * store and is invalidated automatically whenever the password changes. */
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+/** Password hashing with Node's built-in scrypt (no native dependency). Used
+ *  for the per-user account password. Sessions live in the `session` table
+ *  (see ../auth/session), not in a token derived from the hash. */
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 
 const SCRYPT_KEYLEN = 64
-const SESSION_LABEL = 'hearth-session-v1'
 
 /** Hash a plaintext password as `scrypt:<saltHex>:<hashHex>`. */
 export function hashPassword(plain: string): string {
@@ -25,19 +21,4 @@ export function verifyPassword(plain: string, stored: string): boolean {
   if (expected.length === 0) return false
   const actual = scryptSync(plain, salt, expected.length)
   return actual.length === expected.length && timingSafeEqual(actual, expected)
-}
-
-/** The session cookie value for a given stored hash. Deterministic, and changes
- *  with the hash (so rotating the password logs everyone out). */
-export function deriveSessionToken(storedHash: string): string {
-  return createHmac('sha256', storedHash).update(SESSION_LABEL).digest('hex')
-}
-
-/** Timing-safe check that a cookie token matches the current password hash. */
-export function isValidSessionToken(token: string | undefined, storedHash: string): boolean {
-  if (!token) return false
-  const expected = deriveSessionToken(storedHash)
-  const a = Buffer.from(token)
-  const b = Buffer.from(expected)
-  return a.length === b.length && timingSafeEqual(a, b)
 }

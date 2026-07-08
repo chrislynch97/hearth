@@ -5,7 +5,6 @@ import type { FastifyTRPCPluginOptions } from '@trpc/server/adapters/fastify'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { existsSync } from 'node:fs'
-import { eq } from 'drizzle-orm'
 import { appRouter } from './trpc/router'
 import type { AppRouter } from './trpc/router'
 import { createContext } from './trpc/context'
@@ -13,9 +12,8 @@ import { runMigrations } from './db/migrate'
 import { ensureSeed } from './db/seed'
 import { db } from './db/client'
 import { startBackupScheduler } from './backup/runner'
-import { household } from './db/schema'
 import { parseSessionCookie } from './auth/cookies'
-import { isValidSessionToken } from './auth/password'
+import { getOwnerUser, getValidSession } from './auth/session'
 
 // tRPC procedures reachable without authentication (so a locked instance can
 // still show the login screen and accept a login).
@@ -86,19 +84,21 @@ async function main() {
   // check target.
   app.get('/health', async () => ({ status: 'ok' }))
 
-  // Shared-password gate: when a password is set, block every tRPC call except
-  // the auth endpoints unless the request carries a valid session cookie.
+  // Auth gate: when the owner account has a password, block every tRPC call
+  // except the auth endpoints unless the request carries a valid session cookie.
+  // No password (or not yet provisioned) = an open instance; everything passes.
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/trpc/')) return
-    const [hh] = await db.select().from(household).where(eq(household.id, 'household'))
-    if (!hh?.passwordHash) return
+    const owner = await getOwnerUser(db)
+    if (!owner?.passwordHash) return
 
     const path = req.url.slice('/trpc/'.length).split('?')[0] ?? ''
     const procedures = path.split(',').map((p) => decodeURIComponent(p))
     if (procedures.length > 0 && procedures.every((p) => PUBLIC_PROCEDURES.has(p))) return
 
     const token = parseSessionCookie(req.headers.cookie)
-    if (isValidSessionToken(token, hh.passwordHash)) return
+    const session = await getValidSession(db, token)
+    if (session && session.userId === owner.id) return
 
     return reply.code(401).send({ error: 'Authentication required' })
   })
