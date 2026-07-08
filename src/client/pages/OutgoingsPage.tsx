@@ -411,7 +411,7 @@ export function OutgoingsPage() {
         <div>
           <Title order={2}>Bills</Title>
           <Text size="sm" c="dimmed">
-            Recurring payments that get spent and reconciled. To set money aside into a pot, use Set aside.
+            Recurring payments that get spent and reconciled. To set money aside into a pot, use its monthly contribution on the Pots page.
           </Text>
         </div>
         <Button onClick={openAdd}>Add bill</Button>
@@ -444,6 +444,7 @@ export function OutgoingsPage() {
                   {formatMoney(groupMonthly(g.bills), money)}/mo
                 </Text>
               </Group>
+              <Divider />
               {g.sections.map((section) => (
                 <Stack key={section.catId ?? 'none'} gap={4}>
                   <Text size="xs" fw={700} c="dimmed" tt="uppercase">

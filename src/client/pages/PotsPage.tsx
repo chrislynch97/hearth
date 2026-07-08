@@ -368,12 +368,17 @@ function PotRow({ pot, members, categories, unused, setAsides, money }: PotRowPr
   )
 }
 
-interface AddPotFormProps {
+function PotFormModal({
+  opened,
+  onClose,
+  members,
+  categories,
+}: {
+  opened: boolean
+  onClose: () => void
   members: Member[]
   categories: Category[]
-}
-
-function AddPotForm({ members, categories }: AddPotFormProps) {
+}) {
   const utils = trpc.useUtils()
   const create = trpc.pots.create.useMutation()
 
@@ -383,19 +388,13 @@ function AddPotForm({ members, categories }: AddPotFormProps) {
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
 
-  const memberOptions = members.map((m) => ({ value: m.id, label: m.displayName }))
+  const memberOptions = orderMembers(members).map((m) => ({ value: m.id, label: m.displayName }))
   const categoryOptions = categories.map((c) => ({ value: c.id, label: c.name }))
 
   async function handleAdd() {
     const trimmed = name.trim()
-    if (!trimmed) {
-      setError('Please enter a pot name.')
-      return
-    }
-    if (!ownerId) {
-      setError('Please choose an owner.')
-      return
-    }
+    if (!trimmed) return setError('Please enter a pot name.')
+    if (!ownerId) return setError('Please choose an owner.')
     setError('')
     await create.mutateAsync({
       name: trimmed,
@@ -404,62 +403,71 @@ function AddPotForm({ members, categories }: AddPotFormProps) {
       note: note.trim() || undefined,
     })
     await utils.pots.list.invalidate()
-    setName('')
-    setCategoryId(null)
-    setNote('')
+    onClose()
   }
 
   return (
-    <Stack gap="sm">
-      <Divider label="Add a pot" labelPosition="left" />
-      <Group grow align="flex-end">
-        <TextInput
-          label="Name"
-          placeholder="e.g. Holiday fund"
-          value={name}
-          onChange={(e) => {
-            setName(e.currentTarget.value)
-            setError('')
-          }}
-        />
-        <Select
-          label="Owner"
-          placeholder="Choose owner"
-          data={memberOptions}
-          value={ownerId}
-          onChange={(v) => {
-            setOwnerId(v)
-            setError('')
-          }}
-        />
-        <Select
-          label="Category"
-          placeholder="Uncategorised"
-          data={categoryOptions}
-          value={categoryId}
-          onChange={setCategoryId}
-          searchable
-          clearable
-        />
-      </Group>
-      <Group align="flex-end" justify="space-between">
-        <TextInput
-          label="Note (optional)"
-          placeholder="Optional note"
-          value={note}
-          onChange={(e) => setNote(e.currentTarget.value)}
-          style={{ flex: 1 }}
-        />
-        <Button onClick={() => void handleAdd()} loading={create.isPending} ml="md">
-          Add pot
-        </Button>
-      </Group>
-      {(error || create.error) && (
-        <Alert color="red" title="Error">
-          {error || create.error?.message}
-        </Alert>
-      )}
-    </Stack>
+    <Modal opened={opened} onClose={onClose} title="Add pot" size="md">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          void handleAdd()
+        }}
+      >
+        <Stack gap="sm">
+          <TextInput
+            label="Name"
+            placeholder="e.g. Holiday fund"
+            value={name}
+            onChange={(e) => {
+              setName(e.currentTarget.value)
+              setError('')
+            }}
+            autoFocus
+          />
+          <Group grow>
+            <Select
+              label="Owner"
+              placeholder="Choose owner"
+              data={memberOptions}
+              value={ownerId}
+              onChange={(v) => {
+                setOwnerId(v)
+                setError('')
+              }}
+            />
+            <Select
+              label="Category"
+              placeholder="Uncategorised"
+              data={categoryOptions}
+              value={categoryId}
+              onChange={setCategoryId}
+              searchable
+              clearable
+            />
+          </Group>
+          <TextInput
+            label="Note (optional)"
+            placeholder="Optional note"
+            value={note}
+            onChange={(e) => setNote(e.currentTarget.value)}
+          />
+          {(error || create.error) && (
+            <Alert color="red" title="Error">
+              {error || create.error?.message}
+            </Alert>
+          )}
+          <Group justify="flex-end">
+            <Button type="button" variant="default" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={create.isPending}>
+              Add pot
+            </Button>
+          </Group>
+        </Stack>
+      </form>
+    </Modal>
   )
 }
 
@@ -528,15 +536,26 @@ function PotsPanel({
         const ownerPots = pots.filter((p) => p.ownerId === owner.id)
         if (ownerPots.length === 0) return null
         const sections = potsByCategory(ownerPots)
+        const ownerMonthly = roundMinor(
+          ownerPots.reduce((acc, p) => acc + contributionMonthly(setAsidesByPot.get(p.id) ?? []), 0),
+        )
         return (
           <Card key={owner.id} withBorder padding="md">
             <Stack gap="sm">
-              <Group gap="xs">
-                <Title order={4}>{owner.displayName}</Title>
-                <Badge size="sm" variant="light" color={owner.color ?? 'gray'}>
-                  {owner.kind === 'joint' ? 'joint' : 'personal'}
-                </Badge>
+              <Group justify="space-between">
+                <Group gap="xs">
+                  <Title order={4}>{owner.displayName}</Title>
+                  <Badge size="sm" variant="light" color={owner.color ?? 'gray'}>
+                    {owner.kind === 'joint' ? 'joint' : 'personal'}
+                  </Badge>
+                </Group>
+                {ownerMonthly > 0 && (
+                  <Text size="sm" c="dimmed">
+                    {formatMoney(ownerMonthly, money)}/mo in
+                  </Text>
+                )}
               </Group>
+              <Divider />
               {sections.map((section) => (
                 <Stack key={section.catId ?? 'none'} gap={4}>
                   <Text size="xs" fw={700} c="dimmed" tt="uppercase">
@@ -561,10 +580,6 @@ function PotsPanel({
           </Card>
         )
       })}
-
-      <Card withBorder padding="md">
-        <AddPotForm members={members} categories={categories} />
-      </Card>
     </Stack>
   )
 }
@@ -601,9 +616,19 @@ export function PotsPage() {
   }
   for (const arr of setAsidesByPot.values()) arr.sort((a, b) => a.sortOrder - b.sortOrder)
 
+  const [formOpened, setFormOpened] = useState(false)
+
   return (
     <Stack gap="lg" maw={900} mx="auto">
-      <Title order={2}>Pots</Title>
+      <Group justify="space-between">
+        <div>
+          <Title order={2}>Pots</Title>
+          <Text size="sm" c="dimmed">
+            Buckets you split your money into. Each pot's monthly contribution is set here.
+          </Text>
+        </div>
+        <Button onClick={() => setFormOpened(true)}>Add pot</Button>
+      </Group>
       <PotsPanel
         pots={pots}
         categories={categories}
@@ -614,6 +639,7 @@ export function PotsPage() {
         setAsidesByPot={setAsidesByPot}
         money={money}
       />
+      {formOpened && <PotFormModal opened={formOpened} onClose={() => setFormOpened(false)} members={members} categories={categories} />}
     </Stack>
   )
 }

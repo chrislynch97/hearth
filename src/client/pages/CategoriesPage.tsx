@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   Center,
-  Divider,
   Group,
   Loader,
   Modal,
@@ -111,32 +110,71 @@ function CategoryRow({ category }: { category: Category }) {
   )
 }
 
-export function CategoriesPage() {
+function CategoryFormModal({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const utils = trpc.useUtils()
-  const categoriesQuery = trpc.categories.list.useQuery()
-  const categories = categoriesQuery.data ?? []
-  const [newName, setNewName] = useState('')
-  const [addError, setAddError] = useState('')
   const create = trpc.categories.create.useMutation()
+  const [name, setName] = useState('')
+  const [error, setError] = useState('')
 
   async function handleAdd() {
-    const trimmed = newName.trim()
-    if (!trimmed) {
-      setAddError('Please enter a name.')
-      return
-    }
-    setAddError('')
+    const trimmed = name.trim()
+    if (!trimmed) return setError('Please enter a name.')
+    setError('')
     await create.mutateAsync({ name: trimmed })
     await utils.categories.list.invalidate()
-    setNewName('')
+    onClose()
   }
 
   return (
+    <Modal opened={opened} onClose={onClose} title="Add category" size="sm">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          void handleAdd()
+        }}
+      >
+        <Stack gap="sm">
+          <TextInput
+            label="Name"
+            placeholder="e.g. Household"
+            value={name}
+            onChange={(e) => {
+              setName(e.currentTarget.value)
+              setError('')
+            }}
+            error={error || (create.error?.message ?? undefined)}
+            autoFocus
+          />
+          <Group justify="flex-end">
+            <Button type="button" variant="default" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={create.isPending}>
+              Add category
+            </Button>
+          </Group>
+        </Stack>
+      </form>
+    </Modal>
+  )
+}
+
+export function CategoriesPage() {
+  const categoriesQuery = trpc.categories.list.useQuery()
+  const categories = categoriesQuery.data ?? []
+  const [formOpened, setFormOpened] = useState(false)
+
+  return (
     <Stack gap="lg" maw={700} mx="auto">
-      <Title order={2}>Categories</Title>
-      <Text size="sm" c="dimmed">
-        Categories group your pots and bills across the household (e.g. Housing, Food, Subscriptions).
-      </Text>
+      <Group justify="space-between">
+        <div>
+          <Title order={2}>Categories</Title>
+          <Text size="sm" c="dimmed">
+            Categories group your pots and bills across the household (e.g. Housing, Food, Subscriptions).
+          </Text>
+        </div>
+        <Button onClick={() => setFormOpened(true)}>Add category</Button>
+      </Group>
       <Card withBorder padding="md">
         <Stack gap="sm">
           {categoriesQuery.isLoading && (
@@ -146,7 +184,7 @@ export function CategoriesPage() {
           )}
           {!categoriesQuery.isLoading && categories.length === 0 && (
             <Text size="sm" c="dimmed">
-              No categories yet — add one below.
+              No categories yet — add one to get started.
             </Text>
           )}
           <Stack gap={2}>
@@ -154,28 +192,9 @@ export function CategoriesPage() {
               <CategoryRow key={c.id} category={c} />
             ))}
           </Stack>
-          <Divider />
-          <Group gap="sm" align="flex-end">
-            <TextInput
-              label="Add category"
-              placeholder="e.g. Household"
-              value={newName}
-              onChange={(e) => {
-                setNewName(e.currentTarget.value)
-                setAddError('')
-              }}
-              error={addError || (create.error?.message ?? undefined)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void handleAdd()
-              }}
-              style={{ flex: 1 }}
-            />
-            <Button onClick={() => void handleAdd()} loading={create.isPending}>
-              Add
-            </Button>
-          </Group>
         </Stack>
       </Card>
+      {formOpened && <CategoryFormModal opened={formOpened} onClose={() => setFormOpened(false)} />}
     </Stack>
   )
 }
