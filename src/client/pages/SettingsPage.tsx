@@ -1248,13 +1248,14 @@ function HouseholdAccessSection() {
   const role = me.data?.role ?? null
   const isAdmin = role === 'admin' || role === 'owner'
   const isOwner = role === 'owner'
+  const isInstanceOwner = me.data?.isInstanceOwner ?? false
   const memberships = me.data?.memberships ?? []
 
   const invites = trpc.invitations.list.useQuery(undefined, { enabled: isAdmin })
   const createInvite = trpc.invitations.create.useMutation()
   const revoke = trpc.invitations.revoke.useMutation()
 
-  const regOpen = trpc.auth.registrationOpen.useQuery(undefined, { enabled: isOwner })
+  const regOpen = trpc.auth.registrationOpen.useQuery(undefined, { enabled: isInstanceOwner })
   const setRegOpen = trpc.auth.setRegistrationOpen.useMutation()
 
   const [inviteRole, setInviteRole] = useState('member')
@@ -1305,7 +1306,7 @@ function HouseholdAccessSection() {
           />
         )}
 
-        {isOwner && (
+        {isInstanceOwner && (
           <Switch
             label="Allow anyone to register"
             description="Instance-wide: when on, the sign-in screen lets new people create their own account and household. Leave off to stay invite-only."

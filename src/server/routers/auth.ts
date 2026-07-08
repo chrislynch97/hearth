@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import QRCode from 'qrcode'
 import { router, publicProcedure } from '../trpc/trpc'
-import { assertRole } from '../trpc/tenant'
+import { DEFAULT_HOUSEHOLD_ID } from '../trpc/tenant'
 import { membership, user } from '../db/schema'
 import type { User } from '../db/schema'
 import { getInstanceSettings, setAllowOpenRegistration } from '../db/instanceSettings'
@@ -53,6 +53,27 @@ async function requireCurrentUser(ctx: Context): Promise<User> {
   const u = await currentUser(ctx)
   if (!u) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
   return u
+}
+
+/** Instance-wide settings belong to the self-host operator, i.e. an owner of the
+ *  PRIMARY household — not just any household owner. Without this, a
+ *  self-registered user (owner of their own new household) could flip
+ *  instance-level switches like open registration. */
+async function assertInstanceOwner(ctx: Context): Promise<void> {
+  if (!ctx.userId) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
+  const [grant] = await ctx.db
+    .select()
+    .from(membership)
+    .where(
+      and(
+        eq(membership.userId, ctx.userId),
+        eq(membership.householdId, DEFAULT_HOUSEHOLD_ID),
+        eq(membership.role, 'owner'),
+      ),
+    )
+  if (!grant || grant.acceptedAt === null) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the instance owner can change this.' })
+  }
 }
 
 export const authRouter = router({
@@ -119,12 +140,12 @@ export const authRouter = router({
     return await getInstanceSettings(ctx.db)
   }),
 
-  /** Turn open registration on/off. Instance-wide (self-host: the owner is the
-   *  instance admin), so it's owner-only. */
+  /** Turn open registration on/off. Instance-wide, so restricted to the instance
+   *  owner (an owner of the primary household) — not any household owner. */
   setRegistrationOpen: publicProcedure
     .input(z.object({ open: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
-      assertRole(ctx.role, 'owner')
+      await assertInstanceOwner(ctx)
       await setAllowOpenRegistration(ctx.db, input.open)
       return { allowOpenRegistration: input.open }
     }),

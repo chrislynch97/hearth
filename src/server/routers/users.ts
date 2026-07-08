@@ -3,7 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { household, member, membership, session, user } from '../db/schema'
-import { scopeWhere } from '../trpc/tenant'
+import { DEFAULT_HOUSEHOLD_ID, scopeWhere } from '../trpc/tenant'
 import { getUser, getUserByUsername, getValidSession } from '../auth/session'
 
 export const usersRouter = router({
@@ -37,6 +37,11 @@ export const usersRouter = router({
       email: u.email,
       activeHouseholdId: ctx.householdId,
       role: ctx.role ?? null,
+      // Instance operator = an owner of the primary household. Gates instance-wide
+      // controls (e.g. open registration) in the UI; the server re-checks.
+      isInstanceOwner: grants.some(
+        (g) => g.householdId === DEFAULT_HOUSEHOLD_ID && g.role === 'owner',
+      ),
       linkedMemberId: linked?.id ?? null,
       linkedMemberName: linked?.displayName ?? null,
       memberships: grants.map((g) => ({

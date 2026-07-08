@@ -22,24 +22,44 @@ function caller(db: DB, opts: { role?: string; userId?: string } = {}) {
 const REG = { username: 'nadia', displayName: 'Nadia', password: 'strong-new-pw-1', householdName: 'Nadia Home' }
 
 describe('open registration', () => {
-  it('is closed by default; only an owner can open it', async () => {
+  it('is closed by default; only the instance owner can open it', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
+    const owner = await getUserByUsername(db, 'owner')
 
     expect((await caller(db).c.auth.registrationOpen()).allowOpenRegistration).toBe(false)
     await expect(caller(db).c.auth.register(REG)).rejects.toMatchObject({ code: 'FORBIDDEN' })
 
-    await expect(caller(db, { role: 'member' }).c.auth.setRegistrationOpen({ open: true })).rejects.toMatchObject({
+    // No identity → can't toggle.
+    await expect(caller(db).c.auth.setRegistrationOpen({ open: true })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+    // The primary-household owner can.
+    await caller(db, { userId: owner!.id }).c.auth.setRegistrationOpen({ open: true })
+    expect((await caller(db).c.auth.registrationOpen()).allowOpenRegistration).toBe(true)
+  })
+
+  it('a self-registered owner cannot flip the instance-wide toggle', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getUserByUsername(db, 'owner')
+    await caller(db, { userId: owner!.id }).c.auth.setRegistrationOpen({ open: true })
+
+    // Register Nadia — she becomes owner of her OWN household…
+    await caller(db).c.auth.register(REG)
+    const nadia = await getUserByUsername(db, 'nadia')
+    // …which must NOT let her control instance-wide registration.
+    await expect(caller(db, { userId: nadia!.id }).c.auth.setRegistrationOpen({ open: false })).rejects.toMatchObject({
       code: 'FORBIDDEN',
     })
-    await caller(db, { role: 'owner' }).c.auth.setRegistrationOpen({ open: true })
     expect((await caller(db).c.auth.registrationOpen()).allowOpenRegistration).toBe(true)
   })
 
   it('creates a new owner + their own household, and logs them in', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    await caller(db, { role: 'owner' }).c.auth.setRegistrationOpen({ open: true })
+    const primaryOwner = await getUserByUsername(db, 'owner')
+    await caller(db, { userId: primaryOwner!.id }).c.auth.setRegistrationOpen({ open: true })
 
     const reg = caller(db)
     expect(await reg.c.auth.register(REG)).toEqual({ ok: true })
