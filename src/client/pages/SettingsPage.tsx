@@ -1407,6 +1407,10 @@ function HouseholdAccessSection() {
 // ---------------------------------------------------------------------------
 
 export function SettingsPage() {
+  // Whole-instance data tools (export/import/reset + row stats) belong to the
+  // self-host operator; hide them from tenant owners on a multi-household instance.
+  const me = trpc.users.me.useQuery()
+  const isInstanceOwner = me.data?.isInstanceOwner ?? false
   return (
     <Stack gap="lg" maw={760} mx="auto">
       <Title order={2}>Settings</Title>
@@ -1416,8 +1420,8 @@ export function SettingsPage() {
       <HouseholdAccessSection />
       <SecuritySection />
       <MfaSection />
-      <DataSection />
-      <AboutSection />
+      {isInstanceOwner && <DataSection />}
+      {isInstanceOwner && <AboutSection />}
     </Stack>
   )
 }

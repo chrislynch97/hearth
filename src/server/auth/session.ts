@@ -4,6 +4,7 @@
  *  identity and be revoked (logout, password change, "sign out everywhere"). */
 import { randomBytes } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
+import { TRPCError } from '@trpc/server'
 import type { DB } from '../db/client'
 import { membership, session, user } from '../db/schema'
 import type { Session, User } from '../db/schema'
@@ -57,6 +58,32 @@ export async function getOwnerUser(db: DB): Promise<User | null> {
 export async function getUser(db: DB, userId: string): Promise<User | null> {
   const [u] = await db.select().from(user).where(eq(user.id, userId))
   return u ?? null
+}
+
+/** True if the user is an owner of the PRIMARY household — the self-host operator
+ *  who controls instance-wide actions (full-instance export / import / reset,
+ *  open registration), as opposed to an owner of some other household. */
+export async function isInstanceOwner(db: DB, userId: string | undefined): Promise<boolean> {
+  if (!userId) return false
+  const [grant] = await db
+    .select()
+    .from(membership)
+    .where(
+      and(
+        eq(membership.userId, userId),
+        eq(membership.householdId, DEFAULT_HOUSEHOLD_ID),
+        eq(membership.role, 'owner'),
+      ),
+    )
+  return !!grant && grant.acceptedAt !== null
+}
+
+/** Throw unless the caller is the instance owner (see isInstanceOwner). */
+export async function assertInstanceOwner(db: DB, userId: string | undefined): Promise<void> {
+  if (!userId) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
+  if (!(await isInstanceOwner(db, userId))) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the instance owner can do this.' })
+  }
 }
 
 export async function getUserByUsername(db: DB, username: string): Promise<User | null> {

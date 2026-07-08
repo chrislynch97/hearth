@@ -3,7 +3,7 @@ import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
 import { appRouter } from '../trpc/router'
 import { getOwnerUser } from '../auth/session'
-import { membership, session, user } from '../db/schema'
+import { household, membership, session, user } from '../db/schema'
 import { hashPassword } from '../auth/password'
 import { newId } from '../../shared/ids'
 import type { DB } from '../db/client'
@@ -157,5 +157,27 @@ describe('access.resetPassword', () => {
     await expect(
       caller(db, { role: 'admin' }).c.access.resetPassword({ userId: ada, newPassword: 'brand-new-strong-pw' }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+  })
+
+  it('refuses to reset a user who also belongs to another household', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const carol = await addMember(db, 'carol', 'member') // member of the primary household
+    // …and also a member (owner) of a second household.
+    const now = Date.now()
+    await db.insert(household).values({ id: 'h2', createdAt: now, updatedAt: now })
+    await db.insert(membership).values({
+      id: newId(),
+      userId: carol,
+      householdId: 'h2',
+      role: 'owner',
+      acceptedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    await expect(
+      caller(db, { role: 'owner' }).c.access.resetPassword({ userId: carol, newPassword: 'brand-new-strong-pw' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
 })

@@ -137,6 +137,20 @@ export const accessRouter = router({
       if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'No such member.' })
       assertCanManage(ctx.role, target.role)
 
+      // A reset lets the resetter choose (and thus learn) the new password. That's
+      // fine for someone who only belongs here, but if they're also a member/owner
+      // of another household it would hand this admin the keys to that household.
+      // Refuse — a multi-household user must reset their own password.
+      const theirMemberships = (
+        await ctx.db.select().from(membership).where(eq(membership.userId, input.userId))
+      ).filter((g) => g.acceptedAt !== null)
+      if (theirMemberships.length > 1) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'This person belongs to other households, so they must reset their own password.',
+        })
+      }
+
       const weak = validatePassword(input.newPassword)
       if (weak) throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
 

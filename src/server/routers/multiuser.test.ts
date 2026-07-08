@@ -31,18 +31,19 @@ describe('role enforcement', () => {
     await expect(owner.c.categories.create({ name: 'Yes' })).resolves.toBeTruthy()
   })
 
-  it('household settings and reset are gated by role', async () => {
+  it('household settings are gated by role; whole-instance reset needs the instance owner', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
 
     const member = caller(db, { role: 'member' })
     await expect(member.c.household.update({ displayName: 'X' })).rejects.toMatchObject({ code: 'FORBIDDEN' })
-    await expect(member.c.data.reset()).rejects.toMatchObject({ code: 'FORBIDDEN' })
 
     const admin = caller(db, { role: 'admin' })
     await expect(admin.c.household.update({ displayName: 'Renamed' })).resolves.toBeTruthy()
-    // reset is owner-only, so admin still can't.
-    await expect(admin.c.data.reset()).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    // data.reset is whole-instance, so even an admin can't — only the instance
+    // owner can (exercised in data.test.ts). Here the admin has no userId, so the
+    // instance-owner check rejects them.
+    await expect(admin.c.data.reset()).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   })
 })
 

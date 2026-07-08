@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
-import { assertRole } from '../trpc/tenant'
+import { assertInstanceOwner } from '../auth/session'
 import { household } from '../db/schema'
 import { ALL_TABLES, MONEY_COLUMNS } from '../db/tables'
 import { ensureSeed } from '../db/seed'
@@ -15,9 +15,12 @@ import type { DB } from '../db/client'
 const INSERT_CHUNK = 200
 
 // NOTE: export / import / reset / stats and the on-disk backup are instance-wide
-// (they operate over every table, all households). That's the self-host backup
-// contract today. Per-household export/reset is a Phase B concern once more than
-// one household can share a database.
+// (they operate over every table, ALL households) — the self-host backup
+// contract. Because they cross household boundaries they're restricted to the
+// INSTANCE OWNER (owner of the primary household), not just any household owner:
+// otherwise a self-registered tenant owner could read or wipe everyone's data.
+// Per-household export/reset is a Phase D concern once hosting makes tenants
+// mutually untrusted.
 
 // drizzle's dynamic-table typing is intentionally strict; these thin casts let us
 // iterate the table registry generically for whole-database operations.
@@ -36,6 +39,7 @@ async function runBatch(db: DB, statements: BatchStatement[]): Promise<void> {
 export const dataRouter = router({
   /** The portability contract: every table's rows as JSON. */
   export: publicProcedure.query(async ({ ctx }) => {
+    await assertInstanceOwner(ctx.db, ctx.userId)
     return buildSnapshot(ctx.db)
   }),
 
@@ -48,6 +52,7 @@ export const dataRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await assertInstanceOwner(ctx.db, ctx.userId)
       if (input.version !== EXPORT_VERSION) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: `Unsupported export version ${input.version}` })
       }
@@ -76,7 +81,7 @@ export const dataRouter = router({
 
   /** Wipe everything and re-seed a blank household (returns to the setup wizard). */
   reset: publicProcedure.mutation(async ({ ctx }) => {
-    assertRole(ctx.role, 'owner')
+    await assertInstanceOwner(ctx.db, ctx.userId)
     const statements = [...ALL_TABLES]
       .reverse()
       .map(([, table]) => ctx.db.delete(table as SQLiteTable))
@@ -138,11 +143,13 @@ export const dataRouter = router({
 
   /** Write a JSON backup to disk now (the auto-backup, triggered manually). */
   backupNow: publicProcedure.mutation(async ({ ctx }) => {
+    await assertInstanceOwner(ctx.db, ctx.userId)
     return runBackup(ctx.db)
   }),
 
   /** Row counts per table + the database location, for the About screen. */
   stats: publicProcedure.query(async ({ ctx }) => {
+    await assertInstanceOwner(ctx.db, ctx.userId)
     const counts: Record<string, number> = {}
     for (const [name, table] of ALL_TABLES) {
       const rows = await ctx.db.select().from(table as SQLiteTable)

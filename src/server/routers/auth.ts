@@ -1,9 +1,8 @@
 import { z } from 'zod'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import QRCode from 'qrcode'
 import { router, publicProcedure } from '../trpc/trpc'
-import { DEFAULT_HOUSEHOLD_ID } from '../trpc/tenant'
 import { membership, user } from '../db/schema'
 import type { User } from '../db/schema'
 import { getInstanceSettings, setAllowOpenRegistration } from '../db/instanceSettings'
@@ -11,6 +10,7 @@ import { provisionHousehold } from '../db/seed'
 import { newId } from '../../shared/ids'
 import { hashPassword, verifyPassword } from '../auth/password'
 import {
+  assertInstanceOwner,
   createSession,
   defaultHouseholdFor,
   deleteSession,
@@ -40,6 +40,14 @@ const loginLimiter = new RateLimiter({
   blockMs: 15 * 60 * 1000,
 })
 
+// Throttle self-registration so an open instance can't be spammed into creating
+// unbounded accounts + households: 10 per hour per client, then a 1-hour block.
+const registerLimiter = new RateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxAttempts: 10,
+  blockMs: 60 * 60 * 1000,
+})
+
 /** The user this request acts as: the session's user, or — on an open
  *  (password-less) instance — the owner. Null when locked with no valid session. */
 async function currentUser(ctx: Context): Promise<User | null> {
@@ -53,27 +61,6 @@ async function requireCurrentUser(ctx: Context): Promise<User> {
   const u = await currentUser(ctx)
   if (!u) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
   return u
-}
-
-/** Instance-wide settings belong to the self-host operator, i.e. an owner of the
- *  PRIMARY household — not just any household owner. Without this, a
- *  self-registered user (owner of their own new household) could flip
- *  instance-level switches like open registration. */
-async function assertInstanceOwner(ctx: Context): Promise<void> {
-  if (!ctx.userId) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
-  const [grant] = await ctx.db
-    .select()
-    .from(membership)
-    .where(
-      and(
-        eq(membership.userId, ctx.userId),
-        eq(membership.householdId, DEFAULT_HOUSEHOLD_ID),
-        eq(membership.role, 'owner'),
-      ),
-    )
-  if (!grant || grant.acceptedAt === null) {
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the instance owner can change this.' })
-  }
 }
 
 export const authRouter = router({
@@ -145,7 +132,7 @@ export const authRouter = router({
   setRegistrationOpen: publicProcedure
     .input(z.object({ open: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
-      await assertInstanceOwner(ctx)
+      await assertInstanceOwner(ctx.db, ctx.userId)
       await setAllowOpenRegistration(ctx.db, input.open)
       return { allowOpenRegistration: input.open }
     }),
@@ -166,13 +153,19 @@ export const authRouter = router({
       if (!allowOpenRegistration) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Registration is closed on this instance.' })
       }
+
+      const key = ctx.clientKey ?? 'unknown'
+      const now = Date.now()
+      if (!registerLimiter.check(key, now).allowed) {
+        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many sign-ups from here. Try again later.' })
+      }
+
       const weak = validatePassword(input.password)
       if (weak) throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
       if (await getUserByUsername(ctx.db, input.username.trim())) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'That username is taken.' })
       }
 
-      const now = Date.now()
       const householdId = await provisionHousehold(ctx.db, { displayName: input.householdName })
       const userId = newId()
       await ctx.db.insert(user).values({
@@ -194,6 +187,7 @@ export const authRouter = router({
         updatedAt: now,
       })
 
+      registerLimiter.fail(key, now) // count this sign-up toward the per-client cap
       ctx.setSessionCookie?.(await createSession(ctx.db, userId, householdId))
       return { ok: true as const }
     }),
