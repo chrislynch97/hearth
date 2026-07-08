@@ -439,7 +439,11 @@ export function HomePage() {
   const summaryQuery = trpc.dashboard.summary.useQuery(periodStart ? { periodStart } : undefined)
   const accountsSummary = trpc.accounts.summary.useQuery()
 
+  const me = trpc.users.me.useQuery()
+  // Greet the person: their linked budgeting member, else their account name,
+  // falling back to the household name (e.g. an open instance with no account).
   const householdName = ctx.data?.household?.displayName
+  const greetingName = me.data?.linkedMemberName || me.data?.displayName || householdName
   const summary = summaryQuery.data
 
   function shift(delta: number) {
@@ -470,7 +474,7 @@ export function HomePage() {
       <Group justify="space-between" align="center">
         <Title order={2}>
           {getGreeting()}
-          {householdName ? `, ${householdName}` : ''}
+          {greetingName ? `, ${greetingName}` : ''}
         </Title>
         <Button component={Link} to="/spending">
           + Quick add

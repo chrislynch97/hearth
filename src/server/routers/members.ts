@@ -2,8 +2,8 @@ import { z } from 'zod'
 import { eq, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
-import { scopeWhere } from '../trpc/tenant'
-import { member } from '../db/schema'
+import { assertRole, scopeWhere } from '../trpc/tenant'
+import { member, membership } from '../db/schema'
 import { newId } from '../../shared/ids'
 
 export const membersRouter = router({
@@ -90,6 +90,43 @@ export const membersRouter = router({
       }
 
       return updated
+    }),
+
+  /** Link a budgeting member to a user account (or clear it with userId: null).
+   *  The mapping is one-to-one within a household: linking a user moves it off
+   *  any member it was previously on. Admin+ only. */
+  linkUser: publicProcedure
+    .input(z.object({ memberId: z.string(), userId: z.string().nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      assertRole(ctx.role, 'admin')
+      const now = Date.now()
+
+      const [target] = await ctx.db
+        .select()
+        .from(member)
+        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, input.memberId)))
+      if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' })
+
+      if (input.userId) {
+        const [grant] = await ctx.db
+          .select()
+          .from(membership)
+          .where(scopeWhere(ctx.householdId, membership.householdId, eq(membership.userId, input.userId)))
+        if (!grant || grant.acceptedAt === null) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'That account is not a member of this household.' })
+        }
+        // One user ↔ one member: release the account from any other member first.
+        await ctx.db
+          .update(member)
+          .set({ userId: null, updatedAt: now })
+          .where(scopeWhere(ctx.householdId, member.householdId, eq(member.userId, input.userId)))
+      }
+
+      await ctx.db
+        .update(member)
+        .set({ userId: input.userId, updatedAt: now })
+        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, input.memberId)))
+      return { ok: true as const }
     }),
 
   archive: publicProcedure

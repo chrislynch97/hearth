@@ -254,14 +254,34 @@ function MembersSection() {
   const addPerson = trpc.members.addPerson.useMutation()
   const updateMember = trpc.members.update.useMutation()
   const archive = trpc.members.archive.useMutation()
+  const linkUser = trpc.members.linkUser.useMutation()
+
+  const me = trpc.users.me.useQuery()
+  const isAdmin = me.data?.role === 'admin' || me.data?.role === 'owner'
+  // Accounts to map members onto (admin-only endpoint).
+  const accounts = trpc.access.list.useQuery(undefined, { enabled: isAdmin })
 
   const members = (membersQuery.data ?? []).filter((m) => m.archivedAt === null)
   const [newName, setNewName] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
 
+  const accountOptions = [
+    { value: '', label: '— no account —' },
+    ...(accounts.data ?? []).map((a) => ({ value: a.userId, label: `${a.displayName} (@${a.username})` })),
+  ]
+
   async function refresh() {
-    await Promise.all([utils.members.list.invalidate(), utils.bootstrap.context.invalidate()])
+    await Promise.all([
+      utils.members.list.invalidate(),
+      utils.bootstrap.context.invalidate(),
+      utils.users.me.invalidate(),
+    ])
+  }
+
+  async function handleLink(memberId: string, userId: string) {
+    await linkUser.mutateAsync({ memberId, userId: userId || null })
+    await refresh()
   }
 
   async function handleAdd() {
@@ -286,7 +306,8 @@ function MembersSection() {
       </Title>
       <Stack gap={4}>
         {members.map((m) => (
-          <Group key={m.id} justify="space-between" px="xs" py={4}>
+          <div key={m.id}>
+          <Group justify="space-between" px="xs" py={4}>
             {editingId === m.id ? (
               <Group gap="xs" style={{ flex: 1 }}>
                 <TextInput
@@ -342,6 +363,23 @@ function MembersSection() {
               </>
             )}
           </Group>
+          {isAdmin && m.kind === 'person' && editingId !== m.id && (
+            <Group gap="xs" px="xs" pb={6} wrap="nowrap">
+              <Text size="xs" c="dimmed" w={58} style={{ flexShrink: 0 }}>
+                Account
+              </Text>
+              <Select
+                size="xs"
+                data={accountOptions}
+                value={m.userId ?? ''}
+                allowDeselect={false}
+                placeholder="— no account —"
+                onChange={(v) => void handleLink(m.id, v ?? '')}
+                style={{ flex: 1, maxWidth: 260 }}
+              />
+            </Group>
+          )}
+          </div>
         ))}
       </Stack>
       <Divider my="sm" />

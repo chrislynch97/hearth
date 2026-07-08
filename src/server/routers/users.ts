@@ -2,7 +2,8 @@ import { z } from 'zod'
 import { and, eq, inArray } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
-import { household, membership, session, user } from '../db/schema'
+import { household, member, membership, session, user } from '../db/schema'
+import { scopeWhere } from '../trpc/tenant'
 import { getUser, getUserByUsername, getValidSession } from '../auth/session'
 
 export const usersRouter = router({
@@ -22,6 +23,13 @@ export const usersRouter = router({
       : []
     const nameById = new Map(households.map((h) => [h.id, h.displayName]))
 
+    // The budgeting member this account maps to in the active household, if any —
+    // lets the app greet you by your name and know which participant you are.
+    const [linked] = await ctx.db
+      .select()
+      .from(member)
+      .where(scopeWhere(ctx.householdId, member.householdId, eq(member.userId, u.id)))
+
     return {
       id: u.id,
       username: u.username,
@@ -29,6 +37,8 @@ export const usersRouter = router({
       email: u.email,
       activeHouseholdId: ctx.householdId,
       role: ctx.role ?? null,
+      linkedMemberId: linked?.id ?? null,
+      linkedMemberName: linked?.displayName ?? null,
       memberships: grants.map((g) => ({
         householdId: g.householdId,
         householdName: nameById.get(g.householdId) ?? 'Household',
