@@ -16,6 +16,11 @@ ENV DATABASE_URL=file:/data/app.db
 ENV CLIENT_DIR=/app/dist/client
 EXPOSE 8787
 
+# The server exposes GET /health (no DB access) for orchestrators. `node -e`
+# keeps the image dependency-free (node:slim ships no curl/wget).
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://localhost:'+(process.env.PORT||8787)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 # Run node directly (not via `npm run start`) so SIGTERM reaches the process and
 # the graceful-shutdown handler exits cleanly. Pair with `init: true` in
 # docker-compose so a proper PID 1 forwards the signal.

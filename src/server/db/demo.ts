@@ -17,24 +17,7 @@ import { eq } from 'drizzle-orm'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type { DB } from './client'
 import { ALL_TABLES } from './tables'
-import {
-  household,
-  member,
-  category,
-  pot,
-  expense,
-  setAside,
-  reconciliationBatch,
-  importBatch,
-  spendTransaction,
-  incomeSource,
-  payslipComponentType,
-  payslip,
-  payslipLine,
-  raise,
-  account,
-  accountBalance,
-} from './schema'
+import { household } from './schema'
 
 // --- deterministic randomness ---------------------------------------------
 

@@ -21,7 +21,7 @@ import {
 } from '@mantine/core'
 import { AreaChart } from '@mantine/charts'
 import { trpc } from '../trpc'
-import { formatMoney, fromMinor, toMinor } from '../../shared/money'
+import { formatMoney, toMinor } from '../../shared/money'
 import { useMoney, useFormatDate } from '../useMoney'
 import { hearthTokens, chartXAxisProps } from '../theme'
 import type { MoneyFormat } from '../useMoney'

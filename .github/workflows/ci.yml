@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # `npm install` (not `npm ci`): the lockfile is often generated on a
+      # different OS/arch than the Linux runner, and `npm ci` is strict about
+      # that drift (EUSAGE on platform-specific optional deps). Matches the
+      # Dockerfile's reasoning.
+      - run: npm install --no-audit --no-fund
+
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

@@ -42,6 +42,9 @@ async function main() {
   // Raspberry Pi). A stop requested mid-startup then still closes cleanly and
   // exits 0, instead of a hard kill that a container manager reads as a crash and
   // restart-loops.
+  // `let`, not `const`: the shutdown closure below closes over `app` and must be
+  // registered before it's assigned (so a stop mid-startup still exits cleanly).
+  // eslint-disable-next-line prefer-const
   let app: FastifyInstance | undefined
   let closing = false
   const shutdown = async (signal: string) => {
