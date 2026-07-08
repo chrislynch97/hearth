@@ -135,8 +135,8 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
   {
     title: 'Plan',
     items: [
-      { to: '/pots', label: 'Pots' },
       { to: '/categories', label: 'Categories' },
+      { to: '/pots', label: 'Pots' },
       { to: '/outgoings', label: 'Bills' },
       { to: '/funding', label: 'Funding' },
       { to: '/upcoming', label: 'Upcoming' },

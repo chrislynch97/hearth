@@ -292,7 +292,7 @@ function PotFormModal({
               setName(e.currentTarget.value)
               setError('')
             }}
-            autoFocus
+            data-autofocus
           />
           <Group grow>
             <Select

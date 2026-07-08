@@ -143,7 +143,7 @@ function CategoryFormModal({ opened, onClose }: { opened: boolean; onClose: () =
               setError('')
             }}
             error={error || (create.error?.message ?? undefined)}
-            autoFocus
+            data-autofocus
           />
           <Group justify="flex-end">
             <Button type="button" variant="default" onClick={onClose}>

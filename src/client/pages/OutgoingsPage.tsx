@@ -135,7 +135,7 @@ function BillFormModal({ opened, onClose, members, pots, categories, money, expe
   return (
     <Modal opened={opened} onClose={onClose} title={isEditing ? 'Edit bill' : 'Add bill'} size="lg">
       <Stack gap="sm">
-        <TextInput label="Name" placeholder="e.g. Council tax" value={name} onChange={(e) => setName(e.currentTarget.value)} autoFocus />
+        <TextInput label="Name" placeholder="e.g. Council tax" value={name} onChange={(e) => setName(e.currentTarget.value)} data-autofocus />
         <Group grow>
           <NumberInput
             label="Amount"
