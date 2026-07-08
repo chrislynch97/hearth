@@ -1,10 +1,9 @@
 import { z } from 'zod'
-import { eq, and, isNull } from 'drizzle-orm'
+import { eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { household, member } from '../db/schema'
-
-const HOUSEHOLD_ID = 'household'
 
 export const householdRouter = router({
   update: publicProcedure
@@ -37,12 +36,12 @@ export const householdRouter = router({
       await ctx.db
         .update(household)
         .set({ ...input, updatedAt: now })
-        .where(eq(household.id, HOUSEHOLD_ID))
+        .where(eq(household.id, ctx.householdId))
 
       const [updated] = await ctx.db
         .select()
         .from(household)
-        .where(eq(household.id, HOUSEHOLD_ID))
+        .where(eq(household.id, ctx.householdId))
 
       if (!updated) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Household not found' })
@@ -56,7 +55,7 @@ export const householdRouter = router({
     const people = await ctx.db
       .select()
       .from(member)
-      .where(and(eq(member.kind, 'person'), isNull(member.archivedAt)))
+      .where(scopeWhere(ctx.householdId, member.householdId, eq(member.kind, 'person'), isNull(member.archivedAt)))
 
     if (people.length === 0) {
       throw new TRPCError({
@@ -70,12 +69,12 @@ export const householdRouter = router({
     await ctx.db
       .update(household)
       .set({ setupCompletedAt: now, updatedAt: now })
-      .where(eq(household.id, HOUSEHOLD_ID))
+      .where(eq(household.id, ctx.householdId))
 
     const [updated] = await ctx.db
       .select()
       .from(household)
-      .where(eq(household.id, HOUSEHOLD_ID))
+      .where(eq(household.id, ctx.householdId))
 
     if (!updated) {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Household not found' })

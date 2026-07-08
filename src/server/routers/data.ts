@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
@@ -11,12 +11,16 @@ import { buildSnapshot, EXPORT_VERSION } from '../db/snapshot'
 import { runBackup } from '../backup/runner'
 import type { DB } from '../db/client'
 
-const HOUSEHOLD_ID = 'household'
 const INSERT_CHUNK = 200
+
+// NOTE: export / import / reset / stats and the on-disk backup are instance-wide
+// (they operate over every table, all households). That's the self-host backup
+// contract today. Per-household export/reset is a Phase B concern once more than
+// one household can share a database.
 
 // drizzle's dynamic-table typing is intentionally strict; these thin casts let us
 // iterate the table registry generically for whole-database operations.
-type AnyTable = SQLiteTable & { id: unknown }
+type AnyTable = SQLiteTable & { id: unknown; householdId: unknown }
 
 type BatchArg = Parameters<DB['batch']>[0]
 type BatchStatement = BatchArg[number]
@@ -83,18 +87,24 @@ export const dataRouter = router({
   rescaleCurrency: publicProcedure
     .input(z.object({ decimalPlaces: z.number().int().min(0).max(4) }))
     .mutation(async ({ ctx, input }) => {
-      const [hh] = await ctx.db.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
+      const [hh] = await ctx.db.select().from(household).where(eq(household.id, ctx.householdId))
       if (!hh) throw new TRPCError({ code: 'NOT_FOUND', message: 'Household not found' })
 
       const fromDp = hh.currencyDecimalPlaces
       const toDp = input.decimalPlaces
 
-      // Read current values, then apply all changes atomically in one batch.
+      // Read current values, then apply all changes atomically in one batch. Only
+      // this household's rows are rescaled (its own decimal-places setting).
       const statements: BatchStatement[] = []
       let rescaled = 0
       if (fromDp !== toDp) {
         for (const [table, col] of MONEY_COLUMNS) {
-          const rows = (await ctx.db.select().from(table as SQLiteTable)) as Array<Record<string, unknown>>
+          const rows = (await ctx.db
+            .select()
+            .from(table as SQLiteTable)
+            .where(eq((table as AnyTable).householdId as never, ctx.householdId as never))) as Array<
+            Record<string, unknown>
+          >
           for (const row of rows) {
             const value = row[col]
             if (typeof value !== 'number') continue
@@ -102,7 +112,12 @@ export const dataRouter = router({
               ctx.db
                 .update(table as SQLiteTable)
                 .set({ [col]: rescaleMinor(value, fromDp, toDp) })
-                .where(eq((table as AnyTable).id as never, row['id'] as never)),
+                .where(
+                  and(
+                    eq((table as AnyTable).householdId as never, ctx.householdId as never),
+                    eq((table as AnyTable).id as never, row['id'] as never),
+                  ),
+                ),
             )
             rescaled += 1
           }
@@ -112,7 +127,7 @@ export const dataRouter = router({
         ctx.db
           .update(household)
           .set({ currencyDecimalPlaces: toDp, updatedAt: Date.now() })
-          .where(eq(household.id, HOUSEHOLD_ID)),
+          .where(eq(household.id, ctx.householdId)),
       )
       await runBatch(ctx.db, statements)
 
