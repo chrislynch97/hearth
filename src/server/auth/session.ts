@@ -42,8 +42,8 @@ export async function deleteUserSessions(db: DB, userId: string): Promise<void> 
   await db.delete(session).where(eq(session.userId, userId))
 }
 
-/** The owner user of the default household — the single self-host account until
- *  multi-user login (B3). */
+/** The owner user of the default household — the single self-host account on an
+ *  open (password-less) instance. */
 export async function getOwnerUser(db: DB): Promise<User | null> {
   const [grant] = await db
     .select()
@@ -52,4 +52,28 @@ export async function getOwnerUser(db: DB): Promise<User | null> {
   if (!grant) return null
   const [u] = await db.select().from(user).where(eq(user.id, grant.userId))
   return u ?? null
+}
+
+export async function getUser(db: DB, userId: string): Promise<User | null> {
+  const [u] = await db.select().from(user).where(eq(user.id, userId))
+  return u ?? null
+}
+
+export async function getUserByUsername(db: DB, username: string): Promise<User | null> {
+  const [u] = await db.select().from(user).where(eq(user.username, username))
+  return u ?? null
+}
+
+/** The user's accepted memberships, most-privileged first (owner → viewer). */
+export async function listMemberships(db: DB, userId: string) {
+  const rows = await db.select().from(membership).where(eq(membership.userId, userId))
+  return rows.filter((m) => m.acceptedAt !== null)
+}
+
+/** Where to drop a user after login: their most-privileged accepted household. */
+export async function defaultHouseholdFor(db: DB, userId: string): Promise<string> {
+  const rows = await listMemberships(db, userId)
+  const rank: Record<string, number> = { owner: 3, admin: 2, member: 1, viewer: 0 }
+  rows.sort((a, b) => (rank[b.role] ?? -1) - (rank[a.role] ?? -1))
+  return rows[0]?.householdId ?? DEFAULT_HOUSEHOLD_ID
 }

@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
+import { assertRole } from '../trpc/tenant'
 import { household } from '../db/schema'
 import { ALL_TABLES, MONEY_COLUMNS } from '../db/tables'
 import { ensureSeed } from '../db/seed'
@@ -75,6 +76,7 @@ export const dataRouter = router({
 
   /** Wipe everything and re-seed a blank household (returns to the setup wizard). */
   reset: publicProcedure.mutation(async ({ ctx }) => {
+    assertRole(ctx.role, 'owner')
     const statements = [...ALL_TABLES]
       .reverse()
       .map(([, table]) => ctx.db.delete(table as SQLiteTable))

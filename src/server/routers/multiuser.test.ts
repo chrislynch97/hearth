@@ -1,0 +1,134 @@
+import { describe, it, expect } from 'vitest'
+import { makeTestDb } from '../db/testdb'
+import { ensureSeed } from '../db/seed'
+import { appRouter } from '../trpc/router'
+import { getOwnerUser } from '../auth/session'
+import { household, membership } from '../db/schema'
+import { newId } from '../../shared/ids'
+import type { DB } from '../db/client'
+
+function caller(db: DB, opts: { role?: string; userId?: string; sessionToken?: string } = {}) {
+  const cookies: Array<string | null> = []
+  const c = appRouter.createCaller({
+    db,
+    householdId: 'household',
+    role: opts.role,
+    userId: opts.userId,
+    sessionToken: opts.sessionToken,
+    setSessionCookie: (t) => cookies.push(t),
+  })
+  return { c, cookies }
+}
+
+describe('role enforcement', () => {
+  it('viewers cannot write, but owners can', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+
+    const viewer = caller(db, { role: 'viewer' })
+    await expect(viewer.c.categories.create({ name: 'Nope' })).rejects.toMatchObject({ code: 'FORBIDDEN' })
+
+    const owner = caller(db, { role: 'owner' })
+    await expect(owner.c.categories.create({ name: 'Yes' })).resolves.toBeTruthy()
+  })
+
+  it('household settings and reset are gated by role', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+
+    const member = caller(db, { role: 'member' })
+    await expect(member.c.household.update({ displayName: 'X' })).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    await expect(member.c.data.reset()).rejects.toMatchObject({ code: 'FORBIDDEN' })
+
+    const admin = caller(db, { role: 'admin' })
+    await expect(admin.c.household.update({ displayName: 'Renamed' })).resolves.toBeTruthy()
+    // reset is owner-only, so admin still can't.
+    await expect(admin.c.data.reset()).rejects.toMatchObject({ code: 'FORBIDDEN' })
+  })
+})
+
+describe('invitations', () => {
+  it('members cannot invite; admins can invite member/viewer; only owners invite admins', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+
+    await expect(caller(db, { role: 'member' }).c.invitations.create({ role: 'member' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    await expect(caller(db, { role: 'admin' }).c.invitations.create({ role: 'member' })).resolves.toMatchObject({
+      role: 'member',
+    })
+    await expect(caller(db, { role: 'admin' }).c.invitations.create({ role: 'admin' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    await expect(caller(db, { role: 'owner' }).c.invitations.create({ role: 'admin' })).resolves.toMatchObject({
+      role: 'admin',
+    })
+  })
+
+  it('accept creates an account + membership and logs in; the token is single-use', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+
+    const owner = await getOwnerUser(db)
+    const { token } = await caller(db, { role: 'owner', userId: owner!.id }).c.invitations.create({ role: 'member' })
+
+    // Public info describes the invite.
+    const info = await caller(db).c.invitations.info({ token })
+    expect(info?.role).toBe('member')
+
+    // Accept it → new user, membership, session cookie.
+    const invitee = caller(db)
+    const res = await invitee.c.invitations.accept({
+      token,
+      username: 'ben',
+      displayName: 'Ben',
+      password: 'another-strong-pw',
+    })
+    expect(res).toEqual({ ok: true })
+    expect(invitee.cookies.at(-1)).toBeTruthy()
+
+    // The new account can log in and sees its membership.
+    const login = caller(db)
+    // Lock the instance by giving the owner a password first, so login is live.
+    await caller(db, { role: 'owner', userId: owner!.id }).c.auth.setPassword({ newPassword: 'owner-strong-pw' })
+    expect(await login.c.auth.login({ username: 'ben', password: 'another-strong-pw' })).toEqual({ ok: true })
+
+    // Token can't be reused.
+    await expect(
+      caller(db).c.invitations.accept({ token, username: 'x', displayName: 'X', password: 'yet-another-pw' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+
+    // And it no longer shows as pending.
+    const pending = await caller(db, { role: 'owner', userId: owner!.id }).c.invitations.list()
+    expect(pending).toHaveLength(0)
+  })
+})
+
+describe('switchHousehold', () => {
+  it('rejects a household the user does not belong to', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+
+    // A second household the owner is NOT a member of.
+    const now = Date.now()
+    await db.insert(household).values({ id: 'h2', createdAt: now, updatedAt: now })
+
+    // Give the owner a real session to switch within.
+    const setup = caller(db, { role: 'owner', userId: owner!.id })
+    await setup.c.auth.setPassword({ newPassword: 'owner-strong-pw' })
+    const token = setup.cookies.at(-1) as string
+
+    await expect(
+      caller(db, { userId: owner!.id, sessionToken: token }).c.users.switchHousehold({ householdId: 'h2' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+
+    // Owner IS a member of the default household → allowed.
+    await expect(
+      caller(db, { userId: owner!.id, sessionToken: token }).c.users.switchHousehold({ householdId: 'household' }),
+    ).resolves.toEqual({ activeHouseholdId: 'household' })
+    // (membership row exists from ensureSeed)
+    expect(await db.select().from(membership)).not.toHaveLength(0)
+  })
+})

@@ -8,12 +8,14 @@ import type { User } from '../db/schema'
 import { hashPassword, verifyPassword } from '../auth/password'
 import {
   createSession,
+  defaultHouseholdFor,
   deleteSession,
   deleteUserSessions,
   getOwnerUser,
+  getUser,
+  getUserByUsername,
   getValidSession,
 } from '../auth/session'
-import { DEFAULT_HOUSEHOLD_ID } from '../trpc/tenant'
 import {
   buildOtpauthUrl,
   consumeRecoveryCode,
@@ -24,6 +26,7 @@ import {
 } from '../auth/totp'
 import { validatePassword } from '../../shared/password-policy'
 import { RateLimiter } from '../auth/rateLimit'
+import type { Context } from '../trpc/context'
 import type { DB } from '../db/client'
 
 // Throttle password attempts: 10 per 15 minutes per client, then a 15-minute block.
@@ -33,46 +36,42 @@ const loginLimiter = new RateLimiter({
   blockMs: 15 * 60 * 1000,
 })
 
-/** The owner account, or throw — every auth op targets it (single-user for now). */
-async function requireOwner(db: DB): Promise<User> {
-  const owner = await getOwnerUser(db)
-  if (!owner) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'No owner account provisioned' })
-  return owner
+/** The user this request acts as: the session's user, or — on an open
+ *  (password-less) instance — the owner. Null when locked with no valid session. */
+async function currentUser(ctx: Context): Promise<User | null> {
+  const s = await getValidSession(ctx.db, ctx.sessionToken)
+  if (s) return getUser(ctx.db, s.userId)
+  const owner = await getOwnerUser(ctx.db)
+  return owner && owner.passwordHash === null ? owner : null
 }
 
-/** True when the request carries a live session belonging to `owner`. */
-async function isAuthenticated(db: DB, sessionToken: string | undefined, owner: User): Promise<boolean> {
-  const s = await getValidSession(db, sessionToken)
-  return s !== null && s.userId === owner.id
-}
-
-/** Require the caller to hold a valid session — gates MFA management, which
- *  layers on an already-authenticated session (the HTTP gate enforces it too). */
-async function assertAuthenticated(db: DB, sessionToken: string | undefined, owner: User): Promise<void> {
-  if (!(await isAuthenticated(db, sessionToken, owner))) {
-    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
-  }
+async function requireCurrentUser(ctx: Context): Promise<User> {
+  const u = await currentUser(ctx)
+  if (!u) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
+  return u
 }
 
 export const authRouter = router({
-  /** Whether a password is configured, whether MFA is on, and whether this
-   *  request is authenticated. */
+  /** Whether the instance requires login, whether the current user has MFA on,
+   *  whether this request is authenticated, and who it is. */
   status: publicProcedure.query(async ({ ctx }) => {
-    const owner = await requireOwner(ctx.db)
-    const hasPassword = owner.passwordHash !== null
+    const owner = await getOwnerUser(ctx.db)
+    const locked = (owner?.passwordHash ?? null) !== null
+    const s = await getValidSession(ctx.db, ctx.sessionToken)
+    const cur = s ? await getUser(ctx.db, s.userId) : locked ? null : owner
     return {
-      passwordSet: hasPassword,
-      mfaEnabled: owner.mfaEnabledAt !== null,
-      authenticated: hasPassword ? await isAuthenticated(ctx.db, ctx.sessionToken, owner) : true,
+      passwordSet: locked,
+      authenticated: locked ? s !== null : true,
+      mfaEnabled: (cur?.mfaEnabledAt ?? null) !== null,
+      user: cur ? { id: cur.id, username: cur.username, displayName: cur.displayName } : null,
     }
   }),
 
   login: publicProcedure
-    .input(z.object({ password: z.string(), code: z.string().optional() }))
+    .input(z.object({ username: z.string(), password: z.string(), code: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const owner = await requireOwner(ctx.db)
-      const hash = owner.passwordHash
-      if (hash === null) return { ok: true as const } // no password required
+      const owner = await getOwnerUser(ctx.db)
+      if ((owner?.passwordHash ?? null) === null) return { ok: true as const } // open instance
 
       const key = ctx.clientKey ?? 'unknown'
       const now = Date.now()
@@ -84,28 +83,23 @@ export const authRouter = router({
         })
       }
 
-      if (!verifyPassword(input.password, hash)) {
+      const u = await getUserByUsername(ctx.db, input.username.trim())
+      if (!u || u.passwordHash === null || !verifyPassword(input.password, u.passwordHash)) {
         loginLimiter.fail(key, now)
-        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect password' })
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect username or password' })
       }
 
-      // Password OK. If MFA is enabled, require a valid TOTP or recovery code
-      // before issuing a session.
-      if (owner.mfaEnabledAt && owner.mfaSecret) {
-        if (!input.code) {
-          // Not a failed attempt — the client just needs to collect the code.
-          return { ok: false as const, mfaRequired: true as const }
-        }
-        const codeOk = await verifyMfaCode(ctx.db, owner, input.code)
-        if (!codeOk) {
+      if (u.mfaEnabledAt && u.mfaSecret) {
+        if (!input.code) return { ok: false as const, mfaRequired: true as const }
+        if (!(await verifyMfaCode(ctx.db, u, input.code))) {
           loginLimiter.fail(key, now)
           throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect authentication code' })
         }
       }
 
       loginLimiter.reset(key)
-      const sessionId = await createSession(ctx.db, owner.id, DEFAULT_HOUSEHOLD_ID)
-      ctx.setSessionCookie?.(sessionId)
+      const householdId = await defaultHouseholdFor(ctx.db, u.id)
+      ctx.setSessionCookie?.(await createSession(ctx.db, u.id, householdId))
       return { ok: true as const }
     }),
 
@@ -115,84 +109,79 @@ export const authRouter = router({
     return { ok: true as const }
   }),
 
-  /** Set or change the password. Requires the current password if one is set;
-   *  revokes existing sessions and keeps the setter logged in under a fresh one. */
+  /** Set or change the current user's password. Requires the current password
+   *  if one is set; revokes existing sessions and keeps the setter logged in. */
   setPassword: publicProcedure
     .input(z.object({ currentPassword: z.string().optional(), newPassword: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const owner = await requireOwner(ctx.db)
-      const hash = owner.passwordHash
-      if (hash !== null && !verifyPassword(input.currentPassword ?? '', hash)) {
+      const me = await requireCurrentUser(ctx)
+      if (me.passwordHash !== null && !verifyPassword(input.currentPassword ?? '', me.passwordHash)) {
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Current password is incorrect' })
       }
       const weak = validatePassword(input.newPassword)
       if (weak) throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
 
       const newHash = hashPassword(input.newPassword)
-      await ctx.db.update(user).set({ passwordHash: newHash, updatedAt: Date.now() }).where(eq(user.id, owner.id))
-      // Invalidate every existing session, then issue a fresh one for the setter.
-      await deleteUserSessions(ctx.db, owner.id)
-      const sessionId = await createSession(ctx.db, owner.id, DEFAULT_HOUSEHOLD_ID)
-      ctx.setSessionCookie?.(sessionId)
+      await ctx.db.update(user).set({ passwordHash: newHash, updatedAt: Date.now() }).where(eq(user.id, me.id))
+      await deleteUserSessions(ctx.db, me.id)
+      const householdId = await defaultHouseholdFor(ctx.db, me.id)
+      ctx.setSessionCookie?.(await createSession(ctx.db, me.id, householdId))
       return { ok: true as const }
     }),
 
-  /** Remove the password (returns the instance to no-auth). Also clears MFA,
-   *  which is meaningless without a password, and revokes all sessions. */
+  /** Remove the password, returning the instance to no-auth. Owner-only, and only
+   *  when they're the sole account (can't reopen past other people's logins). */
   clearPassword: publicProcedure
     .input(z.object({ currentPassword: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const owner = await requireOwner(ctx.db)
-      const hash = owner.passwordHash
-      if (hash === null) return { ok: true as const }
-      if (!verifyPassword(input.currentPassword, hash)) {
+      const me = await requireCurrentUser(ctx)
+      if (me.passwordHash === null) return { ok: true as const }
+      if (!verifyPassword(input.currentPassword, me.passwordHash)) {
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Current password is incorrect' })
+      }
+      const owner = await getOwnerUser(ctx.db)
+      if (me.id !== owner?.id) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the owner can remove the password.' })
+      }
+      const users = await ctx.db.select().from(user)
+      if (users.length > 1) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Remove the other accounts before turning the password off.',
+        })
       }
       await ctx.db
         .update(user)
         .set({ passwordHash: null, mfaSecret: null, mfaEnabledAt: null, mfaRecoveryCodes: null, updatedAt: Date.now() })
-        .where(eq(user.id, owner.id))
-      await deleteUserSessions(ctx.db, owner.id)
+        .where(eq(user.id, me.id))
+      await deleteUserSessions(ctx.db, me.id)
       ctx.setSessionCookie?.(null)
       return { ok: true as const }
     }),
 
-  /** Begin MFA enrolment: generate a fresh secret (pending until confirmed) and
-   *  return the scannable QR + manual-entry secret. Requires an authenticated
-   *  session and an existing password. */
+  /** Begin MFA enrolment for the current user: a fresh pending secret + QR. */
   enrollMfa: publicProcedure.mutation(async ({ ctx }) => {
-    const owner = await requireOwner(ctx.db)
-    if (owner.passwordHash === null) {
+    const me = await requireCurrentUser(ctx)
+    if (me.passwordHash === null) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Set a password before enabling two-factor authentication.' })
     }
-    await assertAuthenticated(ctx.db, ctx.sessionToken, owner)
-
     const secret = generateTotpSecret()
-    // Store as pending (secret set, not yet enabled). A re-enrol overwrites any
-    // previous pending secret; enabled MFA is untouched until confirmMfa runs.
-    await ctx.db.update(user).set({ mfaSecret: secret, mfaEnabledAt: null, updatedAt: Date.now() }).where(eq(user.id, owner.id))
-
-    const account = owner.displayName || 'Household'
-    const otpauthUrl = buildOtpauthUrl(secret, account)
+    await ctx.db.update(user).set({ mfaSecret: secret, mfaEnabledAt: null, updatedAt: Date.now() }).where(eq(user.id, me.id))
+    const otpauthUrl = buildOtpauthUrl(secret, me.displayName || me.username)
     const qrSvg = await QRCode.toString(otpauthUrl, { type: 'svg', margin: 1, width: 200 })
     return { secret, otpauthUrl, qrSvg }
   }),
 
-  /** Confirm enrolment with a code from the authenticator. On success MFA turns
-   *  on and one-time recovery codes are returned (shown once). */
+  /** Confirm enrolment with a code; turns MFA on and returns recovery codes. */
   confirmMfa: publicProcedure
     .input(z.object({ code: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const owner = await requireOwner(ctx.db)
-      if (owner.passwordHash === null) throw new TRPCError({ code: 'BAD_REQUEST', message: 'No password set.' })
-      await assertAuthenticated(ctx.db, ctx.sessionToken, owner)
-      if (!owner.mfaSecret) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Start enrolment first.' })
-      }
-      if (!verifyTotp(owner.mfaSecret, input.code)) {
+      const me = await requireCurrentUser(ctx)
+      if (me.passwordHash === null) throw new TRPCError({ code: 'BAD_REQUEST', message: 'No password set.' })
+      if (!me.mfaSecret) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Start enrolment first.' })
+      if (!verifyTotp(me.mfaSecret, input.code)) {
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect code — check your authenticator and try again.' })
       }
-
       const recoveryCodes = generateRecoveryCodes(10)
       await ctx.db
         .update(user)
@@ -201,7 +190,7 @@ export const authRouter = router({
           mfaRecoveryCodes: JSON.stringify(hashRecoveryCodes(recoveryCodes)),
           updatedAt: Date.now(),
         })
-        .where(eq(user.id, owner.id))
+        .where(eq(user.id, me.id))
       return { ok: true as const, recoveryCodes }
     }),
 
@@ -209,31 +198,30 @@ export const authRouter = router({
   disableMfa: publicProcedure
     .input(z.object({ currentPassword: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const owner = await requireOwner(ctx.db)
-      if (owner.passwordHash === null) return { ok: true as const }
-      await assertAuthenticated(ctx.db, ctx.sessionToken, owner)
-      if (!verifyPassword(input.currentPassword, owner.passwordHash)) {
+      const me = await requireCurrentUser(ctx)
+      if (me.passwordHash === null) return { ok: true as const }
+      if (!verifyPassword(input.currentPassword, me.passwordHash)) {
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Current password is incorrect' })
       }
       await ctx.db
         .update(user)
         .set({ mfaSecret: null, mfaEnabledAt: null, mfaRecoveryCodes: null, updatedAt: Date.now() })
-        .where(eq(user.id, owner.id))
+        .where(eq(user.id, me.id))
       return { ok: true as const }
     }),
 })
 
 /** Verify a login MFA code: first as a TOTP, then as a single-use recovery code
  *  (which is consumed on success). Returns whether it was accepted. */
-async function verifyMfaCode(db: DB, owner: User, code: string): Promise<boolean> {
-  if (owner.mfaSecret && verifyTotp(owner.mfaSecret, code)) return true
-  if (!owner.mfaRecoveryCodes) return false
-  const hashes = JSON.parse(owner.mfaRecoveryCodes) as string[]
+async function verifyMfaCode(db: DB, u: User, code: string): Promise<boolean> {
+  if (u.mfaSecret && verifyTotp(u.mfaSecret, code)) return true
+  if (!u.mfaRecoveryCodes) return false
+  const hashes = JSON.parse(u.mfaRecoveryCodes) as string[]
   const remaining = consumeRecoveryCode(code, hashes)
   if (remaining === null) return false
   await db
     .update(user)
     .set({ mfaRecoveryCodes: JSON.stringify(remaining), updatedAt: Date.now() })
-    .where(eq(user.id, owner.id))
+    .where(eq(user.id, u.id))
   return true
 }

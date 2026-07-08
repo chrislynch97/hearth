@@ -1,5 +1,5 @@
 import type { CreateFastifyContextOptions } from '@trpc/server/adapters/fastify'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { DB } from '../db/client'
 import { db } from '../db/client'
 import { membership, session } from '../db/schema'
@@ -12,6 +12,8 @@ export interface Context {
   householdId: string
   /** The authenticated (or, on an open instance, the resolved owner) user id. */
   userId?: string
+  /** The current user's role in the active household ('owner'|'admin'|'member'|'viewer'). */
+  role?: string
   /** The active session's id, when the request carries a valid session cookie. */
   sessionId?: string
   /** Raw session-cookie value from the request, if any. */
@@ -37,18 +39,41 @@ function isHttps(req: CreateFastifyContextOptions['req'] | undefined): boolean {
  */
 async function resolveIdentity(
   sessionToken: string | undefined,
-): Promise<{ userId?: string; householdId: string; sessionId?: string }> {
+): Promise<{ userId?: string; householdId: string; sessionId?: string; role?: string }> {
+  let userId: string | undefined
+  let householdId = DEFAULT_HOUSEHOLD_ID
+  let sessionId: string | undefined
+
   if (sessionToken) {
     const [s] = await db.select().from(session).where(eq(session.id, sessionToken))
     if (s && s.expiresAt > Date.now()) {
-      return { userId: s.userId, householdId: s.activeHouseholdId, sessionId: s.id }
+      userId = s.userId
+      householdId = s.activeHouseholdId
+      sessionId = s.id
     }
   }
-  const [owner] = await db
-    .select()
-    .from(membership)
-    .where(eq(membership.householdId, DEFAULT_HOUSEHOLD_ID))
-  return { userId: owner?.userId, householdId: DEFAULT_HOUSEHOLD_ID }
+
+  if (!userId) {
+    // Open/local fallback: the default household's owner, so a password-less
+    // instance works with no login.
+    const [owner] = await db
+      .select()
+      .from(membership)
+      .where(eq(membership.householdId, DEFAULT_HOUSEHOLD_ID))
+    userId = owner?.userId
+    householdId = DEFAULT_HOUSEHOLD_ID
+  }
+
+  let role: string | undefined
+  if (userId) {
+    const [m] = await db
+      .select()
+      .from(membership)
+      .where(and(eq(membership.userId, userId), eq(membership.householdId, householdId)))
+    role = m?.role
+  }
+
+  return { userId, householdId, sessionId, role }
 }
 
 export async function createContext(opts?: CreateFastifyContextOptions): Promise<Context> {
@@ -61,6 +86,7 @@ export async function createContext(opts?: CreateFastifyContextOptions): Promise
     db,
     householdId: identity.householdId,
     userId: identity.userId,
+    role: identity.role,
     sessionId: identity.sessionId,
     sessionToken,
     clientKey: req?.ip,

@@ -22,8 +22,8 @@ async function twoHouseholds() {
     updatedAt: now,
   })
 
-  const h1 = appRouter.createCaller({ db, householdId: 'household' })
-  const h2 = appRouter.createCaller({ db, householdId: 'h2' })
+  const h1 = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+  const h2 = appRouter.createCaller({ db, householdId: 'h2', role: 'owner' })
   const h1Joint = (await h1.members.list()).find((m) => m.kind === 'joint')!
   return { db, h1, h2, h1Joint, h2Joint }
 }

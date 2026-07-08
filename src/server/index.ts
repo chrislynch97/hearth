@@ -16,8 +16,15 @@ import { parseSessionCookie } from './auth/cookies'
 import { getOwnerUser, getValidSession } from './auth/session'
 
 // tRPC procedures reachable without authentication (so a locked instance can
-// still show the login screen and accept a login).
-const PUBLIC_PROCEDURES = new Set(['auth.status', 'auth.login', 'auth.logout'])
+// still show the login screen, accept a login, or let an invitee create their
+// account from an invite link).
+const PUBLIC_PROCEDURES = new Set([
+  'auth.status',
+  'auth.login',
+  'auth.logout',
+  'invitations.info',
+  'invitations.accept',
+])
 
 const PORT = Number(process.env.PORT ?? 8787)
 

@@ -8,7 +8,7 @@ describe('categories router', () => {
   it('create → list returns the new category', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const cat = await caller.categories.create({ name: 'Essentials' })
 
@@ -24,7 +24,7 @@ describe('categories router', () => {
   it('list is ordered by sortOrder asc then name asc', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const a = await caller.categories.create({ name: 'Zebra' })
     const b = await caller.categories.create({ name: 'Alpha' })
@@ -38,7 +38,7 @@ describe('categories router', () => {
   it('create sets timestamps', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const before = Date.now()
     const cat = await caller.categories.create({ name: 'Groceries' })
@@ -53,7 +53,7 @@ describe('categories router', () => {
   it('create sortOrder is max+1', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const c1 = await caller.categories.create({ name: 'First' })
     const c2 = await caller.categories.create({ name: 'Second' })
@@ -65,7 +65,7 @@ describe('categories router', () => {
   it('update renames a category', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const cat = await caller.categories.create({ name: 'Old Name' })
     const updated = await caller.categories.update({ id: cat.id, name: 'New Name' })
@@ -80,7 +80,7 @@ describe('categories router', () => {
   it('update sets updatedAt', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const cat = await caller.categories.create({ name: 'Test' })
     const before = Date.now()
@@ -94,7 +94,7 @@ describe('categories router', () => {
   it('archive removes from list', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const cat = await caller.categories.create({ name: 'ToArchive' })
     await caller.categories.archive({ id: cat.id })
@@ -106,7 +106,7 @@ describe('categories router', () => {
   it('archive throws NOT_FOUND for unknown id', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     await expect(caller.categories.archive({ id: 'nonexistent' })).rejects.toMatchObject({
       code: 'NOT_FOUND',
@@ -119,8 +119,8 @@ describe('categories router', () => {
     const now = Date.now()
     await db.insert(household).values({ id: 'h2', createdAt: now, updatedAt: now })
 
-    const h1 = appRouter.createCaller({ db, householdId: 'household' })
-    const h2 = appRouter.createCaller({ db, householdId: 'h2' })
+    const h1 = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+    const h2 = appRouter.createCaller({ db, householdId: 'h2', role: 'owner' })
 
     const c1 = await h1.categories.create({ name: 'H1 only' })
     await h2.categories.create({ name: 'H2 only' })

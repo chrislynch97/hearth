@@ -8,7 +8,7 @@ describe('members router', () => {
   it('list returns seeded joint member ordered by sortOrder', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const members = await caller.members.list()
     expect(members.length).toBe(1)
@@ -18,7 +18,7 @@ describe('members router', () => {
   it('addPerson creates a person and list returns it with joint, ordered', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const person = await caller.members.addPerson({ displayName: 'Alice' })
 
@@ -41,7 +41,7 @@ describe('members router', () => {
   it('addPerson sets timestamps', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const before = Date.now()
     const person = await caller.members.addPerson({ displayName: 'Bob' })
@@ -56,7 +56,7 @@ describe('members router', () => {
   it('addPerson accepts optional fields', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const person = await caller.members.addPerson({
       displayName: 'Carol',
@@ -73,7 +73,7 @@ describe('members router', () => {
   it('update renames a member and persists', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const person = await caller.members.addPerson({ displayName: 'Dave' })
     const updated = await caller.members.update({ id: person.id, displayName: 'David' })
@@ -91,7 +91,7 @@ describe('members router', () => {
   it('update sets updatedAt', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const person = await caller.members.addPerson({ displayName: 'Eve' })
     const before = Date.now()
@@ -105,7 +105,7 @@ describe('members router', () => {
   it('update can rename the joint member', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -118,7 +118,7 @@ describe('members router', () => {
   it('archive sets archivedAt for a person', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const person = await caller.members.addPerson({ displayName: 'Frank' })
 
@@ -136,7 +136,7 @@ describe('members router', () => {
   it('archive throws BAD_REQUEST for the joint member', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const members = await caller.members.list()
     const joint = members.find((m) => m.kind === 'joint')!
@@ -150,7 +150,7 @@ describe('members router', () => {
   it('addPerson sortOrder is max + 1', async () => {
     const db = await makeTestDb()
     await ensureSeed(db) // joint at sortOrder=100
-    const caller = appRouter.createCaller({ db, householdId: 'household' })
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const p1 = await caller.members.addPerson({ displayName: 'G' })
     const p2 = await caller.members.addPerson({ displayName: 'H' })

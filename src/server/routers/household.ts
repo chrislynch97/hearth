@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
-import { scopeWhere } from '../trpc/tenant'
+import { assertRole, scopeWhere } from '../trpc/tenant'
 import { household, member } from '../db/schema'
 
 export const householdRouter = router({
@@ -32,6 +32,7 @@ export const householdRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      assertRole(ctx.role, 'admin')
       const now = Date.now()
       await ctx.db
         .update(household)

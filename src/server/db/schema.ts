@@ -107,6 +107,21 @@ export const session = sqliteTable('session', {
 
 export type Session = typeof session.$inferSelect
 
+// A pending invitation for someone to join a household. The row id is the
+// unguessable invite token; accepting it creates the user + membership.
+export const invitation = sqliteTable('invitation', {
+  id: text('id').primaryKey(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
+  role: text('role').notNull().default('member'), // 'admin' | 'member' | 'viewer'
+  email: text('email'), // optional, informational (who it was sent to)
+  invitedByUserId: text('invited_by_user_id').references(() => user.id),
+  createdAt: integer('created_at').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  acceptedAt: integer('accepted_at'),
+})
+
+export type Invitation = typeof invitation.$inferSelect
+
 // A budgeting participant within a household: a person, or the shared 'joint'
 // entity. `userId` optionally links a participant to a login identity.
 export const member = sqliteTable('member', {
