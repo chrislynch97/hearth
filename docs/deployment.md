@@ -61,7 +61,7 @@ See [docker-compose.yml](../docker-compose.yml) and the root [Dockerfile](../Doc
 
 ## Option B — Node directly (no Docker)
 
-Prerequisites: Node.js 20+ and git.
+Prerequisites: Node.js 22+ and git.
 
 ```bash
 git clone https://github.com/chrislynch97/hearth.git && cd hearth
@@ -192,22 +192,30 @@ where you'd add HTTPS with a local certificate. Optional.
 
 ## HTTPS & security
 
-- **Set a password** (**Settings → Security**). With no password set, the instance
-  is open (fine on a trusted LAN; not for public exposure). A single shared password
-  gates the whole app; it must be at least 10 characters and very common passwords
-  are rejected.
+- **Accounts & login.** Hearth has per-user accounts. A fresh install auto-creates
+  an **owner** account with no password, so the app is **open** on your network with
+  no login (fine on a trusted LAN; not for public exposure). Set a password on your
+  account (**Settings → Security**) to turn login on — from then on everyone signs in
+  with their own username + password. Passwords must be at least 10 characters and
+  very common ones are rejected.
+- **Invite others with roles** (**Settings → Households & access**). An admin creates
+  a single-use invite link (expires in 7 days); the recipient opens it, picks a
+  username + password, and joins. Roles: **owner** (full control), **admin** (manage
+  settings & invite), **member** (edit budgeting data), **viewer** (read-only). Only
+  the owner can remove the password / reopen the instance, and only while they're the
+  sole account.
 - **Enable two-factor authentication** (**Settings → Two-factor authentication**) for
   anything reachable beyond a trusted network. It adds a TOTP code (Google
-  Authenticator, 1Password, Aegis…) on top of the password, with one-time recovery
+  Authenticator, 1Password, Aegis…) on top of your password, with one-time recovery
   codes shown once at enrolment — **save them**, they're your way back in if you lose
-  the authenticator.
-- **HTTPS matters for the cookie.** The session cookie is only marked `Secure` over
-  HTTPS. Terminate TLS at a reverse proxy / tunnel and, if it doesn't forward
-  `x-forwarded-proto: https`, set `HEARTH_SECURE_COOKIES=1`.
+  the authenticator. MFA is per-account.
+- **HTTPS matters for the cookie.** The session cookie holds a server-side session id
+  and is only marked `Secure` over HTTPS. Terminate TLS at a reverse proxy / tunnel
+  and, if it doesn't forward `x-forwarded-proto: https`, set `HEARTH_SECURE_COOKIES=1`.
 - **Login is rate-limited** (10 attempts / 15 min per client, then a 15-minute
   block) to slow brute-forcing. Behind a proxy, set `HEARTH_TRUST_PROXY=1` so the
   limit is per real client IP, not per proxy.
-- **The database is not encrypted at rest.** The password hash, TOTP secret and
+- **The database is not encrypted at rest.** Password hashes, TOTP secrets and
   recovery-code hashes live in the same SQLite file as your data, so two-factor
   protects the *login path*, not someone who already has the file. Keep the data
   directory (and your backups) on trusted storage.
