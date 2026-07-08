@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { spendTransaction, member, importBatch, household } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { parseCsvTable } from '../../shared/csvParse'
@@ -10,12 +11,10 @@ import type { MappedRow } from '../import/monzo'
 import { suggestPot } from '../spending/suggest'
 import type { DB } from '../db/client'
 
-const HOUSEHOLD_ID = 'household'
-
 type BatchArg = Parameters<DB['batch']>[0]
 
-async function assertMember(db: DB, ownerId: string): Promise<void> {
-  const [owner] = await db.select().from(member).where(eq(member.id, ownerId))
+async function assertMember(db: DB, householdId: string, ownerId: string): Promise<void> {
+  const [owner] = await db.select().from(member).where(scopeWhere(householdId, member.householdId, eq(member.id, ownerId)))
   if (!owner) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
   }
@@ -31,9 +30,9 @@ export const importsRouter = router({
   preview: publicProcedure
     .input(z.object({ ownerId: z.string(), csvText: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await assertMember(ctx.db, input.ownerId)
+      await assertMember(ctx.db, ctx.householdId, input.ownerId)
 
-      const [hh] = await ctx.db.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
+      const [hh] = await ctx.db.select().from(household).where(eq(household.id, ctx.householdId))
       const decimalPlaces = hh?.currencyDecimalPlaces ?? 2
       const currencyCode = hh?.currencyCode ?? 'GBP'
 
@@ -43,7 +42,10 @@ export const importsRouter = router({
       }
 
       // Existing import refs → dedup; existing pot-assigned spends → suggestions.
-      const priors = await ctx.db.select().from(spendTransaction)
+      const priors = await ctx.db
+        .select()
+        .from(spendTransaction)
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId))
       const existingRefs = new Set(priors.map((p) => p.importRef).filter((r): r is string => !!r))
       const withPot = priors
         .filter((p) => p.potId !== null)
@@ -97,9 +99,12 @@ export const importsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await assertMember(ctx.db, input.ownerId)
+      await assertMember(ctx.db, ctx.householdId, input.ownerId)
 
-      const priors = await ctx.db.select({ importRef: spendTransaction.importRef }).from(spendTransaction)
+      const priors = await ctx.db
+        .select({ importRef: spendTransaction.importRef })
+        .from(spendTransaction)
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId))
       const existingRefs = new Set(priors.map((p) => p.importRef).filter((r): r is string => !!r))
 
       const now = Date.now()
@@ -120,6 +125,7 @@ export const importsRouter = router({
       const statements = [
         ctx.db.insert(importBatch).values({
           id: batchId,
+          householdId: ctx.householdId,
           source: 'monzo_csv',
           filename: input.filename ?? null,
           rowCount: totalRows,
@@ -133,6 +139,7 @@ export const importsRouter = router({
         ...toInsert.map((r) =>
           ctx.db.insert(spendTransaction).values({
             id: newId(),
+            householdId: ctx.householdId,
             date: r.date,
             description: r.description,
             amount: r.amount,
@@ -157,7 +164,10 @@ export const importsRouter = router({
 
   /** Past import batches, newest first — for an audit/history view. */
   batches: publicProcedure.query(async ({ ctx }) => {
-    const rows = await ctx.db.select().from(importBatch)
+    const rows = await ctx.db
+      .select()
+      .from(importBatch)
+      .where(scopeWhere(ctx.householdId, importBatch.householdId))
     return rows.sort((a, b) => b.importedAt - a.importedAt)
   }),
 })

@@ -1,7 +1,8 @@
 import { z } from 'zod'
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { desc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { spendTransaction, pot, reconciliationBatch } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { computeBacklog } from '../spending/backlog'
@@ -11,9 +12,12 @@ export const reconcileRouter = router({
     const transactions = await ctx.db
       .select()
       .from(spendTransaction)
-      .where(eq(spendTransaction.reconciled, 0))
+      .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.reconciled, 0)))
 
-    const pots = await ctx.db.select().from(pot).where(isNull(pot.archivedAt))
+    const pots = await ctx.db
+      .select()
+      .from(pot)
+      .where(scopeWhere(ctx.householdId, pot.householdId, isNull(pot.archivedAt)))
 
     return computeBacklog({
       transactions: transactions.map((t) => ({
@@ -39,7 +43,9 @@ export const reconcileRouter = router({
     .input(z.object({ potId: z.string(), ownerId: z.string().nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       const scope = () =>
-        and(
+        scopeWhere(
+          ctx.householdId,
+          spendTransaction.householdId,
           eq(spendTransaction.potId, input.potId),
           eq(spendTransaction.reconciled, 0),
           eq(spendTransaction.settledAtSource, 0),
@@ -60,6 +66,7 @@ export const reconcileRouter = router({
 
       await ctx.db.insert(reconciliationBatch).values({
         id: batchId,
+        householdId: ctx.householdId,
         potId: input.potId,
         ownerId: input.ownerId ?? null,
         totalAmount,
@@ -73,7 +80,10 @@ export const reconcileRouter = router({
         .set({ reconciled: 1, reconciledAt: now, reconciliationBatchId: batchId, updatedAt: now })
         .where(scope())
 
-      const [batch] = await ctx.db.select().from(reconciliationBatch).where(eq(reconciliationBatch.id, batchId))
+      const [batch] = await ctx.db
+        .select()
+        .from(reconciliationBatch)
+        .where(scopeWhere(ctx.householdId, reconciliationBatch.householdId, eq(reconciliationBatch.id, batchId)))
       if (!batch) {
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create reconciliation batch' })
       }
@@ -83,7 +93,10 @@ export const reconcileRouter = router({
   undoBatch: publicProcedure
     .input(z.object({ batchId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [batch] = await ctx.db.select().from(reconciliationBatch).where(eq(reconciliationBatch.id, input.batchId))
+      const [batch] = await ctx.db
+        .select()
+        .from(reconciliationBatch)
+        .where(scopeWhere(ctx.householdId, reconciliationBatch.householdId, eq(reconciliationBatch.id, input.batchId)))
       if (!batch) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Reconciliation batch not found' })
       }
@@ -93,17 +106,27 @@ export const reconcileRouter = router({
       await ctx.db
         .update(reconciliationBatch)
         .set({ reversedAt: now, updatedAt: now })
-        .where(eq(reconciliationBatch.id, input.batchId))
+        .where(scopeWhere(ctx.householdId, reconciliationBatch.householdId, eq(reconciliationBatch.id, input.batchId)))
 
       await ctx.db
         .update(spendTransaction)
         .set({ reconciled: 0, reconciledAt: null, reconciliationBatchId: null, updatedAt: now })
-        .where(eq(spendTransaction.reconciliationBatchId, input.batchId))
+        .where(
+          scopeWhere(
+            ctx.householdId,
+            spendTransaction.householdId,
+            eq(spendTransaction.reconciliationBatchId, input.batchId),
+          ),
+        )
 
       return { batchId: input.batchId }
     }),
 
   batches: publicProcedure.query(async ({ ctx }) => {
-    return ctx.db.select().from(reconciliationBatch).orderBy(desc(reconciliationBatch.createdAt))
+    return ctx.db
+      .select()
+      .from(reconciliationBatch)
+      .where(scopeWhere(ctx.householdId, reconciliationBatch.householdId))
+      .orderBy(desc(reconciliationBatch.createdAt))
   }),
 })

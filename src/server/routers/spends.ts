@@ -1,7 +1,8 @@
 import { z } from 'zod'
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { desc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
+import { scopeWhere } from '../trpc/tenant'
 import { spendTransaction, member, pot, category, reconciliationBatch } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { suggestPot } from '../spending/suggest'
@@ -13,22 +14,23 @@ function todayIso(): string {
 
 async function validateOwnerAndPot(
   db: DB,
+  householdId: string,
   ownerId: string,
   potId: string | null | undefined,
   categoryId: string | null | undefined,
 ): Promise<void> {
-  const [owner] = await db.select().from(member).where(eq(member.id, ownerId))
+  const [owner] = await db.select().from(member).where(scopeWhere(householdId, member.householdId, eq(member.id, ownerId)))
   if (!owner) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
   }
   if (potId) {
-    const [p] = await db.select().from(pot).where(eq(pot.id, potId))
+    const [p] = await db.select().from(pot).where(scopeWhere(householdId, pot.householdId, eq(pot.id, potId)))
     if (!p) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'potId does not refer to an existing pot' })
     }
   }
   if (categoryId) {
-    const [c] = await db.select().from(category).where(eq(category.id, categoryId))
+    const [c] = await db.select().from(category).where(scopeWhere(householdId, category.householdId, eq(category.id, categoryId)))
     if (!c) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'categoryId does not refer to an existing category' })
     }
@@ -61,12 +63,10 @@ export const spendsRouter = router({
         conditions.push(eq(spendTransaction.settledAtSource, 0))
       }
 
-      const where = conditions.length > 0 ? and(...conditions) : undefined
-
       return ctx.db
         .select()
         .from(spendTransaction)
-        .where(where)
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, ...conditions))
         .orderBy(desc(spendTransaction.date), desc(spendTransaction.createdAt))
     }),
 
@@ -86,13 +86,14 @@ export const spendsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await validateOwnerAndPot(ctx.db, input.ownerId, input.potId, input.categoryId)
+      await validateOwnerAndPot(ctx.db, ctx.householdId, input.ownerId, input.potId, input.categoryId)
 
       const now = Date.now()
       const id = newId()
 
       await ctx.db.insert(spendTransaction).values({
         id,
+        householdId: ctx.householdId,
         date: input.date ?? todayIso(),
         description: input.description,
         amount: input.amount,
@@ -107,7 +108,10 @@ export const spendsRouter = router({
         updatedAt: now,
       })
 
-      const [inserted] = await ctx.db.select().from(spendTransaction).where(eq(spendTransaction.id, id))
+      const [inserted] = await ctx.db
+        .select()
+        .from(spendTransaction)
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.id, id)))
       if (!inserted) {
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to insert spend transaction' })
       }
@@ -132,13 +136,17 @@ export const spendsRouter = router({
       const { id, settledAtSource, ...rest } = input
       const now = Date.now()
 
-      const [target] = await ctx.db.select().from(spendTransaction).where(eq(spendTransaction.id, id))
+      const [target] = await ctx.db
+        .select()
+        .from(spendTransaction)
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.id, id)))
       if (!target) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Spend transaction not found' })
       }
 
       await validateOwnerAndPot(
         ctx.db,
+        ctx.householdId,
         rest.ownerId ?? target.ownerId,
         rest.potId !== undefined ? rest.potId : target.potId,
         rest.categoryId !== undefined ? rest.categoryId : target.categoryId,
@@ -147,9 +155,12 @@ export const spendsRouter = router({
       await ctx.db
         .update(spendTransaction)
         .set({ ...rest, ...(settledAtSource !== undefined ? { settledAtSource: settledAtSource ? 1 : 0 } : {}), updatedAt: now })
-        .where(eq(spendTransaction.id, id))
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.id, id)))
 
-      const [updated] = await ctx.db.select().from(spendTransaction).where(eq(spendTransaction.id, id))
+      const [updated] = await ctx.db
+        .select()
+        .from(spendTransaction)
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.id, id)))
       if (!updated) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Spend transaction not found' })
       }
@@ -159,8 +170,13 @@ export const spendsRouter = router({
   remove: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [target] = await ctx.db.select().from(spendTransaction).where(eq(spendTransaction.id, input.id))
-      await ctx.db.delete(spendTransaction).where(eq(spendTransaction.id, input.id))
+      const [target] = await ctx.db
+        .select()
+        .from(spendTransaction)
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.id, input.id)))
+      await ctx.db
+        .delete(spendTransaction)
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.id, input.id)))
 
       // If this spend was part of a reconciliation batch, keep that batch honest.
       // Recompute its totals from what's left, and delete it entirely once its
@@ -170,11 +186,23 @@ export const spendsRouter = router({
         const remaining = await ctx.db
           .select()
           .from(spendTransaction)
-          .where(eq(spendTransaction.reconciliationBatchId, target.reconciliationBatchId))
+          .where(
+            scopeWhere(
+              ctx.householdId,
+              spendTransaction.householdId,
+              eq(spendTransaction.reconciliationBatchId, target.reconciliationBatchId),
+            ),
+          )
         if (remaining.length === 0) {
           await ctx.db
             .delete(reconciliationBatch)
-            .where(eq(reconciliationBatch.id, target.reconciliationBatchId))
+            .where(
+              scopeWhere(
+                ctx.householdId,
+                reconciliationBatch.householdId,
+                eq(reconciliationBatch.id, target.reconciliationBatchId),
+              ),
+            )
         } else {
           await ctx.db
             .update(reconciliationBatch)
@@ -183,7 +211,13 @@ export const spendsRouter = router({
               transactionCount: remaining.length,
               updatedAt: Date.now(),
             })
-            .where(eq(reconciliationBatch.id, target.reconciliationBatchId))
+            .where(
+              scopeWhere(
+                ctx.householdId,
+                reconciliationBatch.householdId,
+                eq(reconciliationBatch.id, target.reconciliationBatchId),
+              ),
+            )
         }
       }
 
@@ -211,7 +245,10 @@ export const spendsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [original] = await ctx.db.select().from(spendTransaction).where(eq(spendTransaction.id, input.id))
+      const [original] = await ctx.db
+        .select()
+        .from(spendTransaction)
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.id, input.id)))
       if (!original) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Spend transaction not found' })
       }
@@ -228,7 +265,7 @@ export const spendsRouter = router({
       }
 
       for (const part of input.parts) {
-        await validateOwnerAndPot(ctx.db, part.ownerId, part.potId, part.categoryId)
+        await validateOwnerAndPot(ctx.db, ctx.householdId, part.ownerId, part.potId, part.categoryId)
       }
 
       const now = Date.now()
@@ -247,11 +284,12 @@ export const spendsRouter = router({
           splitGroupId,
           updatedAt: now,
         })
-        .where(eq(spendTransaction.id, original.id))
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.id, original.id)))
 
       for (const part of rest) {
         await ctx.db.insert(spendTransaction).values({
           id: newId(),
+          householdId: ctx.householdId,
           date: original.date,
           description: original.description,
           amount: part.amount,
@@ -267,13 +305,19 @@ export const spendsRouter = router({
         })
       }
 
-      return ctx.db.select().from(spendTransaction).where(eq(spendTransaction.splitGroupId, splitGroupId))
+      return ctx.db
+        .select()
+        .from(spendTransaction)
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.splitGroupId, splitGroupId)))
     }),
 
   suggestPot: publicProcedure
     .input(z.object({ description: z.string(), ownerId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const priors = await ctx.db.select().from(spendTransaction)
+      const priors = await ctx.db
+        .select()
+        .from(spendTransaction)
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId))
       const withPot = priors.filter((p) => p.potId !== null)
       return suggestPot({
         description: input.description,
