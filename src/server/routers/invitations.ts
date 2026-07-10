@@ -3,12 +3,11 @@ import { desc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertRole, scopeWhere } from '../trpc/tenant'
-import { household, invitation, membership, user } from '../db/schema'
+import { household, invitation } from '../db/schema'
 import { hashPassword } from '../auth/password'
-import { createSession, getUserByUsername, newSessionId, normalizeUsername } from '../auth/session'
+import { createSession, createUserWithMembership, getUserByUsername, newSessionId, normalizeUsername } from '../auth/session'
 import { validatePassword } from '../../shared/password-policy'
 import { RateLimiter } from '../auth/rateLimit'
-import { newId } from '../../shared/ids'
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const inviteRole = z.enum(['admin', 'member', 'viewer'])
@@ -109,25 +108,14 @@ export const invitationsRouter = router({
       }
 
       const now = Date.now()
-      const userId = newId()
-      await ctx.db.insert(user).values({
-        id: userId,
+      const userId = await createUserWithMembership(ctx.db, {
         username: normalizeUsername(input.username),
-        email: inv.email,
         displayName: input.displayName.trim(),
+        email: inv.email,
         passwordHash: await hashPassword(input.password),
-        createdAt: now,
-        updatedAt: now,
-      })
-      await ctx.db.insert(membership).values({
-        id: newId(),
-        userId,
         householdId: inv.householdId,
         role: inv.role,
         invitedAt: inv.createdAt,
-        acceptedAt: now,
-        createdAt: now,
-        updatedAt: now,
       })
       await ctx.db.update(invitation).set({ acceptedAt: now }).where(eq(invitation.id, inv.id))
 

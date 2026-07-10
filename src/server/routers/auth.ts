@@ -3,15 +3,15 @@ import { eq } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import QRCode from 'qrcode'
 import { router, publicProcedure } from '../trpc/trpc'
-import { membership, user } from '../db/schema'
+import { user } from '../db/schema'
 import type { User } from '../db/schema'
 import { getInstanceSettings, setAllowOpenRegistration } from '../db/instanceSettings'
 import { provisionHousehold } from '../db/seed'
-import { newId } from '../../shared/ids'
 import { hashPassword, verifyPassword } from '../auth/password'
 import {
   assertInstanceOwner,
   createSession,
+  createUserWithMembership,
   defaultHouseholdFor,
   deleteSession,
   deleteUserSessions,
@@ -176,24 +176,13 @@ export const authRouter = router({
       }
 
       const householdId = await provisionHousehold(ctx.db, { displayName: input.householdName })
-      const userId = newId()
-      await ctx.db.insert(user).values({
-        id: userId,
+      const userId = await createUserWithMembership(ctx.db, {
         username: normalizeUsername(input.username),
-        email: null,
         displayName: input.displayName.trim(),
+        email: null,
         passwordHash: await hashPassword(input.password),
-        createdAt: now,
-        updatedAt: now,
-      })
-      await ctx.db.insert(membership).values({
-        id: newId(),
-        userId,
         householdId,
         role: 'owner',
-        acceptedAt: now,
-        createdAt: now,
-        updatedAt: now,
       })
 
       registerLimiter.fail(key, now) // count this sign-up toward the per-client cap

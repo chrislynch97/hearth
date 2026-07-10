@@ -10,8 +10,49 @@ import { membership, session, user } from '../db/schema'
 import type { Session, User } from '../db/schema'
 import { getInstanceSettings, setAuthRequired } from '../db/instanceSettings'
 import { DEFAULT_HOUSEHOLD_ID, ROLE_RANK, type Role } from '../trpc/tenant'
+import { newId } from '../../shared/ids'
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days, matching the cookie Max-Age
+
+/** Create a new user and their accepted membership of a household in one shot.
+ *  Shared by self-registration and invite acceptance (which differ only in the
+ *  email, role and whether an invite predates the account). Returns the user id.
+ *  The password is passed pre-hashed so callers control the (async) hashing. */
+export async function createUserWithMembership(
+  db: DB,
+  opts: {
+    username: string
+    displayName: string
+    email: string | null
+    passwordHash: string
+    householdId: string
+    role: string
+    invitedAt?: number
+  },
+): Promise<string> {
+  const now = Date.now()
+  const userId = newId()
+  await db.insert(user).values({
+    id: userId,
+    username: opts.username,
+    email: opts.email,
+    displayName: opts.displayName,
+    passwordHash: opts.passwordHash,
+    createdAt: now,
+    updatedAt: now,
+  })
+  await db.insert(membership).values({
+    id: newId(),
+    userId,
+    householdId: opts.householdId,
+    role: opts.role,
+    invitedAt: opts.invitedAt ?? null,
+    acceptedAt: now,
+    createdAt: now,
+    updatedAt: now,
+  })
+  return userId
+}
 
 /** A fresh, unguessable session id (256 bits). */
 export function newSessionId(): string {
