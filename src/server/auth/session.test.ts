@@ -9,7 +9,6 @@ import { newId } from '../../shared/ids'
 import { hashPassword } from './password'
 import { getOwnerUser, isInstanceLocked, isInstanceOwner, syncAuthRequired } from './session'
 
-const PW_HASH = hashPassword('correct-horse-staple')
 
 describe('instance owner / lock resolution', () => {
   it('ensureSeed backfills the explicit owner id and an unlocked (open) instance', async () => {
@@ -34,7 +33,7 @@ describe('instance owner / lock resolution', () => {
 
     // Lock the instance (owner sets a password) via the real sync path.
     const owner = (await getOwnerUser(db))!
-    await db.update(user).set({ passwordHash: PW_HASH }).where(eq(user.id, owner.id))
+    await db.update(user).set({ passwordHash: await hashPassword('correct-horse-staple') }).where(eq(user.id, owner.id))
     await syncAuthRequired(db)
     expect(await isInstanceLocked(db)).toBe(true)
 

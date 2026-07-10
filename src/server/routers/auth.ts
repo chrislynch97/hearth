@@ -99,7 +99,7 @@ export const authRouter = router({
       }
 
       const u = await getUserByUsername(ctx.db, input.username.trim())
-      if (!u || u.passwordHash === null || !verifyPassword(input.password, u.passwordHash)) {
+      if (!u || u.passwordHash === null || !(await verifyPassword(input.password, u.passwordHash))) {
         loginLimiter.fail(key, now)
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect username or password' })
       }
@@ -182,7 +182,7 @@ export const authRouter = router({
         username: normalizeUsername(input.username),
         email: null,
         displayName: input.displayName.trim(),
-        passwordHash: hashPassword(input.password),
+        passwordHash: await hashPassword(input.password),
         createdAt: now,
         updatedAt: now,
       })
@@ -207,13 +207,13 @@ export const authRouter = router({
     .input(z.object({ currentPassword: z.string().optional(), newPassword: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const me = await requireCurrentUser(ctx)
-      if (me.passwordHash !== null && !verifyPassword(input.currentPassword ?? '', me.passwordHash)) {
+      if (me.passwordHash !== null && !(await verifyPassword(input.currentPassword ?? '', me.passwordHash))) {
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Current password is incorrect' })
       }
       const weak = validatePassword(input.newPassword)
       if (weak) throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
 
-      const newHash = hashPassword(input.newPassword)
+      const newHash = await hashPassword(input.newPassword)
       await ctx.db.update(user).set({ passwordHash: newHash, updatedAt: Date.now() }).where(eq(user.id, me.id))
       await deleteUserSessions(ctx.db, me.id)
       // Setting the owner's password locks the instance; persist that so the gate
@@ -231,7 +231,7 @@ export const authRouter = router({
     .mutation(async ({ ctx, input }) => {
       const me = await requireCurrentUser(ctx)
       if (me.passwordHash === null) return { ok: true as const }
-      if (!verifyPassword(input.currentPassword, me.passwordHash)) {
+      if (!(await verifyPassword(input.currentPassword, me.passwordHash))) {
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Current password is incorrect' })
       }
       const owner = await getOwnerUser(ctx.db)
@@ -267,7 +267,7 @@ export const authRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Set a password before enabling two-factor authentication.' })
       }
       if (me.mfaEnabledAt && me.mfaSecret) {
-        if (!input?.currentPassword || !verifyPassword(input.currentPassword, me.passwordHash)) {
+        if (!input?.currentPassword || !(await verifyPassword(input.currentPassword, me.passwordHash))) {
           throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Current password is incorrect' })
         }
       }
@@ -289,11 +289,12 @@ export const authRouter = router({
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect code — check your authenticator and try again.' })
       }
       const recoveryCodes = generateRecoveryCodes(10)
+      const hashedRecoveryCodes = await hashRecoveryCodes(recoveryCodes)
       await ctx.db
         .update(user)
         .set({
           mfaEnabledAt: Date.now(),
-          mfaRecoveryCodes: JSON.stringify(hashRecoveryCodes(recoveryCodes)),
+          mfaRecoveryCodes: JSON.stringify(hashedRecoveryCodes),
           updatedAt: Date.now(),
         })
         .where(eq(user.id, me.id))
@@ -306,7 +307,7 @@ export const authRouter = router({
     .mutation(async ({ ctx, input }) => {
       const me = await requireCurrentUser(ctx)
       if (me.passwordHash === null) return { ok: true as const }
-      if (!verifyPassword(input.currentPassword, me.passwordHash)) {
+      if (!(await verifyPassword(input.currentPassword, me.passwordHash))) {
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Current password is incorrect' })
       }
       await ctx.db
@@ -332,7 +333,7 @@ async function verifyMfaCode(db: DB, u: User, code: string): Promise<boolean> {
   }
   if (!u.mfaRecoveryCodes) return false
   const hashes = JSON.parse(u.mfaRecoveryCodes) as string[]
-  const remaining = consumeRecoveryCode(code, hashes)
+  const remaining = await consumeRecoveryCode(code, hashes)
   if (remaining === null) return false
   await db
     .update(user)

@@ -30,7 +30,7 @@ async function addMember(db: DB, username: string, role: string): Promise<string
     id: uid,
     username,
     displayName: username,
-    passwordHash: hashPassword('their-strong-pw'),
+    passwordHash: await hashPassword('their-strong-pw'),
     createdAt: now,
     updatedAt: now,
   })

@@ -115,7 +115,7 @@ export const invitationsRouter = router({
         username: normalizeUsername(input.username),
         email: inv.email,
         displayName: input.displayName.trim(),
-        passwordHash: hashPassword(input.password),
+        passwordHash: await hashPassword(input.password),
         createdAt: now,
         updatedAt: now,
       })

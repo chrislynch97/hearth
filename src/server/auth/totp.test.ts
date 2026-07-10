@@ -65,28 +65,28 @@ describe('recovery codes', () => {
     for (const c of codes) expect(c).toMatch(/^[2-9A-HJ-NP-Z]{5}-[2-9A-HJ-NP-Z]{5}$/)
   })
 
-  it('consumes a valid code once and removes it from the pool', () => {
+  it('consumes a valid code once and removes it from the pool', async () => {
     const codes = generateRecoveryCodes(3)
-    const hashes = hashRecoveryCodes(codes)
+    const hashes = await hashRecoveryCodes(codes)
 
-    const remaining = consumeRecoveryCode(codes[1]!, hashes)
+    const remaining = await consumeRecoveryCode(codes[1]!, hashes)
     expect(remaining).not.toBeNull()
     expect(remaining).toHaveLength(2)
 
     // The same code no longer works against the reduced pool.
-    expect(consumeRecoveryCode(codes[1]!, remaining!)).toBeNull()
+    expect(await consumeRecoveryCode(codes[1]!, remaining!)).toBeNull()
   })
 
-  it('matches regardless of case, spaces or dashes', () => {
+  it('matches regardless of case, spaces or dashes', async () => {
     const [code] = generateRecoveryCodes(1)
-    const hashes = hashRecoveryCodes([code!])
+    const hashes = await hashRecoveryCodes([code!])
     const messy = code!.replace('-', ' ').toLowerCase()
-    expect(consumeRecoveryCode(messy, hashes)).not.toBeNull()
+    expect(await consumeRecoveryCode(messy, hashes)).not.toBeNull()
   })
 
-  it('rejects an unknown or empty code', () => {
-    const hashes = hashRecoveryCodes(generateRecoveryCodes(2))
-    expect(consumeRecoveryCode('ZZZZZ-ZZZZZ', hashes)).toBeNull()
-    expect(consumeRecoveryCode('', hashes)).toBeNull()
+  it('rejects an unknown or empty code', async () => {
+    const hashes = await hashRecoveryCodes(generateRecoveryCodes(2))
+    expect(await consumeRecoveryCode('ZZZZZ-ZZZZZ', hashes)).toBeNull()
+    expect(await consumeRecoveryCode('', hashes)).toBeNull()
   })
 })

@@ -166,16 +166,18 @@ function normalizeRecoveryCode(code: string): string {
 }
 
 /** Hash recovery codes for storage. */
-export function hashRecoveryCodes(codes: string[]): string[] {
-  return codes.map((c) => hashPassword(normalizeRecoveryCode(c)))
+export async function hashRecoveryCodes(codes: string[]): Promise<string[]> {
+  return Promise.all(codes.map((c) => hashPassword(normalizeRecoveryCode(c))))
 }
 
 /** Try to consume `code` against stored hashes. Returns the remaining hashes
  *  (with the matched one removed) on success, or `null` if no code matched. */
-export function consumeRecoveryCode(code: string, hashes: string[]): string[] | null {
+export async function consumeRecoveryCode(code: string, hashes: string[]): Promise<string[] | null> {
   const normalized = normalizeRecoveryCode(code)
   if (normalized.length === 0) return null
-  const idx = hashes.findIndex((h) => verifyPassword(normalized, h))
+  // Check all hashes concurrently (scrypt is async now), then find the match.
+  const matches = await Promise.all(hashes.map((h) => verifyPassword(normalized, h)))
+  const idx = matches.indexOf(true)
   if (idx === -1) return null
   return hashes.filter((_, i) => i !== idx)
 }

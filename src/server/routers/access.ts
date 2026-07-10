@@ -149,7 +149,7 @@ export const accessRouter = router({
 
       await ctx.db
         .update(user)
-        .set({ passwordHash: hashPassword(input.newPassword), updatedAt: Date.now() })
+        .set({ passwordHash: await hashPassword(input.newPassword), updatedAt: Date.now() })
         .where(eq(user.id, input.userId))
       await deleteUserSessions(ctx.db, input.userId)
       return { ok: true as const }
