@@ -102,11 +102,20 @@ export const dashboardRouter = router({
       // D — allocation by category (planned funding).
       const potCategoryById = new Map(pots.map((p) => [p.id, p.categoryId]))
       const allocation = allocationByCategory({
-        pots: funding.pots.map((p) => ({
-          id: p.potId,
-          categoryId: potCategoryById.get(p.potId) ?? null,
-          fundingPerMonth: p.fundingPerMonth,
-        })),
+        pots: [
+          ...funding.pots.map((p) => ({
+            id: p.potId,
+            categoryId: potCategoryById.get(p.potId) ?? null,
+            fundingPerMonth: p.fundingPerMonth,
+          })),
+          // Bills paid straight from the main account (funding='main') are part of
+          // the plan too — without them these categories read as planned £0.
+          ...funding.mainAccountByCategory.map((m, i) => ({
+            id: `main:${i}`,
+            categoryId: m.categoryId,
+            fundingPerMonth: m.fundingPerMonth,
+          })),
+        ],
         categories: categories.map((c) => ({ id: c.id, name: c.name })),
       })
 
