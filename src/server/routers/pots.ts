@@ -3,7 +3,7 @@ import { asc, eq, isNull, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { scopeWhere } from '../trpc/tenant'
-import { pot, member, expenseShare, spendTransaction, reconciliationBatch } from '../db/schema'
+import { pot, member, expense, setAside, spendTransaction, reconciliationBatch } from '../db/schema'
 import { newId } from '../../shared/ids'
 
 export const potsRouter = router({
@@ -15,14 +15,18 @@ export const potsRouter = router({
       .orderBy(asc(pot.sortOrder), asc(pot.name))
   }),
 
-  // Pots referenced by an outgoing share, a spend, or a reconciliation batch.
-  // Anything not in this set has never been used and is safe to delete.
+  // Pots referenced by a current bill, a set-aside, a spend, or a reconciliation
+  // batch. Anything not in this set has never been used and is safe to delete.
   usedIds: publicProcedure.query(async ({ ctx }) => {
-    const [shares, spends, batches] = await Promise.all([
+    const [bills, setAsides, spends, batches] = await Promise.all([
       ctx.db
-        .select({ potId: expenseShare.potId })
-        .from(expenseShare)
-        .where(scopeWhere(ctx.householdId, expenseShare.householdId)),
+        .select({ potId: expense.potId })
+        .from(expense)
+        .where(scopeWhere(ctx.householdId, expense.householdId)),
+      ctx.db
+        .select({ potId: setAside.potId })
+        .from(setAside)
+        .where(scopeWhere(ctx.householdId, setAside.householdId)),
       ctx.db
         .select({ potId: spendTransaction.potId })
         .from(spendTransaction)
@@ -33,7 +37,7 @@ export const potsRouter = router({
         .where(scopeWhere(ctx.householdId, reconciliationBatch.householdId)),
     ])
     const used = new Set<string>()
-    for (const row of [...shares, ...spends, ...batches]) {
+    for (const row of [...bills, ...setAsides, ...spends, ...batches]) {
       if (row.potId) used.add(row.potId)
     }
     return [...used]

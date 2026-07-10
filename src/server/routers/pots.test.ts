@@ -187,6 +187,54 @@ describe('pots router', () => {
     expect(ids).not.toContain(unused.id)
   })
 
+  it('usedIds includes a pot funded by a current bill', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+
+    const members = await caller.members.list()
+    const joint = members.find((m) => m.kind === 'joint')!
+
+    const funded = await caller.pots.create({ name: 'Rent', ownerId: joint.id })
+    const unused = await caller.pots.create({ name: 'Never Used', ownerId: joint.id })
+
+    await caller.expenses.create({
+      name: 'Rent',
+      recurrence: 'monthly',
+      amount: 90000,
+      funding: 'pot_manual',
+      potId: funded.id,
+    })
+
+    const ids = await caller.pots.usedIds()
+    expect(ids).toContain(funded.id)
+    expect(ids).not.toContain(unused.id)
+  })
+
+  it('usedIds includes a pot filled by a set-aside', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+
+    const members = await caller.members.list()
+    const joint = members.find((m) => m.kind === 'joint')!
+
+    const filled = await caller.pots.create({ name: 'Holiday', ownerId: joint.id })
+    const unused = await caller.pots.create({ name: 'Never Used', ownerId: joint.id })
+
+    await caller.setAside.create({
+      name: 'Holiday Fund',
+      ownerId: joint.id,
+      potId: filled.id,
+      amount: 5000,
+      recurrence: 'monthly',
+    })
+
+    const ids = await caller.pots.usedIds()
+    expect(ids).toContain(filled.id)
+    expect(ids).not.toContain(unused.id)
+  })
+
   it('create with a person member as owner works', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
