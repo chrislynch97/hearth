@@ -888,10 +888,14 @@ function MfaSection() {
         <Stack gap="sm">
           <Text size="sm">Scan this with your authenticator app, then enter the 6-digit code it shows.</Text>
           <Group align="flex-start" gap="lg">
-            <div
-              style={{ width: 200, height: 200, flexShrink: 0 }}
-              // The SVG is generated server-side from our own otpauth URL — no user input.
-              dangerouslySetInnerHTML={{ __html: enroll.qrSvg }}
+            {/* Render the server-generated SVG as an image (a data URI) rather than
+                injecting raw HTML, so it can't introduce markup into the page. */}
+            <img
+              src={`data:image/svg+xml;utf8,${encodeURIComponent(enroll.qrSvg)}`}
+              alt="Two-factor authentication QR code"
+              width={200}
+              height={200}
+              style={{ flexShrink: 0 }}
             />
             <Stack gap="xs" style={{ flex: 1 }}>
               <Text size="xs" c="dimmed">

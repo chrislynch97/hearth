@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 import fastifyStatic from '@fastify/static'
+import fastifyHelmet from '@fastify/helmet'
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify'
 import type { FastifyTRPCPluginOptions } from '@trpc/server/adapters/fastify'
 import { fileURLToPath } from 'node:url'
@@ -86,6 +87,34 @@ async function main() {
     logger: true,
     bodyLimit: 64 * 1024 * 1024,
     trustProxy: process.env.HEARTH_TRUST_PROXY === '1',
+  })
+
+  // Security headers (defence-in-depth for a directly internet-exposed instance;
+  // harmless on a trusted LAN). The app owns these headers; if you additionally
+  // set any of them at a reverse proxy, drop them here (or there) so they aren't
+  // emitted twice. HSTS is only honoured by browsers over HTTPS, so it's inert on
+  // a plain-HTTP LAN deployment and doesn't need to be conditional.
+  await app.register(fastifyHelmet, {
+    // Serve our own SPA + tRPC; allow the Google Fonts stylesheet/font files the
+    // client loads, Mantine's runtime-injected inline <style> tags, and data: URIs
+    // for the inline favicon and the MFA-enrolment QR image.
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+        imgSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        formAction: ["'self'"],
+        // Don't force http→https upgrades: the LAN deployment is often plain HTTP
+        // and the upgrade would make every request fail.
+        upgradeInsecureRequests: null,
+      },
+    },
   })
 
   // Cheap liveness probe — returns 200 as soon as we're listening, without
