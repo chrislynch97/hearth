@@ -187,4 +187,24 @@ describe('MFA', () => {
     const login = makeCaller(db)
     expect(await login.caller.auth.login({ username: USER, password: PW })).toEqual({ ok: true })
   })
+
+  it('re-enrolling while MFA is active needs the password (no silent downgrade)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { authed } = await lockAndLogin(db)
+    const enroll = await authed.caller.auth.enrollMfa()
+    await authed.caller.auth.confirmMfa({ code: generateTotp(enroll.secret) })
+    expect((await authed.caller.auth.status()).mfaEnabled).toBe(true)
+
+    // Session alone (or a wrong password) must not overwrite the secret / clear enforcement.
+    await expect(authed.caller.auth.enrollMfa()).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+    await expect(authed.caller.auth.enrollMfa({ currentPassword: 'wrong-password-x' })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+    expect((await authed.caller.auth.status()).mfaEnabled).toBe(true)
+
+    // With the password it proceeds (starts a fresh pending secret).
+    const re = await authed.caller.auth.enrollMfa({ currentPassword: PW })
+    expect(re.secret).toBeTruthy()
+  })
 })

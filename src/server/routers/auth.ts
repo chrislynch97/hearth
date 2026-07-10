@@ -247,18 +247,28 @@ export const authRouter = router({
       return { ok: true as const }
     }),
 
-  /** Begin MFA enrolment for the current user: a fresh pending secret + QR. */
-  enrollMfa: publicProcedure.mutation(async ({ ctx }) => {
-    const me = await requireCurrentUser(ctx)
-    if (me.passwordHash === null) {
-      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Set a password before enabling two-factor authentication.' })
-    }
-    const secret = generateTotpSecret()
-    await ctx.db.update(user).set({ mfaSecret: secret, mfaEnabledAt: null, updatedAt: Date.now() }).where(eq(user.id, me.id))
-    const otpauthUrl = buildOtpauthUrl(secret, me.displayName || me.username)
-    const qrSvg = await QRCode.toString(otpauthUrl, { type: 'svg', margin: 1, width: 200 })
-    return { secret, otpauthUrl, qrSvg }
-  }),
+  /** Begin MFA enrolment for the current user: a fresh pending secret + QR.
+   *  If MFA is already active, re-enrolling would clear `mfaEnabledAt` and so
+   *  turn enforcement off (see the login gate) — a downgrade. Require the
+   *  current password in that case, matching `disableMfa`. */
+  enrollMfa: publicProcedure
+    .input(z.object({ currentPassword: z.string() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      const me = await requireCurrentUser(ctx)
+      if (me.passwordHash === null) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Set a password before enabling two-factor authentication.' })
+      }
+      if (me.mfaEnabledAt && me.mfaSecret) {
+        if (!input?.currentPassword || !verifyPassword(input.currentPassword, me.passwordHash)) {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Current password is incorrect' })
+        }
+      }
+      const secret = generateTotpSecret()
+      await ctx.db.update(user).set({ mfaSecret: secret, mfaEnabledAt: null, updatedAt: Date.now() }).where(eq(user.id, me.id))
+      const otpauthUrl = buildOtpauthUrl(secret, me.displayName || me.username)
+      const qrSvg = await QRCode.toString(otpauthUrl, { type: 'svg', margin: 1, width: 200 })
+      return { secret, otpauthUrl, qrSvg }
+    }),
 
   /** Confirm enrolment with a code; turns MFA on and returns recovery codes. */
   confirmMfa: publicProcedure
