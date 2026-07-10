@@ -146,7 +146,7 @@ export const dataRouter = router({
   /** Write a JSON backup to disk now (the auto-backup, triggered manually). */
   backupNow: publicProcedure.mutation(async ({ ctx }) => {
     await assertInstanceOwner(ctx.db, ctx.userId)
-    return runBackup(ctx.db)
+    return runBackup(ctx.db, [ctx.householdId])
   }),
 
   /** Row counts per table + the database location, for the About screen. */
