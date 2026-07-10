@@ -31,6 +31,19 @@ describe('role enforcement', () => {
     await expect(owner.c.categories.create({ name: 'Yes' })).resolves.toBeTruthy()
   })
 
+  it('an unknown/undefined role cannot write (guard fails closed)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+
+    // A removed member still holding a session resolves to role === undefined.
+    // The write guard must deny by default rather than let them through.
+    const stranger = caller(db, { role: undefined })
+    await expect(stranger.c.categories.create({ name: 'Nope' })).rejects.toMatchObject({ code: 'FORBIDDEN' })
+
+    // Self-service/auth mutations stay open so they can still log out.
+    await expect(stranger.c.auth.logout()).resolves.toBeTruthy()
+  })
+
   it('household settings are gated by role; whole-instance reset needs the instance owner', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
