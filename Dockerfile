@@ -11,6 +11,7 @@ RUN npm install --no-audit --no-fund
 COPY . .
 RUN npm run build        # builds the client into dist/client
 
+ENV NODE_ENV=production
 ENV PORT=8787
 ENV DATABASE_URL=file:/data/app.db
 ENV CLIENT_DIR=/app/dist/client

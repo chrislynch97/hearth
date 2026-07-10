@@ -2,7 +2,26 @@ import { initTRPC, TRPCError } from '@trpc/server'
 import type { Context } from './context'
 import { hasRole } from './tenant'
 
-const t = initTRPC.context<Context>().create()
+// Ship only a code and a safe message to the browser — never a stack trace or
+// raw internal error text. tRPC's default formatter attaches `data.stack` and
+// serializes the underlying error message whenever NODE_ENV !== 'production',
+// which would leak file paths, DB constraint names and library internals from
+// any raw `throw new Error(...)` or Drizzle/SQLite failure. We therefore always
+// drop the stack and replace INTERNAL_SERVER_ERROR messages (which wrap
+// unexpected/unhandled errors) with a generic string, regardless of NODE_ENV.
+const t = initTRPC.context<Context>().create({
+  errorFormatter({ shape, error }) {
+    const isInternal = error.code === 'INTERNAL_SERVER_ERROR'
+    return {
+      ...shape,
+      message: isInternal ? 'Internal server error' : shape.message,
+      data: {
+        code: shape.data.code,
+        httpStatus: shape.data.httpStatus,
+      },
+    }
+  },
+})
 
 export const router = t.router
 
