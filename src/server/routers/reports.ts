@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { eq, isNull } from 'drizzle-orm'
+import { eq, gte, isNull } from 'drizzle-orm'
 import { router, publicProcedure } from '../trpc/trpc'
 import { scopeWhere } from '../trpc/tenant'
 import { category, expense, setAside, household, member, pot, spendTransaction } from '../db/schema'
@@ -8,7 +8,7 @@ import { computeIncomeByMember } from '../income/service'
 import { allocationByCategory } from '../dashboard/summary'
 import { categoryBreakdown, monthlyTotals, monthOverMonth, perMemberVsJoint, spendVsAllocation } from '../reports/reports'
 import { periodForDate } from '../../shared/period'
-import { todayIso } from '../../shared/dates'
+import { subtractMonths, todayIso } from '../../shared/dates'
 import type { Recurrence } from '../../shared/recurrence'
 
 export const reportsRouter = router({
@@ -108,12 +108,23 @@ export const reportsRouter = router({
         categories: categories.map((c) => ({ id: c.id, name: c.name })),
       })
 
-      // Spends, optionally filtered to one owner.
-      const allSpends = await ctx.db
+      // Spends, optionally filtered to one owner, and never older than we need:
+      // the month-over-month window reaches back `months` from today, the period
+      // slice reaches back to period.start — load from the earlier of the two and
+      // push both bounds into SQL instead of fetching the whole history.
+      const monthsWindowStart = subtractMonths(today, months)
+      const lowerBound = period.start < monthsWindowStart ? period.start : monthsWindowStart
+      const scoped = await ctx.db
         .select()
         .from(spendTransaction)
-        .where(scopeWhere(ctx.householdId, spendTransaction.householdId))
-      const scoped = input?.ownerId ? allSpends.filter((s) => s.ownerId === input.ownerId) : allSpends
+        .where(
+          scopeWhere(
+            ctx.householdId,
+            spendTransaction.householdId,
+            gte(spendTransaction.date, lowerBound),
+            ...(input?.ownerId ? [eq(spendTransaction.ownerId, input.ownerId)] : []),
+          ),
+        )
       const inPeriod = scoped.filter((s) => s.date >= period.start && s.date <= period.end)
 
       const categoryRefs = categories.map((c) => ({ id: c.id, name: c.name }))
