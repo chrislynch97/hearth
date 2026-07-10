@@ -162,8 +162,14 @@ export const authRouter = router({
       }
 
       const weak = validatePassword(input.password)
-      if (weak) throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
+      if (weak) {
+        registerLimiter.fail(key, now)
+        throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
+      }
+      // Count the "taken" path against the limiter too, otherwise it's an
+      // unthrottled username-enumeration oracle on an open-registration instance.
       if (await getUserByUsername(ctx.db, input.username.trim())) {
+        registerLimiter.fail(key, now)
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'That username is taken.' })
       }
 

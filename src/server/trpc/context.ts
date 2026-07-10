@@ -1,5 +1,5 @@
 import type { CreateFastifyContextOptions } from '@trpc/server/adapters/fastify'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNotNull } from 'drizzle-orm'
 import type { DB } from '../db/client'
 import { db } from '../db/client'
 import { membership, session } from '../db/schema'
@@ -71,7 +71,15 @@ async function resolveIdentity(
     const [m] = await db
       .select()
       .from(membership)
-      .where(and(eq(membership.userId, userId), eq(membership.householdId, householdId)))
+      // Only accepted memberships grant a role — defence in depth against a
+      // hand-crafted snapshot import planting an unaccepted membership row.
+      .where(
+        and(
+          eq(membership.userId, userId),
+          eq(membership.householdId, householdId),
+          isNotNull(membership.acceptedAt),
+        ),
+      )
     role = m?.role
   }
 

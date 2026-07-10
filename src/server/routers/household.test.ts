@@ -75,6 +75,13 @@ describe('household router', () => {
     })
   })
 
+  it('completeSetup requires the admin role (#14)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'member' })
+    await expect(caller.household.completeSetup()).rejects.toMatchObject({ code: 'FORBIDDEN' })
+  })
+
   it('completeSetup sets setupCompletedAt after a person is added', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)

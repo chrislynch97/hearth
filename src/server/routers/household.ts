@@ -52,6 +52,7 @@ export const householdRouter = router({
     }),
 
   completeSetup: publicProcedure.mutation(async ({ ctx }) => {
+    assertRole(ctx.role, 'admin')
     // Require at least one active person member
     const people = await ctx.db
       .select()

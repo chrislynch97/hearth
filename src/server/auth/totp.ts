@@ -121,12 +121,22 @@ const RECOVERY_ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ'
 const RECOVERY_GROUPS = 2
 const RECOVERY_GROUP_LEN = 5
 
+/** A uniformly-random index into `RECOVERY_ALPHABET`. Plain `byte % len` is
+ *  biased when 256 isn't a multiple of `len` (256 % 30 = 16, so low indices are
+ *  ~12% more likely); reject bytes in the ragged top range and redraw. */
+function randomAlphabetIndex(len: number): number {
+  const limit = 256 - (256 % len) // largest multiple of len that fits in a byte
+  for (;;) {
+    const byte = randomBytes(1)[0]!
+    if (byte < limit) return byte % len
+  }
+}
+
 function randomRecoveryCode(): string {
-  const bytes = randomBytes(RECOVERY_GROUPS * RECOVERY_GROUP_LEN)
   let out = ''
-  for (let i = 0; i < bytes.length; i++) {
+  for (let i = 0; i < RECOVERY_GROUPS * RECOVERY_GROUP_LEN; i++) {
     if (i > 0 && i % RECOVERY_GROUP_LEN === 0) out += '-'
-    out += RECOVERY_ALPHABET[bytes[i]! % RECOVERY_ALPHABET.length]
+    out += RECOVERY_ALPHABET[randomAlphabetIndex(RECOVERY_ALPHABET.length)]
   }
   return out
 }

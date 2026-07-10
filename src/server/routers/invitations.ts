@@ -7,10 +7,19 @@ import { household, invitation, membership, user } from '../db/schema'
 import { hashPassword } from '../auth/password'
 import { createSession, getUserByUsername, newSessionId } from '../auth/session'
 import { validatePassword } from '../../shared/password-policy'
+import { RateLimiter } from '../auth/rateLimit'
 import { newId } from '../../shared/ids'
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const inviteRole = z.enum(['admin', 'member', 'viewer'])
+
+// Throttle invite acceptance so the username-taken response can't be used as an
+// unbounded enumeration oracle: 10 attempts per hour per client, then a block.
+const acceptLimiter = new RateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxAttempts: 10,
+  blockMs: 60 * 60 * 1000,
+})
 
 export const invitationsRouter = router({
   /** Pending (unaccepted, unexpired) invitations for the active household. */
@@ -78,13 +87,24 @@ export const invitationsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const key = ctx.clientKey ?? 'unknown'
+      const nowCheck = Date.now()
+      if (!acceptLimiter.check(key, nowCheck).allowed) {
+        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many attempts. Try again later.' })
+      }
+
       const [inv] = await ctx.db.select().from(invitation).where(eq(invitation.id, input.token))
       if (!inv || inv.acceptedAt !== null || inv.expiresAt < Date.now()) {
+        acceptLimiter.fail(key, nowCheck)
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'This invitation is invalid or has expired.' })
       }
       const weak = validatePassword(input.password)
-      if (weak) throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
+      if (weak) {
+        acceptLimiter.fail(key, nowCheck)
+        throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
+      }
       if (await getUserByUsername(ctx.db, input.username.trim())) {
+        acceptLimiter.fail(key, nowCheck)
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'That username is taken.' })
       }
 
@@ -111,6 +131,7 @@ export const invitationsRouter = router({
       })
       await ctx.db.update(invitation).set({ acceptedAt: now }).where(eq(invitation.id, inv.id))
 
+      acceptLimiter.reset(key)
       ctx.setSessionCookie?.(await createSession(ctx.db, userId, inv.householdId))
       return { ok: true as const }
     }),
