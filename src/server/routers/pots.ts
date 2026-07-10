@@ -2,8 +2,8 @@ import { z } from 'zod'
 import { asc, eq, isNull, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
-import { scopeWhere } from '../trpc/tenant'
-import { pot, member, expense, setAside, spendTransaction, reconciliationBatch } from '../db/schema'
+import { assertMember, scopeWhere } from '../trpc/tenant'
+import { pot, expense, setAside, spendTransaction, reconciliationBatch } from '../db/schema'
 import { newId } from '../../shared/ids'
 
 export const potsRouter = router({
@@ -56,13 +56,7 @@ export const potsRouter = router({
       const now = Date.now()
 
       // Validate ownerId — must be a member of THIS household.
-      const [owner] = await ctx.db
-        .select()
-        .from(member)
-        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, input.ownerId)))
-      if (!owner) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
-      }
+      await assertMember(ctx.db, ctx.householdId, input.ownerId)
 
       const [result] = await ctx.db
         .select({ maxOrder: max(pot.sortOrder) })
@@ -111,15 +105,7 @@ export const potsRouter = router({
       const now = Date.now()
 
       // Validate ownerId if provided — must be a member of THIS household.
-      if (ownerId !== undefined) {
-        const [owner] = await ctx.db
-          .select()
-          .from(member)
-          .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, ownerId)))
-        if (!owner) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
-        }
-      }
+      if (ownerId !== undefined) await assertMember(ctx.db, ctx.householdId, ownerId)
 
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (ownerId !== undefined) setFields['ownerId'] = ownerId

@@ -2,8 +2,8 @@ import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
-import { scopeWhere } from '../trpc/tenant'
-import { spendTransaction, member, importBatch, household } from '../db/schema'
+import { assertMember, scopeWhere } from '../trpc/tenant'
+import { spendTransaction, importBatch, household } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { parseCsvTable } from '../../shared/csvParse'
 import { mapMonzoRows } from '../import/monzo'
@@ -12,13 +12,6 @@ import { suggestPot } from '../spending/suggest'
 import type { DB } from '../db/client'
 
 type BatchArg = Parameters<DB['batch']>[0]
-
-async function assertMember(db: DB, householdId: string, ownerId: string): Promise<void> {
-  const [owner] = await db.select().from(member).where(scopeWhere(householdId, member.householdId, eq(member.id, ownerId)))
-  if (!owner) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
-  }
-}
 
 export interface PreviewRow extends MappedRow {
   suggestedPotId: string | null

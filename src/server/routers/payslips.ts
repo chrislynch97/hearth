@@ -2,8 +2,8 @@ import { z } from 'zod'
 import { desc, eq, inArray } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
-import { scopeWhere } from '../trpc/tenant'
-import { member, payslip, payslipComponentType, payslipLine } from '../db/schema'
+import { assertPerson, scopeWhere } from '../trpc/tenant'
+import { payslip, payslipComponentType, payslipLine } from '../db/schema'
 import type { Payslip, PayslipLine } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { computePayslipTotals, type ComponentKind, type PayslipTotals } from '../income/payslip'
@@ -18,16 +18,6 @@ export interface PayslipWithLines extends Payslip {
   lines: PayslipLine[]
   totals: PayslipTotals
   hasVariablePay: boolean
-}
-
-async function assertPerson(db: DB, householdId: string, ownerId: string): Promise<void> {
-  const [owner] = await db.select().from(member).where(scopeWhere(householdId, member.householdId, eq(member.id, ownerId)))
-  if (!owner) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
-  }
-  if (owner.kind !== 'person') {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Payslips belong to a person, not the joint entity' })
-  }
 }
 
 /** Every line's component must exist and belong to the payslip's owner; no dupes. */

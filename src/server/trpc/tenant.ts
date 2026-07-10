@@ -1,6 +1,9 @@
 import { and, eq, type SQL } from 'drizzle-orm'
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
 import { TRPCError } from '@trpc/server'
+import { member } from '../db/schema'
+import type { Member } from '../db/schema'
+import type { DB } from '../db/client'
 
 /**
  * Id of the original single-tenant household. Until per-user login lands
@@ -28,6 +31,33 @@ export function scopeWhere(
 ): SQL {
   // `and` with at least one argument always yields a defined SQL.
   return and(eq(householdColumn, householdId), ...more)!
+}
+
+/** Return the member `ownerId` names within `householdId`, or throw BAD_REQUEST.
+ *  Shared by every router that accepts an `ownerId` referencing a member. */
+export async function requireMember(db: DB, householdId: string, ownerId: string): Promise<Member> {
+  const [owner] = await db
+    .select()
+    .from(member)
+    .where(scopeWhere(householdId, member.householdId, eq(member.id, ownerId)))
+  if (!owner) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
+  }
+  return owner
+}
+
+/** Throw BAD_REQUEST unless `ownerId` names a member of `householdId`. */
+export async function assertMember(db: DB, householdId: string, ownerId: string): Promise<void> {
+  await requireMember(db, householdId, ownerId)
+}
+
+/** Throw BAD_REQUEST unless `ownerId` names a *person* member (payslips and their
+ *  components belong to a person, never the joint entity). */
+export async function assertPerson(db: DB, householdId: string, ownerId: string): Promise<void> {
+  const owner = await requireMember(db, householdId, ownerId)
+  if (owner.kind !== 'person') {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'This belongs to a person, not the joint entity' })
+  }
 }
 
 // --- Roles -----------------------------------------------------------------

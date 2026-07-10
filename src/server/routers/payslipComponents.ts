@@ -2,23 +2,11 @@ import { z } from 'zod'
 import { asc, eq, isNull, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
-import { scopeWhere } from '../trpc/tenant'
-import { member, payslipComponentType } from '../db/schema'
+import { assertPerson, scopeWhere } from '../trpc/tenant'
+import { payslipComponentType } from '../db/schema'
 import { newId } from '../../shared/ids'
-import type { DB } from '../db/client'
 
 const kindEnum = z.enum(['earning', 'deduction', 'employer_info'])
-
-/** Payslips and their components belong to a person, never the joint entity. */
-async function assertPerson(db: DB, householdId: string, ownerId: string): Promise<void> {
-  const [owner] = await db.select().from(member).where(scopeWhere(householdId, member.householdId, eq(member.id, ownerId)))
-  if (!owner) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
-  }
-  if (owner.kind !== 'person') {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Payslip components belong to a person, not the joint entity' })
-  }
-}
 
 export const payslipComponentsRouter = router({
   list: publicProcedure

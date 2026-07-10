@@ -2,8 +2,8 @@ import { z } from 'zod'
 import { asc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
-import { scopeWhere } from '../trpc/tenant'
-import { setAside, member, pot } from '../db/schema'
+import { assertMember, scopeWhere } from '../trpc/tenant'
+import { setAside, pot } from '../db/schema'
 import type { SetAside } from '../db/schema'
 import { newId } from '../../shared/ids'
 import type { DB } from '../db/client'
@@ -21,8 +21,7 @@ const baseInput = z.object({
 })
 
 async function validateOwnerAndPot(db: DB, householdId: string, ownerId: string, potId: string): Promise<void> {
-  const [owner] = await db.select().from(member).where(scopeWhere(householdId, member.householdId, eq(member.id, ownerId)))
-  if (!owner) throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
+  await assertMember(db, householdId, ownerId)
   const [p] = await db.select().from(pot).where(scopeWhere(householdId, pot.householdId, eq(pot.id, potId)))
   if (!p) throw new TRPCError({ code: 'BAD_REQUEST', message: 'potId does not refer to an existing pot' })
 }

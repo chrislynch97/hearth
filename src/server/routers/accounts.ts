@@ -2,8 +2,8 @@ import { z } from 'zod'
 import { asc, eq, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
-import { scopeWhere } from '../trpc/tenant'
-import { account, accountBalance, member } from '../db/schema'
+import { assertMember, scopeWhere } from '../trpc/tenant'
+import { account, accountBalance } from '../db/schema'
 import type { Account, AccountBalance } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { netWorthAsOf, netWorthTimeline } from '../networth/networth'
@@ -11,13 +11,6 @@ import type { AccountKind } from '../networth/networth'
 import type { DB } from '../db/client'
 
 const KIND = z.enum(['asset', 'liability'])
-
-async function assertMember(db: DB, householdId: string, ownerId: string): Promise<void> {
-  const [owner] = await db.select().from(member).where(scopeWhere(householdId, member.householdId, eq(member.id, ownerId)))
-  if (!owner) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId does not refer to an existing member' })
-  }
-}
 
 async function getAccount(db: DB, householdId: string, id: string): Promise<Account> {
   const [row] = await db.select().from(account).where(scopeWhere(householdId, account.householdId, eq(account.id, id)))
