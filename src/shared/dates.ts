@@ -1,9 +1,14 @@
 /** Calendar-date helpers. Dates are `YYYY-MM-DD` text — a day, not a moment —
  *  so they compare lexicographically and carry no timezone. */
 
-/** Today as `YYYY-MM-DD`. */
+/** Today as `YYYY-MM-DD`, in the server's local timezone. Consumers treat this
+ *  as the household's calendar day (period selection, `daysUntil`, trend
+ *  buckets), so it must NOT be the UTC day — for a UTC+ household near local
+ *  midnight the UTC slice is still yesterday, showing the wrong period. Build it
+ *  from local date parts rather than `toISOString()` (which is always UTC). */
 export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  const now = new Date()
+  return `${pad(now.getFullYear(), 4)}-${pad(now.getMonth() + 1, 2)}-${pad(now.getDate(), 2)}`
 }
 
 /** Subtract a number of whole months from a `YYYY-MM-DD` date, clamping the day

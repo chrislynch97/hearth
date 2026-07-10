@@ -1,5 +1,21 @@
-import { describe, it, expect } from 'vitest'
-import { addDays, addMonths, subtractMonths } from './dates'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { addDays, addMonths, subtractMonths, todayIso } from './dates'
+
+describe('todayIso', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('returns the local calendar day, not the UTC day', () => {
+    vi.useFakeTimers()
+    // An instant where UTC has already ticked to the next day (00:30Z) but many
+    // local zones are still on the previous day — the original UTC-slice bug.
+    const instant = new Date('2026-07-01T00:30:00Z')
+    vi.setSystemTime(instant)
+    const expected = `${instant.getFullYear()}-${String(instant.getMonth() + 1).padStart(2, '0')}-${String(
+      instant.getDate(),
+    ).padStart(2, '0')}`
+    expect(todayIso()).toBe(expected)
+  })
+})
 
 describe('subtractMonths', () => {
   it('subtracts whole months within a year', () => {
