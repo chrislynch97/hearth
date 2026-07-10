@@ -13,5 +13,5 @@
     "verbatimModuleSyntax": true,
     "noEmit": true
   },
-  "include": ["src", "vite.config.ts", "drizzle.config.ts"]
+  "include": ["src", "scripts", "vite.config.ts", "drizzle.config.ts"]
 }
