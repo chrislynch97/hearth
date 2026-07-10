@@ -43,6 +43,9 @@ export const spendsRouter = router({
           potId: z.string().optional(),
           reconciled: z.boolean().optional(),
           needsPot: z.boolean().optional(),
+          // Cap the rows returned (the Spending register pages through history so
+          // it never loads the whole table at once). Omit for the full list.
+          limit: z.number().int().min(1).max(10000).optional(),
         })
         .optional(),
     )
@@ -60,11 +63,12 @@ export const spendsRouter = router({
         conditions.push(eq(spendTransaction.settledAtSource, 0))
       }
 
-      return ctx.db
+      const base = ctx.db
         .select()
         .from(spendTransaction)
         .where(scopeWhere(ctx.householdId, spendTransaction.householdId, ...conditions))
         .orderBy(desc(spendTransaction.date), desc(spendTransaction.createdAt))
+      return input?.limit !== undefined ? base.limit(input.limit) : base
     }),
 
   add: publicProcedure

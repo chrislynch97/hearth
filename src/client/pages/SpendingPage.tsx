@@ -962,8 +962,18 @@ function Register({ members, pots, money }: { members: Member[]; pots: Pot[]; mo
     return i
   }, [ownerFilter, potFilter, reconciledFilter, needsPotOnly])
 
-  const spendsQuery = trpc.spends.list.useQuery(input)
-  const spends = spendsQuery.data ?? []
+  // Page through history rather than loading and rendering the whole table: fetch
+  // `limit + 1` so we know whether a "Load more" is warranted, and reset to the
+  // first page whenever the filters change.
+  const PAGE_SIZE = 100
+  const [pages, setPages] = useState(1)
+  useEffect(() => setPages(1), [input])
+  const limit = pages * PAGE_SIZE
+
+  const spendsQuery = trpc.spends.list.useQuery({ ...input, limit: limit + 1 })
+  const allRows = spendsQuery.data ?? []
+  const hasMore = allRows.length > limit
+  const spends = hasMore ? allRows.slice(0, limit) : allRows
   // Queried once here and passed to every row, rather than each SpendRow mounting
   // its own categories.list subscription.
   const categories = trpc.categories.list.useQuery().data ?? []
@@ -1045,6 +1055,14 @@ function Register({ members, pots, money }: { members: Member[]; pots: Pot[]; mo
               </Table.Tbody>
             </Table>
           </Table.ScrollContainer>
+        )}
+
+        {!spendsQuery.isLoading && hasMore && (
+          <Group justify="center">
+            <Button variant="default" size="xs" onClick={() => setPages((p) => p + 1)}>
+              Load more
+            </Button>
+          </Group>
         )}
       </Stack>
     </Card>

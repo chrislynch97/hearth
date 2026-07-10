@@ -121,6 +121,25 @@ describe('spends router', () => {
     expect(list[0]?.id).toBe(s.id)
   })
 
+  it('caps the result at `limit`, newest first (register pagination, #15)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
+
+    for (let i = 0; i < 5; i++) {
+      await caller.spends.add({ date: `2026-07-0${i + 1}`, description: `s${i}`, amount: 100, ownerId: joint.id })
+    }
+
+    const all = await caller.spends.list({})
+    expect(all.length).toBe(5)
+
+    const page = await caller.spends.list({ limit: 2 })
+    expect(page.length).toBe(2)
+    // Ordered by date desc, so the newest two (07-05, 07-04) come back.
+    expect(page.map((s) => s.date)).toEqual(['2026-07-05', '2026-07-04'])
+  })
+
   it('add without a pot → list({needsPot:true}) returns it', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
