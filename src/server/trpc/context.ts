@@ -4,6 +4,7 @@ import type { DB } from '../db/client'
 import { db } from '../db/client'
 import { membership, session } from '../db/schema'
 import { parseSessionCookie, serializeSessionCookie } from '../auth/cookies'
+import { getOwnerUser } from '../auth/session'
 import { DEFAULT_HOUSEHOLD_ID } from './tenant'
 
 export interface Context {
@@ -54,13 +55,14 @@ async function resolveIdentity(
   }
 
   if (!userId) {
-    // Open/local fallback: the default household's owner, so a password-less
-    // instance works with no login.
-    const [owner] = await db
-      .select()
-      .from(membership)
-      .where(eq(membership.householdId, DEFAULT_HOUSEHOLD_ID))
-    userId = owner?.userId
+    // Open/local fallback: the instance owner, so a password-less instance works
+    // with no login. Resolve it through getOwnerUser (accepted `owner` grant,
+    // deterministically ordered) rather than "first membership in the default
+    // household" — the latter had no role/acceptedAt filter and no ORDER BY, so
+    // ambient identity could resolve to a viewer or an unaccepted invitee, and
+    // could flip after a row reorder.
+    const owner = await getOwnerUser(db)
+    userId = owner?.id
     householdId = DEFAULT_HOUSEHOLD_ID
   }
 

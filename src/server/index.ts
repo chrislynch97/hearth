@@ -13,7 +13,7 @@ import { ensureSeed } from './db/seed'
 import { db } from './db/client'
 import { startBackupScheduler } from './backup/runner'
 import { parseSessionCookie } from './auth/cookies'
-import { getOwnerUser, getValidSession } from './auth/session'
+import { getValidSession, isInstanceLocked } from './auth/session'
 
 // tRPC procedures reachable without authentication (so a locked instance can
 // still show the login screen, accept a login, or let an invitee create their
@@ -100,8 +100,7 @@ async function main() {
   // No owner password (or not yet provisioned) = an open instance; all passes.
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/trpc/')) return
-    const owner = await getOwnerUser(db)
-    if (!owner?.passwordHash) return
+    if (!(await isInstanceLocked(db))) return
 
     const path = req.url.slice('/trpc/'.length).split('?')[0] ?? ''
     const procedures = path.split(',').map((p) => decodeURIComponent(p))

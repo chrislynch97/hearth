@@ -3,8 +3,8 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { household, member, membership, session, user } from '../db/schema'
-import { DEFAULT_HOUSEHOLD_ID, scopeWhere } from '../trpc/tenant'
-import { getUser, getUserByUsername, getValidSession } from '../auth/session'
+import { scopeWhere } from '../trpc/tenant'
+import { getUser, getUserByUsername, getValidSession, isInstanceOwner } from '../auth/session'
 
 export const usersRouter = router({
   /** The current user, their accepted households (with role), and which one is
@@ -37,11 +37,12 @@ export const usersRouter = router({
       email: u.email,
       activeHouseholdId: ctx.householdId,
       role: ctx.role ?? null,
-      // Instance operator = an owner of the primary household. Gates instance-wide
-      // controls (e.g. open registration) in the UI; the server re-checks.
-      isInstanceOwner: grants.some(
-        (g) => g.householdId === DEFAULT_HOUSEHOLD_ID && g.role === 'owner',
-      ),
+      // Instance operator = the single account controlling instance-wide actions.
+      // Derived from the same source of truth as server enforcement (not a second
+      // inline predicate), so the UI gate can't diverge from what the server
+      // allows. Gates instance-wide controls (e.g. open registration) in the UI;
+      // the server re-checks.
+      isInstanceOwner: await isInstanceOwner(ctx.db, u.id),
       linkedMemberId: linked?.id ?? null,
       linkedMemberName: linked?.displayName ?? null,
       memberships: grants.map((g) => ({

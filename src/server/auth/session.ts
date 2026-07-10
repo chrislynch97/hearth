@@ -3,11 +3,12 @@
  *  Replaces the old stateless HMAC(password) token so sessions can carry user
  *  identity and be revoked (logout, password change, "sign out everywhere"). */
 import { randomBytes } from 'node:crypto'
-import { and, eq } from 'drizzle-orm'
+import { and, asc, eq, isNotNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import type { DB } from '../db/client'
 import { membership, session, user } from '../db/schema'
 import type { Session, User } from '../db/schema'
+import { getInstanceSettings, setAuthRequired } from '../db/instanceSettings'
 import { DEFAULT_HOUSEHOLD_ID, ROLE_RANK, type Role } from '../trpc/tenant'
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days, matching the cookie Max-Age
@@ -43,16 +44,43 @@ export async function deleteUserSessions(db: DB, userId: string): Promise<void> 
   await db.delete(session).where(eq(session.userId, userId))
 }
 
-/** The owner user of the default household — the single self-host account on an
- *  open (password-less) instance. */
-export async function getOwnerUser(db: DB): Promise<User | null> {
+/** Derive the instance operator from the primary household's owner grant — the
+ *  fallback used before an explicit owner id has been stored (legacy installs),
+ *  and the source `ensureSeed` backfills that id from. Filters to an *accepted*
+ *  `owner` grant and orders deterministically so the result can't silently drift
+ *  when rows are reordered (e.g. by a VACUUM) or when several rows match. */
+async function deriveOwnerUser(db: DB): Promise<User | null> {
   const [grant] = await db
     .select()
     .from(membership)
-    .where(and(eq(membership.householdId, DEFAULT_HOUSEHOLD_ID), eq(membership.role, 'owner')))
+    .where(
+      and(
+        eq(membership.householdId, DEFAULT_HOUSEHOLD_ID),
+        eq(membership.role, 'owner'),
+        isNotNull(membership.acceptedAt),
+      ),
+    )
+    .orderBy(asc(membership.createdAt), asc(membership.id))
   if (!grant) return null
   const [u] = await db.select().from(user).where(eq(user.id, grant.userId))
   return u ?? null
+}
+
+/** The instance operator user — the single self-host account that gates login
+ *  and controls instance-wide actions. Resolved from the explicitly stored owner
+ *  id (`instance_settings.ownerUserId`), falling back to deriving it from the
+ *  primary household's owner grant for installs that predate that field. Unlike
+ *  the old lookup, this no longer hinges on the primary household literally
+ *  having id 'household' — so an instance whose primary household was restored or
+ *  re-provisioned under a different id still resolves an owner instead of
+ *  silently reading as ownerless (and therefore open). */
+export async function getOwnerUser(db: DB): Promise<User | null> {
+  const { ownerUserId } = await getInstanceSettings(db)
+  if (ownerUserId) {
+    const u = await getUser(db, ownerUserId)
+    if (u) return u
+  }
+  return deriveOwnerUser(db)
 }
 
 export async function getUser(db: DB, userId: string): Promise<User | null> {
@@ -60,22 +88,32 @@ export async function getUser(db: DB, userId: string): Promise<User | null> {
   return u ?? null
 }
 
-/** True if the user is an owner of the PRIMARY household — the self-host operator
- *  who controls instance-wide actions (full-instance export / import / reset,
- *  open registration), as opposed to an owner of some other household. */
+/** Whether the instance requires login (is "locked"). Reads the persisted
+ *  `authRequired` flag, which fails CLOSED: a lookup that can't resolve the owner
+ *  keeps the instance locked rather than throwing it open. A stored owner
+ *  password is also treated as locked, so no code path can set a password
+ *  without the gate engaging. */
+export async function isInstanceLocked(db: DB): Promise<boolean> {
+  const { authRequired } = await getInstanceSettings(db)
+  if (authRequired) return true
+  const owner = await getOwnerUser(db)
+  return (owner?.passwordHash ?? null) !== null
+}
+
+/** Recompute and persist the lock flag from the instance owner's current
+ *  password. Call after any change to that password (set / change / clear). */
+export async function syncAuthRequired(db: DB): Promise<void> {
+  const owner = await getOwnerUser(db)
+  await setAuthRequired(db, (owner?.passwordHash ?? null) !== null)
+}
+
+/** True if the user is the instance operator — the single account that controls
+ *  instance-wide actions (full-instance export / import / reset, open
+ *  registration), as opposed to an owner of some other household. */
 export async function isInstanceOwner(db: DB, userId: string | undefined): Promise<boolean> {
   if (!userId) return false
-  const [grant] = await db
-    .select()
-    .from(membership)
-    .where(
-      and(
-        eq(membership.userId, userId),
-        eq(membership.householdId, DEFAULT_HOUSEHOLD_ID),
-        eq(membership.role, 'owner'),
-      ),
-    )
-  return !!grant && grant.acceptedAt !== null
+  const owner = await getOwnerUser(db)
+  return owner?.id === userId
 }
 
 /** Throw unless the caller is the instance owner (see isInstanceOwner). */

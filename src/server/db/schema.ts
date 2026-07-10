@@ -112,6 +112,18 @@ export const instanceSettings = sqliteTable('instance_settings', {
   // 0/1: when on, `auth.register` lets anyone create an account + their own
   // household. Off by default so a self-host stays invite-only until opted in.
   allowOpenRegistration: integer('allow_open_registration').notNull().default(0),
+  // The instance operator: the single user who controls instance-wide actions
+  // (full export/import/reset, open registration) and whose account gates
+  // login. Stored explicitly (a logical FK to `user.id`, nullable) so owner
+  // identity never has to be inferred from a magic household id — which failed
+  // to resolve, and silently fell open, on any install whose primary household
+  // isn't literally id 'household'. Backfilled by `ensureSeed`.
+  ownerUserId: text('owner_user_id'),
+  // 0/1: when on, the instance is "locked" — every request must carry a valid
+  // session. Persisted rather than re-derived from the owner's password each
+  // request, so a lookup that can't find the owner fails CLOSED (stays locked)
+  // instead of open. Kept in sync whenever the owner's password is set/cleared.
+  authRequired: integer('auth_required').notNull().default(0),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 })

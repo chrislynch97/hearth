@@ -1,6 +1,7 @@
-import { eq } from 'drizzle-orm'
+import { and, asc, eq, isNotNull } from 'drizzle-orm'
 import type { DB } from './client'
 import { household, member, membership, user } from './schema'
+import { getInstanceSettings, setAuthRequired, setInstanceOwnerId } from './instanceSettings'
 import { DEFAULT_HOUSEHOLD_ID } from '../trpc/tenant'
 import { newId } from '../../shared/ids'
 
@@ -84,5 +85,30 @@ export async function ensureSeed(database: DB): Promise<void> {
       createdAt: now,
       updatedAt: now,
     })
+  }
+
+  // Persist the instance operator explicitly and record the current lock state,
+  // once, for installs that predate those fields (they migrate in as null/0).
+  // From here on, owner identity and open/locked come from instance_settings —
+  // no longer inferred from the magic household id — and the auth flow keeps the
+  // lock flag in sync. Gated on a null ownerUserId so it only runs the first time.
+  const settings = await getInstanceSettings(database)
+  if (settings.ownerUserId === null) {
+    const [ownerGrant] = await database
+      .select()
+      .from(membership)
+      .where(
+        and(
+          eq(membership.householdId, HOUSEHOLD_ID),
+          eq(membership.role, 'owner'),
+          isNotNull(membership.acceptedAt),
+        ),
+      )
+      .orderBy(asc(membership.createdAt), asc(membership.id))
+    if (ownerGrant) {
+      const [ownerUser] = await database.select().from(user).where(eq(user.id, ownerGrant.userId))
+      await setInstanceOwnerId(database, ownerGrant.userId)
+      await setAuthRequired(database, (ownerUser?.passwordHash ?? null) !== null)
+    }
   }
 }

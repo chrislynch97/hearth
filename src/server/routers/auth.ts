@@ -19,6 +19,8 @@ import {
   getUser,
   getUserByUsername,
   getValidSession,
+  isInstanceLocked,
+  syncAuthRequired,
 } from '../auth/session'
 import {
   buildOtpauthUrl,
@@ -53,8 +55,8 @@ const registerLimiter = new RateLimiter({
 async function currentUser(ctx: Context): Promise<User | null> {
   const s = await getValidSession(ctx.db, ctx.sessionToken)
   if (s) return getUser(ctx.db, s.userId)
-  const owner = await getOwnerUser(ctx.db)
-  return owner && owner.passwordHash === null ? owner : null
+  if (await isInstanceLocked(ctx.db)) return null
+  return getOwnerUser(ctx.db) // open instance: act as the owner
 }
 
 async function requireCurrentUser(ctx: Context): Promise<User> {
@@ -67,8 +69,8 @@ export const authRouter = router({
   /** Whether the instance requires login, whether the current user has MFA on,
    *  whether this request is authenticated, and who it is. */
   status: publicProcedure.query(async ({ ctx }) => {
+    const locked = await isInstanceLocked(ctx.db)
     const owner = await getOwnerUser(ctx.db)
-    const locked = (owner?.passwordHash ?? null) !== null
     const s = await getValidSession(ctx.db, ctx.sessionToken)
     const cur = s ? await getUser(ctx.db, s.userId) : locked ? null : owner
     return {
@@ -82,8 +84,7 @@ export const authRouter = router({
   login: publicProcedure
     .input(z.object({ username: z.string(), password: z.string(), code: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const owner = await getOwnerUser(ctx.db)
-      if ((owner?.passwordHash ?? null) === null) return { ok: true as const } // open instance
+      if (!(await isInstanceLocked(ctx.db))) return { ok: true as const } // open instance
 
       const key = ctx.clientKey ?? 'unknown'
       const now = Date.now()
@@ -207,6 +208,9 @@ export const authRouter = router({
       const newHash = hashPassword(input.newPassword)
       await ctx.db.update(user).set({ passwordHash: newHash, updatedAt: Date.now() }).where(eq(user.id, me.id))
       await deleteUserSessions(ctx.db, me.id)
+      // Setting the owner's password locks the instance; persist that so the gate
+      // fails closed regardless of how the owner is later resolved.
+      await syncAuthRequired(ctx.db)
       const householdId = await defaultHouseholdFor(ctx.db, me.id)
       ctx.setSessionCookie?.(await createSession(ctx.db, me.id, householdId))
       return { ok: true as const }
@@ -238,6 +242,7 @@ export const authRouter = router({
         .set({ passwordHash: null, mfaSecret: null, mfaEnabledAt: null, mfaRecoveryCodes: null, updatedAt: Date.now() })
         .where(eq(user.id, me.id))
       await deleteUserSessions(ctx.db, me.id)
+      await syncAuthRequired(ctx.db) // owner has no password again → instance is open
       ctx.setSessionCookie?.(null)
       return { ok: true as const }
     }),
