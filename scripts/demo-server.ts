@@ -6,6 +6,8 @@
 //   npm run demo          → serve the demo db (seeds it on first run)
 //   npm run demo -- --seed → force a fresh re-seed before serving
 
+import { looksLikeRealDb } from './demo-guard.ts'
+
 const DEFAULT_DEMO_URL = 'file:./data/demo.db'
 const reseed = process.argv.includes('--seed')
 const forced = process.argv.includes('--force')
@@ -20,7 +22,7 @@ if (!forced) process.env.DATABASE_URL = DEFAULT_DEMO_URL
 // Belt-and-suspenders guard mirroring scripts/seed-demo.ts: refuse to touch
 // anything that still looks like the real database.
 const target = process.env.DATABASE_URL ?? DEFAULT_DEMO_URL
-if (/app\.db(\?|$)/.test(target) && !forced) {
+if (looksLikeRealDb(target) && !forced) {
   console.error(
     `Refusing to run demo mode against "${target}" — that looks like the real database.\n` +
       `Unset DATABASE_URL to use the default (${DEFAULT_DEMO_URL}), point it at a demo/test file, or pass --force.`,

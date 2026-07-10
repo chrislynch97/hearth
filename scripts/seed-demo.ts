@@ -10,13 +10,14 @@
 // Point at the demo database unless the caller overrode it. Guard against
 // accidentally seeding the real app.db — refuse unless it's clearly a demo/test
 // target or the caller passes --force.
+import { looksLikeRealDb } from './demo-guard.ts'
+
 const DEFAULT_DEMO_URL = 'file:./data/demo.db'
 const forced = process.argv.includes('--force')
 process.env.DATABASE_URL ??= DEFAULT_DEMO_URL
 
 const target = process.env.DATABASE_URL
-const looksLikeRealDb = /app\.db(\?|$)/.test(target) && !forced
-if (looksLikeRealDb) {
+if (looksLikeRealDb(target) && !forced) {
   console.error(
     `Refusing to seed demo data into "${target}" — that looks like the real database.\n` +
       `Use the default (${DEFAULT_DEMO_URL}), point DATABASE_URL at a demo/test file, or pass --force.`,
