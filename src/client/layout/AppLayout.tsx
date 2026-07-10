@@ -219,7 +219,7 @@ function UserMenu() {
             <Menu.Divider />
           </>
         )}
-        <Menu.Item onClick={() => navigate('/settings')}>Account &amp; settings</Menu.Item>
+        <Menu.Item onClick={() => navigate('/settings/account')}>Account &amp; settings</Menu.Item>
         {canLogOut && (
           <Menu.Item color="red" onClick={() => void handleLogout()}>
             Log out
@@ -510,7 +510,10 @@ export function AppLayout() {
                 </Text>
               )}
               {section.items.map((item) => {
-                const isActive = location.pathname === item.to
+                // Exact match, or a sub-route of it (e.g. /settings/account keeps
+                // the Settings item active). The `+ '/'` stops '/' matching all.
+                const isActive =
+                  location.pathname === item.to || location.pathname.startsWith(item.to + '/')
                 return (
                   <NavLink
                     key={item.to}

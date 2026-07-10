@@ -17,7 +17,13 @@ import { IncomePage } from './pages/IncomePage'
 import { PayslipsPage } from './pages/PayslipsPage'
 import { RaisesPage } from './pages/RaisesPage'
 import { ReportsPage } from './pages/ReportsPage'
-import { SettingsPage } from './pages/SettingsPage'
+import {
+  AccountSettingsPage,
+  HouseholdSettingsPage,
+  SettingsIndexRedirect,
+  SettingsLayout,
+  SystemSettingsPage,
+} from './pages/SettingsPage'
 import { UpcomingPage } from './pages/UpcomingPage'
 import { AccountsPage } from './pages/AccountsPage'
 import { ImportPage } from './pages/ImportPage'
@@ -92,7 +98,12 @@ function AuthedApp() {
         <Route path="raises" element={<RaisesPage />} />
         <Route path="accounts" element={<AccountsPage />} />
         <Route path="reports" element={<ReportsPage />} />
-        <Route path="settings" element={<SettingsPage />} />
+        <Route path="settings" element={<SettingsLayout />}>
+          <Route index element={<SettingsIndexRedirect />} />
+          <Route path="account" element={<AccountSettingsPage />} />
+          <Route path="household" element={<HouseholdSettingsPage />} />
+          <Route path="system" element={<SystemSettingsPage />} />
+        </Route>
       </Route>
     </Routes>
   )

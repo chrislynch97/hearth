@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   ActionIcon,
   Alert,
@@ -8,6 +9,7 @@ import {
   CopyButton,
   Divider,
   Group,
+  Loader,
   Modal,
   NumberInput,
   PasswordInput,
@@ -16,6 +18,7 @@ import {
   Stack,
   Switch,
   Table,
+  Tabs,
   Text,
   TextInput,
   Title,
@@ -1248,15 +1251,11 @@ function HouseholdAccessSection() {
   const role = me.data?.role ?? null
   const isAdmin = role === 'admin' || role === 'owner'
   const isOwner = role === 'owner'
-  const isInstanceOwner = me.data?.isInstanceOwner ?? false
   const memberships = me.data?.memberships ?? []
 
   const invites = trpc.invitations.list.useQuery(undefined, { enabled: isAdmin })
   const createInvite = trpc.invitations.create.useMutation()
   const revoke = trpc.invitations.revoke.useMutation()
-
-  const regOpen = trpc.auth.registrationOpen.useQuery(undefined, { enabled: isInstanceOwner })
-  const setRegOpen = trpc.auth.setRegistrationOpen.useMutation()
 
   const [inviteRole, setInviteRole] = useState('member')
   const [link, setLink] = useState('')
@@ -1303,18 +1302,6 @@ function HouseholdAccessSection() {
             value={me.data.activeHouseholdId}
             onChange={(v) => v && void handleSwitch(v)}
             allowDeselect={false}
-          />
-        )}
-
-        {isInstanceOwner && (
-          <Switch
-            label="Allow anyone to register"
-            description="Instance-wide: when on, the sign-in screen lets new people create their own account and household. Leave off to stay invite-only."
-            checked={regOpen.data?.allowOpenRegistration ?? false}
-            onChange={async (e) => {
-              await setRegOpen.mutateAsync({ open: e.currentTarget.checked })
-              await utils.auth.registrationOpen.invalidate()
-            }}
           />
         )}
 
@@ -1403,25 +1390,102 @@ function HouseholdAccessSection() {
 }
 
 // ---------------------------------------------------------------------------
-// SettingsPage
+// Instance-wide registration toggle (System scope). Moved out of the household
+// access section — it governs the whole instance, not one household.
 // ---------------------------------------------------------------------------
 
-export function SettingsPage() {
-  // Whole-instance data tools (export/import/reset + row stats) belong to the
-  // self-host operator; hide them from tenant owners on a multi-household instance.
-  const me = trpc.users.me.useQuery()
-  const isInstanceOwner = me.data?.isInstanceOwner ?? false
+function RegistrationSection() {
+  const utils = trpc.useUtils()
+  const regOpen = trpc.auth.registrationOpen.useQuery()
+  const setRegOpen = trpc.auth.setRegistrationOpen.useMutation()
   return (
-    <Stack gap="lg" maw={760} mx="auto">
-      <Title order={2}>Settings</Title>
+    <Card withBorder padding="md" radius="md">
+      <Title order={4} mb="sm">
+        Registration
+      </Title>
+      <Switch
+        label="Allow anyone to register"
+        description="Instance-wide: when on, the sign-in screen lets new people create their own account and household. Leave off to stay invite-only."
+        checked={regOpen.data?.allowOpenRegistration ?? false}
+        onChange={async (e) => {
+          await setRegOpen.mutateAsync({ open: e.currentTarget.checked })
+          await utils.auth.registrationOpen.invalidate()
+        }}
+      />
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Settings, split by authorization scope (see issue #16):
+//   /settings/account  — the signed-in user (any role)
+//   /settings/household — the active household (edits gated by role)
+//   /settings/system   — the whole instance (instance owner only)
+// The section components are reused as-is; these pages just group them.
+// ---------------------------------------------------------------------------
+
+export function AccountSettingsPage() {
+  return (
+    <Stack gap="lg">
       <AccountSection />
+      <SecuritySection />
+      <MfaSection />
+    </Stack>
+  )
+}
+
+export function HouseholdSettingsPage() {
+  return (
+    <Stack gap="lg">
       <GeneralSection />
       <MembersSection />
       <HouseholdAccessSection />
-      <SecuritySection />
-      <MfaSection />
-      {isInstanceOwner && <DataSection />}
-      {isInstanceOwner && <AboutSection />}
     </Stack>
   )
+}
+
+export function SystemSettingsPage() {
+  const me = trpc.users.me.useQuery()
+  // Instance-owner only. While loading, hold; if not permitted, bounce to Account
+  // rather than render an empty page (the server also gates each endpoint).
+  if (me.isLoading) return <Loader size="sm" />
+  if (!me.data?.isInstanceOwner) return <Navigate to="/settings/account" replace />
+  return (
+    <Stack gap="lg">
+      <RegistrationSection />
+      <DataSection />
+      <AboutSection />
+    </Stack>
+  )
+}
+
+/** Shared chrome for the settings sub-pages: a title + a tab bar that only shows
+ *  the tabs the current user may use, with the active page's content below. */
+export function SettingsLayout() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const me = trpc.users.me.useQuery()
+  const isInstanceOwner = me.data?.isInstanceOwner ?? false
+
+  // Which sub-route are we on? (…/settings/<tab>)
+  const active = location.pathname.split('/')[2] ?? 'account'
+
+  return (
+    <Stack gap="lg" maw={760} mx="auto">
+      <Title order={2}>Settings</Title>
+      <Tabs value={active} onChange={(v) => v && navigate(`/settings/${v}`)}>
+        <Tabs.List>
+          <Tabs.Tab value="account">Account</Tabs.Tab>
+          <Tabs.Tab value="household">Household</Tabs.Tab>
+          {isInstanceOwner && <Tabs.Tab value="system">System</Tabs.Tab>}
+        </Tabs.List>
+      </Tabs>
+      <Outlet />
+    </Stack>
+  )
+}
+
+/** `/settings` → the first sub-route the user can see (always Account). */
+export function SettingsIndexRedirect() {
+  return <Navigate to="/settings/account" replace />
 }
