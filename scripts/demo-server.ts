@@ -7,8 +7,26 @@
 //   npm run demo -- --seed → force a fresh re-seed before serving
 
 const DEFAULT_DEMO_URL = 'file:./data/demo.db'
-process.env.DATABASE_URL ??= DEFAULT_DEMO_URL
 const reseed = process.argv.includes('--seed')
+const forced = process.argv.includes('--force')
+
+// Demo mode always runs against the disposable demo database. Force the demo
+// path unconditionally (do NOT defer to an inherited DATABASE_URL with `??=`):
+// otherwise a `DATABASE_URL` left pointing at the real app.db would be migrated,
+// re-seeded (which wipes every table), and served — silently destroying the
+// owner's real financial data. `--force` lets an explicit operator override stand.
+if (!forced) process.env.DATABASE_URL = DEFAULT_DEMO_URL
+
+// Belt-and-suspenders guard mirroring scripts/seed-demo.ts: refuse to touch
+// anything that still looks like the real database.
+const target = process.env.DATABASE_URL ?? DEFAULT_DEMO_URL
+if (/app\.db(\?|$)/.test(target) && !forced) {
+  console.error(
+    `Refusing to run demo mode against "${target}" — that looks like the real database.\n` +
+      `Unset DATABASE_URL to use the default (${DEFAULT_DEMO_URL}), point it at a demo/test file, or pass --force.`,
+  )
+  process.exit(1)
+}
 
 async function main(): Promise<void> {
   const { runMigrations } = await import('../src/server/db/migrate.ts')
