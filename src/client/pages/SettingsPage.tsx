@@ -24,6 +24,8 @@ import {
   Title,
 } from '@mantine/core'
 import { trpc } from '../trpc'
+import type { Household } from '../../server/db/schema'
+import { useFormatDate } from '../useMoney'
 import { downloadBlob, downloadJson, toCsv } from '../csv'
 import { zipStore } from '../zip'
 import { MIN_PASSWORD_LENGTH, validatePassword } from '../../shared/password-policy'
@@ -49,6 +51,45 @@ function numberFormatKey(group: string, decimal: string): string {
   )
 }
 
+/** A ms epoch → local `YYYY-MM-DD`, so it can be fed to the household useFormatDate
+ *  (en-CA renders the ISO shape in the local timezone). */
+function msToLocalIso(ms: number): string {
+  return new Date(ms).toLocaleDateString('en-CA')
+}
+
+// The editable household fields as one object, so seeding from the query is a
+// single assignment (no per-field copy line to forget) and adding a field can't
+// silently render blank or get wiped on save.
+interface GeneralForm {
+  displayName: string
+  currencySymbol: string
+  startDay: number | string
+  jointBasis: string
+  incomeBasis: string
+  decimalPlaces: number | string
+  symbolPosition: string
+  numberFormat: string
+  weekStart: string
+  dateFormat: string
+  emergencyMonths: number | string
+}
+
+function generalFormFrom(hh: Household): GeneralForm {
+  return {
+    displayName: hh.displayName,
+    currencySymbol: hh.currencySymbol,
+    startDay: hh.budgetPeriodStartDay,
+    jointBasis: hh.jointContributionBasis,
+    incomeBasis: hh.incomeBasisDefault,
+    decimalPlaces: hh.currencyDecimalPlaces,
+    symbolPosition: hh.currencySymbolPosition,
+    numberFormat: numberFormatKey(hh.currencyGroupSeparator, hh.currencyDecimalSeparator),
+    weekStart: hh.weekStart,
+    dateFormat: hh.dateFormat,
+    emergencyMonths: hh.emergencyFundMonths,
+  }
+}
+
 function GeneralSection() {
   const utils = trpc.useUtils()
   const ctx = trpc.bootstrap.context.useQuery()
@@ -56,59 +97,51 @@ function GeneralSection() {
   const rescale = trpc.data.rescaleCurrency.useMutation()
   const hh = ctx.data?.household
 
-  const [displayName, setDisplayName] = useState('')
-  const [currencySymbol, setCurrencySymbol] = useState('')
-  const [startDay, setStartDay] = useState<number | string>(1)
-  const [jointBasis, setJointBasis] = useState('equal')
-  const [incomeBasis, setIncomeBasis] = useState('regular_net')
-  const [decimalPlaces, setDecimalPlaces] = useState<number | string>(2)
-  const [symbolPosition, setSymbolPosition] = useState('prefix')
-  const [numberFormat, setNumberFormat] = useState('comma_dot')
-  const [weekStart, setWeekStart] = useState('monday')
-  const [dateFormat, setDateFormat] = useState('medium')
-  const [emergencyMonths, setEmergencyMonths] = useState<number | string>(3)
+  // One form object seeded from the household once it loads. `null` until then,
+  // so fields never flash blank defaults over real data.
+  const [form, setForm] = useState<GeneralForm | null>(null)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    if (!hh) return
-    setDisplayName(hh.displayName)
-    setCurrencySymbol(hh.currencySymbol)
-    setStartDay(hh.budgetPeriodStartDay)
-    setJointBasis(hh.jointContributionBasis)
-    setIncomeBasis(hh.incomeBasisDefault)
-    setDecimalPlaces(hh.currencyDecimalPlaces)
-    setSymbolPosition(hh.currencySymbolPosition)
-    setNumberFormat(numberFormatKey(hh.currencyGroupSeparator, hh.currencyDecimalSeparator))
-    setWeekStart(hh.weekStart)
-    setDateFormat(hh.dateFormat)
-    setEmergencyMonths(hh.emergencyFundMonths)
+    if (hh) setForm((prev) => prev ?? generalFormFrom(hh))
   }, [hh])
 
-  const selectedFormat =
-    NUMBER_FORMATS.find((f) => f.value === numberFormat) ?? NUMBER_FORMATS[0]
+  const set = <K extends keyof GeneralForm>(key: K, value: GeneralForm[K]) =>
+    setForm((f) => (f ? { ...f, [key]: value } : f))
+
+  const selectedFormat = NUMBER_FORMATS.find((f) => f.value === form?.numberFormat) ?? NUMBER_FORMATS[0]
 
   async function handleSave() {
+    if (!form) return
     await update.mutateAsync({
-      displayName: displayName.trim() || undefined,
-      currencySymbol: currencySymbol || undefined,
-      currencySymbolPosition: symbolPosition as 'prefix' | 'suffix',
+      displayName: form.displayName.trim() || undefined,
+      currencySymbol: form.currencySymbol || undefined,
+      currencySymbolPosition: form.symbolPosition as 'prefix' | 'suffix',
       currencyGroupSeparator: selectedFormat.group,
       currencyDecimalSeparator: selectedFormat.decimal,
-      budgetPeriodStartDay: Number(startDay),
-      jointContributionBasis: jointBasis as 'equal' | 'income_proportional' | 'custom',
-      incomeBasisDefault: incomeBasis as 'regular_net' | 'latest_payslip' | 'rolling_12m',
-      weekStart: weekStart as 'monday' | 'sunday',
-      dateFormat: dateFormat as 'iso' | 'numeric' | 'medium' | 'long',
-      emergencyFundMonths: Number(emergencyMonths),
+      budgetPeriodStartDay: Number(form.startDay),
+      jointContributionBasis: form.jointBasis as 'equal' | 'income_proportional' | 'custom',
+      incomeBasisDefault: form.incomeBasis as 'regular_net' | 'latest_payslip' | 'rolling_12m',
+      weekStart: form.weekStart as 'monday' | 'sunday',
+      dateFormat: form.dateFormat as 'iso' | 'numeric' | 'medium' | 'long',
+      emergencyFundMonths: Number(form.emergencyMonths),
     })
     // Currency decimal-places change rescales every money column, so it goes
     // through the dedicated endpoint.
-    if (hh && Number(decimalPlaces) !== hh.currencyDecimalPlaces) {
-      await rescale.mutateAsync({ decimalPlaces: Number(decimalPlaces) })
+    if (hh && Number(form.decimalPlaces) !== hh.currencyDecimalPlaces) {
+      await rescale.mutateAsync({ decimalPlaces: Number(form.decimalPlaces) })
     }
     await utils.invalidate()
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  if (!form) {
+    return (
+      <Card withBorder padding="md" radius="md">
+        <Loader size="sm" />
+      </Card>
+    )
   }
 
   return (
@@ -118,42 +151,42 @@ function GeneralSection() {
       </Title>
       <Stack gap="sm">
         <Group grow>
-          <TextInput label="Household name" value={displayName} onChange={(e) => setDisplayName(e.currentTarget.value)} />
-          <TextInput label="Currency symbol" value={currencySymbol} onChange={(e) => setCurrencySymbol(e.currentTarget.value)} w={120} />
+          <TextInput label="Household name" value={form.displayName} onChange={(e) => set('displayName', e.currentTarget.value)} />
+          <TextInput label="Currency symbol" value={form.currencySymbol} onChange={(e) => set('currencySymbol', e.currentTarget.value)} w={120} />
         </Group>
         <Group grow>
           <NumberInput
             label="Budget period starts on day"
             min={1}
             max={28}
-            value={startDay}
-            onChange={setStartDay}
+            value={form.startDay}
+            onChange={(v) => set('startDay', v)}
           />
           <NumberInput
             label="Currency decimal places"
             description="Changing this rescales all stored amounts"
             min={0}
             max={4}
-            value={decimalPlaces}
-            onChange={setDecimalPlaces}
+            value={form.decimalPlaces}
+            onChange={(v) => set('decimalPlaces', v)}
           />
         </Group>
         <Group grow align="flex-end">
           <Select
             label="Currency symbol position"
             data={[
-              { value: 'prefix', label: `Before (${currencySymbol || '£'}100)` },
-              { value: 'suffix', label: `After (100 ${currencySymbol || '£'})` },
+              { value: 'prefix', label: `Before (${form.currencySymbol || '£'}100)` },
+              { value: 'suffix', label: `After (100 ${form.currencySymbol || '£'})` },
             ]}
-            value={symbolPosition}
-            onChange={(v) => setSymbolPosition(v ?? 'prefix')}
+            value={form.symbolPosition}
+            onChange={(v) => set('symbolPosition', v ?? 'prefix')}
             allowDeselect={false}
           />
           <Select
             label="Number format"
             data={NUMBER_FORMATS.map((f) => ({ value: f.value, label: f.label }))}
-            value={numberFormat}
-            onChange={(v) => setNumberFormat(v ?? 'comma_dot')}
+            value={form.numberFormat}
+            onChange={(v) => set('numberFormat', v ?? 'comma_dot')}
             allowDeselect={false}
           />
         </Group>
@@ -161,9 +194,9 @@ function GeneralSection() {
           Preview:{' '}
           <Text span ff="monospace" fz="sm" fw={500}>
             {formatMoney(123456, {
-              symbol: currencySymbol || '£',
-              decimalPlaces: Number(decimalPlaces) || 0,
-              symbolPosition: symbolPosition as 'prefix' | 'suffix',
+              symbol: form.currencySymbol || '£',
+              decimalPlaces: Number(form.decimalPlaces) || 0,
+              symbolPosition: form.symbolPosition as 'prefix' | 'suffix',
               groupSeparator: selectedFormat.group,
               decimalSeparator: selectedFormat.decimal,
             })}
@@ -177,8 +210,8 @@ function GeneralSection() {
               { value: 'income_proportional', label: 'Income proportional' },
               { value: 'custom', label: 'Custom weights' },
             ]}
-            value={jointBasis}
-            onChange={(v) => setJointBasis(v ?? 'equal')}
+            value={form.jointBasis}
+            onChange={(v) => set('jointBasis', v ?? 'equal')}
             allowDeselect={false}
           />
           <Select
@@ -188,8 +221,8 @@ function GeneralSection() {
               { value: 'latest_payslip', label: 'Latest payslip' },
               { value: 'rolling_12m', label: 'Rolling 12 months' },
             ]}
-            value={incomeBasis}
-            onChange={(v) => setIncomeBasis(v ?? 'regular_net')}
+            value={form.incomeBasis}
+            onChange={(v) => set('incomeBasis', v ?? 'regular_net')}
             allowDeselect={false}
           />
         </Group>
@@ -200,8 +233,8 @@ function GeneralSection() {
               { value: 'monday', label: 'Monday' },
               { value: 'sunday', label: 'Sunday' },
             ]}
-            value={weekStart}
-            onChange={(v) => setWeekStart(v ?? 'monday')}
+            value={form.weekStart}
+            onChange={(v) => set('weekStart', v ?? 'monday')}
             allowDeselect={false}
           />
           <Select
@@ -212,8 +245,8 @@ function GeneralSection() {
               { value: 'numeric', label: 'Numeric (04/07/2026)' },
               { value: 'iso', label: 'ISO (2026-07-04)' },
             ]}
-            value={dateFormat}
-            onChange={(v) => setDateFormat(v ?? 'medium')}
+            value={form.dateFormat}
+            onChange={(v) => set('dateFormat', v ?? 'medium')}
             allowDeselect={false}
           />
         </Group>
@@ -223,8 +256,8 @@ function GeneralSection() {
             description="Target cushion shown on the Funding page — typically 3–6 months."
             min={0}
             max={24}
-            value={emergencyMonths}
-            onChange={setEmergencyMonths}
+            value={form.emergencyMonths}
+            onChange={(v) => set('emergencyMonths', v)}
           />
           <div />
         </Group>
@@ -411,6 +444,7 @@ function MembersSection() {
 function DataSection() {
   const utils = trpc.useUtils()
   const ctx = trpc.bootstrap.context.useQuery()
+  const fmt = useFormatDate()
   const importMut = trpc.data.import.useMutation()
   const resetMut = trpc.data.reset.useMutation()
   const updateHousehold = trpc.household.update.useMutation()
@@ -510,7 +544,7 @@ function DataSection() {
               </Text>{' '}
               folder next to your database (last 14 kept).
               {hh?.backupLastAt
-                ? ` Last: ${new Date(hh.backupLastAt).toLocaleString()}.`
+                ? ` Last: ${fmt(msToLocalIso(hh.backupLastAt))} ${new Date(hh.backupLastAt).toLocaleTimeString()}.`
                 : ' None yet.'}
             </Text>
           </div>
@@ -994,33 +1028,40 @@ function AboutSection() {
 // Account (the current user)
 // ---------------------------------------------------------------------------
 
+interface AccountForm {
+  username: string
+  displayName: string
+  email: string
+}
+
 function AccountSection() {
   const utils = trpc.useUtils()
   const me = trpc.users.me.useQuery()
   const update = trpc.users.updateProfile.useMutation()
 
-  const [username, setUsername] = useState('')
-  const [displayName, setDisplayName] = useState('')
-  const [email, setEmail] = useState('')
+  // One seeded form object (see GeneralSection) — no per-field copy line.
+  const [form, setForm] = useState<AccountForm | null>(null)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!me.data) return
-    setUsername(me.data.username)
-    setDisplayName(me.data.displayName)
-    setEmail(me.data.email ?? '')
+    const d = me.data
+    if (d) setForm((prev) => prev ?? { username: d.username, displayName: d.displayName, email: d.email ?? '' })
   }, [me.data])
 
-  if (!me.data) return null
+  const set = <K extends keyof AccountForm>(key: K, value: AccountForm[K]) =>
+    setForm((f) => (f ? { ...f, [key]: value } : f))
+
+  if (!form) return null
 
   async function handleSave() {
+    if (!form) return
     setError('')
     try {
       await update.mutateAsync({
-        username: username.trim(),
-        displayName: displayName.trim(),
-        email: email.trim() || null,
+        username: form.username.trim(),
+        displayName: form.displayName.trim(),
+        email: form.email.trim() || null,
       })
       await Promise.all([utils.users.me.invalidate(), utils.auth.status.invalidate()])
       setSaved(true)
@@ -1037,14 +1078,14 @@ function AccountSection() {
       </Title>
       <Stack gap="sm">
         <Group grow>
-          <TextInput label="Name" value={displayName} onChange={(e) => setDisplayName(e.currentTarget.value)} />
-          <TextInput label="Username" value={username} onChange={(e) => setUsername(e.currentTarget.value)} />
+          <TextInput label="Name" value={form.displayName} onChange={(e) => set('displayName', e.currentTarget.value)} />
+          <TextInput label="Username" value={form.username} onChange={(e) => set('username', e.currentTarget.value)} />
         </Group>
         <TextInput
           label="Email"
           description="Optional — only used for invitations and (later) password reset."
-          value={email}
-          onChange={(e) => setEmail(e.currentTarget.value)}
+          value={form.email}
+          onChange={(e) => set('email', e.currentTarget.value)}
           type="email"
         />
         {error && (
@@ -1246,6 +1287,7 @@ function AccessList({ isOwner }: { isOwner: boolean }) {
 function HouseholdAccessSection() {
   const utils = trpc.useUtils()
   const me = trpc.users.me.useQuery()
+  const fmt = useFormatDate()
   const switchHousehold = trpc.users.switchHousehold.useMutation()
 
   const role = me.data?.role ?? null
@@ -1362,7 +1404,7 @@ function HouseholdAccessSection() {
                       <Text size="sm">
                         {inv.email ?? 'Invite link'}{' '}
                         <Text span size="xs" c="dimmed">
-                          · {inv.role} · expires {new Date(inv.expiresAt).toLocaleDateString()}
+                          · {inv.role} · expires {fmt(msToLocalIso(inv.expiresAt))}
                         </Text>
                       </Text>
                       <Button
