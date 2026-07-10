@@ -19,7 +19,7 @@ import {
 import { LineChart } from '@mantine/charts'
 import { trpc } from '../trpc'
 import { formatMoney, fromMinor, toMinor } from '../../shared/money'
-import { useMoney, useFormatDate } from '../useMoney'
+import { useMoney, useFormatDate, formatSignedPercent } from '../useMoney'
 import type { MoneyFormat } from '../useMoney'
 import { hearthTokens, chartXAxisProps } from '../theme'
 import type { Member } from '../../server/db/schema'
@@ -251,7 +251,7 @@ export function RaisesPage() {
                   <Table.Td style={{ whiteSpace: 'nowrap' }}>{fmt(r.effectiveDate)}</Table.Td>
                   <Table.Td>{formatMoney(r.newSalary, money)}</Table.Td>
                   <Table.Td>
-                    {r.percentIncrease === null ? '—' : `${r.percentIncrease > 0 ? '+' : ''}${r.percentIncrease.toFixed(1)}%`}
+                    {r.percentIncrease === null ? '—' : formatSignedPercent(r.percentIncrease)}
                   </Table.Td>
                   <Table.Td>{r.newPosition ?? '—'}</Table.Td>
                   <Table.Td style={{ textAlign: 'right' }}>

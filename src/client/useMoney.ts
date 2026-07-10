@@ -1,6 +1,12 @@
 import { trpc } from './trpc'
 import { formatDate, type DateFormat } from '../shared/dateFormat'
 
+/** Format a percentage with an explicit leading `+` for positive values (e.g.
+ *  `+3.5%`, `-1.2%`, `0.0%`). Shared by the raises and net-worth change columns. */
+export function formatSignedPercent(value: number, fractionDigits = 1): string {
+  return `${value > 0 ? '+' : ''}${value.toFixed(fractionDigits)}%`
+}
+
 export interface MoneyFormat {
   symbol: string
   decimalPlaces: number

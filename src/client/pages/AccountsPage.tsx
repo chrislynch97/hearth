@@ -22,7 +22,7 @@ import {
 import { AreaChart } from '@mantine/charts'
 import { trpc } from '../trpc'
 import { formatMoney, toMinor } from '../../shared/money'
-import { useMoney, useFormatDate } from '../useMoney'
+import { useMoney, useFormatDate, formatSignedPercent } from '../useMoney'
 import { hearthTokens, chartXAxisProps } from '../theme'
 import type { MoneyFormat } from '../useMoney'
 import type { Account } from '../../server/db/schema'
@@ -419,7 +419,7 @@ function BalancesModal({
                         <Text size="xs" c={flat ? 'dimmed' : good ? hearthTokens.semantic.positive : 'red'}>
                           {change.delta > 0 ? '+' : ''}
                           {formatMoney(change.delta, money)}
-                          {change.pct !== null ? ` (${change.pct > 0 ? '+' : ''}${change.pct.toFixed(1)}%)` : ''}
+                          {change.pct !== null ? ` (${formatSignedPercent(change.pct)})` : ''}
                         </Text>
                       )}
                     </Table.Td>
