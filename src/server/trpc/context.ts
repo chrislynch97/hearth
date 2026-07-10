@@ -2,10 +2,23 @@ import type { CreateFastifyContextOptions } from '@trpc/server/adapters/fastify'
 import { and, eq, isNotNull } from 'drizzle-orm'
 import type { DB } from '../db/client'
 import { db } from '../db/client'
-import { membership, session } from '../db/schema'
+import { membership } from '../db/schema'
+import type { Session } from '../db/schema'
 import { parseSessionCookie, serializeSessionCookie } from '../auth/cookies'
-import { getOwnerUser } from '../auth/session'
+import { getOwnerUser, getValidSession } from '../auth/session'
 import { DEFAULT_HOUSEHOLD_ID } from './tenant'
+
+// The HTTP auth gate (index.ts) already validates the session for locked,
+// authenticated requests. Stash that result keyed by the request object so
+// createContext reuses it instead of re-querying the same row (one session
+// lookup per request instead of two). A WeakMap avoids leaking finished requests.
+const validatedSessionByRequest = new WeakMap<object, Session | null>()
+
+/** Called by the HTTP gate once it has validated (or rejected) a session, so the
+ *  tRPC context for the same request doesn't repeat the lookup. */
+export function rememberValidatedSession(req: object, session: Session | null): void {
+  validatedSessionByRequest.set(req, session)
+}
 
 export interface Context {
   db: DB
@@ -40,18 +53,20 @@ function isHttps(req: CreateFastifyContextOptions['req'] | undefined): boolean {
  */
 async function resolveIdentity(
   sessionToken: string | undefined,
+  preresolvedSession: Session | null | undefined,
 ): Promise<{ userId?: string; householdId: string; sessionId?: string; role?: string }> {
   let userId: string | undefined
   let householdId = DEFAULT_HOUSEHOLD_ID
   let sessionId: string | undefined
 
-  if (sessionToken) {
-    const [s] = await db.select().from(session).where(eq(session.id, sessionToken))
-    if (s && s.expiresAt > Date.now()) {
-      userId = s.userId
-      householdId = s.activeHouseholdId
-      sessionId = s.id
-    }
+  // Reuse the gate's already-validated session when present; otherwise go through
+  // getValidSession (not a hand-rolled query) so the session-validity rules stay
+  // in one place and can't drift from the HTTP auth gate.
+  const s = preresolvedSession !== undefined ? preresolvedSession : await getValidSession(db, sessionToken)
+  if (s) {
+    userId = s.userId
+    householdId = s.activeHouseholdId
+    sessionId = s.id
   }
 
   if (!userId) {
@@ -91,7 +106,8 @@ export async function createContext(opts?: CreateFastifyContextOptions): Promise
   const res = opts?.res
   const secure = isHttps(req)
   const sessionToken = parseSessionCookie(req?.headers.cookie)
-  const identity = await resolveIdentity(sessionToken)
+  const preresolved = req ? validatedSessionByRequest.get(req) : undefined
+  const identity = await resolveIdentity(sessionToken, preresolved)
   return {
     db,
     householdId: identity.householdId,

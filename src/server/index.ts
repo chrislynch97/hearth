@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path'
 import { existsSync } from 'node:fs'
 import { appRouter } from './trpc/router'
 import type { AppRouter } from './trpc/router'
-import { createContext } from './trpc/context'
+import { createContext, rememberValidatedSession } from './trpc/context'
 import { runMigrations } from './db/migrate'
 import { ensureSeed } from './db/seed'
 import { db } from './db/client'
@@ -108,6 +108,8 @@ async function main() {
 
     const token = parseSessionCookie(req.headers.cookie)
     const session = await getValidSession(db, token)
+    // Hand the validated session to createContext so it doesn't re-query it.
+    rememberValidatedSession(req, session)
     if (session) return
 
     return reply.code(401).send({ error: 'Authentication required' })
