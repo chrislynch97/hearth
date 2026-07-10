@@ -44,6 +44,26 @@ async function validateLines(
   }
 }
 
+type PayslipRow = typeof payslip.$inferSelect
+type ComponentRow = typeof payslipComponentType.$inferSelect
+
+/** Assemble one payslip's lines + totals into the API shape. Pure: callers pass
+ *  the already-fetched rows so both the single-row and list paths reuse it. */
+function assemblePayslip(row: PayslipRow, lines: PayslipLine[], componentById: Map<string, ComponentRow>): PayslipWithLines {
+  const totals = computePayslipTotals(
+    lines.map((l) => {
+      const component = componentById.get(l.componentId)
+      return {
+        kind: (component?.kind ?? 'employer_info') as ComponentKind,
+        amount: l.amount,
+        isVariable: component?.isVariable === 1,
+      }
+    }),
+    row.netPay,
+  )
+  return { ...row, lines, totals, hasVariablePay: totals.variableEarnings !== 0 }
+}
+
 async function loadPayslip(db: DB, householdId: string, payslipId: string): Promise<PayslipWithLines> {
   const [row] = await db.select().from(payslip).where(scopeWhere(householdId, payslip.householdId, eq(payslip.id, payslipId)))
   if (!row) {
@@ -62,45 +82,43 @@ async function loadPayslip(db: DB, householdId: string, payslipId: string): Prom
         .from(payslipComponentType)
         .where(scopeWhere(householdId, payslipComponentType.householdId, inArray(payslipComponentType.id, componentIds)))
     : []
-  const byId = new Map(components.map((c) => [c.id, c]))
-
-  const totals = computePayslipTotals(
-    lines.map((l) => {
-      const component = byId.get(l.componentId)
-      return {
-        kind: (component?.kind ?? 'employer_info') as ComponentKind,
-        amount: l.amount,
-        isVariable: component?.isVariable === 1,
-      }
-    }),
-    row.netPay,
-  )
-  const hasVariablePay = totals.variableEarnings !== 0
-
-  return { ...row, lines, totals, hasVariablePay }
+  return assemblePayslip(row, lines, new Map(components.map((c) => [c.id, c])))
 }
 
 export const payslipsRouter = router({
   list: publicProcedure
     .input(z.object({ ownerId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      const rows = await ctx.db
-        .select()
-        .from(payslip)
-        .where(
-          scopeWhere(
-            ctx.householdId,
-            payslip.householdId,
-            ...(input?.ownerId ? [eq(payslip.ownerId, input.ownerId)] : []),
-          ),
-        )
-        .orderBy(desc(payslip.payDate))
+      // Three household-scoped queries + in-memory assembly, instead of the old
+      // per-row loadPayslip() (3 queries each = an N+1 over the components table).
+      const [rows, lines, components] = await Promise.all([
+        ctx.db
+          .select()
+          .from(payslip)
+          .where(
+            scopeWhere(
+              ctx.householdId,
+              payslip.householdId,
+              ...(input?.ownerId ? [eq(payslip.ownerId, input.ownerId)] : []),
+            ),
+          )
+          .orderBy(desc(payslip.payDate)),
+        ctx.db.select().from(payslipLine).where(scopeWhere(ctx.householdId, payslipLine.householdId)),
+        ctx.db
+          .select()
+          .from(payslipComponentType)
+          .where(scopeWhere(ctx.householdId, payslipComponentType.householdId)),
+      ])
 
-      const result: PayslipWithLines[] = []
-      for (const p of rows) {
-        result.push(await loadPayslip(ctx.db, ctx.householdId, p.id))
+      const componentById = new Map(components.map((c) => [c.id, c]))
+      const linesByPayslip = new Map<string, PayslipLine[]>()
+      for (const l of lines) {
+        const arr = linesByPayslip.get(l.payslipId) ?? []
+        arr.push(l)
+        linesByPayslip.set(l.payslipId, arr)
       }
-      return result
+
+      return rows.map((p) => assemblePayslip(p, linesByPayslip.get(p.id) ?? [], componentById))
     }),
 
   create: publicProcedure
