@@ -645,8 +645,15 @@ export async function seedDemo(db: DB, opts: DemoOptions = {}): Promise<Record<s
   for (const [name, table] of ALL_TABLES) {
     const rows = data[name] ?? []
     counts[name] = rows.length
-    for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
-      const chunk = rows.slice(i, i + INSERT_CHUNK)
+    // Every demo row belongs to the singleton demo household. Stamp householdId
+    // here (the `household` table itself has no such column) rather than on each
+    // of the dozens of row literals — and now that the schema no longer defaults
+    // household_id, an omitted stamp is a loud NOT NULL error, not a silent
+    // mis-scope.
+    const scoped =
+      name === 'household' ? rows : rows.map((r) => ({ householdId: 'household', ...(r as object) }))
+    for (let i = 0; i < scoped.length; i += INSERT_CHUNK) {
+      const chunk = scoped.slice(i, i + INSERT_CHUNK)
       if (chunk.length > 0) statements.push(db.insert(table as SQLiteTable).values(chunk as never))
     }
   }

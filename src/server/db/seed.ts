@@ -49,6 +49,7 @@ export async function ensureSeed(database: DB): Promise<void> {
   if (joint.length === 0) {
     await database.insert(member).values({
       id: newId(),
+      householdId: HOUSEHOLD_ID,
       kind: 'joint',
       displayName: 'Joint',
       sortOrder: 100,

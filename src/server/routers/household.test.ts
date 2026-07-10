@@ -89,6 +89,7 @@ describe('household router', () => {
     const now = Date.now()
     await db.insert(member).values({
       id: newId(),
+      householdId: 'household',
       kind: 'person',
       displayName: 'Alice',
       sortOrder: 1,
@@ -112,6 +113,7 @@ describe('household router', () => {
     const now = Date.now()
     await db.insert(member).values({
       id: newId(),
+      householdId: 'household',
       kind: 'person',
       displayName: 'Bob',
       sortOrder: 1,

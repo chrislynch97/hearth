@@ -155,6 +155,13 @@
       "when": 1783701366014,
       "tag": "0021_ancient_klaw",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1783710000662,
+      "tag": "0022_curved_mole_man",
+      "breakpoints": true
     }
   ]
 }

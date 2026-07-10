@@ -20,8 +20,6 @@ import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core
 // be — the 'joint' member has no login, and a viewer user may have no member.
 // ---------------------------------------------------------------------------
 
-const HOUSEHOLD_DEFAULT = 'household'
-
 export const household = sqliteTable('household', {
   id: text('id').primaryKey(),
   displayName: text('display_name').notNull().default('My Household'),
@@ -151,7 +149,7 @@ export type Invitation = typeof invitation.$inferSelect
 // entity. `userId` optionally links a participant to a login identity.
 export const member = sqliteTable('member', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   userId: text('user_id'), // optional link to a login identity; null for 'joint' and unlinked people
   kind: text('kind').notNull(), // 'person' | 'joint'
   displayName: text('display_name').notNull(),
@@ -171,7 +169,7 @@ export type Member = typeof member.$inferSelect
 
 export const category = sqliteTable('category', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   name: text('name').notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
   archivedAt: integer('archived_at'),
@@ -181,7 +179,7 @@ export const category = sqliteTable('category', {
 
 export const pot = sqliteTable('pot', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   name: text('name').notNull(),
   categoryId: text('category_id').references(() => category.id),
   ownerId: text('owner_id')
@@ -206,7 +204,7 @@ export type Pot = typeof pot.$inferSelect
 // (The legacy per-owner `expense_share` model was retired; see the 001x migration.)
 export const expense = sqliteTable('expense', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   name: text('name').notNull(),
   recurrence: text('recurrence').notNull(), // 'monthly' | 'quarterly' | 'yearly'
   amount: integer('amount'),                // minor units, per-recurrence; null on un-migrated legacy rows
@@ -227,7 +225,7 @@ export const expense = sqliteTable('expense', {
 // new rows. A later migration drops it once every household has migrated.
 export const expenseShare = sqliteTable('expense_share', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   expenseId: text('expense_id').notNull().references(() => expense.id, { onDelete: 'cascade' }),
   ownerId: text('owner_id').notNull().references(() => member.id),
   amount: integer('amount').notNull(),      // minor units, per-recurrence cost for this owner
@@ -247,7 +245,7 @@ export type ExpenseShare = typeof expenseShare.$inferSelect
 // set-asides share a display name (e.g. "Treat Yo Self" = one per person).
 export const setAside = sqliteTable('set_aside', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   name: text('name').notNull(),
   groupLabel: text('group_label'),          // optional shared label across per-person rows
   ownerId: text('owner_id').notNull().references(() => member.id),
@@ -266,7 +264,7 @@ export type SetAside = typeof setAside.$inferSelect
 
 export const reconciliationBatch = sqliteTable('reconciliation_batch', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   potId: text('pot_id').references(() => pot.id), // null = mixed/multi-pot
   ownerId: text('owner_id').references(() => member.id), // the payer this batch settled; null = whole-pot / legacy
   totalAmount: integer('total_amount').notNull(),
@@ -281,7 +279,7 @@ export const reconciliationBatch = sqliteTable('reconciliation_batch', {
 // so a whole import can be identified (and, in future, reversed).
 export const importBatch = sqliteTable('import_batch', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   source: text('source').notNull(),        // 'monzo_csv'
   filename: text('filename'),
   rowCount: integer('row_count').notNull(),        // rows in the file
@@ -295,7 +293,7 @@ export const importBatch = sqliteTable('import_batch', {
 
 export const spendTransaction = sqliteTable('spend_transaction', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   date: text('date').notNull(), // YYYY-MM-DD
   description: text('description').notNull(),
   amount: integer('amount').notNull(), // minor units; + = spend, - = refund
@@ -336,7 +334,7 @@ export type ImportBatch = typeof importBatch.$inferSelect
 // Recurring non-payslip income (e.g. rental, side income, benefits).
 export const incomeSource = sqliteTable('income_source', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   ownerId: text('owner_id').notNull().references(() => member.id),
   name: text('name').notNull(),
   amount: integer('amount').notNull(),          // minor units, per-recurrence
@@ -353,7 +351,7 @@ export const incomeSource = sqliteTable('income_source', {
 // deductions differ by employer, so they're runtime data, not fixed columns.
 export const payslipComponentType = sqliteTable('payslip_component_type', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   ownerId: text('owner_id').notNull().references(() => member.id),
   name: text('name').notNull(),                  // e.g. 'Basic Pay', 'Bonus', 'Income Tax'
   kind: text('kind').notNull(),                  // 'earning' | 'deduction' | 'employer_info'
@@ -366,7 +364,7 @@ export const payslipComponentType = sqliteTable('payslip_component_type', {
 
 export const payslip = sqliteTable('payslip', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   ownerId: text('owner_id').notNull().references(() => member.id),
   payDate: text('pay_date').notNull(),           // YYYY-MM-DD
   periodLabel: text('period_label'),             // e.g. 'October 2020'
@@ -378,7 +376,7 @@ export const payslip = sqliteTable('payslip', {
 
 export const payslipLine = sqliteTable('payslip_line', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   payslipId: text('payslip_id').notNull().references(() => payslip.id, { onDelete: 'cascade' }),
   componentId: text('component_id').notNull().references(() => payslipComponentType.id),
   amount: integer('amount').notNull(),           // minor units
@@ -391,7 +389,7 @@ export const payslipLine = sqliteTable('payslip_line', {
 // Salary history. Each raise is one row; percent_increase is computed vs the prior raise.
 export const raise = sqliteTable('raise', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   ownerId: text('owner_id').notNull().references(() => member.id),
   effectiveDate: text('effective_date').notNull(), // YYYY-MM-DD
   newSalary: integer('new_salary').notNull(),      // annual, minor units
@@ -418,7 +416,7 @@ export type Raise = typeof raise.$inferSelect
 
 export const account = sqliteTable('account', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   name: text('name').notNull(),
   kind: text('kind').notNull(),                  // 'asset' | 'liability'
   subtype: text('subtype'),                      // savings|pension|investment|property|mortgage|loan|student_loan|credit_card|other
@@ -435,7 +433,7 @@ export const account = sqliteTable('account', {
 
 export const accountBalance = sqliteTable('account_balance', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull().default(HOUSEHOLD_DEFAULT),
+  householdId: text('household_id').notNull(),
   accountId: text('account_id').notNull().references(() => account.id, { onDelete: 'cascade' }),
   asOfDate: text('as_of_date').notNull(),        // YYYY-MM-DD
   value: integer('value').notNull(),             // minor units; magnitude of the balance (liabilities stored positive)
