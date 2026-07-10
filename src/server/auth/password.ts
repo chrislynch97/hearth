@@ -29,3 +29,16 @@ export async function verifyPassword(plain: string, stored: string): Promise<boo
   const actual = (await scryptAsync(plain, salt, expected.length)) as Buffer
   return actual.length === expected.length && timingSafeEqual(actual, expected)
 }
+
+/** A fixed, well-formed hash whose plaintext is unknowable, so a dummy verify
+ *  against it always fails while spending the same scrypt time as a real one. */
+const DUMMY_HASH = `scrypt:${'0'.repeat(32)}:${'0'.repeat(SCRYPT_KEYLEN * 2)}`
+
+/** Burn the same scrypt time as {@link verifyPassword} without a stored hash to
+ *  check against. Call this on login paths where the user (or their password) is
+ *  absent, so response timing doesn't reveal whether the username exists. Always
+ *  resolves to `false`. */
+export async function verifyPasswordDummy(plain: string): Promise<false> {
+  await verifyPassword(plain, DUMMY_HASH)
+  return false
+}

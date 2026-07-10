@@ -7,7 +7,7 @@ import { user } from '../db/schema'
 import type { User } from '../db/schema'
 import { getInstanceSettings, setAllowOpenRegistration } from '../db/instanceSettings'
 import { provisionHousehold } from '../db/seed'
-import { hashPassword, verifyPassword } from '../auth/password'
+import { hashPassword, verifyPassword, verifyPasswordDummy } from '../auth/password'
 import {
   assertInstanceOwner,
   createSession,
@@ -99,7 +99,14 @@ export const authRouter = router({
       }
 
       const u = await getUserByUsername(ctx.db, input.username.trim())
-      if (!u || u.passwordHash === null || !(await verifyPassword(input.password, u.passwordHash))) {
+      // Always spend scrypt time: verify against the stored hash when there is
+      // one, otherwise burn the same time against a dummy. A short-circuit here
+      // would leak whether the username exists via the response timing.
+      const ok =
+        u && u.passwordHash !== null
+          ? await verifyPassword(input.password, u.passwordHash)
+          : await verifyPasswordDummy(input.password)
+      if (!u || !ok) {
         loginLimiter.fail(key, now)
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect username or password' })
       }
