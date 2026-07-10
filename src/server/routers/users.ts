@@ -4,7 +4,7 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { household, member, membership, session, user } from '../db/schema'
 import { scopeWhere } from '../trpc/tenant'
-import { getUser, getUserByUsername, getValidSession, isInstanceOwner } from '../auth/session'
+import { getUser, getUserByUsername, getValidSession, isInstanceOwner, normalizeUsername } from '../auth/session'
 
 export const usersRouter = router({
   /** The current user, their accepted households (with role), and which one is
@@ -75,7 +75,7 @@ export const usersRouter = router({
       await ctx.db
         .update(user)
         .set({
-          ...(input.username !== undefined ? { username: input.username.trim() } : {}),
+          ...(input.username !== undefined ? { username: normalizeUsername(input.username) } : {}),
           ...(input.displayName !== undefined ? { displayName: input.displayName.trim() } : {}),
           ...(input.email !== undefined ? { email: input.email } : {}),
           updatedAt: Date.now(),

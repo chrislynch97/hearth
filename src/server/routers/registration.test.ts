@@ -79,4 +79,21 @@ describe('open registration', () => {
     // Usernames are unique across the instance.
     await expect(reg.c.auth.register(REG)).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
+
+  it('treats usernames case-insensitively (#14)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const primaryOwner = await getUserByUsername(db, 'owner')
+    await caller(db, { userId: primaryOwner!.id }).c.auth.setRegistrationOpen({ open: true })
+
+    // Register with mixed case; stored lower-cased and found by any casing.
+    await caller(db).c.auth.register({ ...REG, username: 'Nadia' })
+    expect((await getUserByUsername(db, 'nadia'))?.username).toBe('nadia')
+    expect(await getUserByUsername(db, 'NADIA')).not.toBeNull()
+
+    // A different-case duplicate is rejected, not silently accepted.
+    await expect(caller(db).c.auth.register({ ...REG, username: 'NADIA' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+  })
 })

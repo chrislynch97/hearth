@@ -124,8 +124,15 @@ export async function assertInstanceOwner(db: DB, userId: string | undefined): P
   }
 }
 
+/** Canonical form of a username: trimmed and lower-cased. Usernames are
+ *  case-insensitive, so both writes and lookups go through this — otherwise
+ *  `Chris` and `chris` could both register and a wrong-case login would fail. */
+export function normalizeUsername(username: string): string {
+  return username.trim().toLowerCase()
+}
+
 export async function getUserByUsername(db: DB, username: string): Promise<User | null> {
-  const [u] = await db.select().from(user).where(eq(user.username, username))
+  const [u] = await db.select().from(user).where(eq(user.username, normalizeUsername(username)))
   return u ?? null
 }
 

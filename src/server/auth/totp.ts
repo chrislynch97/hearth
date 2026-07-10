@@ -91,6 +91,27 @@ export function generateTotp(secret: string, atMs: number = Date.now()): string 
   return (binary % 10 ** DIGITS).toString().padStart(DIGITS, '0')
 }
 
+/** The absolute time-step `token` matches for `secret`, allowing ±`window` steps
+ *  of clock drift (default ±1 step = ±30s), or `null` if it matches none. The
+ *  step lets callers persist the last-accepted step and reject replays within
+ *  the validity window. */
+export function matchTotpStep(
+  secret: string,
+  token: string,
+  atMs: number = Date.now(),
+  window = 1,
+): number | null {
+  const normalized = token.replace(/\s/g, '')
+  if (!/^\d{6}$/.test(normalized)) return null
+  for (let errorWindow = -window; errorWindow <= window; errorWindow++) {
+    const stepMs = atMs + errorWindow * STEP_SECONDS * 1000
+    if (generateTotp(secret, stepMs) === normalized) {
+      return Math.floor(stepMs / 1000 / STEP_SECONDS)
+    }
+  }
+  return null
+}
+
 /** Whether `token` is valid for `secret`, allowing ±`window` steps of clock
  *  drift (default ±1 step = ±30s). Constant-ish; the code space is small enough
  *  that timing isn't the threat — brute force is, which the login rate limiter
@@ -101,14 +122,7 @@ export function verifyTotp(
   atMs: number = Date.now(),
   window = 1,
 ): boolean {
-  const normalized = token.replace(/\s/g, '')
-  if (!/^\d{6}$/.test(normalized)) return false
-  for (let errorWindow = -window; errorWindow <= window; errorWindow++) {
-    if (generateTotp(secret, atMs + errorWindow * STEP_SECONDS * 1000) === normalized) {
-      return true
-    }
-  }
-  return false
+  return matchTotpStep(secret, token, atMs, window) !== null
 }
 
 // ---------------------------------------------------------------------------

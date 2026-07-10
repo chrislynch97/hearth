@@ -20,6 +20,7 @@ import {
   getUserByUsername,
   getValidSession,
   isInstanceLocked,
+  normalizeUsername,
   syncAuthRequired,
 } from '../auth/session'
 import {
@@ -28,6 +29,7 @@ import {
   generateRecoveryCodes,
   generateTotpSecret,
   hashRecoveryCodes,
+  matchTotpStep,
   verifyTotp,
 } from '../auth/totp'
 import { validatePassword } from '../../shared/password-policy'
@@ -177,7 +179,7 @@ export const authRouter = router({
       const userId = newId()
       await ctx.db.insert(user).values({
         id: userId,
-        username: input.username.trim(),
+        username: normalizeUsername(input.username),
         email: null,
         displayName: input.displayName.trim(),
         passwordHash: hashPassword(input.password),
@@ -316,9 +318,18 @@ export const authRouter = router({
 })
 
 /** Verify a login MFA code: first as a TOTP, then as a single-use recovery code
- *  (which is consumed on success). Returns whether it was accepted. */
+ *  (which is consumed on success). Returns whether it was accepted. A TOTP step
+ *  is accepted only if it's newer than the last-used one, so a captured code
+ *  can't be replayed inside its ±1-step validity window. */
 async function verifyMfaCode(db: DB, u: User, code: string): Promise<boolean> {
-  if (u.mfaSecret && verifyTotp(u.mfaSecret, code)) return true
+  if (u.mfaSecret) {
+    const step = matchTotpStep(u.mfaSecret, code)
+    if (step !== null) {
+      if (u.mfaLastStep !== null && step <= u.mfaLastStep) return false // replayed code
+      await db.update(user).set({ mfaLastStep: step, updatedAt: Date.now() }).where(eq(user.id, u.id))
+      return true
+    }
+  }
   if (!u.mfaRecoveryCodes) return false
   const hashes = JSON.parse(u.mfaRecoveryCodes) as string[]
   const remaining = consumeRecoveryCode(code, hashes)

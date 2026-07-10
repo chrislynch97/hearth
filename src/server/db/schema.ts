@@ -67,6 +67,9 @@ export const user = sqliteTable('user', {
   mfaSecret: text('mfa_secret'),
   mfaEnabledAt: integer('mfa_enabled_at'),
   mfaRecoveryCodes: text('mfa_recovery_codes'),
+  // The last TOTP time-step accepted at login. Steps <= this are rejected so a
+  // captured code can't be replayed within its ±1-step validity window.
+  mfaLastStep: integer('mfa_last_step'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 })

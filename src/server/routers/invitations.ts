@@ -5,7 +5,7 @@ import { router, publicProcedure } from '../trpc/trpc'
 import { assertRole, scopeWhere } from '../trpc/tenant'
 import { household, invitation, membership, user } from '../db/schema'
 import { hashPassword } from '../auth/password'
-import { createSession, getUserByUsername, newSessionId } from '../auth/session'
+import { createSession, getUserByUsername, newSessionId, normalizeUsername } from '../auth/session'
 import { validatePassword } from '../../shared/password-policy'
 import { RateLimiter } from '../auth/rateLimit'
 import { newId } from '../../shared/ids'
@@ -112,7 +112,7 @@ export const invitationsRouter = router({
       const userId = newId()
       await ctx.db.insert(user).values({
         id: userId,
-        username: input.username.trim(),
+        username: normalizeUsername(input.username),
         email: inv.email,
         displayName: input.displayName.trim(),
         passwordHash: hashPassword(input.password),

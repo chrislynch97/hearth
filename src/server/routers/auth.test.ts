@@ -170,6 +170,24 @@ describe('MFA', () => {
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   })
 
+  it('rejects a replayed TOTP code within its validity window (#14)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { authed } = await lockAndLogin(db)
+    const enroll = await authed.caller.auth.enrollMfa()
+    await authed.caller.auth.confirmMfa({ code: generateTotp(enroll.secret) })
+
+    const code = generateTotp(enroll.secret)
+    const first = makeCaller(db)
+    expect(await first.caller.auth.login({ username: USER, password: PW, code })).toEqual({ ok: true })
+
+    // The very same code must not work a second time, even though it's still in
+    // its ±1-step window.
+    await expect(
+      makeCaller(db).caller.auth.login({ username: USER, password: PW, code }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+  })
+
   it('disableMfa needs the password and turns MFA back off', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
