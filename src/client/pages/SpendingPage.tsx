@@ -790,16 +790,17 @@ function SpendRow({
   members,
   pots,
   money,
+  categories,
 }: {
   spend: SpendTransaction
   members: Member[]
   pots: Pot[]
   money: MoneyFormat
+  categories: Category[]
 }) {
   const utils = trpc.useUtils()
   const fmt = useFormatDate()
   const remove = trpc.spends.remove.useMutation()
-  const categories = trpc.categories.list.useQuery().data ?? []
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [splitOpen, setSplitOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -963,6 +964,9 @@ function Register({ members, pots, money }: { members: Member[]; pots: Pot[]; mo
 
   const spendsQuery = trpc.spends.list.useQuery(input)
   const spends = spendsQuery.data ?? []
+  // Queried once here and passed to every row, rather than each SpendRow mounting
+  // its own categories.list subscription.
+  const categories = trpc.categories.list.useQuery().data ?? []
 
   return (
     <Card withBorder padding="md">
@@ -1036,7 +1040,7 @@ function Register({ members, pots, money }: { members: Member[]; pots: Pot[]; mo
               </Table.Thead>
               <Table.Tbody>
                 {spends.map((s) => (
-                  <SpendRow key={s.id} spend={s} members={members} pots={pots} money={money} />
+                  <SpendRow key={s.id} spend={s} members={members} pots={pots} money={money} categories={categories} />
                 ))}
               </Table.Tbody>
             </Table>
