@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { makeTestDb } from '../db/testdb'
-import { ensureSeed } from '../db/seed'
+import { ensureSeed, provisionHousehold } from '../db/seed'
 import { appRouter } from '../trpc/router'
 
 const CSV = [
@@ -70,6 +70,26 @@ describe('imports router', () => {
       rows: importable,
     })
     expect(again.imported).toBe(0)
+  })
+
+  it('lets two households import the same Monzo transaction id (#15)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const secondId = await provisionHousehold(db, { displayName: 'Second' })
+
+    const rows = [{ importRef: 'shared_tx', date: '2026-01-01', description: 'A', amount: 500 }]
+
+    const h1 = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+    const joint1 = (await h1.members.list()).find((m) => m.kind === 'joint')!
+    const r1 = await h1.imports.commit({ ownerId: joint1.id, totalRows: 1, rows })
+    expect(r1.imported).toBe(1)
+
+    // The same import_ref in a DIFFERENT household must not collide on the
+    // (previously global) unique index.
+    const h2 = appRouter.createCaller({ db, householdId: secondId, role: 'owner' })
+    const joint2 = (await h2.members.list()).find((m) => m.kind === 'joint')!
+    const r2 = await h2.imports.commit({ ownerId: joint2.id, totalRows: 1, rows })
+    expect(r2.imported).toBe(1)
   })
 
   it('records a batch in history', async () => {

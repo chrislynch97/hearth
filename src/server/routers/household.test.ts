@@ -53,12 +53,10 @@ describe('household router', () => {
       currencyDecimalPlaces: 2,
       locale: 'fr-FR',
       budgetPeriodStartDay: 15,
-      themePreference: 'dark',
       incomeBasisDefault: 'rolling_12m',
       jointContributionBasis: 'income_proportional',
     })
 
-    expect(updated.themePreference).toBe('dark')
     expect(updated.budgetPeriodStartDay).toBe(15)
     expect(updated.incomeBasisDefault).toBe('rolling_12m')
     expect(updated.jointContributionBasis).toBe('income_proportional')

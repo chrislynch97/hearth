@@ -40,7 +40,6 @@ export const household = sqliteTable('household', {
   // Authentication (password + MFA) now lives on `user`, not the household. The
   // legacy household columns were migrated onto the owner user and dropped
   // (migration 0017).
-  themePreference: text('theme_preference').notNull().default('system'),
   weekStart: text('week_start').notNull().default('monday'),   // 'monday' | 'sunday'
   dateFormat: text('date_format').notNull().default('medium'), // 'iso' | 'numeric' | 'medium' | 'long'
   backupFrequency: text('backup_frequency').notNull().default('off'), // 'off' | 'daily' | 'weekly'
@@ -320,7 +319,10 @@ export const spendTransaction = sqliteTable('spend_transaction', {
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 }, (t) => ({
-  uniqImportRef: uniqueIndex('spend_transaction_import_ref').on(t.importRef),
+  // Import dedup is household-scoped (imports.ts filters by householdId), so the
+  // uniqueness must be too — a global unique made two households importing the
+  // same Monzo transaction id collide with a raw SQLite error.
+  uniqImportRef: uniqueIndex('spend_transaction_import_ref').on(t.householdId, t.importRef),
 }))
 
 export type ReconciliationBatch = typeof reconciliationBatch.$inferSelect

@@ -131,7 +131,6 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
       mfaSecret: null,
       mfaEnabledAt: null,
       mfaRecoveryCodes: null,
-      themePreference: 'system',
       weekStart: 'monday',
       dateFormat: 'medium',
       backupFrequency: 'off',
