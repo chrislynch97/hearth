@@ -65,28 +65,21 @@ export const potsRouter = router({
       const nextOrder = (result?.maxOrder ?? 0) + 1
 
       const id = newId()
-      await ctx.db.insert(pot).values({
-        id,
-        householdId: ctx.householdId,
-        name: input.name,
-        categoryId: input.categoryId ?? null,
-        ownerId: input.ownerId,
-        sortOrder: nextOrder,
-        note: input.note ?? null,
-        createdAt: now,
-        updatedAt: now,
-      })
-
       const [inserted] = await ctx.db
-        .select()
-        .from(pot)
-        .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, id)))
-
-      if (!inserted) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to insert pot' })
-      }
-
-      return inserted
+        .insert(pot)
+        .values({
+          id,
+          householdId: ctx.householdId,
+          name: input.name,
+          categoryId: input.categoryId ?? null,
+          ownerId: input.ownerId,
+          sortOrder: nextOrder,
+          note: input.note ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning()
+      return inserted!
     }),
 
   update: publicProcedure

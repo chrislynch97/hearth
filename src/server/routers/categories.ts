@@ -27,25 +27,18 @@ export const categoriesRouter = router({
       const nextOrder = (result?.maxOrder ?? 0) + 1
 
       const id = newId()
-      await ctx.db.insert(category).values({
-        id,
-        householdId: ctx.householdId,
-        name: input.name,
-        sortOrder: nextOrder,
-        createdAt: now,
-        updatedAt: now,
-      })
-
       const [inserted] = await ctx.db
-        .select()
-        .from(category)
-        .where(scopeWhere(ctx.householdId, category.householdId, eq(category.id, id)))
-
-      if (!inserted) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to insert category' })
-      }
-
-      return inserted
+        .insert(category)
+        .values({
+          id,
+          householdId: ctx.householdId,
+          name: input.name,
+          sortOrder: nextOrder,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning()
+      return inserted!
     }),
 
   update: publicProcedure

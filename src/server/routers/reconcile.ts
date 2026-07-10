@@ -64,30 +64,26 @@ export const reconcileRouter = router({
       const now = Date.now()
       const batchId = newId()
 
-      await ctx.db.insert(reconciliationBatch).values({
-        id: batchId,
-        householdId: ctx.householdId,
-        potId: input.potId,
-        ownerId: input.ownerId ?? null,
-        totalAmount,
-        transactionCount,
-        createdAt: now,
-        updatedAt: now,
-      })
+      const [batch] = await ctx.db
+        .insert(reconciliationBatch)
+        .values({
+          id: batchId,
+          householdId: ctx.householdId,
+          potId: input.potId,
+          ownerId: input.ownerId ?? null,
+          totalAmount,
+          transactionCount,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning()
 
       await ctx.db
         .update(spendTransaction)
         .set({ reconciled: 1, reconciledAt: now, reconciliationBatchId: batchId, updatedAt: now })
         .where(scope())
 
-      const [batch] = await ctx.db
-        .select()
-        .from(reconciliationBatch)
-        .where(scopeWhere(ctx.householdId, reconciliationBatch.householdId, eq(reconciliationBatch.id, batchId)))
-      if (!batch) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create reconciliation batch' })
-      }
-      return batch
+      return batch!
     }),
 
   undoBatch: publicProcedure

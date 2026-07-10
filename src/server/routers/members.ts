@@ -36,29 +36,22 @@ export const membersRouter = router({
       const nextOrder = (result?.maxOrder ?? 0) + 1
 
       const id = newId()
-      await ctx.db.insert(member).values({
-        id,
-        householdId: ctx.householdId,
-        kind: 'person',
-        displayName: input.displayName,
-        shortLabel: input.shortLabel ?? null,
-        color: input.color ?? null,
-        jointContributionWeight: input.jointContributionWeight ?? null,
-        sortOrder: nextOrder,
-        createdAt: now,
-        updatedAt: now,
-      })
-
       const [inserted] = await ctx.db
-        .select()
-        .from(member)
-        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, id)))
-
-      if (!inserted) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to insert member' })
-      }
-
-      return inserted
+        .insert(member)
+        .values({
+          id,
+          householdId: ctx.householdId,
+          kind: 'person',
+          displayName: input.displayName,
+          shortLabel: input.shortLabel ?? null,
+          color: input.color ?? null,
+          jointContributionWeight: input.jointContributionWeight ?? null,
+          sortOrder: nextOrder,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning()
+      return inserted!
     }),
 
   update: publicProcedure

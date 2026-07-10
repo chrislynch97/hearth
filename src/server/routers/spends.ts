@@ -88,31 +88,26 @@ export const spendsRouter = router({
       const now = Date.now()
       const id = newId()
 
-      await ctx.db.insert(spendTransaction).values({
-        id,
-        householdId: ctx.householdId,
-        date: input.date ?? todayIso(),
-        description: input.description,
-        amount: input.amount,
-        ownerId: input.ownerId,
-        potId: input.potId ?? null,
-        categoryId: input.categoryId ?? null,
-        settledAtSource: input.settledAtSource ? 1 : 0,
-        reconciled: 0,
-        source: 'manual',
-        note: input.note ?? null,
-        createdAt: now,
-        updatedAt: now,
-      })
-
       const [inserted] = await ctx.db
-        .select()
-        .from(spendTransaction)
-        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.id, id)))
-      if (!inserted) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to insert spend transaction' })
-      }
-      return inserted
+        .insert(spendTransaction)
+        .values({
+          id,
+          householdId: ctx.householdId,
+          date: input.date ?? todayIso(),
+          description: input.description,
+          amount: input.amount,
+          ownerId: input.ownerId,
+          potId: input.potId ?? null,
+          categoryId: input.categoryId ?? null,
+          settledAtSource: input.settledAtSource ? 1 : 0,
+          reconciled: 0,
+          source: 'manual',
+          note: input.note ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning()
+      return inserted!
     }),
 
   update: publicProcedure

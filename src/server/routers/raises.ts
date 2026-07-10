@@ -45,26 +45,22 @@ export const raisesRouter = router({
       await assertPerson(ctx.db, ctx.householdId, input.ownerId)
       const now = Date.now()
       const id = newId()
-      await ctx.db.insert(raise).values({
-        id,
-        householdId: ctx.householdId,
-        ownerId: input.ownerId,
-        effectiveDate: input.effectiveDate,
-        newSalary: input.newSalary,
-        bonus: input.bonus ?? null,
-        newPosition: input.newPosition ?? null,
-        note: input.note ?? null,
-        createdAt: now,
-        updatedAt: now,
-      })
       const [inserted] = await ctx.db
-        .select()
-        .from(raise)
-        .where(scopeWhere(ctx.householdId, raise.householdId, eq(raise.id, id)))
-      if (!inserted) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to insert raise' })
-      }
-      return inserted
+        .insert(raise)
+        .values({
+          id,
+          householdId: ctx.householdId,
+          ownerId: input.ownerId,
+          effectiveDate: input.effectiveDate,
+          newSalary: input.newSalary,
+          bonus: input.bonus ?? null,
+          newPosition: input.newPosition ?? null,
+          note: input.note ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning()
+      return inserted!
     }),
 
   update: publicProcedure

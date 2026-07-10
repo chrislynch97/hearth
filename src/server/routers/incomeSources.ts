@@ -36,26 +36,22 @@ export const incomeSourcesRouter = router({
       await assertMember(ctx.db, ctx.householdId, input.ownerId)
       const now = Date.now()
       const id = newId()
-      await ctx.db.insert(incomeSource).values({
-        id,
-        householdId: ctx.householdId,
-        ownerId: input.ownerId,
-        name: input.name,
-        amount: input.amount,
-        basis: input.basis ?? 'net',
-        recurrence: input.recurrence,
-        note: input.note ?? null,
-        createdAt: now,
-        updatedAt: now,
-      })
       const [inserted] = await ctx.db
-        .select()
-        .from(incomeSource)
-        .where(scopeWhere(ctx.householdId, incomeSource.householdId, eq(incomeSource.id, id)))
-      if (!inserted) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to insert income source' })
-      }
-      return inserted
+        .insert(incomeSource)
+        .values({
+          id,
+          householdId: ctx.householdId,
+          ownerId: input.ownerId,
+          name: input.name,
+          amount: input.amount,
+          basis: input.basis ?? 'net',
+          recurrence: input.recurrence,
+          note: input.note ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning()
+      return inserted!
     }),
 
   update: publicProcedure

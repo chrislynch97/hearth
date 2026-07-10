@@ -46,25 +46,21 @@ export const payslipComponentsRouter = router({
       const nextOrder = (result?.maxOrder ?? 0) + 1
 
       const id = newId()
-      await ctx.db.insert(payslipComponentType).values({
-        id,
-        householdId: ctx.householdId,
-        ownerId: input.ownerId,
-        name: input.name,
-        kind: input.kind,
-        isVariable: input.isVariable ? 1 : 0,
-        sortOrder: nextOrder,
-        createdAt: now,
-        updatedAt: now,
-      })
       const [inserted] = await ctx.db
-        .select()
-        .from(payslipComponentType)
-        .where(scopeWhere(ctx.householdId, payslipComponentType.householdId, eq(payslipComponentType.id, id)))
-      if (!inserted) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to insert component' })
-      }
-      return inserted
+        .insert(payslipComponentType)
+        .values({
+          id,
+          householdId: ctx.householdId,
+          ownerId: input.ownerId,
+          name: input.name,
+          kind: input.kind,
+          isVariable: input.isVariable ? 1 : 0,
+          sortOrder: nextOrder,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning()
+      return inserted!
     }),
 
   update: publicProcedure
