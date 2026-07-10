@@ -21,37 +21,57 @@ export const dashboardRouter = router({
     .query(async ({ ctx, input }) => {
       const today = todayIso()
 
-      const [householdRow] = await ctx.db.select().from(household).where(eq(household.id, ctx.householdId))
+      // These reads are all independent, so fire them together rather than
+      // awaiting one after another (they later feed the funding plan, backlog,
+      // trend and recent-activity sections).
+      const [
+        householdRows,
+        members,
+        pots,
+        categories,
+        expenses,
+        setAsides,
+        incomeByMember,
+        unreconciled,
+        recentRows,
+        payslipSummaries,
+      ] = await Promise.all([
+        ctx.db.select().from(household).where(eq(household.id, ctx.householdId)),
+        ctx.db.select().from(member).where(scopeWhere(ctx.householdId, member.householdId, isNull(member.archivedAt))),
+        ctx.db.select().from(pot).where(scopeWhere(ctx.householdId, pot.householdId, isNull(pot.archivedAt))),
+        ctx.db
+          .select()
+          .from(category)
+          .where(scopeWhere(ctx.householdId, category.householdId, isNull(category.archivedAt))),
+        ctx.db
+          .select()
+          .from(expense)
+          .where(scopeWhere(ctx.householdId, expense.householdId, isNull(expense.archivedAt), eq(expense.active, 1))),
+        ctx.db
+          .select()
+          .from(setAside)
+          .where(scopeWhere(ctx.householdId, setAside.householdId, isNull(setAside.archivedAt), eq(setAside.active, 1))),
+        computeIncomeByMember(ctx.db, ctx.householdId),
+        ctx.db
+          .select()
+          .from(spendTransaction)
+          .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.reconciled, 0))),
+        ctx.db
+          .select()
+          .from(spendTransaction)
+          .where(scopeWhere(ctx.householdId, spendTransaction.householdId))
+          .orderBy(desc(spendTransaction.date), desc(spendTransaction.createdAt))
+          .limit(10),
+        loadPayslipSummaries(ctx.db, ctx.householdId),
+      ])
+
+      const householdRow = householdRows[0]
       const startDay = householdRow?.budgetPeriodStartDay ?? 1
       const jointBasis = (householdRow?.jointContributionBasis ?? 'equal') as
         | 'equal'
         | 'income_proportional'
         | 'custom'
       const period = periodForDate(input?.periodStart ?? today, startDay)
-
-      const members = await ctx.db
-        .select()
-        .from(member)
-        .where(scopeWhere(ctx.householdId, member.householdId, isNull(member.archivedAt)))
-      const pots = await ctx.db
-        .select()
-        .from(pot)
-        .where(scopeWhere(ctx.householdId, pot.householdId, isNull(pot.archivedAt)))
-      const categories = await ctx.db
-        .select()
-        .from(category)
-        .where(scopeWhere(ctx.householdId, category.householdId, isNull(category.archivedAt)))
-      const expenses = await ctx.db
-        .select()
-        .from(expense)
-        .where(scopeWhere(ctx.householdId, expense.householdId, isNull(expense.archivedAt), eq(expense.active, 1)))
-
-      const setAsides = await ctx.db
-        .select()
-        .from(setAside)
-        .where(scopeWhere(ctx.householdId, setAside.householdId, isNull(setAside.archivedAt), eq(setAside.active, 1)))
-
-      const incomeByMember = await computeIncomeByMember(ctx.db, ctx.householdId)
 
       // B / C — funding plan (per-person set-aside, remainder, income share).
       const funding = computeFundingPlan({
@@ -81,10 +101,6 @@ export const dashboardRouter = router({
       })
 
       // A — catch-up backlog (all-time un-reconciled).
-      const unreconciled = await ctx.db
-        .select()
-        .from(spendTransaction)
-        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.reconciled, 0)))
       const backlog = computeBacklog({
         transactions: unreconciled.map((t) => ({
           id: t.id,
@@ -120,7 +136,6 @@ export const dashboardRouter = router({
       })
 
       // E — 12-month household net trend.
-      const payslipSummaries = await loadPayslipSummaries(ctx.db, ctx.householdId)
       const incomeTrend = monthlyNetTrend(
         payslipSummaries.map((p) => ({ payDate: p.payDate, effectiveNet: p.effectiveNet })),
         today,
@@ -130,12 +145,6 @@ export const dashboardRouter = router({
       // F — recent activity (last 10 spends, with names for inline display).
       const memberName = new Map(members.map((m) => [m.id, m.displayName]))
       const potName = new Map(pots.map((p) => [p.id, p.name]))
-      const recentRows = await ctx.db
-        .select()
-        .from(spendTransaction)
-        .where(scopeWhere(ctx.householdId, spendTransaction.householdId))
-        .orderBy(desc(spendTransaction.date), desc(spendTransaction.createdAt))
-        .limit(10)
       const recentActivity = recentRows.map((r) => ({
         id: r.id,
         date: r.date,
