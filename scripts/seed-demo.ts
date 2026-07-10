@@ -10,7 +10,7 @@
 // Point at the demo database unless the caller overrode it. Guard against
 // accidentally seeding the real app.db — refuse unless it's clearly a demo/test
 // target or the caller passes --force.
-import { looksLikeRealDb } from './demo-guard.ts'
+import { looksLikeRealDb } from './demo-guard'
 
 const DEFAULT_DEMO_URL = 'file:./data/demo.db'
 const forced = process.argv.includes('--force')
@@ -26,9 +26,9 @@ if (looksLikeRealDb(target) && !forced) {
 }
 
 async function main(): Promise<void> {
-  const { runMigrations } = await import('../src/server/db/migrate.ts')
-  const { db } = await import('../src/server/db/client.ts')
-  const { seedDemo } = await import('../src/server/db/demo.ts')
+  const { runMigrations } = await import('../src/server/db/migrate')
+  const { db } = await import('../src/server/db/client')
+  const { seedDemo } = await import('../src/server/db/demo')
 
   console.log(`[demo] seeding ${target}`)
   await runMigrations()

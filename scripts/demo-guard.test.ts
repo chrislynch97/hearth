@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { looksLikeRealDb } from './demo-guard.ts'
+import { looksLikeRealDb } from './demo-guard'
 
 describe('looksLikeRealDb', () => {
   it('flags the real app.db regardless of casing (win32 is case-insensitive)', () => {

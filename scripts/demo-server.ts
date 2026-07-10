@@ -6,7 +6,7 @@
 //   npm run demo          → serve the demo db (seeds it on first run)
 //   npm run demo -- --seed → force a fresh re-seed before serving
 
-import { looksLikeRealDb } from './demo-guard.ts'
+import { looksLikeRealDb } from './demo-guard'
 
 const DEFAULT_DEMO_URL = 'file:./data/demo.db'
 const reseed = process.argv.includes('--seed')
@@ -31,9 +31,9 @@ if (looksLikeRealDb(target) && !forced) {
 }
 
 async function main(): Promise<void> {
-  const { runMigrations } = await import('../src/server/db/migrate.ts')
-  const { db } = await import('../src/server/db/client.ts')
-  const { seedDemo, hasHousehold } = await import('../src/server/db/demo.ts')
+  const { runMigrations } = await import('../src/server/db/migrate')
+  const { db } = await import('../src/server/db/client')
+  const { seedDemo, hasHousehold } = await import('../src/server/db/demo')
 
   await runMigrations()
   if (reseed || !(await hasHousehold(db))) {
@@ -44,7 +44,7 @@ async function main(): Promise<void> {
   }
 
   // Boot the real server. It re-uses the same DATABASE_URL we set above.
-  await import('../src/server/index.ts')
+  await import('../src/server/index')
 }
 
 main().catch((err) => {
