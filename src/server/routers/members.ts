@@ -3,7 +3,8 @@ import { eq, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertRole, scopeWhere } from '../trpc/tenant'
-import { member, membership } from '../db/schema'
+import { member } from '../db/schema'
+import { acceptedMembership } from '../auth/session'
 import { newId } from '../../shared/ids'
 
 export const membersRouter = router({
@@ -108,11 +109,8 @@ export const membersRouter = router({
       if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' })
 
       if (input.userId) {
-        const [grant] = await ctx.db
-          .select()
-          .from(membership)
-          .where(scopeWhere(ctx.householdId, membership.householdId, eq(membership.userId, input.userId)))
-        if (!grant || grant.acceptedAt === null) {
+        const grant = await acceptedMembership(ctx.db, ctx.householdId, input.userId)
+        if (!grant) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'That account is not a member of this household.' })
         }
         // One user ↔ one member: release the account from any other member first.

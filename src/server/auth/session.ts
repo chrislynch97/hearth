@@ -136,6 +136,16 @@ export async function getUserByUsername(db: DB, username: string): Promise<User 
   return u ?? null
 }
 
+/** The user's *accepted* membership of a household, or undefined. The single
+ *  source of truth for "does this user have access to this household". */
+export async function acceptedMembership(db: DB, householdId: string, userId: string) {
+  const [g] = await db
+    .select()
+    .from(membership)
+    .where(and(eq(membership.householdId, householdId), eq(membership.userId, userId)))
+  return g && g.acceptedAt !== null ? g : undefined
+}
+
 /** The user's accepted memberships, most-privileged first (owner → viewer). */
 export async function listMemberships(db: DB, userId: string) {
   const rows = await db.select().from(membership).where(eq(membership.userId, userId))

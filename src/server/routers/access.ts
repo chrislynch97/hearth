@@ -6,19 +6,12 @@ import { assertRole, scopeWhere, type Role } from '../trpc/tenant'
 import { membership, user } from '../db/schema'
 import type { DB } from '../db/client'
 import { hashPassword } from '../auth/password'
-import { deleteUserSessions } from '../auth/session'
+import { acceptedMembership, deleteUserSessions } from '../auth/session'
 import { validatePassword } from '../../shared/password-policy'
 
 const assignableRole = z.enum(['owner', 'admin', 'member', 'viewer'])
 
-/** An accepted membership row for the household, or undefined. */
-async function grantFor(db: DB, householdId: string, userId: string) {
-  const [g] = await db
-    .select()
-    .from(membership)
-    .where(scopeWhere(householdId, membership.householdId, eq(membership.userId, userId)))
-  return g && g.acceptedAt !== null ? g : undefined
-}
+const grantFor = acceptedMembership
 
 /** How many accepted owners the household has — the last-owner guard. */
 async function ownerCount(db: DB, householdId: string): Promise<number> {

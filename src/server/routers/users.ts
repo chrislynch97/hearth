@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import { and, eq, inArray } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { household, member, membership, session, user } from '../db/schema'
 import { scopeWhere } from '../trpc/tenant'
-import { getUser, getUserByUsername, getValidSession, isInstanceOwner, normalizeUsername } from '../auth/session'
+import { acceptedMembership, getUser, getUserByUsername, getValidSession, isInstanceOwner, normalizeUsername } from '../auth/session'
 
 export const usersRouter = router({
   /** The current user, their accepted households (with role), and which one is
@@ -93,11 +93,8 @@ export const usersRouter = router({
       const s = await getValidSession(ctx.db, ctx.sessionToken)
       if (!s) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'No active session' })
 
-      const [grant] = await ctx.db
-        .select()
-        .from(membership)
-        .where(and(eq(membership.userId, s.userId), eq(membership.householdId, input.householdId)))
-      if (!grant || grant.acceptedAt === null) {
+      const grant = await acceptedMembership(ctx.db, input.householdId, s.userId)
+      if (!grant) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'You are not a member of that household.' })
       }
 
