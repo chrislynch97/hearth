@@ -210,13 +210,16 @@ function MembersStep({ onNext, onBack }: MembersStepProps) {
 // ---------------------------------------------------------------------------
 
 interface FinishStepProps {
-  householdName: string
   onBack: () => void
 }
 
-function FinishStep({ householdName, onBack }: FinishStepProps) {
+function FinishStep({ onBack }: FinishStepProps) {
   const utils = trpc.useUtils()
   const { data: members } = trpc.members.list.useQuery()
+  // Read the (possibly just-renamed) household name from live data rather than a
+  // stale prop threaded down from the wizard's initial props.
+  const { data: context } = trpc.bootstrap.context.useQuery()
+  const householdName = context?.household?.displayName ?? 'Your household'
   const completeSetup = trpc.household.completeSetup.useMutation()
   const [error, setError] = useState('')
 
@@ -345,8 +348,6 @@ interface SetupWizardProps {
 
 export function SetupWizard({ householdName, currencyCode }: SetupWizardProps) {
   const [active, setActive] = useState(0)
-  // Track the live name as the user edits in step 1 so the finish step shows it
-  const [liveHouseholdName, setLiveHouseholdName] = useState(householdName)
   const isMobile = useMediaQuery('(max-width: 48em)')
 
   return (
@@ -360,22 +361,14 @@ export function SetupWizard({ householdName, currencyCode }: SetupWizardProps) {
           <HouseholdStep
             initialName={householdName}
             initialCurrencyCode={currencyCode}
-            onNext={() => {
-              // Read the current name from the input is tricky without lifting state,
-              // so we just move to next step; FinishStep queries live data.
-              setLiveHouseholdName(liveHouseholdName)
-              setActive(1)
-            }}
+            onNext={() => setActive(1)}
           />
         </Stepper.Step>
         <Stepper.Step label="Members" description="Who lives here?">
           <MembersStep onNext={() => setActive(2)} onBack={() => setActive(0)} />
         </Stepper.Step>
         <Stepper.Step label="Finish" description="Complete setup">
-          <FinishStep
-            householdName={liveHouseholdName}
-            onBack={() => setActive(1)}
-          />
+          <FinishStep onBack={() => setActive(1)} />
         </Stepper.Step>
       </Stepper>
     </Stack>
