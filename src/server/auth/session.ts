@@ -5,7 +5,7 @@
 import { randomBytes } from 'node:crypto'
 import { and, asc, eq, isNotNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
-import type { DB } from '../db/client'
+import type { DB, DBOrTx } from '../db/client'
 import { membership, session, user } from '../db/schema'
 import type { Session, User } from '../db/schema'
 import { getInstanceSettings, setAuthRequired } from '../db/instanceSettings'
@@ -17,9 +17,13 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days, matching the cookie 
 /** Create a new user and their accepted membership of a household in one shot.
  *  Shared by self-registration and invite acceptance (which differ only in the
  *  email, role and whether an invite predates the account). Returns the user id.
- *  The password is passed pre-hashed so callers control the (async) hashing. */
+ *  The password is passed pre-hashed so callers control the (async) hashing.
+ *
+ *  Accepts a transaction handle (`DBOrTx`): both callers run it inside a
+ *  `db.transaction` so the user and membership inserts commit together — a
+ *  failure between them would otherwise orphan a user with no membership. */
 export async function createUserWithMembership(
-  db: DB,
+  db: DBOrTx,
   opts: {
     username: string
     displayName: string

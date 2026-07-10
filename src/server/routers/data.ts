@@ -102,23 +102,24 @@ export const dataRouter = router({
       const fromDp = hh.currencyDecimalPlaces
       const toDp = input.decimalPlaces
 
-      // Read current values, then apply all changes atomically in one batch. Only
-      // this household's rows are rescaled (its own decimal-places setting).
-      const statements: BatchStatement[] = []
-      let rescaled = 0
-      if (fromDp !== toDp) {
-        for (const [table, col] of MONEY_COLUMNS) {
-          const rows = (await ctx.db
-            .select()
-            .from(table as SQLiteTable)
-            .where(eq((table as AnyTable).householdId as never, ctx.householdId as never))) as Array<
-            Record<string, unknown>
-          >
-          for (const row of rows) {
-            const value = row[col]
-            if (typeof value !== 'number') continue
-            statements.push(
-              ctx.db
+      // Read the money rows, rescale in JS, then write — all in one transaction so
+      // a concurrent write between the read and the write can't be silently lost
+      // (the read sees a consistent snapshot and the writes commit atomically).
+      // Only this household's rows are rescaled (its own decimal-places setting).
+      const rescaled = await ctx.db.transaction(async (tx) => {
+        let count = 0
+        if (fromDp !== toDp) {
+          for (const [table, col] of MONEY_COLUMNS) {
+            const rows = (await tx
+              .select()
+              .from(table as SQLiteTable)
+              .where(eq((table as AnyTable).householdId as never, ctx.householdId as never))) as Array<
+              Record<string, unknown>
+            >
+            for (const row of rows) {
+              const value = row[col]
+              if (typeof value !== 'number') continue
+              await tx
                 .update(table as SQLiteTable)
                 .set({ [col]: rescaleMinor(value, fromDp, toDp) })
                 .where(
@@ -126,19 +127,17 @@ export const dataRouter = router({
                     eq((table as AnyTable).householdId as never, ctx.householdId as never),
                     eq((table as AnyTable).id as never, row['id'] as never),
                   ),
-                ),
-            )
-            rescaled += 1
+                )
+              count += 1
+            }
           }
         }
-      }
-      statements.push(
-        ctx.db
+        await tx
           .update(household)
           .set({ currencyDecimalPlaces: toDp, updatedAt: Date.now() })
-          .where(eq(household.id, ctx.householdId)),
-      )
-      await runBatch(ctx.db, statements)
+          .where(eq(household.id, ctx.householdId))
+        return count
+      })
 
       return { rescaled, decimalPlaces: toDp }
     }),

@@ -4,7 +4,7 @@ import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
 import { appRouter } from '../trpc/router'
 import { getUserByUsername } from '../auth/session'
-import { member, membership } from '../db/schema'
+import { household, member, membership } from '../db/schema'
 import type { DB } from '../db/client'
 
 function caller(db: DB, opts: { role?: string; userId?: string } = {}) {
@@ -78,6 +78,27 @@ describe('open registration', () => {
 
     // Usernames are unique across the instance.
     await expect(reg.c.auth.register(REG)).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('concurrent sign-ups for the same username create exactly one account (#26)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const primaryOwner = await getUserByUsername(db, 'owner')
+    await caller(db, { userId: primaryOwner!.id }).c.auth.setRegistrationOpen({ open: true })
+
+    // Both requests pass the "is it taken?" check before either writes; the unique
+    // index on user.username makes only one insert win, and the whole provision +
+    // create runs in a transaction so the loser leaves no orphaned household.
+    const results = await Promise.allSettled([
+      caller(db).c.auth.register(REG),
+      caller(db).c.auth.register(REG),
+    ])
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+
+    // One 'nadia', and one new household beyond the singleton — no orphan.
+    const grants = await db.select().from(membership).where(eq(membership.userId, (await getUserByUsername(db, 'nadia'))!.id))
+    expect(grants).toHaveLength(1)
+    expect(await db.select().from(household)).toHaveLength(2) // singleton + Nadia's
   })
 
   it('treats usernames case-insensitively (#14)', async () => {

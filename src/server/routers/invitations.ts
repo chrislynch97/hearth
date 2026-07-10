@@ -1,9 +1,10 @@
 import { z } from 'zod'
-import { desc, eq, isNull } from 'drizzle-orm'
+import { and, desc, eq, gt, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertRole, scopeWhere } from '../trpc/tenant'
 import { household, invitation } from '../db/schema'
+import { isUniqueViolation } from '../db/errors'
 import { hashPassword } from '../auth/password'
 import { createSession, createUserWithMembership, getUserByUsername, newSessionId, normalizeUsername } from '../auth/session'
 import { validatePassword } from '../../shared/password-policy'
@@ -92,8 +93,8 @@ export const invitationsRouter = router({
         throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many attempts. Try again later.' })
       }
 
-      const [inv] = await ctx.db.select().from(invitation).where(eq(invitation.id, input.token))
-      if (!inv || inv.acceptedAt !== null || inv.expiresAt < Date.now()) {
+      const [preview] = await ctx.db.select().from(invitation).where(eq(invitation.id, input.token))
+      if (!preview || preview.acceptedAt !== null || preview.expiresAt < Date.now()) {
         acceptLimiter.fail(key, nowCheck)
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'This invitation is invalid or has expired.' })
       }
@@ -102,25 +103,55 @@ export const invitationsRouter = router({
         acceptLimiter.fail(key, nowCheck)
         throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
       }
+      // Friendly best-effort check; the unique index on user.username is the real
+      // guard against a concurrent same-username race (handled below).
       if (await getUserByUsername(ctx.db, input.username.trim())) {
         acceptLimiter.fail(key, nowCheck)
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'That username is taken.' })
       }
 
       const now = Date.now()
-      const userId = await createUserWithMembership(ctx.db, {
-        username: normalizeUsername(input.username),
-        displayName: input.displayName.trim(),
-        email: inv.email,
-        passwordHash: await hashPassword(input.password),
-        householdId: inv.householdId,
-        role: inv.role,
-        invitedAt: inv.createdAt,
-      })
-      await ctx.db.update(invitation).set({ acceptedAt: now }).where(eq(invitation.id, inv.id))
+      const passwordHash = await hashPassword(input.password)
+      let result: { userId: string; householdId: string } | null
+      try {
+        result = await ctx.db.transaction(async (tx) => {
+          // Claim the invite atomically: mark it accepted only if it's still
+          // pending and unexpired, and act only if this UPDATE was the one that
+          // did it. Two concurrent accepts of the same token can't both win —
+          // the loser's UPDATE matches no row (accepted_at is no longer null).
+          const [claimed] = await tx
+            .update(invitation)
+            .set({ acceptedAt: now })
+            .where(
+              and(eq(invitation.id, input.token), isNull(invitation.acceptedAt), gt(invitation.expiresAt, now)),
+            )
+            .returning()
+          if (!claimed) return null
+          const userId = await createUserWithMembership(tx, {
+            username: normalizeUsername(input.username),
+            displayName: input.displayName.trim(),
+            email: claimed.email,
+            passwordHash,
+            householdId: claimed.householdId,
+            role: claimed.role,
+            invitedAt: claimed.createdAt,
+          })
+          return { userId, householdId: claimed.householdId }
+        })
+      } catch (err) {
+        if (isUniqueViolation(err)) {
+          acceptLimiter.fail(key, nowCheck)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'That username is taken.' })
+        }
+        throw err
+      }
+      if (!result) {
+        acceptLimiter.fail(key, nowCheck)
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'This invitation is invalid or has expired.' })
+      }
 
       acceptLimiter.reset(key)
-      ctx.setSessionCookie?.(await createSession(ctx.db, userId, inv.householdId))
+      ctx.setSessionCookie?.(await createSession(ctx.db, result.userId, result.householdId))
       return { ok: true as const }
     }),
 })

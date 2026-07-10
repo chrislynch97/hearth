@@ -116,6 +116,36 @@ describe('invitations', () => {
     const pending = await caller(db, { role: 'owner', userId: owner!.id }).c.invitations.list()
     expect(pending).toHaveLength(0)
   })
+
+  it('a token redeemed concurrently creates exactly one account (#26)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+
+    const owner = await getOwnerUser(db)
+    const { token } = await caller(db, { role: 'owner', userId: owner!.id }).c.invitations.create({ role: 'member' })
+
+    // Fire several accepts of the same token at once, each with a distinct
+    // username. The invite is claimed with a conditional UPDATE inside a
+    // transaction, so only one can win — the rest must fail (whether with the
+    // friendly "invalid/expired" or, under SQLite's writer lock, a busy error).
+    const attempts = [1, 2, 3, 4].map((n) =>
+      caller(db).c.invitations.accept({
+        token,
+        username: `racer${n}`,
+        displayName: `Racer ${n}`,
+        password: 'a-strong-password',
+      }),
+    )
+    const results = await Promise.allSettled(attempts)
+    const won = results.filter((r) => r.status === 'fulfilled')
+    expect(won).toHaveLength(1)
+
+    // Exactly one new membership beyond the owner's, and the invite is spent.
+    const grants = await db.select().from(membership)
+    expect(grants).toHaveLength(2) // owner + the single winning invitee
+    const pending = await caller(db, { role: 'owner', userId: owner!.id }).c.invitations.list()
+    expect(pending).toHaveLength(0)
+  })
 })
 
 describe('switchHousehold', () => {

@@ -16,3 +16,12 @@ if (url.startsWith('file:')) {
 export const client = createClient({ url })
 export const db = drizzle(client, { schema })
 export type DB = typeof db
+
+/** The handle drizzle passes to a `db.transaction(tx => …)` callback. */
+export type Tx = Parameters<Parameters<DB['transaction']>[0]>[0]
+
+/** Either the pooled connection or an open transaction. Helpers typed with this
+ *  can run standalone or be threaded into a caller's transaction so several
+ *  writes commit atomically — the fix for the read-then-write races that were
+ *  invisible under SQLite's single writer but real under Postgres concurrency. */
+export type DBOrTx = DB | Tx

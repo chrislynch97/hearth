@@ -7,6 +7,7 @@ import { user } from '../db/schema'
 import type { User } from '../db/schema'
 import { getInstanceSettings, setAllowOpenRegistration } from '../db/instanceSettings'
 import { provisionHousehold } from '../db/seed'
+import { isUniqueViolation } from '../db/errors'
 import { hashPassword, verifyPassword, verifyPasswordDummy } from '../auth/password'
 import {
   assertInstanceOwner,
@@ -177,20 +178,41 @@ export const authRouter = router({
       }
       // Count the "taken" path against the limiter too, otherwise it's an
       // unthrottled username-enumeration oracle on an open-registration instance.
+      // This is a friendly best-effort check; the unique index on user.username is
+      // the real guard against a concurrent same-username race (handled below).
       if (await getUserByUsername(ctx.db, input.username.trim())) {
         registerLimiter.fail(key, now)
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'That username is taken.' })
       }
 
-      const householdId = await provisionHousehold(ctx.db, { displayName: input.householdName })
-      const userId = await createUserWithMembership(ctx.db, {
-        username: normalizeUsername(input.username),
-        displayName: input.displayName.trim(),
-        email: null,
-        passwordHash: await hashPassword(input.password),
-        householdId,
-        role: 'owner',
-      })
+      const passwordHash = await hashPassword(input.password)
+      let householdId: string
+      let userId: string
+      try {
+        // The household and the owning user must commit together: a failure
+        // between them would otherwise leave an orphaned household (or a user with
+        // no membership). Under Postgres's real concurrency two sign-ups can also
+        // pass the check above at once — the unique index makes the loser's insert
+        // throw here, which we turn back into the friendly "taken" message.
+        ;({ householdId, userId } = await ctx.db.transaction(async (tx) => {
+          const hid = await provisionHousehold(tx, { displayName: input.householdName })
+          const uid = await createUserWithMembership(tx, {
+            username: normalizeUsername(input.username),
+            displayName: input.displayName.trim(),
+            email: null,
+            passwordHash,
+            householdId: hid,
+            role: 'owner',
+          })
+          return { householdId: hid, userId: uid }
+        }))
+      } catch (err) {
+        if (isUniqueViolation(err)) {
+          registerLimiter.fail(key, now)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'That username is taken.' })
+        }
+        throw err
+      }
 
       registerLimiter.fail(key, now) // count this sign-up toward the per-client cap
       ctx.setSessionCookie?.(await createSession(ctx.db, userId, householdId))

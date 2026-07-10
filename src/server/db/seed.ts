@@ -1,5 +1,5 @@
 import { and, asc, eq, isNotNull } from 'drizzle-orm'
-import type { DB } from './client'
+import type { DB, DBOrTx } from './client'
 import { household, member, membership, user } from './schema'
 import { getInstanceSettings, setAuthRequired, setInstanceOwnerId } from './instanceSettings'
 import { DEFAULT_HOUSEHOLD_ID } from '../trpc/tenant'
@@ -12,7 +12,7 @@ const HOUSEHOLD_ID = DEFAULT_HOUSEHOLD_ID
  *  registrant as owner. `householdId` is set explicitly on the joint member
  *  because the column defaults to the singleton household. */
 export async function provisionHousehold(
-  db: DB,
+  db: DBOrTx,
   opts: { displayName?: string } = {},
 ): Promise<string> {
   const now = Date.now()
@@ -40,76 +40,82 @@ export async function provisionHousehold(
  *  instance is open until they set one); existing installs had their shared
  *  household password migrated onto the owner user by migration 0017. */
 export async function ensureSeed(database: DB): Promise<void> {
-  const now = Date.now()
-  const existing = await database.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
-  if (existing.length === 0) {
-    await database.insert(household).values({ id: HOUSEHOLD_ID, createdAt: now, updatedAt: now })
-  }
-  const joint = await database.select().from(member).where(eq(member.kind, 'joint'))
-  if (joint.length === 0) {
-    await database.insert(member).values({
-      id: newId(),
-      householdId: HOUSEHOLD_ID,
-      kind: 'joint',
-      displayName: 'Joint',
-      sortOrder: 100,
-      createdAt: now,
-      updatedAt: now,
-    })
-  }
+  // One transaction so the read-then-write idempotency checks below can't race:
+  // under Postgres, two instances booting at once could otherwise both observe an
+  // empty database and each insert the singleton rows. (Under SQLite's single
+  // writer this was already safe; the transaction makes it safe everywhere.)
+  await database.transaction(async (tx) => {
+    const now = Date.now()
+    const existing = await tx.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
+    if (existing.length === 0) {
+      await tx.insert(household).values({ id: HOUSEHOLD_ID, createdAt: now, updatedAt: now })
+    }
+    const joint = await tx.select().from(member).where(eq(member.kind, 'joint'))
+    if (joint.length === 0) {
+      await tx.insert(member).values({
+        id: newId(),
+        householdId: HOUSEHOLD_ID,
+        kind: 'joint',
+        displayName: 'Joint',
+        sortOrder: 100,
+        createdAt: now,
+        updatedAt: now,
+      })
+    }
 
-  // Provision the owner account for the default household. On existing installs
-  // this carries the shared household password/MFA onto the owner user, so the
-  // switch to per-user auth (Phase B) doesn't lock anyone out.
-  const owners = await database
-    .select()
-    .from(membership)
-    .where(eq(membership.householdId, HOUSEHOLD_ID))
-  if (owners.length === 0) {
-    const [hh] = await database.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
-    const userId = newId()
-    await database.insert(user).values({
-      id: userId,
-      username: 'owner',
-      email: null,
-      displayName: hh?.displayName || 'Owner',
-      passwordHash: null,
-      createdAt: now,
-      updatedAt: now,
-    })
-    await database.insert(membership).values({
-      id: newId(),
-      userId,
-      householdId: HOUSEHOLD_ID,
-      role: 'owner',
-      acceptedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    })
-  }
-
-  // Persist the instance operator explicitly and record the current lock state,
-  // once, for installs that predate those fields (they migrate in as null/0).
-  // From here on, owner identity and open/locked come from instance_settings —
-  // no longer inferred from the magic household id — and the auth flow keeps the
-  // lock flag in sync. Gated on a null ownerUserId so it only runs the first time.
-  const settings = await getInstanceSettings(database)
-  if (settings.ownerUserId === null) {
-    const [ownerGrant] = await database
+    // Provision the owner account for the default household. On existing installs
+    // this carries the shared household password/MFA onto the owner user, so the
+    // switch to per-user auth (Phase B) doesn't lock anyone out.
+    const owners = await tx
       .select()
       .from(membership)
-      .where(
-        and(
-          eq(membership.householdId, HOUSEHOLD_ID),
-          eq(membership.role, 'owner'),
-          isNotNull(membership.acceptedAt),
-        ),
-      )
-      .orderBy(asc(membership.createdAt), asc(membership.id))
-    if (ownerGrant) {
-      const [ownerUser] = await database.select().from(user).where(eq(user.id, ownerGrant.userId))
-      await setInstanceOwnerId(database, ownerGrant.userId)
-      await setAuthRequired(database, (ownerUser?.passwordHash ?? null) !== null)
+      .where(eq(membership.householdId, HOUSEHOLD_ID))
+    if (owners.length === 0) {
+      const [hh] = await tx.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
+      const userId = newId()
+      await tx.insert(user).values({
+        id: userId,
+        username: 'owner',
+        email: null,
+        displayName: hh?.displayName || 'Owner',
+        passwordHash: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      await tx.insert(membership).values({
+        id: newId(),
+        userId,
+        householdId: HOUSEHOLD_ID,
+        role: 'owner',
+        acceptedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      })
     }
-  }
+
+    // Persist the instance operator explicitly and record the current lock state,
+    // once, for installs that predate those fields (they migrate in as null/0).
+    // From here on, owner identity and open/locked come from instance_settings —
+    // no longer inferred from the magic household id — and the auth flow keeps the
+    // lock flag in sync. Gated on a null ownerUserId so it only runs the first time.
+    const settings = await getInstanceSettings(tx)
+    if (settings.ownerUserId === null) {
+      const [ownerGrant] = await tx
+        .select()
+        .from(membership)
+        .where(
+          and(
+            eq(membership.householdId, HOUSEHOLD_ID),
+            eq(membership.role, 'owner'),
+            isNotNull(membership.acceptedAt),
+          ),
+        )
+        .orderBy(asc(membership.createdAt), asc(membership.id))
+      if (ownerGrant) {
+        const [ownerUser] = await tx.select().from(user).where(eq(user.id, ownerGrant.userId))
+        await setInstanceOwnerId(tx, ownerGrant.userId)
+        await setAuthRequired(tx, (ownerUser?.passwordHash ?? null) !== null)
+      }
+    }
+  })
 }
