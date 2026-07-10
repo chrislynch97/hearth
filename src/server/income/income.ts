@@ -67,7 +67,10 @@ export function netIncomeSourceMonthly(sources: IncomeSourceSummary[]): number {
  *  does it fall back to the latest payslip's `regularNet` (a proportional
  *  estimate, since a bonus shifts every threshold-based deduction). */
 export function salaryMonthly(payslips: PayslipSummary[], basis: IncomeBasis, asOf: string): number {
-  const sorted = sortedDesc(payslips)
+  // Ignore future-dated payslips (a typo like 2027 for 2026, or one pre-entered
+  // ahead of time) so a single bad date can't become the canonical income. This
+  // matches the `payDate <= asOf` window rolling_12m already applies.
+  const sorted = sortedDesc(payslips.filter((p) => p.payDate <= asOf))
   const latest = sorted[0]
   switch (basis) {
     case 'latest_payslip':

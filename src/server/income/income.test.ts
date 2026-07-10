@@ -73,6 +73,16 @@ describe('salaryMonthly', () => {
     expect(salaryMonthly([], 'latest_payslip', asOf)).toBe(0)
     expect(salaryMonthly([], 'rolling_12m', asOf)).toBe(0)
   })
+  it('ignores future-dated payslips across every basis (#11)', () => {
+    // A 2027 typo must not become canonical income while the real latest is May.
+    const may = slip('2026-05-29', 300000, 380000)
+    const future = slip('2027-06-30', 999999, 1200000)
+    expect(salaryMonthly([may, future], 'latest_payslip', asOf)).toBe(300000)
+    expect(salaryMonthly([may, future], 'regular_net', asOf)).toBe(300000)
+    // With only a future payslip there is no eligible data → 0.
+    expect(salaryMonthly([future], 'latest_payslip', asOf)).toBe(0)
+    expect(salaryMonthly([future], 'regular_net', asOf)).toBe(0)
+  })
 })
 
 describe('monthlyIncome', () => {
