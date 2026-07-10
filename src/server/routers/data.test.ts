@@ -83,6 +83,14 @@ describe('data router', () => {
     expect(ctx.household?.currencyDecimalPlaces).toBe(3)
   })
 
+  it('rescaleCurrency requires the admin role (a member cannot rewrite every amount)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+    const member = appRouter.createCaller({ db, householdId: 'household', role: 'member', userId: owner!.id })
+    await expect(member.data.rescaleCurrency({ decimalPlaces: 3 })).rejects.toMatchObject({ code: 'FORBIDDEN' })
+  })
+
   it('restricts instance-wide ops (export/import/reset/stats) to the instance owner', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)

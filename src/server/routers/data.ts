@@ -4,6 +4,7 @@ import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertInstanceOwner } from '../auth/session'
+import { assertRole } from '../trpc/tenant'
 import { household } from '../db/schema'
 import { ALL_TABLES, MONEY_COLUMNS } from '../db/tables'
 import { ensureSeed } from '../db/seed'
@@ -94,6 +95,7 @@ export const dataRouter = router({
   rescaleCurrency: publicProcedure
     .input(z.object({ decimalPlaces: z.number().int().min(0).max(4) }))
     .mutation(async ({ ctx, input }) => {
+      assertRole(ctx.role, 'admin')
       const [hh] = await ctx.db.select().from(household).where(eq(household.id, ctx.householdId))
       if (!hh) throw new TRPCError({ code: 'NOT_FOUND', message: 'Household not found' })
 
