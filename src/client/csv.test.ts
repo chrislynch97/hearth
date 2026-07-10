@@ -26,6 +26,21 @@ describe('toCsv', () => {
   it('joins rows with a newline', () => {
     expect(toCsv([['a', 'b'], ['c', 'd']])).toBe('a,b\nc,d')
   })
+
+  it('neutralizes cells that start a formula (CSV injection)', () => {
+    // Merchant text imported verbatim from a statement must not evaluate on open.
+    expect(toCsv([['=HYPERLINK("http://evil","x")']])).toBe('"\'=HYPERLINK(""http://evil"",""x"")"')
+    expect(toCsv([['=cmd|/C calc', 'ok']])).toBe("'=cmd|/C calc,ok")
+    expect(toCsv([['+1-800-EVIL']])).toBe("'+1-800-EVIL")
+    expect(toCsv([['@SUM(A1:A9)']])).toBe("'@SUM(A1:A9)")
+    expect(toCsv([['\t=1+1']])).toBe("'\t=1+1")
+  })
+
+  it('leaves plain numbers (including negatives) untouched', () => {
+    // Financial exports are full of negative amounts — those are not formulas.
+    expect(toCsv([['-12.50', '-5', '3.20']])).toBe('-12.50,-5,3.20')
+    expect(toCsv([['Total', -1250]])).toBe('Total,-1250')
+  })
 })
 
 describe('toCsv → parseCsv round-trip', () => {
