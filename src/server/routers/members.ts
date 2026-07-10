@@ -21,7 +21,7 @@ export const membersRouter = router({
         displayName: z.string().min(1),
         shortLabel: z.string().optional(),
         color: z.string().optional(),
-        jointContributionWeight: z.number().int().optional(),
+        jointContributionWeight: z.number().int().min(0).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -67,7 +67,7 @@ export const membersRouter = router({
         displayName: z.string().min(1).optional(),
         shortLabel: z.string().optional(),
         color: z.string().optional(),
-        jointContributionWeight: z.number().int().optional(),
+        jointContributionWeight: z.number().int().min(0).optional(),
         sortOrder: z.number().int().optional(),
       }),
     )

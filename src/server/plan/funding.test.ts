@@ -127,6 +127,33 @@ describe('computeFundingPlan', () => {
     expect(bob.setAside).toBe(1000)
   })
 
+  it('clamps negative custom weights and never loses the joint base (#12)', () => {
+    const members = [
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: 5, monthlyIncome: 0 },
+      { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: -5, monthlyIncome: 0 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
+    ]
+    const pots = [{ id: 'joint-pot', name: 'Joint Savings', ownerId: 'joint' }]
+    const expenses = [
+      { recurrence: 'monthly' as const, active: true, shares: [{ ownerId: 'joint', amount: 4000, potId: 'joint-pot' }] },
+    ]
+
+    const plan = computeFundingPlan({
+      pots,
+      bills: toBills(expenses),
+      setAsides: [],
+      members,
+      jointContributionBasis: 'custom',
+    })
+
+    const alice = plan.perPerson.find((p) => p.memberId === 'alice')!
+    const bob = plan.perPerson.find((p) => p.memberId === 'bob')!
+    // -5 clamps to 0, so 5:0 → Alice takes the whole base; nothing is lost.
+    expect(alice.jointContribution).toBe(4000)
+    expect(bob.jointContribution).toBe(0)
+    expect(alice.jointContribution + bob.jointContribution).toBe(plan.jointPotFundingTotal)
+  })
+
   it('inactive expenses do not contribute to funding', () => {
     const members = [
       { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 0 },

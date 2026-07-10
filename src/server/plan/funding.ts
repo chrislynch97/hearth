@@ -144,7 +144,11 @@ export function computeFundingPlan(input: {
   // Determine weights for splitting the joint base across persons.
   let weights: number[]
   if (jointContributionBasis === 'custom') {
-    const customWeights = persons.map((p) => p.jointContributionWeight ?? 0)
+    // Clamp any negative weight to 0 (defends against pre-`min(0)` rows): a
+    // negative weight breaks allocate's largest-remainder math. If nothing
+    // positive remains, fall back to an equal split rather than assigning the
+    // whole joint base to nobody.
+    const customWeights = persons.map((p) => Math.max(p.jointContributionWeight ?? 0, 0))
     const allZero = customWeights.every((w) => w === 0)
     weights = allZero ? persons.map(() => 1) : customWeights
   } else if (jointContributionBasis === 'income_proportional') {
