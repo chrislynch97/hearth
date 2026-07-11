@@ -14,7 +14,7 @@ import { ensureSeed } from './db/seed'
 import { db } from './db/client'
 import { startBackupScheduler } from './backup/runner'
 import { parseSessionCookie } from './auth/cookies'
-import { getValidSession, isInstanceLocked } from './auth/session'
+import { getValidSession, isInstanceLocked, startSessionPurgeScheduler } from './auth/session'
 import { PUBLIC_PROCEDURES } from './trpc/trpc'
 import { allProceduresIn, isLoopbackHost, trpcProcedures } from './auth/gate'
 import { parseTrustProxy } from './auth/trustProxy'
@@ -78,6 +78,7 @@ async function main() {
   await runMigrations()
   await ensureSeed(db)
   startBackupScheduler(db)
+  startSessionPurgeScheduler(db)
 
   // 64 MB body limit so restoring a large JSON export isn't rejected (default 1 MB).
   // `trustProxy` is opt-in (HEARTH_TRUST_PROXY): only set it when a reverse proxy /

@@ -2,12 +2,20 @@ import { describe, it, expect } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
-import { membership, user } from '../db/schema'
+import { membership, session, user } from '../db/schema'
 import { getInstanceSettings, setInstanceOwnerId } from '../db/instanceSettings'
 import { DEFAULT_HOUSEHOLD_ID } from '../trpc/tenant'
 import { newId } from '../../shared/ids'
 import { hashPassword } from './password'
-import { getOwnerUser, isInstanceLocked, isInstanceOwner, syncAuthRequired } from './session'
+import {
+  createSession,
+  deleteExpiredSessions,
+  getOwnerUser,
+  getValidSession,
+  isInstanceLocked,
+  isInstanceOwner,
+  syncAuthRequired,
+} from './session'
 
 
 describe('instance owner / lock resolution', () => {
@@ -72,6 +80,31 @@ describe('instance owner / lock resolution', () => {
     expect((await getOwnerUser(db))?.id).toBe(owner.id)
     expect(await isInstanceOwner(db, viewerId)).toBe(false)
     expect(await isInstanceOwner(db, owner.id)).toBe(true)
+  })
+
+  it('purges only expired session rows, leaving live ones intact', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = (await getOwnerUser(db))!
+
+    // A live session (createSession sets a 30-day TTL) and a hand-written
+    // already-expired one under the same user/household.
+    const liveId = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+    const expiredId = newId()
+    const now = Date.now()
+    await db.insert(session).values({
+      id: expiredId,
+      userId: owner.id,
+      activeHouseholdId: DEFAULT_HOUSEHOLD_ID,
+      createdAt: now - 40 * 24 * 60 * 60 * 1000,
+      expiresAt: now - 1,
+    })
+
+    await deleteExpiredSessions(db, now)
+
+    // The expired row is gone; the live session still resolves.
+    expect(await db.select().from(session).where(eq(session.id, expiredId))).toHaveLength(0)
+    expect((await getValidSession(db, liveId))?.id).toBe(liveId)
   })
 
   it('ignores an unaccepted owner grant when deriving (no stored id yet)', async () => {

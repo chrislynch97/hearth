@@ -3,7 +3,7 @@
  *  Replaces the old stateless HMAC(password) token so sessions can carry user
  *  identity and be revoked (logout, password change, "sign out everywhere"). */
 import { randomBytes } from 'node:crypto'
-import { and, asc, eq, isNotNull } from 'drizzle-orm'
+import { and, asc, eq, isNotNull, lt } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import type { DB, DBOrTx } from '../db/client'
 import { membership, session, user } from '../db/schema'
@@ -87,6 +87,32 @@ export async function deleteSession(db: DB, id: string): Promise<void> {
 /** Revoke every session for a user (used on password change / clear). */
 export async function deleteUserSessions(db: DB, userId: string): Promise<void> {
   await db.delete(session).where(eq(session.userId, userId))
+}
+
+const PURGE_INTERVAL_MS = 60 * 60 * 1000 // hourly; expiry is 30 days, so timing is not sensitive
+
+/** Delete every session whose TTL has already elapsed. `getValidSession` ignores
+ *  expired rows at read time, so this only reclaims storage — but without it the
+ *  `session` table grows forever on a long-running instance (one dead row per
+ *  login, kept indefinitely). */
+export async function deleteExpiredSessions(db: DB, now: number = Date.now()): Promise<void> {
+  await db.delete(session).where(lt(session.expiresAt, now))
+}
+
+/** Start the periodic purge of expired sessions. Mirrors the backup scheduler:
+ *  an unref'd interval that never keeps the process alive on its own, running an
+ *  immediate first sweep so a fresh boot doesn't wait an hour to clear a backlog. */
+export function startSessionPurgeScheduler(db: DB): void {
+  const tick = async () => {
+    try {
+      await deleteExpiredSessions(db)
+    } catch (err) {
+      console.error('Expired-session purge failed:', err)
+    }
+  }
+  void tick()
+  const timer = setInterval(() => void tick(), PURGE_INTERVAL_MS)
+  timer.unref?.() // don't keep the process alive just for the purge
 }
 
 /** Derive the instance operator from the primary household's owner grant — the
