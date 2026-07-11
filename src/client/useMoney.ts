@@ -44,3 +44,8 @@ export function useWeekStart(): 'monday' | 'sunday' {
   const ctx = trpc.bootstrap.context.useQuery()
   return (ctx.data?.household?.weekStart as 'monday' | 'sunday') ?? 'monday'
 }
+
+/** The household's week start as Mantine's `firstDayOfWeek` (0 = Sunday, 1 = Monday). */
+export function useFirstDayOfWeek(): 0 | 1 {
+  return useWeekStart() === 'sunday' ? 0 : 1
+}

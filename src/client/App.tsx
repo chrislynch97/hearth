@@ -77,6 +77,7 @@ function AuthedApp() {
       <SetupWizard
         householdName={ctx.data.household?.displayName ?? 'My Household'}
         currencyCode={ctx.data.household?.currencyCode ?? 'GBP'}
+        locale={ctx.data.household?.locale ?? 'en-GB'}
       />
     )
   }

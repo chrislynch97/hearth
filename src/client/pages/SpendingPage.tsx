@@ -25,7 +25,7 @@ import { trpc } from '../trpc'
 import type { Category, Member, Pot, SpendTransaction } from '../../server/db/schema'
 import { allocate, formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { todayIso } from '../../shared/dates'
-import { useMoney, useFormatDate, type MoneyFormat } from '../useMoney'
+import { useMoney, useFormatDate, useFirstDayOfWeek, type MoneyFormat } from '../useMoney'
 import { groupedPotOptions, orderMembers } from '../potOptions'
 
 // ---------------------------------------------------------------------------
@@ -141,6 +141,7 @@ function AddSpendForm({
   money: MoneyFormat
 }) {
   const utils = trpc.useUtils()
+  const firstDayOfWeek = useFirstDayOfWeek()
   const add = trpc.spends.add.useMutation()
   const updateExpense = trpc.expenses.update.useMutation()
   const outgoingsQuery = trpc.plan.recentlyDue.useQuery()
@@ -340,6 +341,7 @@ function AddSpendForm({
             onChange={setDate}
             valueFormat="DD MMM YYYY"
             maxDate={todayIso()}
+            firstDayOfWeek={firstDayOfWeek}
             popoverProps={{ withinPortal: true }}
           />
           <div>
@@ -654,6 +656,7 @@ function EditSpendModal({
   onClose: () => void
 }) {
   const utils = trpc.useUtils()
+  const firstDayOfWeek = useFirstDayOfWeek()
   const update = trpc.spends.update.useMutation()
   const categories = trpc.categories.list.useQuery().data ?? []
   const orderedMembers = orderMembers(members)
@@ -727,6 +730,7 @@ function EditSpendModal({
             onChange={setDate}
             valueFormat="DD MMM YYYY"
             maxDate={todayIso()}
+            firstDayOfWeek={firstDayOfWeek}
             popoverProps={{ withinPortal: true }}
           />
         </Group>
