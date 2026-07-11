@@ -606,7 +606,7 @@ function DataSection() {
               </Text>{' '}
               folder next to your database (last 14 kept).
               {hh?.backupLastAt
-                ? ` Last: ${fmt(msToLocalIso(hh.backupLastAt))} ${new Date(hh.backupLastAt).toLocaleTimeString()}.`
+                ? ` Last: ${fmt(msToLocalIso(hh.backupLastAt.getTime()))} ${hh.backupLastAt.toLocaleTimeString()}.`
                 : ' None yet.'}
             </Text>
           </div>
@@ -1470,7 +1470,7 @@ function HouseholdAccessSection() {
                       <Text size="sm">
                         {inv.email ?? 'Invite link'}{' '}
                         <Text span size="xs" c="dimmed">
-                          · {inv.role} · expires {fmt(msToLocalIso(inv.expiresAt))}
+                          · {inv.role} · expires {fmt(msToLocalIso(inv.expiresAt.getTime()))}
                         </Text>
                       </Text>
                       <Button

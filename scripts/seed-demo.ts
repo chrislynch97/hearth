@@ -12,7 +12,7 @@
 // target or the caller passes --force.
 import { looksLikeRealDb } from './demo-guard'
 
-const DEFAULT_DEMO_URL = 'file:./data/demo.db'
+const DEFAULT_DEMO_URL = 'pglite:./data/demo'
 const forced = process.argv.includes('--force')
 process.env.DATABASE_URL ??= DEFAULT_DEMO_URL
 
@@ -27,7 +27,7 @@ if (looksLikeRealDb(target) && !forced) {
 
 async function main(): Promise<void> {
   const { runMigrations } = await import('../src/server/db/migrate')
-  const { db } = await import('../src/server/db/client')
+  const { db, closeDb } = await import('../src/server/db/client')
   const { seedDemo } = await import('../src/server/db/demo')
 
   console.log(`[demo] seeding ${target}`)
@@ -41,7 +41,7 @@ async function main(): Promise<void> {
   }
   console.log(`[demo] done — ${total} rows across ${Object.values(counts).filter((n) => n > 0).length} tables`)
 
-  db.$client.close()
+  await closeDb()
 }
 
 main().catch((err) => {

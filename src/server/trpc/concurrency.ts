@@ -1,5 +1,5 @@
 import { eq, type SQL } from 'drizzle-orm'
-import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
+import type { PgColumn } from 'drizzle-orm/pg-core'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 
@@ -33,7 +33,7 @@ import { z } from 'zod'
  * form) pass it and get conflict protection; lightweight callers that don't
  * (e.g. a projection without `updatedAt`) omit it and keep last-write-wins.
  */
-export const expectedUpdatedAtInput = z.number().int().optional()
+export const expectedUpdatedAtInput = z.date().optional()
 
 /**
  * WHERE fragment enforcing the optimistic lock — pass the result straight into
@@ -41,8 +41,8 @@ export const expectedUpdatedAtInput = z.number().int().optional()
  * (i.e. no guard, last-write-wins) when the client sent no `expectedUpdatedAt`.
  */
 export function versionGuard(
-  updatedAtColumn: SQLiteColumn,
-  expected: number | undefined,
+  updatedAtColumn: PgColumn,
+  expected: Date | undefined,
 ): SQL | undefined {
   return expected === undefined ? undefined : eq(updatedAtColumn, expected)
 }

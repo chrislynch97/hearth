@@ -253,7 +253,7 @@ export const authRouter = router({
       if (weak) throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
 
       const newHash = await hashPassword(input.newPassword)
-      await ctx.db.update(user).set({ passwordHash: newHash, updatedAt: Date.now() }).where(eq(user.id, me.id))
+      await ctx.db.update(user).set({ passwordHash: newHash, updatedAt: new Date() }).where(eq(user.id, me.id))
       await deleteUserSessions(ctx.db, me.id)
       // Setting the owner's password locks the instance; persist that so the gate
       // fails closed regardless of how the owner is later resolved.
@@ -286,7 +286,7 @@ export const authRouter = router({
       }
       await ctx.db
         .update(user)
-        .set({ passwordHash: null, mfaSecret: null, mfaEnabledAt: null, mfaRecoveryCodes: null, updatedAt: Date.now() })
+        .set({ passwordHash: null, mfaSecret: null, mfaEnabledAt: null, mfaRecoveryCodes: null, updatedAt: new Date() })
         .where(eq(user.id, me.id))
       await deleteUserSessions(ctx.db, me.id)
       await syncAuthRequired(ctx.db) // owner has no password again → instance is open
@@ -311,7 +311,7 @@ export const authRouter = router({
         }
       }
       const secret = generateTotpSecret()
-      await ctx.db.update(user).set({ mfaSecret: secret, mfaEnabledAt: null, updatedAt: Date.now() }).where(eq(user.id, me.id))
+      await ctx.db.update(user).set({ mfaSecret: secret, mfaEnabledAt: null, updatedAt: new Date() }).where(eq(user.id, me.id))
       const otpauthUrl = buildOtpauthUrl(secret, me.displayName || me.username)
       const qrSvg = await QRCode.toString(otpauthUrl, { type: 'svg', margin: 1, width: 200 })
       return { secret, otpauthUrl, qrSvg }
@@ -332,9 +332,9 @@ export const authRouter = router({
       await ctx.db
         .update(user)
         .set({
-          mfaEnabledAt: Date.now(),
+          mfaEnabledAt: new Date(),
           mfaRecoveryCodes: JSON.stringify(hashedRecoveryCodes),
-          updatedAt: Date.now(),
+          updatedAt: new Date(),
         })
         .where(eq(user.id, me.id))
       return { ok: true as const, recoveryCodes }
@@ -351,7 +351,7 @@ export const authRouter = router({
       }
       await ctx.db
         .update(user)
-        .set({ mfaSecret: null, mfaEnabledAt: null, mfaRecoveryCodes: null, updatedAt: Date.now() })
+        .set({ mfaSecret: null, mfaEnabledAt: null, mfaRecoveryCodes: null, updatedAt: new Date() })
         .where(eq(user.id, me.id))
       return { ok: true as const }
     }),
@@ -366,7 +366,7 @@ async function verifyMfaCode(db: DB, u: User, code: string): Promise<boolean> {
     const step = matchTotpStep(u.mfaSecret, code)
     if (step !== null) {
       if (u.mfaLastStep !== null && step <= u.mfaLastStep) return false // replayed code
-      await db.update(user).set({ mfaLastStep: step, updatedAt: Date.now() }).where(eq(user.id, u.id))
+      await db.update(user).set({ mfaLastStep: step, updatedAt: new Date() }).where(eq(user.id, u.id))
       return true
     }
   }
@@ -376,7 +376,7 @@ async function verifyMfaCode(db: DB, u: User, code: string): Promise<boolean> {
   if (remaining === null) return false
   await db
     .update(user)
-    .set({ mfaRecoveryCodes: JSON.stringify(remaining), updatedAt: Date.now() })
+    .set({ mfaRecoveryCodes: JSON.stringify(remaining), updatedAt: new Date() })
     .where(eq(user.id, u.id))
   return true
 }

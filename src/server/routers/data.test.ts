@@ -95,7 +95,7 @@ describe('data router', () => {
     const db = await makeTestDb()
     await ensureSeed(db)
     // A user who owns a DIFFERENT household, not the primary one.
-    const now = Date.now()
+    const now = new Date()
     const outsiderId = newId()
     await db.insert(user).values({ id: outsiderId, username: 'out', displayName: 'Out', createdAt: now, updatedAt: now })
     await db.insert(household).values({ id: 'h2', createdAt: now, updatedAt: now })

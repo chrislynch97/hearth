@@ -44,7 +44,7 @@ export const setAsideRouter = router({
 
   create: publicProcedure.input(baseInput).mutation(async ({ ctx, input }) => {
     await validateOwnerAndPot(ctx.db, ctx.householdId, input.ownerId, input.potId)
-    const now = Date.now()
+    const now = new Date()
     const id = newId()
     await ctx.db.insert(setAside).values({
       id,
@@ -82,7 +82,7 @@ export const setAsideRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, expectedUpdatedAt, active, ...rest } = input
-      const now = Date.now()
+      const now = new Date()
       const target = await load(ctx.db, ctx.householdId, id)
 
       if (rest.ownerId !== undefined || rest.potId !== undefined) {
@@ -111,7 +111,7 @@ export const setAsideRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       await load(ctx.db, ctx.householdId, input.id)
-      const now = Date.now()
+      const now = new Date()
       await ctx.db
         .update(setAside)
         .set({ archivedAt: now, updatedAt: now })
@@ -145,7 +145,7 @@ export const setAsideRouter = router({
         .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, input.potId)))
       if (!p) throw new TRPCError({ code: 'BAD_REQUEST', message: 'potId does not refer to an existing pot' })
 
-      const now = Date.now()
+      const now = new Date()
       await ctx.db
         .delete(setAside)
         .where(scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.potId, input.potId)))

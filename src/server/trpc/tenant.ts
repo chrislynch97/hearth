@@ -1,5 +1,5 @@
 import { and, eq, type SQL } from 'drizzle-orm'
-import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
+import type { PgColumn } from 'drizzle-orm/pg-core'
 import { TRPCError } from '@trpc/server'
 import { member } from '../db/schema'
 import type { Member } from '../db/schema'
@@ -26,7 +26,7 @@ export const DEFAULT_HOUSEHOLD_ID = 'household'
  */
 export function scopeWhere(
   householdId: string,
-  householdColumn: SQLiteColumn,
+  householdColumn: PgColumn,
   ...more: Array<SQL | undefined>
 ): SQL {
   // `and` with at least one argument always yields a defined SQL.

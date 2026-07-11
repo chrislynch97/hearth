@@ -1,8 +1,10 @@
 # Hearth
 
 Local-first, self-hostable household budgeting app. It runs as a **single Node
-process** that serves both the API and the web UI, backed by a **single SQLite
-file** — which makes it easy to self-host and trivial to back up (copy one folder).
+process** that serves both the API and the web UI, backed by **Postgres** — either
+an embedded, zero-config [PGlite](https://pglite.dev) database in a local folder
+(the default: easy to self-host, trivial to back up by copying `./data`) or a real
+Postgres server you point it at (for a hosted / multi-instance deployment).
 
 ## What it does
 
@@ -33,10 +35,10 @@ npm run dev:client   # UI on :5173 (proxies /trpc to the API)
 
 For development against fake data (so you never work over your real household) and
 for showing the app to other people, seed a **separate** demo database. It lives in
-its own file (`./data/demo.db`) — your real `app.db` is never touched.
+its own PGlite folder (`./data/demo`) — your real database is never touched.
 
 ```bash
-npm run demo         # seed ./data/demo.db (first run) + serve it on :8787
+npm run demo         # seed ./data/demo (first run) + serve it on :8787
 npm run dev:client   # UI on :5173, in another terminal
 ```
 
@@ -50,7 +52,7 @@ separate dev client):
 docker compose -f docker-compose.demo.yml up --build   # → http://localhost:8787
 ```
 
-This runs against `./data/demo.db`, so your real `app.db` is untouched. Force a
+This runs against `./data/demo`, so your real database is untouched. Force a
 fresh re-seed with:
 
 ```bash
@@ -66,7 +68,8 @@ toward a rising net worth. It's **deterministic** (a fixed seed) and **anchored 
 current month**, so re-runs are identical and the trend charts always look current.
 The generator lives in [`src/server/db/demo.ts`](src/server/db/demo.ts); tweak it to
 change what the demo shows. The seed script refuses to write to a database that looks
-like your real `app.db` (pass `--force` to override).
+like your real one — the `pgdata` folder, a legacy `app.db`, or any `postgres://` URL
+(pass `--force` to override).
 
 ## Deploy
 
@@ -98,7 +101,7 @@ All configuration is via environment variables:
 |---|---|---|
 | `PORT` | `8787` | Port the server listens on. |
 | `HOST` | `0.0.0.0` | Address to bind. Set to `127.0.0.1` to only accept connections from the same machine (e.g. when a reverse proxy sits in front). |
-| `DATABASE_URL` | `file:./data/app.db` | SQLite location (libsql). Can point at a [Turso](https://turso.tech) URL. |
+| `DATABASE_URL` | `pglite:./data/pgdata` | Database. Unset (or `pglite:<dir>`) uses the embedded PGlite database in that folder; `postgres://user:pass@host/db` (or `postgresql://…`) connects to a real Postgres server — use that for a hosted or multi-instance deployment. |
 | `CLIENT_DIR` | `../client` (source) | Where the built UI is served from. **Set to `./dist/client` for a non-Docker production run.** |
 | `HEARTH_SECURE_COOKIES` | unset | Set to `1` to force `Secure` session cookies when behind a reverse proxy that doesn't send `x-forwarded-proto: https`. |
 | `HEARTH_TRUST_PROXY` | unset | Set to the **number of proxy hops** in front of Hearth (a single reverse proxy / tunnel = `1`) so the login rate limiter keys on the real client IP (`X-Forwarded-For`). Leave unset when directly exposed. Do **not** set it to `true`/all — trusting the whole `X-Forwarded-For` chain lets a client spoof the header and dodge the limiter. Your proxy must **overwrite** (not append to) `X-Forwarded-For`. Accepts a hop count, or a comma-separated list of trusted proxy IPs/CIDRs. |
@@ -150,8 +153,14 @@ instance owner. See [docs/deployment.md](docs/deployment.md#https--security).
 ## Tech
 
 TypeScript end-to-end. React + Vite + Mantine (client), Fastify + tRPC (server),
-SQLite via libsql + Drizzle ORM. Money is stored as integer minor units;
-migrations run automatically on boot.
+Postgres via Drizzle ORM — embedded [PGlite](https://pglite.dev) by default, or
+`pg` (node-postgres) against a real server, selected by `DATABASE_URL`. Money is
+stored as integer minor units and timestamps as `timestamptz`; migrations run
+automatically on boot.
+
+Coming from an older SQLite build? Migrate the data in one shot:
+`npm run db:migrate-from-sqlite -- ./data/app.db` (set `DATABASE_URL` to the new
+Postgres target first). It reads the old file directly and imports every table.
 
 ## License
 

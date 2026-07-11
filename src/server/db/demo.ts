@@ -14,7 +14,7 @@
 // ---------------------------------------------------------------------------
 
 import { eq } from 'drizzle-orm'
-import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
+import type { PgTable } from 'drizzle-orm/pg-core'
 import type { DB } from './client'
 import { ALL_TABLES } from './tables'
 import { household } from './schema'
@@ -115,7 +115,7 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
   const jitter = (base: number, pct: number): number =>
     Math.round(base * (1 + (rnd() * 2 - 1) * pct))
 
-  const ts = { createdAt: nowMs, updatedAt: nowMs }
+  const ts = { createdAt: now, updatedAt: now }
 
   // -- household -----------------------------------------------------------
   const households = [
@@ -135,7 +135,7 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
       dateFormat: 'medium',
       backupFrequency: 'off',
       backupLastAt: null,
-      setupCompletedAt: nowMs, // past the setup wizard — go straight to the app
+      setupCompletedAt: now, // past the setup wizard — go straight to the app
       incomeBasisDefault: 'regular_net',
       jointContributionBasis: 'equal',
       emergencyFundMonths: 3,
@@ -553,7 +553,7 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
       potId: s.pot ? potId[s.pot]! : null,
       categoryId: s.category,
       reconciled: willReconcile ? 1 : 0,
-      reconciledAt: willReconcile ? nowMs : null,
+      reconciledAt: willReconcile ? now : null,
       reconciliationBatchId: null, // filled in when batches are built
       source: isImport ? 'import' : 'manual',
       importRef: isImport ? `demo-${id()}` : null,
@@ -600,7 +600,7 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
         importedCount,
         skippedCount: 0,
         mapping: JSON.stringify({ date: 'Date', description: 'Name', amount: 'Amount', importRef: 'Transaction ID' }),
-        importedAt: nowMs,
+        importedAt: now,
         ...ts,
       }]
     : []
@@ -634,30 +634,29 @@ export async function seedDemo(db: DB, opts: DemoOptions = {}): Promise<Record<s
   const data = buildDemoData(opts)
 
   // Delete children-first (reverse FK order), then insert parents-first, all in
-  // one atomic batch — matches the pattern in routers/data.ts (works on :memory:).
-  type BatchArg = Parameters<DB['batch']>[0]
-  const statements: unknown[] = []
-  for (const [, table] of [...ALL_TABLES].reverse()) {
-    statements.push(db.delete(table as SQLiteTable))
-  }
+  // one atomic transaction — matches the pattern in routers/data.ts.
   const counts: Record<string, number> = {}
   const INSERT_CHUNK = 200
-  for (const [name, table] of ALL_TABLES) {
-    const rows = data[name] ?? []
-    counts[name] = rows.length
-    // Every demo row belongs to the singleton demo household. Stamp householdId
-    // here (the `household` table itself has no such column) rather than on each
-    // of the dozens of row literals — and now that the schema no longer defaults
-    // household_id, an omitted stamp is a loud NOT NULL error, not a silent
-    // mis-scope.
-    const scoped =
-      name === 'household' ? rows : rows.map((r) => ({ householdId: 'household', ...(r as object) }))
-    for (let i = 0; i < scoped.length; i += INSERT_CHUNK) {
-      const chunk = scoped.slice(i, i + INSERT_CHUNK)
-      if (chunk.length > 0) statements.push(db.insert(table as SQLiteTable).values(chunk as never))
+  await db.transaction(async (tx) => {
+    for (const [, table] of [...ALL_TABLES].reverse()) {
+      await tx.delete(table as PgTable)
     }
-  }
-  await db.batch(statements as unknown as BatchArg)
+    for (const [name, table] of ALL_TABLES) {
+      const rows = data[name] ?? []
+      counts[name] = rows.length
+      // Every demo row belongs to the singleton demo household. Stamp householdId
+      // here (the `household` table itself has no such column) rather than on each
+      // of the dozens of row literals — and now that the schema no longer defaults
+      // household_id, an omitted stamp is a loud NOT NULL error, not a silent
+      // mis-scope.
+      const scoped =
+        name === 'household' ? rows : rows.map((r) => ({ householdId: 'household', ...(r as object) }))
+      for (let i = 0; i < scoped.length; i += INSERT_CHUNK) {
+        const chunk = scoped.slice(i, i + INSERT_CHUNK)
+        if (chunk.length > 0) await tx.insert(table as PgTable).values(chunk as never)
+      }
+    }
+  })
   // Provision the owner user + membership for the demo household (the wipe above
   // clears them; the demo dataset itself carries no login identities).
   await ensureSeed(db)

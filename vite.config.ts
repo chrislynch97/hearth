@@ -12,5 +12,10 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
+    // Each server test spins up a fresh in-memory PGlite (real Postgres in WASM)
+    // and applies the baseline migration — a heavier per-test setup than the old
+    // in-memory SQLite, so give tests more headroom than the 5s default.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 })

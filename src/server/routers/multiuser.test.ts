@@ -155,7 +155,7 @@ describe('switchHousehold', () => {
     const owner = await getOwnerUser(db)
 
     // A second household the owner is NOT a member of.
-    const now = Date.now()
+    const now = new Date()
     await db.insert(household).values({ id: 'h2', createdAt: now, updatedAt: now })
 
     // Give the owner a real session to switch within.

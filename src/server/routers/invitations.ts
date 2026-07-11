@@ -25,7 +25,7 @@ export const invitationsRouter = router({
   /** Pending (unaccepted, unexpired) invitations for the active household. */
   list: publicProcedure.query(async ({ ctx }) => {
     assertRole(ctx.role, 'admin')
-    const now = Date.now()
+    const now = new Date()
     const rows = await ctx.db
       .select()
       .from(invitation)
@@ -42,7 +42,8 @@ export const invitationsRouter = router({
     .input(z.object({ role: inviteRole, email: z.string().email().nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       assertRole(ctx.role, input.role === 'admin' ? 'owner' : 'admin')
-      const now = Date.now()
+      const now = new Date()
+      const expiresAt = new Date(now.getTime() + INVITE_TTL_MS)
       const token = newSessionId()
       await ctx.db.insert(invitation).values({
         id: token,
@@ -51,10 +52,10 @@ export const invitationsRouter = router({
         email: input.email ?? null,
         invitedByUserId: ctx.userId ?? null,
         createdAt: now,
-        expiresAt: now + INVITE_TTL_MS,
+        expiresAt,
         acceptedAt: null,
       })
-      return { token, role: input.role, expiresAt: now + INVITE_TTL_MS }
+      return { token, role: input.role, expiresAt }
     }),
 
   revoke: publicProcedure
@@ -70,7 +71,7 @@ export const invitationsRouter = router({
   /** Public: describe an invite for the accept screen (or null if invalid). */
   info: publicProcedure.input(z.object({ token: z.string() })).query(async ({ ctx, input }) => {
     const [inv] = await ctx.db.select().from(invitation).where(eq(invitation.id, input.token))
-    if (!inv || inv.acceptedAt !== null || inv.expiresAt < Date.now()) return null
+    if (!inv || inv.acceptedAt !== null || inv.expiresAt.getTime() < Date.now()) return null
     const [hh] = await ctx.db.select().from(household).where(eq(household.id, inv.householdId))
     return { householdName: hh?.displayName ?? 'Household', role: inv.role }
   }),
@@ -94,7 +95,7 @@ export const invitationsRouter = router({
       }
 
       const [preview] = await ctx.db.select().from(invitation).where(eq(invitation.id, input.token))
-      if (!preview || preview.acceptedAt !== null || preview.expiresAt < Date.now()) {
+      if (!preview || preview.acceptedAt !== null || preview.expiresAt.getTime() < Date.now()) {
         acceptLimiter.fail(key, nowCheck)
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'This invitation is invalid or has expired.' })
       }
@@ -110,7 +111,7 @@ export const invitationsRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'That username is taken.' })
       }
 
-      const now = Date.now()
+      const now = new Date()
       const passwordHash = await hashPassword(input.password)
       let result: { userId: string; householdId: string } | null
       try {

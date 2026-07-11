@@ -54,7 +54,7 @@ export const potsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const now = Date.now()
+      const now = new Date()
 
       // Validate ownerId — must be a member of THIS household.
       await assertMember(ctx.db, ctx.householdId, input.ownerId)
@@ -97,7 +97,7 @@ export const potsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, expectedUpdatedAt, ownerId, ...rest } = input
-      const now = Date.now()
+      const now = new Date()
 
       // Validate ownerId if provided — must be a member of THIS household.
       if (ownerId !== undefined) await assertMember(ctx.db, ctx.householdId, ownerId)
@@ -132,7 +132,7 @@ export const potsRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Pot not found' })
       }
 
-      const now = Date.now()
+      const now = new Date()
       await ctx.db
         .update(pot)
         .set({ archivedAt: now, updatedAt: now })

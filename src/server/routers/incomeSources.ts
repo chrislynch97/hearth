@@ -35,7 +35,7 @@ export const incomeSourcesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await assertMember(ctx.db, ctx.householdId, input.ownerId)
-      const now = Date.now()
+      const now = new Date()
       const id = newId()
       const [inserted] = await ctx.db
         .insert(incomeSource)
@@ -70,7 +70,7 @@ export const incomeSourcesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, expectedUpdatedAt, active, ...rest } = input
-      const now = Date.now()
+      const now = new Date()
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (active !== undefined) setFields['active'] = active ? 1 : 0
 
@@ -98,7 +98,7 @@ export const incomeSourcesRouter = router({
       if (!target) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Income source not found' })
       }
-      const now = Date.now()
+      const now = new Date()
       await ctx.db
         .update(incomeSource)
         .set({ archivedAt: now, updatedAt: now })

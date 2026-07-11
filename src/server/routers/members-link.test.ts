@@ -59,7 +59,7 @@ describe('members.linkUser', () => {
     })
 
     // An account with no membership in this household can't be linked.
-    const now = Date.now()
+    const now = new Date()
     const outsider = newId()
     await db.insert(user).values({ id: outsider, username: 'out', displayName: 'Out', createdAt: now, updatedAt: now })
     await expect(caller(db, { role: 'owner' }).members.linkUser({ memberId: ava.id, userId: outsider })).rejects.toMatchObject({

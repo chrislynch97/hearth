@@ -83,7 +83,7 @@ export const expensesRouter = router({
 
   create: publicProcedure.input(billInput).mutation(async ({ ctx, input }) => {
     await validateBill(ctx.db, ctx.householdId, input)
-    const now = Date.now()
+    const now = new Date()
     const id = newId()
     const ff = fundingFields(input)
 
@@ -125,7 +125,7 @@ export const expensesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, expectedUpdatedAt, active, funding, potId, categoryId, ...rest } = input
-      const now = Date.now()
+      const now = new Date()
       const target = await loadExpense(ctx.db, ctx.householdId, id)
 
       // Resolve the effective funding shape (partial updates fall back to stored values).
@@ -166,7 +166,7 @@ export const expensesRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       await loadExpense(ctx.db, ctx.householdId, input.id)
-      const now = Date.now()
+      const now = new Date()
       await ctx.db
         .update(expense)
         .set({ archivedAt: now, updatedAt: now })

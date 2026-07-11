@@ -8,7 +8,7 @@
 
 import { looksLikeRealDb } from './demo-guard'
 
-const DEFAULT_DEMO_URL = 'file:./data/demo.db'
+const DEFAULT_DEMO_URL = 'pglite:./data/demo'
 const reseed = process.argv.includes('--seed')
 const forced = process.argv.includes('--force')
 

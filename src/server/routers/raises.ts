@@ -44,7 +44,7 @@ export const raisesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await assertPerson(ctx.db, ctx.householdId, input.ownerId)
-      const now = Date.now()
+      const now = new Date()
       const id = newId()
       const [inserted] = await ctx.db
         .insert(raise)
@@ -78,7 +78,7 @@ export const raisesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, expectedUpdatedAt, ...rest } = input
-      const now = Date.now()
+      const now = new Date()
       const [updated] = await ctx.db
         .update(raise)
         .set({ ...rest, updatedAt: now })

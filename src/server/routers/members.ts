@@ -27,7 +27,7 @@ export const membersRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const now = Date.now()
+      const now = new Date()
 
       // Compute next sortOrder
       const [result] = await ctx.db
@@ -69,7 +69,7 @@ export const membersRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, expectedUpdatedAt, ...fields } = input
-      const now = Date.now()
+      const now = new Date()
 
       const [updated] = await ctx.db
         .update(member)
@@ -93,7 +93,7 @@ export const membersRouter = router({
     .input(z.object({ memberId: z.string(), userId: z.string().nullable() }))
     .mutation(async ({ ctx, input }) => {
       assertRole(ctx.role, 'admin')
-      const now = Date.now()
+      const now = new Date()
 
       const [target] = await ctx.db
         .select()
@@ -139,7 +139,7 @@ export const membersRouter = router({
         })
       }
 
-      const now = Date.now()
+      const now = new Date()
       await ctx.db
         .update(member)
         .set({ archivedAt: now, updatedAt: now })

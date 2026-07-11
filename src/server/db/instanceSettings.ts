@@ -28,7 +28,7 @@ async function patchInstanceSettings(
   db: DBOrTx,
   patch: { allowOpenRegistration?: boolean; ownerUserId?: string | null; authRequired?: boolean },
 ): Promise<void> {
-  const now = Date.now()
+  const now = new Date()
   const set: Record<string, unknown> = { updatedAt: now }
   if (patch.allowOpenRegistration !== undefined) set.allowOpenRegistration = patch.allowOpenRegistration ? 1 : 0
   if (patch.ownerUserId !== undefined) set.ownerUserId = patch.ownerUserId

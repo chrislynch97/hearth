@@ -9,9 +9,6 @@ import { parseCsvTable } from '../../shared/csvParse'
 import { mapMonzoRows } from '../import/monzo'
 import type { MappedRow } from '../import/monzo'
 import { suggestPot } from '../spending/suggest'
-import type { DB } from '../db/client'
-
-type BatchArg = Parameters<DB['batch']>[0]
 
 export interface PreviewRow extends MappedRow {
   suggestedPotId: string | null
@@ -100,7 +97,7 @@ export const importsRouter = router({
         .where(scopeWhere(ctx.householdId, spendTransaction.householdId))
       const existingRefs = new Set(priors.map((p) => p.importRef).filter((r): r is string => !!r))
 
-      const now = Date.now()
+      const now = new Date()
       const batchId = newId()
 
       // Drop rows already imported (defensive) and any dupes within this payload.
@@ -115,8 +112,11 @@ export const importsRouter = router({
       const importedCount = toInsert.length
       const skippedCount = totalRows - importedCount
 
-      const statements = [
-        ctx.db.insert(importBatch).values({
+      // One transaction so the batch row and its spends commit atomically (no
+      // partial import if a later insert fails). Postgres supports interactive
+      // transactions; the old libsql `db.batch` couldn't on an in-memory DB.
+      await ctx.db.transaction(async (tx) => {
+        await tx.insert(importBatch).values({
           id: batchId,
           householdId: ctx.householdId,
           source: 'monzo_csv',
@@ -128,9 +128,9 @@ export const importsRouter = router({
           importedAt: now,
           createdAt: now,
           updatedAt: now,
-        }),
-        ...toInsert.map((r) =>
-          ctx.db.insert(spendTransaction).values({
+        })
+        for (const r of toInsert) {
+          await tx.insert(spendTransaction).values({
             id: newId(),
             householdId: ctx.householdId,
             date: r.date,
@@ -147,10 +147,9 @@ export const importsRouter = router({
             note: r.note ?? null,
             createdAt: now,
             updatedAt: now,
-          }),
-        ),
-      ]
-      await ctx.db.batch(statements as unknown as BatchArg)
+          })
+        }
+      })
 
       return { batchId, imported: importedCount, skipped: skippedCount }
     }),
@@ -161,6 +160,6 @@ export const importsRouter = router({
       .select()
       .from(importBatch)
       .where(scopeWhere(ctx.householdId, importBatch.householdId))
-    return rows.sort((a, b) => b.importedAt - a.importedAt)
+    return rows.sort((a, b) => b.importedAt.getTime() - a.importedAt.getTime())
   }),
 })

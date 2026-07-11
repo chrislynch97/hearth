@@ -15,7 +15,7 @@ export async function provisionHousehold(
   db: DBOrTx,
   opts: { displayName?: string } = {},
 ): Promise<string> {
-  const now = Date.now()
+  const now = new Date()
   const householdId = newId()
   await db.insert(household).values({
     id: householdId,
@@ -45,7 +45,7 @@ export async function ensureSeed(database: DB): Promise<void> {
   // empty database and each insert the singleton rows. (Under SQLite's single
   // writer this was already safe; the transaction makes it safe everywhere.)
   await database.transaction(async (tx) => {
-    const now = Date.now()
+    const now = new Date()
     const existing = await tx.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
     if (existing.length === 0) {
       await tx.insert(household).values({ id: HOUSEHOLD_ID, createdAt: now, updatedAt: now })

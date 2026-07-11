@@ -41,8 +41,8 @@ function comp(over: Partial<PayslipComponentType>): PayslipComponentType {
     isVariable: 0,
     sortOrder: 0,
     archivedAt: null,
-    createdAt: 0,
-    updatedAt: 0,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
     ...over,
   }
 }
@@ -84,7 +84,7 @@ describe('ComponentManager', () => {
     await waitFor(() =>
       expect(mocks.updateMutate).toHaveBeenCalledWith({
         id: 'c1',
-        expectedUpdatedAt: 0,
+        expectedUpdatedAt: new Date(0),
         name: 'Annual Bonus',
         kind: 'earning',
         isVariable: true,
@@ -104,7 +104,7 @@ describe('ComponentManager', () => {
     await waitFor(() =>
       expect(mocks.updateMutate).toHaveBeenCalledWith({
         id: 'c2',
-        expectedUpdatedAt: 0,
+        expectedUpdatedAt: new Date(0),
         name: 'Income Tax',
         kind: 'deduction',
         isVariable: false,

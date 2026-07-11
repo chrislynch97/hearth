@@ -61,7 +61,7 @@ export const reconcileRouter = router({
       const totalAmount = rows.reduce((sum, r) => sum + r.amount, 0)
       const transactionCount = rows.length
 
-      const now = Date.now()
+      const now = new Date()
       const batchId = newId()
 
       const [batch] = await ctx.db
@@ -97,7 +97,7 @@ export const reconcileRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Reconciliation batch not found' })
       }
 
-      const now = Date.now()
+      const now = new Date()
 
       await ctx.db
         .update(reconciliationBatch)

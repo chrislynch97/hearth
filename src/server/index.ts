@@ -11,7 +11,7 @@ import type { AppRouter } from './trpc/router'
 import { createContext, rememberValidatedSession } from './trpc/context'
 import { runMigrations } from './db/migrate'
 import { ensureSeed } from './db/seed'
-import { db } from './db/client'
+import { db, closeDb } from './db/client'
 import { startBackupScheduler } from './backup/runner'
 import { parseSessionCookie } from './auth/cookies'
 import { getValidSession, isInstanceLocked, startSessionPurgeScheduler } from './auth/session'
@@ -63,10 +63,9 @@ async function main() {
     console.log(`[hearth] received ${signal}, shutting down`)
     try {
       await app?.close()
-      // Release the SQLite file cleanly once requests have drained, so an
-      // in-flight write can't leave a stale rollback journal that blocks the
-      // next boot (journal_mode=delete leaves a `-journal` on an unclean kill).
-      db.$client.close()
+      // Close the DB cleanly once requests have drained: end the Postgres pool
+      // (or the embedded PGlite handle) so connections aren't left dangling.
+      await closeDb()
     } catch (err) {
       console.error(err)
     }

@@ -1,14 +1,17 @@
 # Deployment guide
 
 Hearth is a **single Node process** that serves both the tRPC API and the built
-web UI, backed by a **single SQLite file**. There is no separate frontend host,
-no external database, and no message queue — which is what makes self-hosting
-easy and backups a matter of copying one folder.
+web UI, backed by **Postgres**. By default that's an embedded, zero-config
+[PGlite](https://pglite.dev) database living in a local folder — so a self-host
+needs no separate database server, and backups are a matter of copying one folder.
+For a hosted or multi-instance deployment you can instead point `DATABASE_URL` at
+a real Postgres server.
 
-This shape has one consequence worth stating up front: Hearth wants a **persistent
-disk**. It fits self-hosting and container/VM hosts perfectly, and is a poor fit
-for pure serverless/edge platforms (Vercel/Netlify/Cloudflare Workers), which have
-no persistent local disk for the SQLite file.
+This shape has one consequence worth stating up front: the default (embedded)
+setup wants a **persistent disk**. It fits self-hosting and container/VM hosts
+perfectly, and is a poor fit for pure serverless/edge platforms
+(Vercel/Netlify/Cloudflare Workers), which have no persistent local disk — for
+those, use an external Postgres via `DATABASE_URL`.
 
 - [Choosing how to host](#choosing-how-to-host)
 - [Option A — Docker (recommended)](#option-a--docker-recommended)
@@ -47,7 +50,7 @@ docker compose up -d
 - Open `http://<host-ip>:8787`.
 - Migrations and seed run automatically on first boot.
 - State lives in `./data` on the host (bind-mounted to `/data` in the container):
-  `app.db` plus a `backups/` folder. **Back up = copy `./data`.**
+  the `pgdata/` PGlite folder plus a `backups/` folder. **Back up = copy `./data`.**
 
 Update later:
 
@@ -105,8 +108,9 @@ Update later: `git pull && npm install && npm run build && sudo systemctl restar
 
 ## Raspberry Pi notes
 
-- **Use 64-bit OS.** libsql ships a native `aarch64` binary but no 32-bit build.
-  Check with `uname -m` → it should say `aarch64`.
+- **Use a 64-bit OS.** Check with `uname -m` → it should say `aarch64`. (The
+  embedded PGlite database is WebAssembly, so there's no native binary to match,
+  but the Node/Docker toolchain still expects 64-bit.)
 - **First build is slow.** The initial Docker build compiles dependencies on-device
   (a few minutes on a Pi 5). Subsequent starts are fast.
 - A Pi 5 runs Hearth comfortably — it idles at very low CPU and ~100–200 MB RAM.
@@ -118,7 +122,7 @@ Update later: `git pull && npm install && npm run build && sudo systemctl restar
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `8787` | Port the server listens on. |
-| `DATABASE_URL` | `file:./data/app.db` | SQLite location (libsql `file:` URL). Can also point at a [Turso](https://turso.tech) remote URL to decouple data from local disk. |
+| `DATABASE_URL` | `pglite:./data/pgdata` | Database. Unset (or `pglite:<dir>`) uses the embedded PGlite database in that folder. Set to `postgres://user:pass@host:5432/db` (or `postgresql://…`) to use an external Postgres server — needed to decouple data from local disk or run more than one instance. |
 | `CLIENT_DIR` | `../client` (source) | Directory of the built UI. Set to `./dist/client` for a non-Docker production run. The Docker image sets this for you. |
 | `HEARTH_SECURE_COOKIES` | unset | Set to `1` to force `Secure` session cookies when behind a reverse proxy that terminates TLS but doesn't forward `x-forwarded-proto: https`. |
 | `HEARTH_TRUST_PROXY` | unset | Set to the **number of proxy hops** in front of Hearth (a single reverse proxy / tunnel = `1`) so Fastify reads the real client IP from `X-Forwarded-For` and the login rate limiter throttles per-client. Leave unset when directly exposed. Do **not** set it to `true`/all — trusting the whole chain lets a client spoof `X-Forwarded-For` and dodge the limiter. Your proxy must **overwrite** (not append to) `X-Forwarded-For`. Also accepts a comma-separated list of trusted proxy IPs/CIDRs. |
@@ -135,8 +139,10 @@ instead, a client-supplied header value survives and can be used to spoof the IP
 
 ## Data & backups
 
-Everything Hearth stores is one SQLite file plus JSON backups, both under the data
-directory (`./data` on the host, bind-mounted to `/data` in the container).
+With the default embedded database, everything Hearth stores is the `pgdata`
+PGlite folder plus JSON backups, both under the data directory (`./data` on the
+host, bind-mounted to `/data` in the container). (With an external Postgres, the
+data lives on that server instead; the JSON backups still land under `./data`.)
 
 **Hearth's own backups (app-level).** Enable in **Settings → Data**. These are
 portable JSON snapshots written to `<data>/backups`, restorable from within the app
@@ -145,9 +151,11 @@ a different host** or roll back in-app. You can also export one on demand from t
 same screen.
 
 **Copy the data directory (file-level).** Copying `./data` off the host captures the
-live `app.db` plus the JSON backups. For a guaranteed-consistent copy of the SQLite
-file, stop the container first (`docker compose stop`) so an in-flight write can't
-tear the file, then copy, then start it again.
+live `pgdata` PGlite folder plus the JSON backups. For a guaranteed-consistent copy,
+stop the container first (`docker compose stop`) so an in-flight write can't tear the
+files, then copy, then start it again. (Using an external Postgres instead? Use that
+server's own backup tooling — `pg_dump` — for the database; `./data` then holds only
+the JSON backups.)
 
 Notes:
 
@@ -236,8 +244,8 @@ where you'd add HTTPS with a local certificate. Optional.
   count (a single proxy = `1`) so the per-IP limit keys on the real client IP, not
   the proxy — and make the proxy overwrite `X-Forwarded-For`.
 - **The database is not encrypted at rest.** Password hashes, TOTP secrets and
-  recovery-code hashes live in the same SQLite file as your data, so two-factor
-  protects the *login path*, not someone who already has the file. Keep the data
+  recovery-code hashes live in the same database as your data, so two-factor
+  protects the *login path*, not someone who already has the files. Keep the data
   directory (and your backups) on trusted storage.
 - **Financial data on a device you own** is the intended posture — prefer a VPN over
   a public URL for remote access.
@@ -254,8 +262,9 @@ log out**.
 **Blank page / UI not served (standalone).** `CLIENT_DIR` isn't pointing at the
 build output. Run `npm run build` and start with `CLIENT_DIR=./dist/client`.
 
-**Build fails on a Raspberry Pi.** You're likely on a 32-bit OS. libsql needs
-`aarch64`; reflash with a 64-bit OS (`uname -m` should say `aarch64`).
+**Build fails on a Raspberry Pi.** You're likely on a 32-bit OS. The Node/Docker
+toolchain expects `aarch64`; reflash with a 64-bit OS (`uname -m` should say
+`aarch64`).
 
 **Port 8787 already in use.** Change `PORT` (and the compose `ports:` mapping).
 

@@ -32,7 +32,7 @@ export const payslipComponentsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await assertPerson(ctx.db, ctx.householdId, input.ownerId)
-      const now = Date.now()
+      const now = new Date()
 
       const [result] = await ctx.db
         .select({ maxOrder: max(payslipComponentType.sortOrder) })
@@ -77,7 +77,7 @@ export const payslipComponentsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, expectedUpdatedAt, isVariable, ...rest } = input
-      const now = Date.now()
+      const now = new Date()
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (isVariable !== undefined) setFields['isVariable'] = isVariable ? 1 : 0
 
@@ -105,7 +105,7 @@ export const payslipComponentsRouter = router({
       if (!target) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Component not found' })
       }
-      const now = Date.now()
+      const now = new Date()
       await ctx.db
         .update(payslipComponentType)
         .set({ archivedAt: now, updatedAt: now })

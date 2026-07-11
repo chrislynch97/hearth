@@ -1,4 +1,22 @@
-import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { pgTable, text, integer, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core'
+
+// ---------------------------------------------------------------------------
+// Postgres port — see issue #25.
+// ---------------------------------------------------------------------------
+// Column names are kept byte-identical to the old SQLite schema. Type choices:
+//   * Every `*At` column is `timestamptz` (mode: 'date') — a real Postgres
+//     timestamp, not an epoch-millis integer. This is the long-term-correct
+//     storage type (psql readability, SQL date math, BI tooling) and also
+//     sidesteps the INT4 overflow that epoch-millis (~1.75e12) would hit. The
+//     app works with JS `Date` objects end to end; they cross tRPC as real
+//     Dates via the superjson transformer (see trpc/trpc.ts + client/main.tsx).
+//     The JSON export/backup format deliberately stays epoch-millis NUMBERS
+//     (converted at the snapshot boundary, db/snapshot.ts) so exports remain
+//     engine-agnostic and older SQLite exports still import unchanged.
+//   * Booleans stay `integer` 0/1 and JSON stays `text`, exactly as under
+//     SQLite — the app reads/writes them that way throughout, so keeping the
+//     representation avoids a stack-wide churn for no near-term gain.
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Multi-tenancy model (see the households plan)
@@ -6,12 +24,12 @@ import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core
 // `household` is the TENANT. Every domain table below carries a `householdId`
 // so one database can hold many households in isolation. Tenant scoping is
 // enforced in the app layer (a scoped-query helper keyed on the request's
-// active household), which is the common denominator across SQLite (now) and
-// Postgres/RLS (later). Because these `household_id` columns were added to
-// existing tables via ALTER TABLE, they carry a DEFAULT of 'household' (the id
-// of the original singleton) so the migration backfills the sole tenant, and
-// deliberately have no SQL-level foreign key (SQLite forbids adding a NOT NULL
-// FK column to a populated table) — they are logical FKs.
+// active household). Under Postgres these `household_id` columns are now REAL
+// foreign keys (onDelete cascade) with an index each — deleting a household
+// cascades to its data, and per-tenant queries no longer full-scan. (Under
+// SQLite they were logical-only: FK enforcement was never enabled on the
+// libsql connection and ALTER TABLE couldn't add a NOT NULL FK to a populated
+// table.)
 //
 // `user` is a global LOGIN identity; `membership` grants a user access to a
 // household with a role. This is distinct from `member` (a budgeting
@@ -20,7 +38,7 @@ import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core
 // be — the 'joint' member has no login, and a viewer user may have no member.
 // ---------------------------------------------------------------------------
 
-export const household = sqliteTable('household', {
+export const household = pgTable('household', {
   id: text('id').primaryKey(),
   displayName: text('display_name').notNull().default('My Household'),
   currencyCode: text('currency_code').notNull().default('GBP'),
@@ -46,49 +64,50 @@ export const household = sqliteTable('household', {
   weekStart: text('week_start').notNull().default('monday'),   // 'monday' | 'sunday'
   dateFormat: text('date_format').notNull().default('medium'), // 'iso' | 'numeric' | 'medium' | 'long'
   backupFrequency: text('backup_frequency').notNull().default('off'), // 'off' | 'daily' | 'weekly'
-  backupLastAt: integer('backup_last_at'),
-  setupCompletedAt: integer('setup_completed_at'),
+  backupLastAt: timestamp('backup_last_at', { withTimezone: true, mode: 'date' }),
+  setupCompletedAt: timestamp('setup_completed_at', { withTimezone: true, mode: 'date' }),
   incomeBasisDefault: text('income_basis_default').notNull().default('regular_net'),
   jointContributionBasis: text('joint_contribution_basis').notNull().default('equal'),
   // Emergency fund target = this many months of essential bills (spec: 3 months rule of thumb).
   emergencyFundMonths: integer('emergency_fund_months').notNull().default(3),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
 })
 
 // A login identity. Global (not scoped to a household); reaches households via
 // `membership`. Local/self-host installs are username-only — `email` is optional
 // and only needed later for cloud invites / password reset. `passwordHash` is
 // nullable so a user can be provisioned before a password is set.
-export const user = sqliteTable('user', {
+export const user = pgTable('user', {
   id: text('id').primaryKey(),
   username: text('username').notNull().unique(),
   email: text('email').unique(),
   displayName: text('display_name').notNull(),
   passwordHash: text('password_hash'),
   mfaSecret: text('mfa_secret'),
-  mfaEnabledAt: integer('mfa_enabled_at'),
+  mfaEnabledAt: timestamp('mfa_enabled_at', { withTimezone: true, mode: 'date' }),
   mfaRecoveryCodes: text('mfa_recovery_codes'),
   // The last TOTP time-step accepted at login. Steps <= this are rejected so a
   // captured code can't be replayed within its ±1-step validity window.
   mfaLastStep: integer('mfa_last_step'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
 })
 
 // Grants a user access to a household, with a role. `invitedAt`/`acceptedAt`
 // support an invite flow (pending = invited, not yet accepted).
-export const membership = sqliteTable('membership', {
+export const membership = pgTable('membership', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   role: text('role').notNull().default('member'), // 'owner' | 'admin' | 'member' | 'viewer'
-  invitedAt: integer('invited_at'),
-  acceptedAt: integer('accepted_at'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
+  invitedAt: timestamp('invited_at', { withTimezone: true, mode: 'date' }),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true, mode: 'date' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
 }, (t) => ({
   uniqUserHousehold: uniqueIndex('membership_user_household').on(t.userId, t.householdId),
+  householdIdx: index('membership_household_id_idx').on(t.householdId),
 }))
 
 // A logged-in session. The cookie holds this row's id; each request resolves the
@@ -96,14 +115,14 @@ export const membership = sqliteTable('membership', {
 // shared-password token) so it carries user identity and supports logout,
 // multiple users, and a per-session active household. Not part of the data
 // portability contract — deliberately excluded from ALL_TABLES.
-export const session = sqliteTable('session', {
+export const session = pgTable('session', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   activeHouseholdId: text('active_household_id')
     .notNull()
     .references(() => household.id, { onDelete: 'cascade' }),
-  createdAt: integer('created_at').notNull(),
-  expiresAt: integer('expires_at').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
 })
 
 export type Session = typeof session.$inferSelect
@@ -112,7 +131,7 @@ export type Session = typeof session.$inferSelect
 // per-household settings on `household`. Governs deployment-level behaviour like
 // whether anyone can self-register a new household. Not part of the data
 // portability contract — deliberately excluded from ALL_TABLES.
-export const instanceSettings = sqliteTable('instance_settings', {
+export const instanceSettings = pgTable('instance_settings', {
   id: text('id').primaryKey(),
   // 0/1: when on, `auth.register` lets anyone create an account + their own
   // household. Off by default so a self-host stays invite-only until opted in.
@@ -129,32 +148,34 @@ export const instanceSettings = sqliteTable('instance_settings', {
   // request, so a lookup that can't find the owner fails CLOSED (stays locked)
   // instead of open. Kept in sync whenever the owner's password is set/cleared.
   authRequired: integer('auth_required').notNull().default(0),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
 })
 
 export type InstanceSettings = typeof instanceSettings.$inferSelect
 
 // A pending invitation for someone to join a household. The row id is the
 // unguessable invite token; accepting it creates the user + membership.
-export const invitation = sqliteTable('invitation', {
+export const invitation = pgTable('invitation', {
   id: text('id').primaryKey(),
   householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   role: text('role').notNull().default('member'), // 'admin' | 'member' | 'viewer'
   email: text('email'), // optional, informational (who it was sent to)
   invitedByUserId: text('invited_by_user_id').references(() => user.id),
-  createdAt: integer('created_at').notNull(),
-  expiresAt: integer('expires_at').notNull(),
-  acceptedAt: integer('accepted_at'),
-})
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true, mode: 'date' }),
+}, (t) => ({
+  householdIdx: index('invitation_household_id_idx').on(t.householdId),
+}))
 
 export type Invitation = typeof invitation.$inferSelect
 
 // A budgeting participant within a household: a person, or the shared 'joint'
 // entity. `userId` optionally links a participant to a login identity.
-export const member = sqliteTable('member', {
+export const member = pgTable('member', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   userId: text('user_id'), // optional link to a login identity; null for 'joint' and unlinked people
   kind: text('kind').notNull(), // 'person' | 'joint'
   displayName: text('display_name').notNull(),
@@ -162,29 +183,33 @@ export const member = sqliteTable('member', {
   color: text('color'),
   jointContributionWeight: integer('joint_contribution_weight'),
   sortOrder: integer('sort_order').notNull().default(0),
-  archivedAt: integer('archived_at'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-})
+  archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'date' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  householdIdx: index('member_household_id_idx').on(t.householdId),
+}))
 
 export type Household = typeof household.$inferSelect
 export type User = typeof user.$inferSelect
 export type Membership = typeof membership.$inferSelect
 export type Member = typeof member.$inferSelect
 
-export const category = sqliteTable('category', {
+export const category = pgTable('category', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
-  archivedAt: integer('archived_at'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-})
+  archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'date' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  householdIdx: index('category_household_id_idx').on(t.householdId),
+}))
 
-export const pot = sqliteTable('pot', {
+export const pot = pgTable('pot', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   categoryId: text('category_id').references(() => category.id),
   ownerId: text('owner_id')
@@ -192,10 +217,12 @@ export const pot = sqliteTable('pot', {
     .references(() => member.id),
   sortOrder: integer('sort_order').notNull().default(0),
   note: text('note'),
-  archivedAt: integer('archived_at'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-})
+  archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'date' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  householdIdx: index('pot_household_id_idx').on(t.householdId),
+}))
 
 export type Category = typeof category.$inferSelect
 export type Pot = typeof pot.$inferSelect
@@ -207,9 +234,9 @@ export type Pot = typeof pot.$inferSelect
 //   'pot_auto'   — potId set; the pot auto-deducts (e.g. Monzo) → no catch-up
 //   'main'       — potId null; paid from the main account under categoryId → no catch-up
 // (The legacy per-owner `expense_share` model was retired; see the 001x migration.)
-export const expense = sqliteTable('expense', {
+export const expense = pgTable('expense', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   recurrence: text('recurrence').notNull(), // 'monthly' | 'quarterly' | 'yearly'
   amount: integer('amount'),                // minor units, per-recurrence; null on un-migrated legacy rows
@@ -220,25 +247,28 @@ export const expense = sqliteTable('expense', {
   active: integer('active').notNull().default(1),
   dueAnchor: text('due_anchor'),            // YYYY-MM-DD of one known occurrence
   dueReminderDays: integer('due_reminder_days'),
-  archivedAt: integer('archived_at'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-})
+  archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'date' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  householdIdx: index('expense_household_id_idx').on(t.householdId),
+}))
 
 // DEPRECATED — retired in favour of single-pot bills (above) + the `set_aside`
 // table. Kept defined so migrations can read legacy rows out of it; do not write
 // new rows. A later migration drops it once every household has migrated.
-export const expenseShare = sqliteTable('expense_share', {
+export const expenseShare = pgTable('expense_share', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   expenseId: text('expense_id').notNull().references(() => expense.id, { onDelete: 'cascade' }),
   ownerId: text('owner_id').notNull().references(() => member.id),
   amount: integer('amount').notNull(),      // minor units, per-recurrence cost for this owner
   potId: text('pot_id').references(() => pot.id),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
 }, (t) => ({
   uniqExpenseOwner: uniqueIndex('expense_share_expense_owner').on(t.expenseId, t.ownerId),
+  householdIdx: index('expense_share_household_id_idx').on(t.householdId),
 }))
 
 export type Expense = typeof expense.$inferSelect
@@ -248,9 +278,9 @@ export type ExpenseShare = typeof expenseShare.$inferSelect
 // opposed to a bill that drains one (money out). Always one owner into one pot;
 // never appears on the spending screen or catch-up. `groupLabel` lets several
 // set-asides share a display name (e.g. "Treat Yo Self" = one per person).
-export const setAside = sqliteTable('set_aside', {
+export const setAside = pgTable('set_aside', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   groupLabel: text('group_label'),          // optional shared label across per-person rows
   ownerId: text('owner_id').notNull().references(() => member.id),
@@ -260,45 +290,51 @@ export const setAside = sqliteTable('set_aside', {
   note: text('note'),
   active: integer('active').notNull().default(1),
   sortOrder: integer('sort_order').notNull().default(0),
-  archivedAt: integer('archived_at'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-})
+  archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'date' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  householdIdx: index('set_aside_household_id_idx').on(t.householdId),
+}))
 
 export type SetAside = typeof setAside.$inferSelect
 
-export const reconciliationBatch = sqliteTable('reconciliation_batch', {
+export const reconciliationBatch = pgTable('reconciliation_batch', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   potId: text('pot_id').references(() => pot.id), // null = mixed/multi-pot
   ownerId: text('owner_id').references(() => member.id), // the payer this batch settled; null = whole-pot / legacy
   totalAmount: integer('total_amount').notNull(),
   transactionCount: integer('transaction_count').notNull(),
-  reversedAt: integer('reversed_at'),
+  reversedAt: timestamp('reversed_at', { withTimezone: true, mode: 'date' }),
   note: text('note'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-})
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  householdIdx: index('reconciliation_batch_household_id_idx').on(t.householdId),
+}))
 
 // Import batches — one Monzo CSV upload (spec §5.3). Preserved for audit and
 // so a whole import can be identified (and, in future, reversed).
-export const importBatch = sqliteTable('import_batch', {
+export const importBatch = pgTable('import_batch', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   source: text('source').notNull(),        // 'monzo_csv'
   filename: text('filename'),
   rowCount: integer('row_count').notNull(),        // rows in the file
   importedCount: integer('imported_count').notNull(),
   skippedCount: integer('skipped_count').notNull(),
   mapping: text('mapping'),                 // JSON: column mapping used
-  importedAt: integer('imported_at').notNull(),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-})
+  importedAt: timestamp('imported_at', { withTimezone: true, mode: 'date' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  householdIdx: index('import_batch_household_id_idx').on(t.householdId),
+}))
 
-export const spendTransaction = sqliteTable('spend_transaction', {
+export const spendTransaction = pgTable('spend_transaction', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   date: text('date').notNull(), // YYYY-MM-DD
   description: text('description').notNull(),
   amount: integer('amount').notNull(), // minor units; + = spend, - = refund
@@ -311,7 +347,7 @@ export const spendTransaction = sqliteTable('spend_transaction', {
   // un-assigned spend is potId null AND settledAtSource 0.
   settledAtSource: integer('settled_at_source').notNull().default(0),
   reconciled: integer('reconciled').notNull().default(0),
-  reconciledAt: integer('reconciled_at'),
+  reconciledAt: timestamp('reconciled_at', { withTimezone: true, mode: 'date' }),
   reconciliationBatchId: text('reconciliation_batch_id').references(() => reconciliationBatch.id),
   source: text('source').notNull().default('manual'), // 'manual' | 'import'
   importRef: text('import_ref'),                       // Monzo Transaction ID; unique dedup key (NULL for manual)
@@ -319,13 +355,14 @@ export const spendTransaction = sqliteTable('spend_transaction', {
   raw: text('raw'),                                    // JSON of the original imported row
   splitGroupId: text('split_group_id'),
   note: text('note'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
 }, (t) => ({
   // Import dedup is household-scoped (imports.ts filters by householdId), so the
   // uniqueness must be too — a global unique made two households importing the
   // same Monzo transaction id collide with a raw SQLite error.
   uniqImportRef: uniqueIndex('spend_transaction_import_ref').on(t.householdId, t.importRef),
+  householdIdx: index('spend_transaction_household_id_idx').on(t.householdId),
 }))
 
 export type ReconciliationBatch = typeof reconciliationBatch.$inferSelect
@@ -337,9 +374,9 @@ export type ImportBatch = typeof importBatch.$inferSelect
 // ---------------------------------------------------------------------------
 
 // Recurring non-payslip income (e.g. rental, side income, benefits).
-export const incomeSource = sqliteTable('income_source', {
+export const incomeSource = pgTable('income_source', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   ownerId: text('owner_id').notNull().references(() => member.id),
   name: text('name').notNull(),
   amount: integer('amount').notNull(),          // minor units, per-recurrence
@@ -347,63 +384,72 @@ export const incomeSource = sqliteTable('income_source', {
   recurrence: text('recurrence').notNull(),      // monthly|quarterly|yearly|weekly|fortnightly|one_off
   active: integer('active').notNull().default(1),
   note: text('note'),
-  archivedAt: integer('archived_at'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-})
+  archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'date' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  householdIdx: index('income_source_household_id_idx').on(t.householdId),
+}))
 
 // Per-member configurable payslip line-item definitions. Earnings and
 // deductions differ by employer, so they're runtime data, not fixed columns.
-export const payslipComponentType = sqliteTable('payslip_component_type', {
+export const payslipComponentType = pgTable('payslip_component_type', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   ownerId: text('owner_id').notNull().references(() => member.id),
   name: text('name').notNull(),                  // e.g. 'Basic Pay', 'Bonus', 'Income Tax'
   kind: text('kind').notNull(),                  // 'earning' | 'deduction' | 'employer_info'
   isVariable: integer('is_variable').notNull().default(0), // bonus/overtime — excluded from regular net
   sortOrder: integer('sort_order').notNull().default(0),
-  archivedAt: integer('archived_at'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-})
+  archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'date' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  householdIdx: index('payslip_component_type_household_id_idx').on(t.householdId),
+}))
 
-export const payslip = sqliteTable('payslip', {
+export const payslip = pgTable('payslip', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   ownerId: text('owner_id').notNull().references(() => member.id),
   payDate: text('pay_date').notNull(),           // YYYY-MM-DD
   periodLabel: text('period_label'),             // e.g. 'October 2020'
   netPay: integer('net_pay'),                    // recorded override; effective_net falls back to computed
   note: text('note'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-})
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  householdIdx: index('payslip_household_id_idx').on(t.householdId),
+}))
 
-export const payslipLine = sqliteTable('payslip_line', {
+export const payslipLine = pgTable('payslip_line', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   payslipId: text('payslip_id').notNull().references(() => payslip.id, { onDelete: 'cascade' }),
   componentId: text('component_id').notNull().references(() => payslipComponentType.id),
   amount: integer('amount').notNull(),           // minor units
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
 }, (t) => ({
   uniqPayslipComponent: uniqueIndex('payslip_line_payslip_component').on(t.payslipId, t.componentId),
+  householdIdx: index('payslip_line_household_id_idx').on(t.householdId),
 }))
 
 // Salary history. Each raise is one row; percent_increase is computed vs the prior raise.
-export const raise = sqliteTable('raise', {
+export const raise = pgTable('raise', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   ownerId: text('owner_id').notNull().references(() => member.id),
   effectiveDate: text('effective_date').notNull(), // YYYY-MM-DD
   newSalary: integer('new_salary').notNull(),      // annual, minor units
   bonus: integer('bonus'),                         // documented; excluded from monthly capacity
   newPosition: text('new_position'),
   note: text('note'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-})
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  householdIdx: index('raise_household_id_idx').on(t.householdId),
+}))
 
 export type IncomeSource = typeof incomeSource.$inferSelect
 export type PayslipComponentType = typeof payslipComponentType.$inferSelect
@@ -419,9 +465,9 @@ export type Raise = typeof raise.$inferSelect
 // liability balances from asset balances.
 // ---------------------------------------------------------------------------
 
-export const account = sqliteTable('account', {
+export const account = pgTable('account', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   kind: text('kind').notNull(),                  // 'asset' | 'liability'
   subtype: text('subtype'),                      // savings|pension|investment|property|mortgage|loan|student_loan|credit_card|other
@@ -431,22 +477,25 @@ export const account = sqliteTable('account', {
   institution: text('institution'),             // e.g. 'Vanguard', 'Barclays'
   note: text('note'),
   sortOrder: integer('sort_order').notNull().default(0),
-  archivedAt: integer('archived_at'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-})
+  archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'date' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  householdIdx: index('account_household_id_idx').on(t.householdId),
+}))
 
-export const accountBalance = sqliteTable('account_balance', {
+export const accountBalance = pgTable('account_balance', {
   id: text('id').primaryKey(),
-  householdId: text('household_id').notNull(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   accountId: text('account_id').notNull().references(() => account.id, { onDelete: 'cascade' }),
   asOfDate: text('as_of_date').notNull(),        // YYYY-MM-DD
   value: integer('value').notNull(),             // minor units; magnitude of the balance (liabilities stored positive)
   note: text('note'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
 }, (t) => ({
   uniqAccountDate: uniqueIndex('account_balance_account_date').on(t.accountId, t.asOfDate),
+  householdIdx: index('account_balance_household_id_idx').on(t.householdId),
 }))
 
 export type Account = typeof account.$inferSelect

@@ -137,7 +137,7 @@ export const payslipsRouter = router({
       await assertPerson(ctx.db, ctx.householdId, input.ownerId)
       await validateLines(ctx.db, ctx.householdId, input.ownerId, input.lines)
 
-      const now = Date.now()
+      const now = new Date()
       const id = newId()
       await ctx.db.insert(payslip).values({
         id,
@@ -178,7 +178,7 @@ export const payslipsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, expectedUpdatedAt, lines, ...rest } = input
-      const now = Date.now()
+      const now = new Date()
 
       const [target] = await ctx.db
         .select()

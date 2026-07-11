@@ -1,5 +1,5 @@
 import { getTableColumns } from 'drizzle-orm'
-import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
+import type { PgTable } from 'drizzle-orm/pg-core'
 import {
   household,
   user,
@@ -25,7 +25,7 @@ import {
 
 /** Every table, in FK-dependency (insert-safe) order — parents first. Reverse
  *  the list for deletes. Single source of truth for export / import / reset. */
-export const ALL_TABLES: ReadonlyArray<readonly [string, SQLiteTable]> = [
+export const ALL_TABLES: ReadonlyArray<readonly [string, PgTable]> = [
   ['household', household],
   ['user', user],
   ['membership', membership],
@@ -65,7 +65,7 @@ export const MONEY_FIELD_NAMES: ReadonlySet<string> = new Set([
 
 /** (table, column) pairs holding money in minor units, derived from the schema:
  *  every integer column across ALL_TABLES whose property name is a money name. */
-export const MONEY_COLUMNS: ReadonlyArray<readonly [SQLiteTable, string]> = ALL_TABLES.flatMap(
+export const MONEY_COLUMNS: ReadonlyArray<readonly [PgTable, string]> = ALL_TABLES.flatMap(
   ([, table]) =>
     Object.entries(getTableColumns(table))
       .filter(([key, col]) => col.dataType === 'number' && MONEY_FIELD_NAMES.has(key))

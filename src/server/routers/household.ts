@@ -40,7 +40,7 @@ export const householdRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       assertRole(ctx.role, 'admin')
-      const now = Date.now()
+      const now = new Date()
       await ctx.db
         .update(household)
         .set({ ...input, updatedAt: now })
@@ -74,7 +74,7 @@ export const householdRouter = router({
       })
     }
 
-    const now = Date.now()
+    const now = new Date()
     await ctx.db
       .update(household)
       .set({ setupCompletedAt: now, updatedAt: now })

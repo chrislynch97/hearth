@@ -1,1 +1,0 @@
-ALTER TABLE `pot` DROP COLUMN `is_drawdown`;

@@ -31,10 +31,10 @@ export async function createUserWithMembership(
     passwordHash: string
     householdId: string
     role: string
-    invitedAt?: number
+    invitedAt?: Date
   },
 ): Promise<string> {
-  const now = Date.now()
+  const now = new Date()
   const userId = newId()
   await db.insert(user).values({
     id: userId,
@@ -66,10 +66,16 @@ export function newSessionId(): string {
 /** Create a session for a user's active household; returns the cookie value. */
 export async function createSession(db: DB, userId: string, householdId: string): Promise<string> {
   const id = newSessionId()
-  const now = Date.now()
+  const now = new Date()
   await db
     .insert(session)
-    .values({ id, userId, activeHouseholdId: householdId, createdAt: now, expiresAt: now + SESSION_TTL_MS })
+    .values({
+      id,
+      userId,
+      activeHouseholdId: householdId,
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
+    })
   return id
 }
 
@@ -77,7 +83,7 @@ export async function createSession(db: DB, userId: string, householdId: string)
 export async function getValidSession(db: DB, id: string | undefined): Promise<Session | null> {
   if (!id) return null
   const [s] = await db.select().from(session).where(eq(session.id, id))
-  return s && s.expiresAt > Date.now() ? s : null
+  return s && s.expiresAt.getTime() > Date.now() ? s : null
 }
 
 export async function deleteSession(db: DB, id: string): Promise<void> {
@@ -95,7 +101,7 @@ const PURGE_INTERVAL_MS = 60 * 60 * 1000 // hourly; expiry is 30 days, so timing
  *  expired rows at read time, so this only reclaims storage — but without it the
  *  `session` table grows forever on a long-running instance (one dead row per
  *  login, kept indefinitely). */
-export async function deleteExpiredSessions(db: DB, now: number = Date.now()): Promise<void> {
+export async function deleteExpiredSessions(db: DB, now: Date = new Date()): Promise<void> {
   await db.delete(session).where(lt(session.expiresAt, now))
 }
 

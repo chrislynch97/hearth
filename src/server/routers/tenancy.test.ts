@@ -9,7 +9,7 @@ import { newId } from '../../shared/ids'
 async function twoHouseholds() {
   const db = await makeTestDb()
   await ensureSeed(db) // creates the 'household' singleton + its joint member
-  const now = Date.now()
+  const now = new Date()
   await db.insert(household).values({ id: 'h2', createdAt: now, updatedAt: now })
   const h2Joint = newId()
   await db.insert(member).values({

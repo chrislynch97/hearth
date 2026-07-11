@@ -93,7 +93,7 @@ export const accountsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await assertMember(ctx.db, ctx.householdId, input.ownerId)
-      const now = Date.now()
+      const now = new Date()
       const [result] = await ctx.db
         .select({ maxOrder: max(account.sortOrder) })
         .from(account)
@@ -132,7 +132,7 @@ export const accountsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, expectedUpdatedAt, ownerId, ...rest } = input
       if (ownerId !== undefined) await assertMember(ctx.db, ctx.householdId, ownerId)
-      const setFields: Record<string, unknown> = { ...rest, updatedAt: Date.now() }
+      const setFields: Record<string, unknown> = { ...rest, updatedAt: new Date() }
       if (ownerId !== undefined) setFields['ownerId'] = ownerId
       const [written] = await ctx.db
         .update(account)
@@ -153,7 +153,7 @@ export const accountsRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       await getAccount(ctx.db, ctx.householdId, input.id)
-      const now = Date.now()
+      const now = new Date()
       await ctx.db
         .update(account)
         .set({ archivedAt: now, updatedAt: now })
@@ -193,7 +193,7 @@ export const accountsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await getAccount(ctx.db, ctx.householdId, input.accountId)
-      const now = Date.now()
+      const now = new Date()
 
       // One snapshot per (account, date): update in place if the date already exists.
       const [match] = await ctx.db
@@ -251,7 +251,7 @@ export const accountsRouter = router({
       const { id, expectedUpdatedAt, ...rest } = input
       const [updated] = await ctx.db
         .update(accountBalance)
-        .set({ ...rest, updatedAt: Date.now() })
+        .set({ ...rest, updatedAt: new Date() })
         .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, id), versionGuard(accountBalance.updatedAt, expectedUpdatedAt)))
         .returning()
       if (updated) return updated

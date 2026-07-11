@@ -47,10 +47,10 @@ describe('members router', () => {
     const person = await caller.members.addPerson({ displayName: 'Bob' })
     const after = Date.now()
 
-    expect(person.createdAt).toBeGreaterThanOrEqual(before)
-    expect(person.createdAt).toBeLessThanOrEqual(after)
-    expect(person.updatedAt).toBeGreaterThanOrEqual(before)
-    expect(person.updatedAt).toBeLessThanOrEqual(after)
+    expect(person.createdAt.getTime()).toBeGreaterThanOrEqual(before)
+    expect(person.createdAt.getTime()).toBeLessThanOrEqual(after)
+    expect(person.updatedAt.getTime()).toBeGreaterThanOrEqual(before)
+    expect(person.updatedAt.getTime()).toBeLessThanOrEqual(after)
   })
 
   it('addPerson accepts optional fields', async () => {
@@ -98,8 +98,8 @@ describe('members router', () => {
     const updated = await caller.members.update({ id: person.id, displayName: 'Evelyn' })
     const after = Date.now()
 
-    expect(updated.updatedAt).toBeGreaterThanOrEqual(before)
-    expect(updated.updatedAt).toBeLessThanOrEqual(after)
+    expect(updated.updatedAt.getTime()).toBeGreaterThanOrEqual(before)
+    expect(updated.updatedAt.getTime()).toBeLessThanOrEqual(after)
   })
 
   it('update can rename the joint member', async () => {
@@ -129,8 +129,8 @@ describe('members router', () => {
     // Confirm archivedAt is set via list (still returned in list)
     const members = await caller.members.list()
     const found = members.find((m) => m.id === person.id)
-    expect(found?.archivedAt).toBeGreaterThanOrEqual(before)
-    expect(found?.archivedAt).toBeLessThanOrEqual(after)
+    expect(found!.archivedAt!.getTime()).toBeGreaterThanOrEqual(before)
+    expect(found!.archivedAt!.getTime()).toBeLessThanOrEqual(after)
   })
 
   it('archive throws BAD_REQUEST for the joint member', async () => {

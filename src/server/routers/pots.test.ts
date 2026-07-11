@@ -72,8 +72,8 @@ describe('pots router', () => {
     const p2 = await caller.pots.create({ name: 'Pot B', ownerId: joint.id })
     const after = Date.now()
 
-    expect(p1.createdAt).toBeGreaterThanOrEqual(before)
-    expect(p1.createdAt).toBeLessThanOrEqual(after)
+    expect(p1.createdAt.getTime()).toBeGreaterThanOrEqual(before)
+    expect(p1.createdAt.getTime()).toBeLessThanOrEqual(after)
     expect(p1.sortOrder).toBe(1)
     expect(p2.sortOrder).toBe(2)
   })
@@ -123,8 +123,8 @@ describe('pots router', () => {
     const updated = await caller.pots.update({ id: p.id, name: 'X2' })
     const after = Date.now()
 
-    expect(updated.updatedAt).toBeGreaterThanOrEqual(before)
-    expect(updated.updatedAt).toBeLessThanOrEqual(after)
+    expect(updated.updatedAt.getTime()).toBeGreaterThanOrEqual(before)
+    expect(updated.updatedAt.getTime()).toBeLessThanOrEqual(after)
   })
 
   it('update with a matching expectedUpdatedAt succeeds', async () => {
@@ -155,7 +155,7 @@ describe('pots router', () => {
     // from what this caller last read (here, one tick earlier). The guarded write
     // must refuse rather than silently clobber the other edit.
     await expect(
-      caller.pots.update({ id: p.id, expectedUpdatedAt: p.updatedAt - 1, name: 'Clobber' }),
+      caller.pots.update({ id: p.id, expectedUpdatedAt: new Date(p.updatedAt.getTime() - 1), name: 'Clobber' }),
     ).rejects.toMatchObject({ code: 'CONFLICT' })
 
     // The pot is untouched.
@@ -193,7 +193,7 @@ describe('pots router', () => {
     const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     await expect(
-      caller.pots.update({ id: 'nonexistent', expectedUpdatedAt: 123, name: 'x' }),
+      caller.pots.update({ id: 'nonexistent', expectedUpdatedAt: new Date(123), name: 'x' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })
 

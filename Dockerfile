@@ -13,7 +13,7 @@ RUN npm run build        # builds the client into dist/client
 
 ENV NODE_ENV=production
 ENV PORT=8787
-ENV DATABASE_URL=file:/data/app.db
+ENV DATABASE_URL=pglite:/data/pgdata
 ENV CLIENT_DIR=/app/dist/client
 EXPOSE 8787
 

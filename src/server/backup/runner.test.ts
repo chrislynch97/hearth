@@ -9,14 +9,15 @@ import { applySnapshot, type Snapshot } from '../db/snapshot'
 import { runBackup } from './runner'
 
 // runBackup writes into `<DATABASE_URL dir>/backups`; point it at a throwaway
-// temp dir so tests never touch ./data.
+// temp dir so tests never touch ./data. (The actual DB under test is a separate
+// in-memory PGlite from makeTestDb; this URL only drives the backup directory.)
 let tmp: string
 let prevUrl: string | undefined
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'hearth-backup-test-'))
   prevUrl = process.env.DATABASE_URL
-  process.env.DATABASE_URL = `file:${join(tmp, 'app.db')}`
+  process.env.DATABASE_URL = `pglite:${join(tmp, 'pgdata')}`
 })
 
 afterEach(() => {
@@ -26,7 +27,7 @@ afterEach(() => {
 })
 
 async function addHousehold(db: Awaited<ReturnType<typeof makeTestDb>>, id: string, frequency: string): Promise<void> {
-  await db.insert(household).values({ id, backupFrequency: frequency, createdAt: 1, updatedAt: 1 })
+  await db.insert(household).values({ id, backupFrequency: frequency, createdAt: new Date(1), updatedAt: new Date(1) })
 }
 
 describe('runBackup', () => {
@@ -40,7 +41,7 @@ describe('runBackup', () => {
     const [primary] = await db.select().from(household).where(eq(household.id, 'household'))
     const [secondary] = await db.select().from(household).where(eq(household.id, 'secondary'))
     // The secondary household — created with a random id — must get stamped (#13).
-    expect(secondary!.backupLastAt).toBe(at)
+    expect(secondary!.backupLastAt?.getTime()).toBe(at)
     expect(primary!.backupLastAt).toBeNull()
   })
 
@@ -52,7 +53,7 @@ describe('runBackup', () => {
     const { at } = await runBackup(db, ['a', 'b'])
 
     const rows = await db.select().from(household)
-    expect(rows.every((r) => r.backupLastAt === at)).toBe(true)
+    expect(rows.every((r) => r.backupLastAt?.getTime() === at)).toBe(true)
   })
 
   it('writes a file that actually restores back into a fresh database', async () => {

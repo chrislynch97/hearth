@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { and, eq } from 'drizzle-orm'
-import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
+import type { PgTable } from 'drizzle-orm/pg-core'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertInstanceOwner } from '../auth/session'
@@ -11,7 +11,6 @@ import { ensureSeed } from '../db/seed'
 import { rescaleMinor } from '../../shared/money'
 import { applySnapshot, buildSnapshot, EXPORT_VERSION } from '../db/snapshot'
 import { runBackup } from '../backup/runner'
-import type { DB } from '../db/client'
 
 // NOTE: export / import / reset / stats and the on-disk backup are instance-wide
 // (they operate over every table, ALL households) — the self-host backup
@@ -23,17 +22,7 @@ import type { DB } from '../db/client'
 
 // drizzle's dynamic-table typing is intentionally strict; these thin casts let us
 // iterate the table registry generically for whole-database operations.
-type AnyTable = SQLiteTable & { id: unknown; householdId: unknown }
-
-type BatchArg = Parameters<DB['batch']>[0]
-type BatchStatement = BatchArg[number]
-
-/** Run statements atomically via libsql's batch API (works on `:memory:`, unlike
- *  interactive transactions). No-op for an empty list. */
-async function runBatch(db: DB, statements: BatchStatement[]): Promise<void> {
-  if (statements.length === 0) return
-  await db.batch(statements as unknown as BatchArg)
-}
+type AnyTable = PgTable & { id: unknown; householdId: unknown }
 
 export const dataRouter = router({
   /** The portability contract: every table's rows as JSON. */
@@ -66,10 +55,11 @@ export const dataRouter = router({
   /** Wipe everything and re-seed a blank household (returns to the setup wizard). */
   reset: publicProcedure.mutation(async ({ ctx }) => {
     await assertInstanceOwner(ctx.db, ctx.userId)
-    const statements = [...ALL_TABLES]
-      .reverse()
-      .map(([, table]) => ctx.db.delete(table as SQLiteTable))
-    await runBatch(ctx.db, statements)
+    await ctx.db.transaction(async (tx) => {
+      for (const [, table] of [...ALL_TABLES].reverse()) {
+        await tx.delete(table as PgTable)
+      }
+    })
     await ensureSeed(ctx.db)
     return { ok: true as const }
   }),
@@ -95,7 +85,7 @@ export const dataRouter = router({
           for (const [table, col] of MONEY_COLUMNS) {
             const rows = (await tx
               .select()
-              .from(table as SQLiteTable)
+              .from(table as PgTable)
               .where(eq((table as AnyTable).householdId as never, ctx.householdId as never))) as Array<
               Record<string, unknown>
             >
@@ -103,7 +93,7 @@ export const dataRouter = router({
               const value = row[col]
               if (typeof value !== 'number') continue
               await tx
-                .update(table as SQLiteTable)
+                .update(table as PgTable)
                 .set({ [col]: rescaleMinor(value, fromDp, toDp) })
                 .where(
                   and(
@@ -117,7 +107,7 @@ export const dataRouter = router({
         }
         await tx
           .update(household)
-          .set({ currencyDecimalPlaces: toDp, updatedAt: Date.now() })
+          .set({ currencyDecimalPlaces: toDp, updatedAt: new Date() })
           .where(eq(household.id, ctx.householdId))
         return count
       })
@@ -136,9 +126,9 @@ export const dataRouter = router({
     await assertInstanceOwner(ctx.db, ctx.userId)
     const counts: Record<string, number> = {}
     for (const [name, table] of ALL_TABLES) {
-      const rows = await ctx.db.select().from(table as SQLiteTable)
+      const rows = await ctx.db.select().from(table as PgTable)
       counts[name] = rows.length
     }
-    return { counts, databaseUrl: process.env.DATABASE_URL ?? 'file:./data/app.db' }
+    return { counts, databaseUrl: process.env.DATABASE_URL ?? 'pglite:./data/pgdata' }
   }),
 })

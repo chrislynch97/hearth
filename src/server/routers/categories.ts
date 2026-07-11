@@ -19,7 +19,7 @@ export const categoriesRouter = router({
   create: publicProcedure
     .input(z.object({ name: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const now = Date.now()
+      const now = new Date()
 
       const [result] = await ctx.db
         .select({ maxOrder: max(category.sortOrder) })
@@ -53,7 +53,7 @@ export const categoriesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, expectedUpdatedAt, ...fields } = input
-      const now = Date.now()
+      const now = new Date()
 
       const [updated] = await ctx.db
         .update(category)
@@ -82,7 +82,7 @@ export const categoriesRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Category not found' })
       }
 
-      const now = Date.now()
+      const now = new Date()
       await ctx.db
         .update(category)
         .set({ archivedAt: now, updatedAt: now })

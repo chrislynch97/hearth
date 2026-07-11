@@ -44,10 +44,10 @@ describe('categories router', () => {
     const cat = await caller.categories.create({ name: 'Groceries' })
     const after = Date.now()
 
-    expect(cat.createdAt).toBeGreaterThanOrEqual(before)
-    expect(cat.createdAt).toBeLessThanOrEqual(after)
-    expect(cat.updatedAt).toBeGreaterThanOrEqual(before)
-    expect(cat.updatedAt).toBeLessThanOrEqual(after)
+    expect(cat.createdAt.getTime()).toBeGreaterThanOrEqual(before)
+    expect(cat.createdAt.getTime()).toBeLessThanOrEqual(after)
+    expect(cat.updatedAt.getTime()).toBeGreaterThanOrEqual(before)
+    expect(cat.updatedAt.getTime()).toBeLessThanOrEqual(after)
   })
 
   it('create sortOrder is max+1', async () => {
@@ -87,8 +87,8 @@ describe('categories router', () => {
     const updated = await caller.categories.update({ id: cat.id, name: 'Test2' })
     const after = Date.now()
 
-    expect(updated.updatedAt).toBeGreaterThanOrEqual(before)
-    expect(updated.updatedAt).toBeLessThanOrEqual(after)
+    expect(updated.updatedAt.getTime()).toBeGreaterThanOrEqual(before)
+    expect(updated.updatedAt.getTime()).toBeLessThanOrEqual(after)
   })
 
   it('archive removes from list', async () => {
@@ -116,7 +116,7 @@ describe('categories router', () => {
   it('isolates categories between households', async () => {
     const db = await makeTestDb()
     await ensureSeed(db) // creates the 'household' singleton
-    const now = Date.now()
+    const now = new Date()
     await db.insert(household).values({ id: 'h2', createdAt: now, updatedAt: now })
 
     const h1 = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })

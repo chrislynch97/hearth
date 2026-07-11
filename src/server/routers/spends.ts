@@ -90,7 +90,7 @@ export const spendsRouter = router({
     .mutation(async ({ ctx, input }) => {
       await validateOwnerAndPot(ctx.db, ctx.householdId, input.ownerId, input.potId, input.categoryId)
 
-      const now = Date.now()
+      const now = new Date()
       const id = newId()
 
       const [inserted] = await ctx.db
@@ -132,7 +132,7 @@ export const spendsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, expectedUpdatedAt, settledAtSource, ...rest } = input
-      const now = Date.now()
+      const now = new Date()
 
       const [target] = await ctx.db
         .select()
@@ -206,7 +206,7 @@ export const spendsRouter = router({
             .set({
               totalAmount: remaining.reduce((sum, r) => sum + r.amount, 0),
               transactionCount: remaining.length,
-              updatedAt: Date.now(),
+              updatedAt: new Date(),
             })
             .where(
               scopeWhere(
@@ -265,7 +265,7 @@ export const spendsRouter = router({
         await validateOwnerAndPot(ctx.db, ctx.householdId, part.ownerId, part.potId, part.categoryId)
       }
 
-      const now = Date.now()
+      const now = new Date()
       const splitGroupId = newId()
       const [first, ...rest] = input.parts
 

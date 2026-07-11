@@ -11,16 +11,16 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { inArray } from 'drizzle-orm'
-import { drizzle } from 'drizzle-orm/libsql'
-import { createClient } from '@libsql/client'
-import { migrate } from 'drizzle-orm/libsql/migrator'
+import { drizzle } from 'drizzle-orm/pglite'
+import { PGlite } from '@electric-sql/pglite'
+import { migrate } from 'drizzle-orm/pglite/migrator'
 import type { DB } from '../db/client'
 import { household } from '../db/schema'
 import * as schema from '../db/schema'
 import { ALL_TABLES } from '../db/tables'
 import { applySnapshot, buildSnapshot, type Snapshot } from '../db/snapshot'
 import { shouldBackup, type BackupFrequency } from './schedule'
-import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
+import type { PgTable } from 'drizzle-orm/pg-core'
 
 const KEEP_BACKUPS = 14
 const CHECK_INTERVAL_MS = 60 * 60 * 1000 // check hourly; frequency gates the actual write
@@ -29,10 +29,16 @@ const PREFIX = 'hearth-backup-'
 // be world-readable on a host-mounted volume. (No-op on Windows, harmless there.)
 const BACKUP_MODE = 0o600
 
-/** `./data/backups` alongside the SQLite file. */
+/** `./data/backups`, alongside the local data directory. For an embedded PGlite
+ *  target the backups sit next to its data dir; for a real Postgres server (or
+ *  when DATABASE_URL is unset) they fall back to `./data/backups`. */
 function backupDir(): string {
-  const url = process.env.DATABASE_URL ?? 'file:./data/app.db'
-  const base = url.startsWith('file:') ? dirname(url.slice('file:'.length)) : './data'
+  const url = process.env.DATABASE_URL
+  let base = './data'
+  if (url && /^pglite:(\/\/)?/.test(url)) {
+    const dir = url.replace(/^pglite:(\/\/)?/, '')
+    base = dir.length > 0 ? dirname(dir) : './data'
+  }
   return join(base, 'backups')
 }
 
@@ -57,26 +63,25 @@ function writeFileAtomic(file: string, data: string): void {
  *  backup, so a schema/data mismatch surfaces as a failed backup rather than as a
  *  surprise on the day you actually need to restore. Throws if it doesn't verify.
  *
- *  An in-memory database suffices: `applySnapshot` uses libsql's `batch` (not an
- *  interactive transaction), which works on `:memory:`, and there's no temp file
- *  to leak or fail to unlink on Windows. */
+ *  An in-memory PGlite database suffices — real Postgres semantics (the same
+ *  engine production uses), no temp file to leak or fail to unlink on Windows. */
 async function verifyRestores(snapshot: Snapshot): Promise<void> {
-  const client = createClient({ url: ':memory:' })
+  const pglite = new PGlite() // in-memory, isolated
   try {
-    const probe = drizzle(client, { schema })
+    const probe = drizzle(pglite, { schema })
     await migrate(probe, { migrationsFolder: './drizzle' })
     await applySnapshot(probe as unknown as DB, snapshot.tables)
     // Re-read each table and confirm the restored count matches the snapshot, so
-    // we're checking rows actually persisted (not just that the batch didn't throw).
+    // we're checking rows actually persisted (not just that the insert didn't throw).
     for (const [name, table] of ALL_TABLES) {
-      const restored = (await probe.select().from(table as SQLiteTable)).length
+      const restored = (await probe.select().from(table as PgTable)).length
       const expected = (snapshot.tables[name] ?? []).length
       if (restored !== expected) {
         throw new Error(`restore verification failed for "${name}": expected ${expected} rows, got ${restored}`)
       }
     }
   } finally {
-    client.close()
+    await pglite.close()
   }
 }
 
@@ -110,7 +115,11 @@ export async function runBackup(db: DB, stampHouseholdIds: string[]): Promise<{ 
 
   const at = Date.now()
   if (stampHouseholdIds.length > 0) {
-    await db.update(household).set({ backupLastAt: at, updatedAt: at }).where(inArray(household.id, stampHouseholdIds))
+    const atDate = new Date(at)
+    await db
+      .update(household)
+      .set({ backupLastAt: atDate, updatedAt: atDate })
+      .where(inArray(household.id, stampHouseholdIds))
   }
   return { file, at }
 }
@@ -124,7 +133,9 @@ export function startBackupScheduler(db: DB): void {
       const now = Date.now()
       const households = await db.select().from(household)
       const dueIds = households
-        .filter((hh) => shouldBackup(hh.backupFrequency as BackupFrequency, hh.backupLastAt, now))
+        .filter((hh) =>
+          shouldBackup(hh.backupFrequency as BackupFrequency, hh.backupLastAt?.getTime() ?? null, now),
+        )
         .map((hh) => hh.id)
       if (dueIds.length > 0) {
         await runBackup(db, dueIds)

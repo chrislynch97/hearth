@@ -25,7 +25,7 @@ function caller(db: DB, opts: { role?: string; userId?: string; sessionToken?: s
 /** Insert an accepted member of the default household and return its user id. */
 async function addMember(db: DB, username: string, role: string): Promise<string> {
   const uid = newId()
-  const now = Date.now()
+  const now = new Date()
   await db.insert(user).values({
     id: uid,
     username,
@@ -105,8 +105,8 @@ describe('access.remove', () => {
       id: newId(),
       userId: ben,
       activeHouseholdId: 'household',
-      createdAt: Date.now(),
-      expiresAt: Date.now() + 1_000_000,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 1_000_000),
     })
 
     await expect(caller(db, { role: 'admin' }).c.access.remove({ userId: ben })).resolves.toEqual({ ok: true })
@@ -166,7 +166,7 @@ describe('access.resetPassword', () => {
     await ensureSeed(db)
     const carol = await addMember(db, 'carol', 'member') // member of the primary household
     // …and also a member (owner) of a second household.
-    const now = Date.now()
+    const now = new Date()
     await db.insert(household).values({ id: 'h2', createdAt: now, updatedAt: now })
     await db.insert(membership).values({
       id: newId(),

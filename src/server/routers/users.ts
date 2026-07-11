@@ -78,7 +78,7 @@ export const usersRouter = router({
           ...(input.username !== undefined ? { username: normalizeUsername(input.username) } : {}),
           ...(input.displayName !== undefined ? { displayName: input.displayName.trim() } : {}),
           ...(input.email !== undefined ? { email: input.email } : {}),
-          updatedAt: Date.now(),
+          updatedAt: new Date(),
         })
         .where(eq(user.id, ctx.userId))
 

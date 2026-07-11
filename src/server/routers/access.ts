@@ -60,7 +60,7 @@ export const accessRouter = router({
           acceptedAt: g.acceptedAt,
         }
       })
-      .sort((a, b) => (a.acceptedAt ?? 0) - (b.acceptedAt ?? 0))
+      .sort((a, b) => (a.acceptedAt?.getTime() ?? 0) - (b.acceptedAt?.getTime() ?? 0))
   }),
 
   /** Change a member's role. Owner-only for anything touching owner/admin;
@@ -85,7 +85,7 @@ export const accessRouter = router({
 
       await ctx.db
         .update(membership)
-        .set({ role: input.role, updatedAt: Date.now() })
+        .set({ role: input.role, updatedAt: new Date() })
         .where(scopeWhere(ctx.householdId, membership.householdId, eq(membership.userId, input.userId)))
       return { ok: true as const }
     }),
@@ -149,7 +149,7 @@ export const accessRouter = router({
 
       await ctx.db
         .update(user)
-        .set({ passwordHash: await hashPassword(input.newPassword), updatedAt: Date.now() })
+        .set({ passwordHash: await hashPassword(input.newPassword), updatedAt: new Date() })
         .where(eq(user.id, input.userId))
       await deleteUserSessions(ctx.db, input.userId)
       return { ok: true as const }

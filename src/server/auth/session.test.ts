@@ -65,7 +65,7 @@ describe('instance owner / lock resolution', () => {
     // A viewer added to the primary household with an earlier createdAt than the
     // owner grant — the old unordered/unfiltered fallback could have picked them.
     const viewerId = newId()
-    const now = Date.now()
+    const now = new Date()
     await db.insert(user).values({ id: viewerId, username: 'v', displayName: 'V', createdAt: now, updatedAt: now })
     await db.insert(membership).values({
       id: newId(),
@@ -73,7 +73,7 @@ describe('instance owner / lock resolution', () => {
       householdId: DEFAULT_HOUSEHOLD_ID,
       role: 'viewer',
       acceptedAt: now,
-      createdAt: 0, // earlier than the seeded owner grant
+      createdAt: new Date(0), // earlier than the seeded owner grant
       updatedAt: now,
     })
 
@@ -91,13 +91,13 @@ describe('instance owner / lock resolution', () => {
     // already-expired one under the same user/household.
     const liveId = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
     const expiredId = newId()
-    const now = Date.now()
+    const now = new Date()
     await db.insert(session).values({
       id: expiredId,
       userId: owner.id,
       activeHouseholdId: DEFAULT_HOUSEHOLD_ID,
-      createdAt: now - 40 * 24 * 60 * 60 * 1000,
-      expiresAt: now - 1,
+      createdAt: new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000),
+      expiresAt: new Date(now.getTime() - 1),
     })
 
     await deleteExpiredSessions(db, now)
@@ -116,7 +116,7 @@ describe('instance owner / lock resolution', () => {
     // owner grant. Derivation must skip it and still return the accepted owner.
     await setInstanceOwnerId(db, null)
     const pendingId = newId()
-    const now = Date.now()
+    const now = new Date()
     await db.insert(user).values({ id: pendingId, username: 'p', displayName: 'P', createdAt: now, updatedAt: now })
     await db.insert(membership).values({
       id: newId(),
@@ -125,7 +125,7 @@ describe('instance owner / lock resolution', () => {
       role: 'owner',
       invitedAt: now,
       acceptedAt: null,
-      createdAt: 0, // earlier, but not accepted
+      createdAt: new Date(0), // earlier, but not accepted
       updatedAt: now,
     })
 

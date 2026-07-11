@@ -9,6 +9,6 @@ describe('needsSetup', () => {
     expect(needsSetup({ setupCompletedAt: null })).toBe(true)
   })
   it('is false once setup is complete', () => {
-    expect(needsSetup({ setupCompletedAt: 1719000000000 })).toBe(false)
+    expect(needsSetup({ setupCompletedAt: new Date(1719000000000) })).toBe(false)
   })
 })

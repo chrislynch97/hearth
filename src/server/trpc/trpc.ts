@@ -1,4 +1,5 @@
 import { initTRPC, TRPCError } from '@trpc/server'
+import superjson from 'superjson'
 import type { Context } from './context'
 import { hasRole } from './tenant'
 import { getValidSession, isInstanceLocked } from '../auth/session'
@@ -28,6 +29,12 @@ export const PUBLIC_PROCEDURES = new Set([
 // drop the stack and replace INTERNAL_SERVER_ERROR messages (which wrap
 // unexpected/unhandled errors) with a generic string, regardless of NODE_ENV.
 const t = initTRPC.context<Context>().create({
+  // Preserve real types over the wire. Timestamp columns are `Date` objects
+  // end to end (see db/schema.ts); without a transformer tRPC would JSON them
+  // to strings while the inferred client types still said `Date` — a silent
+  // runtime lie. superjson round-trips Date/Map/Set/undefined faithfully. The
+  // client link must use the same transformer (client/main.tsx).
+  transformer: superjson,
   errorFormatter({ shape, error }) {
     const isInternal = error.code === 'INTERNAL_SERVER_ERROR'
     return {

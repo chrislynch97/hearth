@@ -37,8 +37,8 @@ describe('household router', () => {
     const updated = await caller.household.update({ locale: 'en-US' })
     const after = Date.now()
 
-    expect(updated.updatedAt).toBeGreaterThanOrEqual(before)
-    expect(updated.updatedAt).toBeLessThanOrEqual(after)
+    expect(updated.updatedAt.getTime()).toBeGreaterThanOrEqual(before)
+    expect(updated.updatedAt.getTime()).toBeLessThanOrEqual(after)
   })
 
   it('update accepts all optional fields', async () => {
@@ -86,7 +86,7 @@ describe('household router', () => {
     const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     // Add a person member directly
-    const now = Date.now()
+    const now = new Date()
     await db.insert(member).values({
       id: newId(),
       householdId: 'household',
@@ -101,8 +101,8 @@ describe('household router', () => {
     const updated = await caller.household.completeSetup()
     const after = Date.now()
 
-    expect(updated.setupCompletedAt).toBeGreaterThanOrEqual(before)
-    expect(updated.setupCompletedAt).toBeLessThanOrEqual(after)
+    expect(updated.setupCompletedAt!.getTime()).toBeGreaterThanOrEqual(before)
+    expect(updated.setupCompletedAt!.getTime()).toBeLessThanOrEqual(after)
   })
 
   it('completeSetup throws if only archived person exists', async () => {
@@ -110,7 +110,7 @@ describe('household router', () => {
     await ensureSeed(db)
     const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
-    const now = Date.now()
+    const now = new Date()
     await db.insert(member).values({
       id: newId(),
       householdId: 'household',
