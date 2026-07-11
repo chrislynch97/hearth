@@ -98,12 +98,28 @@ All configuration is via environment variables:
 ## Security
 
 Hearth has **per-user accounts**. A fresh install auto-creates an **owner** account
-with no password, so the app is **open** on your network with no login — fine on a
-trusted LAN, not for public exposure. To guard against an accidental public deploy,
-an open instance bound to a non-loopback address (e.g. `0.0.0.0`) refuses to serve
-budgeting data until you either set an owner password or explicitly opt in with
-`HEARTH_ALLOW_OPEN=1`. Set a password on your account (**Settings →
-Security**) to turn login on; passwords must be at least 10 characters. From there,
+with no password. To guard against an accidental public deploy, an open
+(password-less) instance bound to a non-loopback address (e.g. `0.0.0.0`) refuses
+to serve budgeting data by default — so exposing it to the internet can't silently
+hand anonymous callers full owner access. Two ways forward:
+
+- **Set an owner password** (recommended for anything reachable beyond your home
+  LAN) — **Settings → Security**, at least 10 characters. This locks the instance
+  and turns login on.
+- **Run password-less on a trusted home LAN** by opting in with
+  `HEARTH_ALLOW_OPEN=1`. This is safe on a home network behind a router, not on a
+  public host. It's wired up for you in the two common local setups:
+  - **Local development** — `npm run dev:server` sets it automatically.
+  - **Local Docker** — uncomment the `HEARTH_ALLOW_OPEN=1` line in
+    [`docker-compose.yml`](docker-compose.yml).
+
+> **Exposing Hearth to the internet?** Set the owner password *before* you expose
+> it — run it locally first (either of the password-less setups above, or with
+> `HEARTH_ALLOW_OPEN=1` for a single boot), set a password under **Settings →
+> Security**, then deploy without the flag. Once locked, login works normally on
+> any address.
+
+From a locked (password-set) instance you can then
 invite others with a single-use link and a **role** (owner / admin / member /
 viewer) under **Settings → Households & access**, and layer on **two-factor
 authentication** (TOTP — Google Authenticator, 1Password, Aegis…) with one-time
