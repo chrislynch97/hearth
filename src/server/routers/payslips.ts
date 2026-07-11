@@ -3,6 +3,7 @@ import { desc, eq, inArray } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertPerson, scopeWhere } from '../trpc/tenant'
+import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
 import { payslip, payslipComponentType, payslipLine } from '../db/schema'
 import type { Payslip, PayslipLine } from '../db/schema'
 import { newId } from '../../shared/ids'
@@ -167,6 +168,7 @@ export const payslipsRouter = router({
     .input(
       z.object({
         id: z.string(),
+        expectedUpdatedAt: expectedUpdatedAtInput,
         payDate: z.string().optional(),
         periodLabel: z.string().nullable().optional(),
         netPay: z.number().int().nullable().optional(),
@@ -175,7 +177,7 @@ export const payslipsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, lines, ...rest } = input
+      const { id, expectedUpdatedAt, lines, ...rest } = input
       const now = Date.now()
 
       const [target] = await ctx.db
@@ -189,10 +191,14 @@ export const payslipsRouter = router({
         await validateLines(ctx.db, ctx.householdId, target.ownerId, lines)
       }
 
-      await ctx.db
+      // Guard the payslip row first: on a stale write, bail before we touch its
+      // lines, so a losing concurrent edit never destroys the winner's lines.
+      const [written] = await ctx.db
         .update(payslip)
         .set({ ...rest, updatedAt: now })
-        .where(scopeWhere(ctx.householdId, payslip.householdId, eq(payslip.id, id)))
+        .where(scopeWhere(ctx.householdId, payslip.householdId, eq(payslip.id, id), versionGuard(payslip.updatedAt, expectedUpdatedAt)))
+        .returning({ id: payslip.id })
+      if (!written) throwStaleWrite('Payslip', true)
 
       if (lines !== undefined) {
         await ctx.db

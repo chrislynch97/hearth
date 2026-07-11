@@ -127,6 +127,89 @@ describe('pots router', () => {
     expect(updated.updatedAt).toBeLessThanOrEqual(after)
   })
 
+  it('update with a matching expectedUpdatedAt succeeds', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+
+    const members = await caller.members.list()
+    const joint = members.find((m) => m.kind === 'joint')!
+
+    const p = await caller.pots.create({ name: 'Old', ownerId: joint.id })
+    const updated = await caller.pots.update({ id: p.id, expectedUpdatedAt: p.updatedAt, name: 'New' })
+
+    expect(updated.name).toBe('New')
+  })
+
+  it('update with a stale expectedUpdatedAt throws CONFLICT (optimistic lock, issue #23)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+
+    const members = await caller.members.list()
+    const joint = members.find((m) => m.kind === 'joint')!
+
+    const p = await caller.pots.create({ name: 'Shared', ownerId: joint.id })
+
+    // Model two members editing at once: the row's updatedAt has already moved on
+    // from what this caller last read (here, one tick earlier). The guarded write
+    // must refuse rather than silently clobber the other edit.
+    await expect(
+      caller.pots.update({ id: p.id, expectedUpdatedAt: p.updatedAt - 1, name: 'Clobber' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+
+    // The pot is untouched.
+    const [current] = await caller.pots.list()
+    expect(current?.name).toBe('Shared')
+  })
+
+  it('second concurrent save is rejected once the first has landed', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+
+    const members = await caller.members.list()
+    const joint = members.find((m) => m.kind === 'joint')!
+
+    const p = await caller.pots.create({ name: 'Groceries', ownerId: joint.id })
+    const loadedUpdatedAt = p.updatedAt // both members loaded this version
+
+    // First member saves against the version they loaded → wins.
+    const won = await caller.pots.update({ id: p.id, expectedUpdatedAt: loadedUpdatedAt, name: 'Food' })
+    expect(won.name).toBe('Food')
+
+    // Second member still holds the original version. Their save must conflict
+    // unless the winning write happened to land in the same millisecond.
+    if (won.updatedAt !== loadedUpdatedAt) {
+      await expect(
+        caller.pots.update({ id: p.id, expectedUpdatedAt: loadedUpdatedAt, name: 'Snacks' }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' })
+    }
+  })
+
+  it('update on an unknown id still throws NOT_FOUND', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+
+    await expect(
+      caller.pots.update({ id: 'nonexistent', expectedUpdatedAt: 123, name: 'x' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('update without expectedUpdatedAt keeps last-write-wins', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+
+    const members = await caller.members.list()
+    const joint = members.find((m) => m.kind === 'joint')!
+
+    const p = await caller.pots.create({ name: 'Unguarded', ownerId: joint.id })
+    const updated = await caller.pots.update({ id: p.id, name: 'Renamed' })
+    expect(updated.name).toBe('Renamed')
+  })
+
   it('update with bogus ownerId throws BAD_REQUEST', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)

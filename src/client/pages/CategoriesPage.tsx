@@ -30,7 +30,7 @@ function CategoryRow({ category }: { category: Category }) {
       setName(category.name)
       return
     }
-    await update.mutateAsync({ id: category.id, name: trimmed })
+    await update.mutateAsync({ id: category.id, expectedUpdatedAt: category.updatedAt, name: trimmed })
     await utils.categories.list.invalidate()
     setEditing(false)
   }

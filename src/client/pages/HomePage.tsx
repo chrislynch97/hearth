@@ -380,6 +380,9 @@ function RecentActivityCard({
 
   async function assign(spendId: string, potId: string | null) {
     if (!potId) return
+    // No optimistic-lock guard: the recent-activity projection doesn't carry the
+    // spend's updatedAt, so this quick pot-assign stays last-write-wins (#23).
+    // The full spend edit form on the Spending page is guarded.
     await update.mutateAsync({ id: spendId, potId })
     await Promise.all([utils.dashboard.summary.invalidate(), utils.reconcile.backlog.invalidate()])
   }

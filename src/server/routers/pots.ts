@@ -3,6 +3,7 @@ import { asc, eq, isNull, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertMember, scopeWhere } from '../trpc/tenant'
+import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
 import { pot, expense, setAside, spendTransaction, reconciliationBatch } from '../db/schema'
 import { newId } from '../../shared/ids'
 
@@ -86,6 +87,7 @@ export const potsRouter = router({
     .input(
       z.object({
         id: z.string(),
+        expectedUpdatedAt: expectedUpdatedAtInput,
         name: z.string().min(1).optional(),
         categoryId: z.string().nullable().optional(),
         ownerId: z.string().optional(),
@@ -94,7 +96,7 @@ export const potsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, ownerId, ...rest } = input
+      const { id, expectedUpdatedAt, ownerId, ...rest } = input
       const now = Date.now()
 
       // Validate ownerId if provided — must be a member of THIS household.
@@ -103,21 +105,19 @@ export const potsRouter = router({
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (ownerId !== undefined) setFields['ownerId'] = ownerId
 
-      await ctx.db
+      const [updated] = await ctx.db
         .update(pot)
         .set(setFields)
-        .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, id)))
+        .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, id), versionGuard(pot.updatedAt, expectedUpdatedAt)))
+        .returning()
 
-      const [updated] = await ctx.db
-        .select()
+      if (updated) return updated
+
+      const [current] = await ctx.db
+        .select({ id: pot.id })
         .from(pot)
         .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, id)))
-
-      if (!updated) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Pot not found' })
-      }
-
-      return updated
+      throwStaleWrite('Pot', current != null)
     }),
 
   archive: publicProcedure

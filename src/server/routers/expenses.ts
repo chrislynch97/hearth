@@ -3,6 +3,7 @@ import { asc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { scopeWhere } from '../trpc/tenant'
+import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
 import { expense, category, pot } from '../db/schema'
 import type { Expense } from '../db/schema'
 import { newId } from '../../shared/ids'
@@ -109,6 +110,7 @@ export const expensesRouter = router({
     .input(
       z.object({
         id: z.string(),
+        expectedUpdatedAt: expectedUpdatedAtInput,
         name: z.string().min(1).optional(),
         recurrence: recurrenceEnum.optional(),
         amount: z.number().int().min(0).optional(),
@@ -122,7 +124,7 @@ export const expensesRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, active, funding, potId, categoryId, ...rest } = input
+      const { id, expectedUpdatedAt, active, funding, potId, categoryId, ...rest } = input
       const now = Date.now()
       const target = await loadExpense(ctx.db, ctx.householdId, id)
 
@@ -145,7 +147,18 @@ export const expensesRouter = router({
         setFields['categoryId'] = ff.categoryId
       }
 
-      await ctx.db.update(expense).set(setFields).where(scopeWhere(ctx.householdId, expense.householdId, eq(expense.id, id)))
+      const [written] = await ctx.db
+        .update(expense)
+        .set(setFields)
+        .where(scopeWhere(ctx.householdId, expense.householdId, eq(expense.id, id), versionGuard(expense.updatedAt, expectedUpdatedAt)))
+        .returning({ id: expense.id })
+      if (!written) {
+        const [current] = await ctx.db
+          .select({ id: expense.id })
+          .from(expense)
+          .where(scopeWhere(ctx.householdId, expense.householdId, eq(expense.id, id)))
+        throwStaleWrite('Bill', current != null)
+      }
       return loadExpense(ctx.db, ctx.householdId, id)
     }),
 

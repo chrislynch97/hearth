@@ -330,7 +330,8 @@ function MembersSection() {
 
   async function handleRename(id: string) {
     if (editName.trim()) {
-      await updateMember.mutateAsync({ id, displayName: editName.trim() })
+      const target = members.find((m) => m.id === id)
+      await updateMember.mutateAsync({ id, expectedUpdatedAt: target?.updatedAt, displayName: editName.trim() })
       await refresh()
     }
     setEditingId(null)

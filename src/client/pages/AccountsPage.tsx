@@ -203,7 +203,7 @@ function AccountModal({
       institution: institution.trim() || null,
       note: note.trim() || null,
     }
-    if (isEditing) await update.mutateAsync({ id: account.id, ownerId, ...payload })
+    if (isEditing) await update.mutateAsync({ id: account.id, expectedUpdatedAt: account.updatedAt, ownerId, ...payload })
     else await create.mutateAsync({ ownerId, ...payload })
     await Promise.all([utils.accounts.list.invalidate(), utils.accounts.summary.invalidate()])
     onClose()

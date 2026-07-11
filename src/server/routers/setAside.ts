@@ -3,6 +3,7 @@ import { asc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertMember, scopeWhere } from '../trpc/tenant'
+import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
 import { setAside, pot } from '../db/schema'
 import type { SetAside } from '../db/schema'
 import { newId } from '../../shared/ids'
@@ -68,6 +69,7 @@ export const setAsideRouter = router({
     .input(
       z.object({
         id: z.string(),
+        expectedUpdatedAt: expectedUpdatedAtInput,
         name: z.string().min(1).optional(),
         groupLabel: z.string().nullable().optional(),
         ownerId: z.string().optional(),
@@ -79,7 +81,7 @@ export const setAsideRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, active, ...rest } = input
+      const { id, expectedUpdatedAt, active, ...rest } = input
       const now = Date.now()
       const target = await load(ctx.db, ctx.householdId, id)
 
@@ -90,7 +92,18 @@ export const setAsideRouter = router({
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (active !== undefined) setFields['active'] = active ? 1 : 0
 
-      await ctx.db.update(setAside).set(setFields).where(scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.id, id)))
+      const [written] = await ctx.db
+        .update(setAside)
+        .set(setFields)
+        .where(scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.id, id), versionGuard(setAside.updatedAt, expectedUpdatedAt)))
+        .returning({ id: setAside.id })
+      if (!written) {
+        const [current] = await ctx.db
+          .select({ id: setAside.id })
+          .from(setAside)
+          .where(scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.id, id)))
+        throwStaleWrite('Set-aside', current != null)
+      }
       return load(ctx.db, ctx.householdId, id)
     }),
 

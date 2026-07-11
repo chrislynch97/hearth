@@ -3,6 +3,7 @@ import { desc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertMember, scopeWhere } from '../trpc/tenant'
+import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
 import { spendTransaction, pot, category, reconciliationBatch } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { suggestPot } from '../spending/suggest'
@@ -118,6 +119,7 @@ export const spendsRouter = router({
     .input(
       z.object({
         id: z.string(),
+        expectedUpdatedAt: expectedUpdatedAtInput,
         date: z.string().optional(),
         description: z.string().min(1).optional(),
         amount: z.number().int().optional(),
@@ -129,7 +131,7 @@ export const spendsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, settledAtSource, ...rest } = input
+      const { id, expectedUpdatedAt, settledAtSource, ...rest } = input
       const now = Date.now()
 
       const [target] = await ctx.db
@@ -148,19 +150,18 @@ export const spendsRouter = router({
         rest.categoryId !== undefined ? rest.categoryId : target.categoryId,
       )
 
-      await ctx.db
+      const [updated] = await ctx.db
         .update(spendTransaction)
         .set({ ...rest, ...(settledAtSource !== undefined ? { settledAtSource: settledAtSource ? 1 : 0 } : {}), updatedAt: now })
-        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.id, id)))
+        .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.id, id), versionGuard(spendTransaction.updatedAt, expectedUpdatedAt)))
+        .returning()
+      if (updated) return updated
 
-      const [updated] = await ctx.db
-        .select()
+      const [current] = await ctx.db
+        .select({ id: spendTransaction.id })
         .from(spendTransaction)
         .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.id, id)))
-      if (!updated) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Spend transaction not found' })
-      }
-      return updated
+      throwStaleWrite('Spend', current != null)
     }),
 
   remove: publicProcedure

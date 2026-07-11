@@ -118,7 +118,7 @@ function BillFormModal({ opened, onClose, members, pots, categories, money, expe
       dueAnchor: dueAnchor || undefined,
     }
 
-    if (isEditing) await update.mutateAsync({ id: expense.id, ...payload })
+    if (isEditing) await update.mutateAsync({ id: expense.id, expectedUpdatedAt: expense.updatedAt, ...payload })
     else await create.mutateAsync(payload)
 
     await Promise.all([utils.expenses.list.invalidate(), utils.plan.funding.invalidate()])

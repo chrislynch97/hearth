@@ -72,7 +72,8 @@ export function ComponentManager({ ownerId, components }: { ownerId: string; com
   async function handleSaveEdit(id: string) {
     const draft = normalizeComponentDraft({ name: editName, kind: editKind, isVariable: editIsVariable })
     if (!draft) return // empty name — leave the editor open
-    await update.mutateAsync({ id, ...draft })
+    const target = components.find((c) => c.id === id)
+    await update.mutateAsync({ id, expectedUpdatedAt: target?.updatedAt, ...draft })
     await invalidate()
     setEditingId(null)
   }
@@ -293,7 +294,7 @@ function PayslipModal({ opened, onClose, ownerId, components, lastPayslip, paysl
       netPay: overrideMinor,
       lines,
     }
-    if (isEditing) await update.mutateAsync({ id: payslip.id, ...payload })
+    if (isEditing) await update.mutateAsync({ id: payslip.id, expectedUpdatedAt: payslip.updatedAt, ...payload })
     else await create.mutateAsync({ ownerId, ...payload })
     await Promise.all([utils.payslips.list.invalidate(), utils.income.overview.invalidate()])
     onClose()

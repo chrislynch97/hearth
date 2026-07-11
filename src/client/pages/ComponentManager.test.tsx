@@ -84,6 +84,7 @@ describe('ComponentManager', () => {
     await waitFor(() =>
       expect(mocks.updateMutate).toHaveBeenCalledWith({
         id: 'c1',
+        expectedUpdatedAt: 0,
         name: 'Annual Bonus',
         kind: 'earning',
         isVariable: true,
@@ -103,6 +104,7 @@ describe('ComponentManager', () => {
     await waitFor(() =>
       expect(mocks.updateMutate).toHaveBeenCalledWith({
         id: 'c2',
+        expectedUpdatedAt: 0,
         name: 'Income Tax',
         kind: 'deduction',
         isVariable: false,

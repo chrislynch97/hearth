@@ -3,6 +3,7 @@ import { asc, eq, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertMember, scopeWhere } from '../trpc/tenant'
+import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
 import { account, accountBalance } from '../db/schema'
 import type { Account, AccountBalance } from '../db/schema'
 import { newId } from '../../shared/ids'
@@ -118,6 +119,7 @@ export const accountsRouter = router({
     .input(
       z.object({
         id: z.string(),
+        expectedUpdatedAt: expectedUpdatedAtInput,
         name: z.string().min(1).optional(),
         kind: KIND.optional(),
         subtype: z.string().nullable().optional(),
@@ -128,11 +130,22 @@ export const accountsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, ownerId, ...rest } = input
+      const { id, expectedUpdatedAt, ownerId, ...rest } = input
       if (ownerId !== undefined) await assertMember(ctx.db, ctx.householdId, ownerId)
       const setFields: Record<string, unknown> = { ...rest, updatedAt: Date.now() }
       if (ownerId !== undefined) setFields['ownerId'] = ownerId
-      await ctx.db.update(account).set(setFields).where(scopeWhere(ctx.householdId, account.householdId, eq(account.id, id)))
+      const [written] = await ctx.db
+        .update(account)
+        .set(setFields)
+        .where(scopeWhere(ctx.householdId, account.householdId, eq(account.id, id), versionGuard(account.updatedAt, expectedUpdatedAt)))
+        .returning({ id: account.id })
+      if (!written) {
+        const [current] = await ctx.db
+          .select({ id: account.id })
+          .from(account)
+          .where(scopeWhere(ctx.householdId, account.householdId, eq(account.id, id)))
+        throwStaleWrite('Account', current != null)
+      }
       return getAccount(ctx.db, ctx.householdId, id)
     }),
 
@@ -228,23 +241,26 @@ export const accountsRouter = router({
     .input(
       z.object({
         id: z.string(),
+        expectedUpdatedAt: expectedUpdatedAtInput,
         asOfDate: z.string().optional(),
         value: z.number().int().optional(),
         note: z.string().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, ...rest } = input
-      await ctx.db
+      const { id, expectedUpdatedAt, ...rest } = input
+      const [updated] = await ctx.db
         .update(accountBalance)
         .set({ ...rest, updatedAt: Date.now() })
-        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, id)))
-      const [updated] = await ctx.db
-        .select()
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, id), versionGuard(accountBalance.updatedAt, expectedUpdatedAt)))
+        .returning()
+      if (updated) return updated
+
+      const [current] = await ctx.db
+        .select({ id: accountBalance.id })
         .from(accountBalance)
         .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, id)))
-      if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Balance not found' })
-      return updated
+      throwStaleWrite('Balance', current != null)
     }),
 
   removeBalance: publicProcedure

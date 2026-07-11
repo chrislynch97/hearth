@@ -288,6 +288,9 @@ function AddSpendForm({
 
   async function applyOutgoingUpdate() {
     if (!pendingUpdate) return
+    // No optimistic-lock guard here: this "update the bill going forward" prompt
+    // is driven by a plan projection that doesn't carry the bill's updatedAt, so
+    // it stays last-write-wins (see issue #23). The bill edit form is guarded.
     await updateExpense.mutateAsync({
       id: pendingUpdate.expenseId,
       amount: pendingUpdate.amount,
@@ -613,7 +616,7 @@ function AssignPotCell({ spend, pots }: { spend: SpendTransaction; pots: Pot[] }
   async function handleSave(v: string | null) {
     setValue(v ?? '')
     if (!v) return
-    await update.mutateAsync({ id: spend.id, potId: v })
+    await update.mutateAsync({ id: spend.id, expectedUpdatedAt: spend.updatedAt, potId: v })
     await Promise.all([utils.spends.list.invalidate(), utils.reconcile.backlog.invalidate()])
   }
 
@@ -688,6 +691,7 @@ function EditSpendModal({
     try {
       await update.mutateAsync({
         id: spend.id,
+        expectedUpdatedAt: spend.updatedAt,
         date: date ?? undefined,
         description: trimmed,
         amount: kind === 'refund' ? -minor : minor,

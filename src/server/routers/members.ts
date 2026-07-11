@@ -3,6 +3,7 @@ import { eq, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertRole, scopeWhere } from '../trpc/tenant'
+import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
 import { member } from '../db/schema'
 import { acceptedMembership } from '../auth/session'
 import { newId } from '../../shared/ids'
@@ -58,6 +59,7 @@ export const membersRouter = router({
     .input(
       z.object({
         id: z.string(),
+        expectedUpdatedAt: expectedUpdatedAtInput,
         displayName: z.string().min(1).optional(),
         shortLabel: z.string().optional(),
         color: z.string().optional(),
@@ -66,24 +68,22 @@ export const membersRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, ...fields } = input
+      const { id, expectedUpdatedAt, ...fields } = input
       const now = Date.now()
 
-      await ctx.db
+      const [updated] = await ctx.db
         .update(member)
         .set({ ...fields, updatedAt: now })
-        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, id)))
+        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, id), versionGuard(member.updatedAt, expectedUpdatedAt)))
+        .returning()
 
-      const [updated] = await ctx.db
-        .select()
+      if (updated) return updated
+
+      const [current] = await ctx.db
+        .select({ id: member.id })
         .from(member)
         .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, id)))
-
-      if (!updated) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' })
-      }
-
-      return updated
+      throwStaleWrite('Member', current != null)
     }),
 
   /** Link a budgeting member to a user account (or clear it with userId: null).

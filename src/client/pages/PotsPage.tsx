@@ -252,7 +252,7 @@ function PotFormModal({
 
     let potId: string
     if (isEditing) {
-      await update.mutateAsync({ id: pot.id, name: trimmed, ownerId, categoryId, note: note.trim() })
+      await update.mutateAsync({ id: pot.id, expectedUpdatedAt: pot.updatedAt, name: trimmed, ownerId, categoryId, note: note.trim() })
       potId = pot.id
     } else {
       const created = await create.mutateAsync({ name: trimmed, ownerId, categoryId: categoryId ?? undefined, note: note.trim() || undefined })

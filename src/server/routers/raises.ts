@@ -3,6 +3,7 @@ import { asc, eq } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertPerson, scopeWhere } from '../trpc/tenant'
+import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
 import { raise } from '../db/schema'
 import type { Raise } from '../db/schema'
 import { newId } from '../../shared/ids'
@@ -67,6 +68,7 @@ export const raisesRouter = router({
     .input(
       z.object({
         id: z.string(),
+        expectedUpdatedAt: expectedUpdatedAtInput,
         effectiveDate: z.string().optional(),
         newSalary: z.number().int().optional(),
         bonus: z.number().int().nullable().optional(),
@@ -75,20 +77,20 @@ export const raisesRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, ...rest } = input
+      const { id, expectedUpdatedAt, ...rest } = input
       const now = Date.now()
-      await ctx.db
+      const [updated] = await ctx.db
         .update(raise)
         .set({ ...rest, updatedAt: now })
-        .where(scopeWhere(ctx.householdId, raise.householdId, eq(raise.id, id)))
-      const [updated] = await ctx.db
-        .select()
+        .where(scopeWhere(ctx.householdId, raise.householdId, eq(raise.id, id), versionGuard(raise.updatedAt, expectedUpdatedAt)))
+        .returning()
+      if (updated) return updated
+
+      const [current] = await ctx.db
+        .select({ id: raise.id })
         .from(raise)
         .where(scopeWhere(ctx.householdId, raise.householdId, eq(raise.id, id)))
-      if (!updated) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Raise not found' })
-      }
-      return updated
+      throwStaleWrite('Raise', current != null)
     }),
 
   remove: publicProcedure

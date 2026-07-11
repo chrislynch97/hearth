@@ -99,7 +99,7 @@ function RaiseModal({ opened, onClose, ownerId, raise }: RaiseModalProps) {
       newPosition: newPosition.trim() || undefined,
       note: note.trim() || undefined,
     }
-    if (isEditing) await update.mutateAsync({ id: raise.id, ...payload })
+    if (isEditing) await update.mutateAsync({ id: raise.id, expectedUpdatedAt: raise.updatedAt, ...payload })
     else await create.mutateAsync({ ownerId, ...payload })
     await utils.raises.list.invalidate()
     await utils.income.overview.invalidate()

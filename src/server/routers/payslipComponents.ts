@@ -3,6 +3,7 @@ import { asc, eq, isNull, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertPerson, scopeWhere } from '../trpc/tenant'
+import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
 import { payslipComponentType } from '../db/schema'
 import { newId } from '../../shared/ids'
 
@@ -67,6 +68,7 @@ export const payslipComponentsRouter = router({
     .input(
       z.object({
         id: z.string(),
+        expectedUpdatedAt: expectedUpdatedAtInput,
         name: z.string().min(1).optional(),
         kind: kindEnum.optional(),
         isVariable: z.boolean().optional(),
@@ -74,23 +76,23 @@ export const payslipComponentsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, isVariable, ...rest } = input
+      const { id, expectedUpdatedAt, isVariable, ...rest } = input
       const now = Date.now()
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (isVariable !== undefined) setFields['isVariable'] = isVariable ? 1 : 0
 
-      await ctx.db
+      const [updated] = await ctx.db
         .update(payslipComponentType)
         .set(setFields)
-        .where(scopeWhere(ctx.householdId, payslipComponentType.householdId, eq(payslipComponentType.id, id)))
-      const [updated] = await ctx.db
-        .select()
+        .where(scopeWhere(ctx.householdId, payslipComponentType.householdId, eq(payslipComponentType.id, id), versionGuard(payslipComponentType.updatedAt, expectedUpdatedAt)))
+        .returning()
+      if (updated) return updated
+
+      const [current] = await ctx.db
+        .select({ id: payslipComponentType.id })
         .from(payslipComponentType)
         .where(scopeWhere(ctx.householdId, payslipComponentType.householdId, eq(payslipComponentType.id, id)))
-      if (!updated) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Component not found' })
-      }
-      return updated
+      throwStaleWrite('Component', current != null)
     }),
 
   archive: publicProcedure

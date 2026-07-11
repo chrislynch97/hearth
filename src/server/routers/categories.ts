@@ -3,6 +3,7 @@ import { asc, eq, isNull, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { scopeWhere } from '../trpc/tenant'
+import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
 import { category } from '../db/schema'
 import { newId } from '../../shared/ids'
 
@@ -45,29 +46,28 @@ export const categoriesRouter = router({
     .input(
       z.object({
         id: z.string(),
+        expectedUpdatedAt: expectedUpdatedAtInput,
         name: z.string().min(1).optional(),
         sortOrder: z.number().int().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, ...fields } = input
+      const { id, expectedUpdatedAt, ...fields } = input
       const now = Date.now()
 
-      await ctx.db
+      const [updated] = await ctx.db
         .update(category)
         .set({ ...fields, updatedAt: now })
-        .where(scopeWhere(ctx.householdId, category.householdId, eq(category.id, id)))
+        .where(scopeWhere(ctx.householdId, category.householdId, eq(category.id, id), versionGuard(category.updatedAt, expectedUpdatedAt)))
+        .returning()
 
-      const [updated] = await ctx.db
-        .select()
+      if (updated) return updated
+
+      const [current] = await ctx.db
+        .select({ id: category.id })
         .from(category)
         .where(scopeWhere(ctx.householdId, category.householdId, eq(category.id, id)))
-
-      if (!updated) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Category not found' })
-      }
-
-      return updated
+      throwStaleWrite('Category', current != null)
     }),
 
   archive: publicProcedure
