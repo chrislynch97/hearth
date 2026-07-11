@@ -15,21 +15,22 @@ import { db } from './db/client'
 import { startBackupScheduler } from './backup/runner'
 import { parseSessionCookie } from './auth/cookies'
 import { getValidSession, isInstanceLocked } from './auth/session'
+import { PUBLIC_PROCEDURES } from './trpc/trpc'
+import { allProceduresIn, isLoopbackHost, trpcProcedures } from './auth/gate'
 
-// tRPC procedures reachable without authentication (so a locked instance can
-// still show the login screen, accept a login, or let an invitee create their
-// account from an invite link).
-const PUBLIC_PROCEDURES = new Set([
-  'auth.status',
-  'auth.login',
-  'auth.logout',
-  'auth.registrationOpen',
-  'auth.register',
-  'invitations.info',
-  'invitations.accept',
-])
+// On an OPEN (password-less) instance the owner fallback resolves every
+// anonymous request as the owner — safe on a trusted LAN, catastrophic if the
+// instance is reachable from the internet. When we're bound to a non-loopback
+// address with no password, refuse everything except the endpoints needed to
+// lock the instance down, unless the operator has explicitly opted in with
+// HEARTH_ALLOW_OPEN=1. `auth.setPassword` is allowed so a first-run owner can set
+// a password (which locks the instance) from an otherwise-blocked UI.
+const OPEN_ON_PUBLIC_ALLOWED = new Set([...PUBLIC_PROCEDURES, 'auth.setPassword'])
 
 const PORT = Number(process.env.PORT ?? 8787)
+const HOST = process.env.HOST ?? '0.0.0.0'
+const BIND_IS_LOOPBACK = isLoopbackHost(HOST)
+const ALLOW_OPEN = process.env.HEARTH_ALLOW_OPEN === '1'
 
 // A rejected promise or thrown error *outside* a request would otherwise take the
 // whole process down with no explanation — the exact shape of "ran fine, then
@@ -122,18 +123,32 @@ async function main() {
   // check target.
   app.get('/health', async () => ({ status: 'ok' }))
 
-  // Auth gate: when the instance is locked (the primary owner has a password),
-  // block every tRPC call except the public auth endpoints unless the request
-  // carries a valid session — for ANY user, not just the owner, so invited
-  // members and self-registered owners of other households can use the app.
-  // No owner password (or not yet provisioned) = an open instance; all passes.
+  // Coarse outer auth gate. Authorization is also enforced in-band by the tRPC
+  // `enforceAuthenticated` middleware (trpc/trpc.ts); this is a cheap first line
+  // that rejects unauthenticated requests before they reach a resolver. Both
+  // layers key on the same PUBLIC_PROCEDURES set, so they can't drift.
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/trpc/')) return
-    if (!(await isInstanceLocked(db))) return
+    const procedures = trpcProcedures(req.url)
 
-    const path = req.url.slice('/trpc/'.length).split('?')[0] ?? ''
-    const procedures = path.split(',').map((p) => decodeURIComponent(p))
-    if (procedures.length > 0 && procedures.every((p) => PUBLIC_PROCEDURES.has(p))) return
+    if (!(await isInstanceLocked(db))) {
+      // Open instance. Fine on loopback, or when the operator has opted in.
+      // Otherwise it's reachable from the network with no password, so anyone
+      // could act as the owner — allow only the endpoints needed to lock it.
+      if (BIND_IS_LOOPBACK || ALLOW_OPEN) return
+      if (allProceduresIn(procedures, OPEN_ON_PUBLIC_ALLOWED)) return
+      return reply.code(403).send({
+        error:
+          'This instance has no owner password and is exposed on a non-loopback address. ' +
+          'Set an owner password, or set HEARTH_ALLOW_OPEN=1 to permit open access.',
+      })
+    }
+
+    // Locked instance: block every tRPC call except the public auth endpoints
+    // unless the request carries a valid session — for ANY user, not just the
+    // owner, so invited members and self-registered owners of other households
+    // can use the app.
+    if (allProceduresIn(procedures, PUBLIC_PROCEDURES)) return
 
     const token = parseSessionCookie(req.headers.cookie)
     const session = await getValidSession(db, token)
@@ -159,8 +174,17 @@ async function main() {
     })
   }
 
-  await app.listen({ port: PORT, host: '0.0.0.0' })
-  console.log(`[hearth] listening on :${PORT}`)
+  await app.listen({ port: PORT, host: HOST })
+  console.log(`[hearth] listening on ${HOST}:${PORT}`)
+
+  // Warn loudly if we're serving an open (password-less) instance on a
+  // network-reachable address only because the operator opted in.
+  if (!BIND_IS_LOOPBACK && ALLOW_OPEN && !(await isInstanceLocked(db))) {
+    console.warn(
+      `[hearth] WARNING: running OPEN (no owner password) on ${HOST} with HEARTH_ALLOW_OPEN=1 — ` +
+        'anyone who can reach this address has full owner access. Set an owner password.',
+    )
+  }
 }
 
 main().catch((err) => {

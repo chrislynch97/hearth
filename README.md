@@ -88,16 +88,21 @@ All configuration is via environment variables:
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `8787` | Port the server listens on. |
+| `HOST` | `0.0.0.0` | Address to bind. Set to `127.0.0.1` to only accept connections from the same machine (e.g. when a reverse proxy sits in front). |
 | `DATABASE_URL` | `file:./data/app.db` | SQLite location (libsql). Can point at a [Turso](https://turso.tech) URL. |
 | `CLIENT_DIR` | `../client` (source) | Where the built UI is served from. **Set to `./dist/client` for a non-Docker production run.** |
 | `HEARTH_SECURE_COOKIES` | unset | Set to `1` to force `Secure` session cookies when behind a reverse proxy that doesn't send `x-forwarded-proto: https`. |
 | `HEARTH_TRUST_PROXY` | unset | Set to `1` **only when behind a reverse proxy / tunnel** so the login rate limiter keys on the real client IP (`X-Forwarded-For`). Leave unset when directly exposed, or clients could spoof that header. |
+| `HEARTH_ALLOW_OPEN` | unset | Set to `1` to allow running **open** (no owner password) while bound to a non-loopback address. Without it, an open instance on `0.0.0.0` serves only the login/first-run endpoints and refuses budgeting data — so a public deploy can't accidentally hand anonymous callers full owner access. Set an owner password instead of using this in production. |
 
 ## Security
 
 Hearth has **per-user accounts**. A fresh install auto-creates an **owner** account
 with no password, so the app is **open** on your network with no login — fine on a
-trusted LAN, not for public exposure. Set a password on your account (**Settings →
+trusted LAN, not for public exposure. To guard against an accidental public deploy,
+an open instance bound to a non-loopback address (e.g. `0.0.0.0`) refuses to serve
+budgeting data until you either set an owner password or explicitly opt in with
+`HEARTH_ALLOW_OPEN=1`. Set a password on your account (**Settings →
 Security**) to turn login on; passwords must be at least 10 characters. From there,
 invite others with a single-use link and a **role** (owner / admin / member /
 viewer) under **Settings → Households & access**, and layer on **two-factor

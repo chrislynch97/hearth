@@ -135,15 +135,17 @@ describe('access.resetPassword', () => {
     await ensureSeed(db)
     const owner = await getOwnerUser(db)
     const ben = await addMember(db, 'ben', 'member')
+    const ada = await addMember(db, 'ada', 'admin')
     // lock the instance so login is live
     await caller(db, { role: 'owner', userId: owner!.id }).c.auth.setPassword({ newPassword: 'owner-strong-pw' })
 
+    // A locked instance requires a real identity, not just a role string.
     await expect(
-      caller(db, { role: 'admin' }).c.access.resetPassword({ userId: ben, newPassword: 'short' }),
+      caller(db, { role: 'admin', userId: ada }).c.access.resetPassword({ userId: ben, newPassword: 'short' }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
 
     await expect(
-      caller(db, { role: 'admin' }).c.access.resetPassword({ userId: ben, newPassword: 'brand-new-strong-pw' }),
+      caller(db, { role: 'admin', userId: ada }).c.access.resetPassword({ userId: ben, newPassword: 'brand-new-strong-pw' }),
     ).resolves.toEqual({ ok: true })
 
     // The new password works.

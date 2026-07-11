@@ -5,7 +5,7 @@ import { db } from '../db/client'
 import { membership } from '../db/schema'
 import type { Session } from '../db/schema'
 import { parseSessionCookie, serializeSessionCookie } from '../auth/cookies'
-import { getOwnerUser, getValidSession } from '../auth/session'
+import { getOwnerUser, getValidSession, isInstanceLocked } from '../auth/session'
 import { DEFAULT_HOUSEHOLD_ID } from './tenant'
 
 // The HTTP auth gate (index.ts) already validates the session for locked,
@@ -46,12 +46,16 @@ function isHttps(req: CreateFastifyContextOptions['req'] | undefined): boolean {
 /**
  * Resolve who this request is and which household it acts on. A valid session
  * cookie wins; otherwise we fall back to the default household's owner so an
- * open (password-less) local instance keeps working with no login. On a locked
- * instance the HTTP gate rejects unauthenticated requests before they reach a
- * tenant-scoped procedure, so this fallback identity is only actually used when
- * the instance is open.
+ * open (password-less) local instance keeps working with no login.
+ *
+ * The owner fallback is gated on the instance being open: on a LOCKED instance
+ * an unauthenticated request resolves to an anonymous context (no userId/role)
+ * and fails closed in-resolver. Previously the fallback fired regardless, and
+ * only the outer HTTP gate stopped an anonymous caller from being handed owner
+ * identity — so any gate regression escalated straight to owner takeover.
  */
-async function resolveIdentity(
+export async function resolveIdentity(
+  database: DB,
   sessionToken: string | undefined,
   preresolvedSession: Session | null | undefined,
 ): Promise<{ userId?: string; householdId: string; sessionId?: string; role?: string }> {
@@ -62,28 +66,30 @@ async function resolveIdentity(
   // Reuse the gate's already-validated session when present; otherwise go through
   // getValidSession (not a hand-rolled query) so the session-validity rules stay
   // in one place and can't drift from the HTTP auth gate.
-  const s = preresolvedSession !== undefined ? preresolvedSession : await getValidSession(db, sessionToken)
+  const s = preresolvedSession !== undefined ? preresolvedSession : await getValidSession(database, sessionToken)
   if (s) {
     userId = s.userId
     householdId = s.activeHouseholdId
     sessionId = s.id
   }
 
-  if (!userId) {
+  if (!userId && !(await isInstanceLocked(database))) {
     // Open/local fallback: the instance owner, so a password-less instance works
-    // with no login. Resolve it through getOwnerUser (accepted `owner` grant,
-    // deterministically ordered) rather than "first membership in the default
-    // household" — the latter had no role/acceptedAt filter and no ORDER BY, so
-    // ambient identity could resolve to a viewer or an unaccepted invitee, and
-    // could flip after a row reorder.
-    const owner = await getOwnerUser(db)
+    // with no login. Only applied when the instance is OPEN — a locked instance
+    // must never hand owner identity to an unauthenticated request (defence in
+    // depth behind the HTTP gate). Resolve it through getOwnerUser (accepted
+    // `owner` grant, deterministically ordered) rather than "first membership in
+    // the default household" — the latter had no role/acceptedAt filter and no
+    // ORDER BY, so ambient identity could resolve to a viewer or an unaccepted
+    // invitee, and could flip after a row reorder.
+    const owner = await getOwnerUser(database)
     userId = owner?.id
     householdId = DEFAULT_HOUSEHOLD_ID
   }
 
   let role: string | undefined
   if (userId) {
-    const [m] = await db
+    const [m] = await database
       .select()
       .from(membership)
       // Only accepted memberships grant a role — defence in depth against a
@@ -107,7 +113,7 @@ export async function createContext(opts?: CreateFastifyContextOptions): Promise
   const secure = isHttps(req)
   const sessionToken = parseSessionCookie(req?.headers.cookie)
   const preresolved = req ? validatedSessionByRequest.get(req) : undefined
-  const identity = await resolveIdentity(sessionToken, preresolved)
+  const identity = await resolveIdentity(db, sessionToken, preresolved)
   return {
     db,
     householdId: identity.householdId,

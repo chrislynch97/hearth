@@ -19,6 +19,11 @@ const forced = process.argv.includes('--force')
 // owner's real financial data. `--force` lets an explicit operator override stand.
 if (!forced) process.env.DATABASE_URL = DEFAULT_DEMO_URL
 
+// The demo dataset has no owner password (it's disposable fake data meant to be
+// browsed with no login), so the server would otherwise refuse to serve it on a
+// non-loopback bind. Opt the demo into open access explicitly.
+process.env.HEARTH_ALLOW_OPEN ??= '1'
+
 // Belt-and-suspenders guard mirroring scripts/seed-demo.ts: refuse to touch
 // anything that still looks like the real database.
 const target = process.env.DATABASE_URL ?? DEFAULT_DEMO_URL

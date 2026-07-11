@@ -1,6 +1,24 @@
 import { initTRPC, TRPCError } from '@trpc/server'
 import type { Context } from './context'
 import { hasRole } from './tenant'
+import { getValidSession, isInstanceLocked } from '../auth/session'
+
+// tRPC procedures reachable WITHOUT authentication. A locked instance must still
+// be able to show its login screen, accept a login, let an invitee create their
+// account from an invite link, and let a client read auth/registration state.
+// This is the single source of truth for "public": the coarse HTTP gate
+// (index.ts) imports the same set, so the two layers can never drift apart.
+// Everything NOT listed here is protected — new procedures are private by
+// default and fail closed (see enforceAuthenticated).
+export const PUBLIC_PROCEDURES = new Set([
+  'auth.status',
+  'auth.login',
+  'auth.logout',
+  'auth.registrationOpen',
+  'auth.register',
+  'invitations.info',
+  'invitations.accept',
+])
 
 // Ship only a code and a safe message to the browser — never a stack trace or
 // raw internal error text. tRPC's default formatter attaches `data.stack` and
@@ -72,4 +90,32 @@ const enforceWriteRole = t.middleware(async ({ ctx, type, path, next }) => {
   return next()
 })
 
-export const publicProcedure = t.procedure.use(enforceWriteRole)
+/** In-band, fail-closed authentication. The coarse HTTP gate (index.ts) blocks
+ *  unauthenticated calls to protected procedures on a locked instance by parsing
+ *  the tRPC URL; this middleware enforces the SAME rule from inside tRPC, using
+ *  tRPC's own resolved `path`, so it also covers query procedures and can't be
+ *  bypassed if that hand-rolled URL parser ever drifts from the adapter. A
+ *  request is allowed when the procedure is public, when it already carries an
+ *  identity (`ctx.userId` — set for a real session or, on an open instance, the
+ *  owner fallback), or, failing both, when a valid session cookie resolves.
+ *  Otherwise, on a locked instance, it is rejected. */
+const enforceAuthenticated = t.middleware(async ({ ctx, path, next }) => {
+  if (!PUBLIC_PROCEDURES.has(path) && !ctx.userId) {
+    // No ambient identity. On an open instance the owner fallback normally
+    // supplies one; when it doesn't (locked instance, or the fallback was
+    // withheld), only a live session may proceed.
+    if (await isInstanceLocked(ctx.db)) {
+      const session = await getValidSession(ctx.db, ctx.sessionToken)
+      if (!session) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Authentication required' })
+      }
+    }
+  }
+  return next()
+})
+
+/** The base procedure. Despite the historical name it is NOT anonymous-open:
+ *  every procedure built from it is authenticated-by-default (enforceAuthenticated)
+ *  unless its path is in PUBLIC_PROCEDURES, and write mutations additionally need a
+ *  writable household role (enforceWriteRole). */
+export const publicProcedure = t.procedure.use(enforceAuthenticated).use(enforceWriteRole)
