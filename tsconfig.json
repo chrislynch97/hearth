@@ -11,7 +11,11 @@
     "skipLibCheck": true,
     "types": ["vitest/globals", "@testing-library/jest-dom"],
     "verbatimModuleSyntax": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@/*": ["./src/client/*"],
+      "@shared/*": ["./src/shared/*"],
+    }
   },
   "include": ["src", "scripts", "vite.config.ts", "drizzle.config.ts"]
 }

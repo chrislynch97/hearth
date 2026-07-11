@@ -1,6 +1,6 @@
 import { Center, Loader } from '@mantine/core'
 import { Route, Routes } from 'react-router-dom'
-import { trpc } from './trpc'
+import { trpc } from '@/trpc'
 import { ConnectionError } from './ErrorState'
 import { LoginGate } from './LoginGate'
 import { AcceptInvite } from './AcceptInvite'
