@@ -1,40 +1,16 @@
-import { StrictMode, useState } from 'react'
+import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MantineProvider } from '@mantine/core'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { httpBatchLink } from '@trpc/client'
-import superjson from 'superjson'
-import { BrowserRouter } from 'react-router-dom'
 import '@mantine/core/styles.css'
 import '@mantine/charts/styles.css'
 import '@mantine/dates/styles.css'
-import { trpc } from './trpc'
-import { theme } from './theme'
+import '@mantine/notifications/styles.css'
 import { App } from './App'
-import { ErrorBoundary } from './ErrorState'
-
-function Root() {
-  const [queryClient] = useState(() => new QueryClient())
-  const [trpcClient] = useState(() =>
-    trpc.createClient({ links: [httpBatchLink({ url: '/trpc', transformer: superjson })] }),
-  )
-  return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        <MantineProvider theme={theme} defaultColorScheme="auto">
-          <ErrorBoundary>
-            <BrowserRouter>
-              <App />
-            </BrowserRouter>
-          </ErrorBoundary>
-        </MantineProvider>
-      </QueryClientProvider>
-    </trpc.Provider>
-  )
-}
+import { AppProviders } from './providers'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Root />
+    <AppProviders>
+      <App />
+    </AppProviders>
   </StrictMode>,
 )

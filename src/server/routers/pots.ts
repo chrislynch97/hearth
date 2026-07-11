@@ -6,6 +6,7 @@ import { assertMember, scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
 import { pot, expense, setAside, spendTransaction, reconciliationBatch } from '../db/schema'
 import { newId } from '../../shared/ids'
+import { contributionLineInput, insertContributionLines } from './setAside'
 
 export const potsRouter = router({
   list: publicProcedure.query(async ({ ctx }) => {
@@ -81,6 +82,54 @@ export const potsRouter = router({
         })
         .returning()
       return inserted!
+    }),
+
+  // Create a pot and its monthly contribution lines in one transaction. The
+  // Pots screen used to fire `pots.create` then `setAside.replaceForPot` as two
+  // separate mutations — if the second failed you were left with a pot that had
+  // no contributions and no way to undo (issue #33). Doing both in one resolver
+  // makes it atomic: either the whole pot lands or none of it does.
+  createWithContributions: publicProcedure
+    .input(
+      z.object({
+        name: z.string().min(1),
+        categoryId: z.string().nullable().optional(),
+        ownerId: z.string(),
+        note: z.string().optional(),
+        lines: z.array(contributionLineInput),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const now = new Date()
+
+      // Validate ownerId — must be a member of THIS household.
+      await assertMember(ctx.db, ctx.householdId, input.ownerId)
+
+      return ctx.db.transaction(async (tx) => {
+        const [result] = await tx
+          .select({ maxOrder: max(pot.sortOrder) })
+          .from(pot)
+          .where(scopeWhere(ctx.householdId, pot.householdId))
+        const nextOrder = (result?.maxOrder ?? 0) + 1
+
+        const [inserted] = await tx
+          .insert(pot)
+          .values({
+            id: newId(),
+            householdId: ctx.householdId,
+            name: input.name,
+            categoryId: input.categoryId ?? null,
+            ownerId: input.ownerId,
+            sortOrder: nextOrder,
+            note: input.note ?? null,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .returning()
+
+        await insertContributionLines(tx, ctx.householdId, inserted!, input.lines, now)
+        return inserted!
+      })
     }),
 
   update: publicProcedure

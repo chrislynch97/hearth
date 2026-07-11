@@ -5,11 +5,55 @@ import { router, publicProcedure } from '../trpc/trpc'
 import { assertMember, scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
 import { setAside, pot } from '../db/schema'
-import type { SetAside } from '../db/schema'
+import type { SetAside, Pot } from '../db/schema'
 import { newId } from '../../shared/ids'
-import type { DB } from '../db/client'
+import type { DB, DBOrTx } from '../db/client'
 
 const recurrenceEnum = z.enum(['monthly', 'quarterly', 'yearly'])
+
+/** One contribution line as the Pots screen sends it — a named part (or the
+ *  common single unnamed line) with a monthly-ish amount. Shared by
+ *  `setAside.replaceForPot` and `pots.createWithContributions`. */
+export const contributionLineInput = z.object({
+  label: z.string().nullable().optional(),
+  amount: z.number().int().min(0),
+  recurrence: recurrenceEnum.optional(),
+})
+export type ContributionLine = z.infer<typeof contributionLineInput>
+
+/**
+ * Insert a pot's contribution lines, skipping zero-amount lines. Owner is taken
+ * from the pot. Takes a `DBOrTx` so it composes inside a larger transaction —
+ * `pots.createWithContributions` threads its tx through here so the pot and its
+ * contributions commit atomically (no orphaned pot if a line insert fails).
+ */
+export async function insertContributionLines(
+  db: DBOrTx,
+  householdId: string,
+  p: Pick<Pot, 'id' | 'name' | 'ownerId'>,
+  lines: ContributionLine[],
+  now: Date,
+): Promise<void> {
+  const kept = lines.filter((l) => l.amount > 0)
+  for (const [i, line] of kept.entries()) {
+    await db.insert(setAside).values({
+      id: newId(),
+      householdId,
+      name: line.label?.trim() || p.name,
+      groupLabel: null,
+      ownerId: p.ownerId,
+      potId: p.id,
+      amount: line.amount,
+      recurrence: line.recurrence ?? 'monthly',
+      note: null,
+      active: 1,
+      sortOrder: i,
+      archivedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+  }
+}
 
 const baseInput = z.object({
   name: z.string().min(1),
@@ -129,46 +173,23 @@ export const setAsideRouter = router({
     .input(
       z.object({
         potId: z.string(),
-        lines: z.array(
-          z.object({
-            label: z.string().nullable().optional(),
-            amount: z.number().int().min(0),
-            recurrence: recurrenceEnum.optional(),
-          }),
-        ),
+        lines: z.array(contributionLineInput),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [p] = await ctx.db
-        .select()
-        .from(pot)
-        .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, input.potId)))
-      if (!p) throw new TRPCError({ code: 'BAD_REQUEST', message: 'potId does not refer to an existing pot' })
-
       const now = new Date()
-      await ctx.db
-        .delete(setAside)
-        .where(scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.potId, input.potId)))
+      await ctx.db.transaction(async (tx) => {
+        const [p] = await tx
+          .select()
+          .from(pot)
+          .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, input.potId)))
+        if (!p) throw new TRPCError({ code: 'BAD_REQUEST', message: 'potId does not refer to an existing pot' })
 
-      const kept = input.lines.filter((l) => l.amount > 0)
-      for (const [i, line] of kept.entries()) {
-        await ctx.db.insert(setAside).values({
-          id: newId(),
-          householdId: ctx.householdId,
-          name: line.label?.trim() || p.name,
-          groupLabel: null,
-          ownerId: p.ownerId,
-          potId: input.potId,
-          amount: line.amount,
-          recurrence: line.recurrence ?? 'monthly',
-          note: null,
-          active: 1,
-          sortOrder: i,
-          archivedAt: null,
-          createdAt: now,
-          updatedAt: now,
-        })
-      }
+        await tx
+          .delete(setAside)
+          .where(scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.potId, input.potId)))
+        await insertContributionLines(tx, ctx.householdId, p, input.lines, now)
+      })
       return ctx.db
         .select()
         .from(setAside)

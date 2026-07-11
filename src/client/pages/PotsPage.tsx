@@ -23,6 +23,7 @@ import { formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { normaliseToMonthly, roundMinor, type Recurrence } from '../../shared/recurrence'
 import { orderMembers } from '../potOptions'
 import { useMoney, type MoneyFormat } from '../useMoney'
+import { notifySuccess } from '../notify'
 
 /** Monthly-equivalent total of a pot's contribution lines. */
 function contributionMonthly(lines: SetAside[]): number {
@@ -72,9 +73,14 @@ function PotRow({ pot, members, categories, unused, setAsides, money }: PotRowPr
   const hasBreakdown = setAsides.length > 1
 
   async function handleArchive() {
-    await archive.mutateAsync({ id: pot.id })
+    try {
+      await archive.mutateAsync({ id: pot.id })
+    } catch {
+      return // error surfaced by the global handler; keep the dialog open
+    }
     await utils.pots.list.invalidate()
     setConfirmArchive(false)
+    notifySuccess(`Archived ${pot.name}.`)
   }
 
   return (
@@ -216,7 +222,7 @@ function PotFormModal({
   setAsides?: SetAside[]
 }) {
   const utils = trpc.useUtils()
-  const create = trpc.pots.create.useMutation()
+  const create = trpc.pots.createWithContributions.useMutation()
   const update = trpc.pots.update.useMutation()
   const replaceContrib = trpc.setAside.replaceForPot.useMutation()
   const isEditing = !!pot
@@ -250,23 +256,29 @@ function PotFormModal({
     if (!ownerId) return setError('Please choose an owner.')
     setError('')
 
-    let potId: string
-    if (isEditing) {
-      await update.mutateAsync({ id: pot.id, expectedUpdatedAt: pot.updatedAt, name: trimmed, ownerId, categoryId, note: note.trim() })
-      potId = pot.id
-    } else {
-      const created = await create.mutateAsync({ name: trimmed, ownerId, categoryId: categoryId ?? undefined, note: note.trim() || undefined })
-      potId = created.id
+    const contribLines = lines.map((l) => ({
+      label: l.label.trim() || null,
+      amount: l.amountMajor === '' ? 0 : toMinor(Number(l.amountMajor), money.decimalPlaces),
+      recurrence: l.recurrence,
+    }))
+
+    try {
+      if (isEditing) {
+        // Edit is still two writes (metadata, then contributions); replaceForPot
+        // is itself atomic, and neither leaves an orphaned pot the way a failed
+        // create did, so the create path is the only one that needs a combined
+        // resolver.
+        await update.mutateAsync({ id: pot.id, expectedUpdatedAt: pot.updatedAt, name: trimmed, ownerId, categoryId, note: note.trim() })
+        await replaceContrib.mutateAsync({ potId: pot.id, lines: contribLines })
+      } else {
+        await create.mutateAsync({ name: trimmed, ownerId, categoryId: categoryId ?? undefined, note: note.trim() || undefined, lines: contribLines })
+      }
+    } catch {
+      return // error surfaced by the global handler; keep the form open to retry
     }
-    await replaceContrib.mutateAsync({
-      potId,
-      lines: lines.map((l) => ({
-        label: l.label.trim() || null,
-        amount: l.amountMajor === '' ? 0 : toMinor(Number(l.amountMajor), money.decimalPlaces),
-        recurrence: l.recurrence,
-      })),
-    })
+
     await Promise.all([utils.pots.list.invalidate(), utils.setAside.list.invalidate(), utils.plan.funding.invalidate()])
+    notifySuccess(isEditing ? `Saved ${trimmed}.` : `Added ${trimmed}.`)
     onClose()
   }
 
@@ -358,9 +370,9 @@ function PotFormModal({
             </Group>
           </Stack>
 
-          {(error || create.error || update.error || replaceContrib.error) && (
+          {error && (
             <Alert color="red" title="Error">
-              {error || create.error?.message || update.error?.message || replaceContrib.error?.message}
+              {error}
             </Alert>
           )}
           <Group justify="flex-end">

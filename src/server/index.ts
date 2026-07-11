@@ -89,6 +89,12 @@ async function main() {
   app = Fastify({
     logger: true,
     bodyLimit: 64 * 1024 * 1024,
+    // tRPC's httpBatchLink packs every procedure name of a batched request into
+    // the URL path (`/trpc/a.list,b.list,c.list?batch=1`). Fastify's default
+    // `maxParamLength` of 100 silently 404s any batch whose joined names exceed
+    // that — which happens on data-heavy pages (Pots batches ~9 queries), taking
+    // the whole batch (and every query in it) down. Give the router real headroom.
+    maxParamLength: 5000,
     trustProxy: parseTrustProxy(process.env.HEARTH_TRUST_PROXY),
   })
 
