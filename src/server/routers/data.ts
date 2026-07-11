@@ -9,11 +9,9 @@ import { household } from '../db/schema'
 import { ALL_TABLES, MONEY_COLUMNS } from '../db/tables'
 import { ensureSeed } from '../db/seed'
 import { rescaleMinor } from '../../shared/money'
-import { buildSnapshot, EXPORT_VERSION } from '../db/snapshot'
+import { applySnapshot, buildSnapshot, EXPORT_VERSION } from '../db/snapshot'
 import { runBackup } from '../backup/runner'
 import type { DB } from '../db/client'
-
-const INSERT_CHUNK = 200
 
 // NOTE: export / import / reset / stats and the on-disk backup are instance-wide
 // (they operate over every table, ALL households) — the self-host backup
@@ -62,22 +60,7 @@ export const dataRouter = router({
       }
 
       // Atomic delete-all + insert-all in a single batch (see makeTestDb note).
-      const statements: BatchStatement[] = []
-      for (const [, table] of [...ALL_TABLES].reverse()) {
-        statements.push(ctx.db.delete(table as SQLiteTable))
-      }
-      for (const [name, table] of ALL_TABLES) {
-        const rows = input.tables[name] ?? []
-        for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
-          const chunk = rows.slice(i, i + INSERT_CHUNK)
-          if (chunk.length > 0) {
-            statements.push(ctx.db.insert(table as SQLiteTable).values(chunk as never))
-          }
-        }
-      }
-      await runBatch(ctx.db, statements)
-
-      return Object.fromEntries(ALL_TABLES.map(([n]) => [n, (input.tables[n] ?? []).length]))
+      return applySnapshot(ctx.db, input.tables)
     }),
 
   /** Wipe everything and re-seed a blank household (returns to the setup wizard). */

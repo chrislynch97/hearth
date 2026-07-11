@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../db/testdb'
 import { household } from '../db/schema'
+import { applySnapshot, type Snapshot } from '../db/snapshot'
 import { runBackup } from './runner'
 
 // runBackup writes into `<DATABASE_URL dir>/backups`; point it at a throwaway
@@ -52,5 +53,42 @@ describe('runBackup', () => {
 
     const rows = await db.select().from(household)
     expect(rows.every((r) => r.backupLastAt === at)).toBe(true)
+  })
+
+  it('writes a file that actually restores back into a fresh database', async () => {
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+    await addHousehold(db, 'secondary', 'weekly')
+
+    const { file } = await runBackup(db, ['household'])
+
+    // Read the on-disk backup and replay it through the real import path into an
+    // empty database — the round-trip the runner never used to exercise.
+    const snapshot = JSON.parse(readFileSync(file, 'utf8')) as Snapshot
+    const restored = await makeTestDb()
+    await applySnapshot(restored as never, snapshot.tables)
+
+    const rows = await restored.select().from(household)
+    expect(rows.map((r) => r.id).sort()).toEqual(['household', 'secondary'])
+  })
+
+  it('writes atomically, leaving no stray .tmp file', async () => {
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+
+    const { file } = await runBackup(db, ['household'])
+
+    const entries = readdirSync(dirname(file))
+    expect(entries.some((f) => f.endsWith('.tmp'))).toBe(false)
+    expect(entries.filter((f) => f.endsWith('.json')).length).toBe(1)
+  })
+
+  it.skipIf(process.platform === 'win32')('writes the backup owner-only (0600)', async () => {
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+
+    const { file } = await runBackup(db, ['household'])
+
+    expect(statSync(file).mode & 0o777).toBe(0o600)
   })
 })
