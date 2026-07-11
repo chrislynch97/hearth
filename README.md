@@ -74,8 +74,17 @@ See **[docs/deployment.md](docs/deployment.md)** for the full guide.
 
 - **Docker** (any PC / VM / Raspberry Pi):
   ```bash
-  docker compose up -d      # → http://localhost:8787
+  docker compose up -d      # → http://localhost:8787  (passwords on — the safe default)
   ```
+  To run **password-less on a trusted home LAN**, set the env var at launch (no
+  file edits needed):
+  ```bash
+  HEARTH_ALLOW_OPEN=1 docker compose up -d
+  # PowerShell:  $env:HEARTH_ALLOW_OPEN=1; docker compose up -d
+  # Plain docker run:  docker run -e HEARTH_ALLOW_OPEN=1 ...
+  ```
+  Leave it unset for anything reachable from the internet, and set an owner
+  password instead.
 - **Node directly** (no Docker) — see the deployment guide.
 
 Your entire state lives in one folder (`./data`, bind-mounted to `/data` in the
@@ -110,8 +119,8 @@ hand anonymous callers full owner access. Two ways forward:
   `HEARTH_ALLOW_OPEN=1`. This is safe on a home network behind a router, not on a
   public host. It's wired up for you in the two common local setups:
   - **Local development** — `npm run dev:server` sets it automatically.
-  - **Local Docker** — uncomment the `HEARTH_ALLOW_OPEN=1` line in
-    [`docker-compose.yml`](docker-compose.yml).
+  - **Local Docker** — launch with `HEARTH_ALLOW_OPEN=1 docker compose up -d`
+    (see [Deploy](#deploy)); no file edits needed.
 
 > **Exposing Hearth to the internet?** Set the owner password *before* you expose
 > it — run it locally first (either of the password-less setups above, or with
