@@ -6,6 +6,7 @@ import { router, publicProcedure } from '../trpc/trpc'
 import { assertInstanceOwner } from '../auth/session'
 import { assertRole } from '../trpc/tenant'
 import { household } from '../db/schema'
+import { describeDatabase } from '../db/client'
 import { ALL_TABLES, MONEY_COLUMNS } from '../db/tables'
 import { ensureSeed } from '../db/seed'
 import { rescaleMinor } from '../../shared/money'
@@ -129,6 +130,6 @@ export const dataRouter = router({
       const rows = await ctx.db.select().from(table as PgTable)
       counts[name] = rows.length
     }
-    return { counts, databaseUrl: process.env.DATABASE_URL ?? 'pglite:./data/pgdata' }
+    return { counts, databaseLabel: describeDatabase() }
   }),
 })

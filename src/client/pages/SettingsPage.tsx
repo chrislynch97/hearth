@@ -1074,7 +1074,7 @@ function AboutSection() {
         About
       </Title>
       <Text size="sm" c="dimmed" mb="sm">
-        Database: {stats.databaseUrl}
+        Database: {stats.databaseLabel}
       </Text>
       <Table verticalSpacing={4}>
         <Table.Tbody>

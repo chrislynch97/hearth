@@ -53,6 +53,23 @@ export const db = created.db
 /** Close the underlying connection cleanly on shutdown (pool.end / pglite.close). */
 export const closeDb = created.close
 
+/** A human-readable, credential-free description of the live database, safe to
+ *  send to the client (shown on the About screen). Never includes the password
+ *  or username from a `postgres://user:pass@host` URL. */
+export function describeDatabase(url = process.env.DATABASE_URL): string {
+  if (url && (url.startsWith('postgres://') || url.startsWith('postgresql://'))) {
+    try {
+      const parsed = new URL(url)
+      const dbName = parsed.pathname.replace(/^\//, '')
+      const location = [parsed.host, dbName].filter(Boolean).join('/')
+      return location ? `PostgreSQL (${location})` : 'PostgreSQL'
+    } catch {
+      return 'PostgreSQL'
+    }
+  }
+  return `PGlite (${pgliteDir(url)})`
+}
+
 /** The handle drizzle passes to a `db.transaction(tx => …)` callback. */
 export type Tx = Parameters<Parameters<DB['transaction']>[0]>[0]
 
