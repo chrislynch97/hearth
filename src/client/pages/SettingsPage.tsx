@@ -64,6 +64,8 @@ interface GeneralForm {
   displayName: string
   currencySymbol: string
   startDay: number | string
+  periodFrequency: string
+  periodAnchor: string
   jointBasis: string
   incomeBasis: string
   decimalPlaces: number | string
@@ -79,6 +81,8 @@ function generalFormFrom(hh: Household): GeneralForm {
     displayName: hh.displayName,
     currencySymbol: hh.currencySymbol,
     startDay: hh.budgetPeriodStartDay,
+    periodFrequency: hh.budgetPeriodFrequency,
+    periodAnchor: hh.budgetPeriodAnchor ?? '',
     jointBasis: hh.jointContributionBasis,
     incomeBasis: hh.incomeBasisDefault,
     decimalPlaces: hh.currencyDecimalPlaces,
@@ -120,6 +124,13 @@ function GeneralSection() {
       currencyGroupSeparator: selectedFormat.group,
       currencyDecimalSeparator: selectedFormat.decimal,
       budgetPeriodStartDay: Number(form.startDay),
+      budgetPeriodFrequency: form.periodFrequency as 'monthly' | 'four_weekly' | 'fortnightly' | 'weekly',
+      // Anchor only matters for the weekly cycles; clear it for monthly. Fall back
+      // to today if a non-monthly cycle was picked without choosing a start date.
+      budgetPeriodAnchor:
+        form.periodFrequency === 'monthly'
+          ? null
+          : form.periodAnchor || new Date().toISOString().slice(0, 10),
       jointContributionBasis: form.jointBasis as 'equal' | 'income_proportional' | 'custom',
       incomeBasisDefault: form.incomeBasis as 'regular_net' | 'latest_payslip' | 'rolling_12m',
       weekStart: form.weekStart as 'monday' | 'sunday',
@@ -154,14 +165,47 @@ function GeneralSection() {
           <TextInput label="Household name" value={form.displayName} onChange={(e) => set('displayName', e.currentTarget.value)} />
           <TextInput label="Currency symbol" value={form.currencySymbol} onChange={(e) => set('currencySymbol', e.currentTarget.value)} w={120} />
         </Group>
-        <Group grow>
-          <NumberInput
-            label="Budget period starts on day"
-            min={1}
-            max={28}
-            value={form.startDay}
-            onChange={(v) => set('startDay', v)}
+        <Group grow align="flex-start">
+          <Select
+            label="Budget period"
+            description="How your pay cycle is split into budget periods."
+            data={[
+              { value: 'monthly', label: 'Monthly' },
+              { value: 'four_weekly', label: 'Every 4 weeks' },
+              { value: 'fortnightly', label: 'Fortnightly (2 weeks)' },
+              { value: 'weekly', label: 'Weekly' },
+            ]}
+            value={form.periodFrequency}
+            onChange={(v) => {
+              const next = v ?? 'monthly'
+              set('periodFrequency', next)
+              // A weekly cycle needs a reference start date — seed today if unset.
+              if (next !== 'monthly' && !form.periodAnchor) {
+                set('periodAnchor', new Date().toISOString().slice(0, 10))
+              }
+            }}
+            allowDeselect={false}
           />
+          {form.periodFrequency === 'monthly' ? (
+            <NumberInput
+              label="Starts on day"
+              description="Day of the month the period begins."
+              min={1}
+              max={28}
+              value={form.startDay}
+              onChange={(v) => set('startDay', v)}
+            />
+          ) : (
+            <TextInput
+              type="date"
+              label="First period starts"
+              description="Anchor date; periods repeat from here."
+              value={form.periodAnchor}
+              onChange={(e) => set('periodAnchor', e.currentTarget.value)}
+            />
+          )}
+        </Group>
+        <Group grow>
           <NumberInput
             label="Currency decimal places"
             description="Changing this rescales all stored amounts"
@@ -170,6 +214,7 @@ function GeneralSection() {
             value={form.decimalPlaces}
             onChange={(v) => set('decimalPlaces', v)}
           />
+          <div />
         </Group>
         <Group grow align="flex-end">
           <Select

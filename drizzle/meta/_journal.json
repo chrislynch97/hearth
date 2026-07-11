@@ -162,6 +162,13 @@
       "when": 1783710000662,
       "tag": "0022_curved_mole_man",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1783773641500,
+      "tag": "0023_last_vulcan",
+      "breakpoints": true
     }
   ]
 }

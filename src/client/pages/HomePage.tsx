@@ -18,7 +18,7 @@ import { BarChart } from '@mantine/charts'
 import { Link } from 'react-router-dom'
 import { trpc } from '../trpc'
 import { formatMoney } from '../../shared/money'
-import { periodForDate, shiftPeriod } from '../../shared/period'
+import { periodForDate, shiftPeriod, periodConfig } from '../../shared/period'
 import { useMoney, useFormatDate } from '../useMoney'
 import { hearthTokens, chartXAxisProps } from '../theme'
 import type { MoneyFormat } from '../useMoney'
@@ -436,7 +436,7 @@ function RecentActivityCard({
 export function HomePage() {
   const money = useMoney()
   const ctx = trpc.bootstrap.context.useQuery()
-  const startDay = ctx.data?.household?.budgetPeriodStartDay ?? 1
+  const periodCfg = periodConfig(ctx.data?.household ?? 1)
 
   const [periodStart, setPeriodStart] = useState<string | undefined>(undefined)
   const summaryQuery = trpc.dashboard.summary.useQuery(periodStart ? { periodStart } : undefined)
@@ -450,8 +450,8 @@ export function HomePage() {
   const summary = summaryQuery.data
 
   function shift(delta: number) {
-    const base = summary?.period ?? periodForDate(new Date().toISOString().slice(0, 10), startDay)
-    setPeriodStart(shiftPeriod(base, delta, startDay).start)
+    const base = summary?.period ?? periodForDate(new Date().toISOString().slice(0, 10), periodCfg)
+    setPeriodStart(shiftPeriod(base, delta, periodCfg).start)
   }
 
   // `[` / `]` (handled globally in AppLayout) shift the period. Use a ref so the

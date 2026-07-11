@@ -35,6 +35,11 @@ export const household = sqliteTable('household', {
   currencyDecimalSeparator: text('currency_decimal_separator').notNull().default('.'),
   locale: text('locale').notNull().default('en-GB'),
   budgetPeriodStartDay: integer('budget_period_start_day').notNull().default(1),
+  // Period *length*. 'monthly' keeps the calendar-month behaviour anchored on
+  // budget_period_start_day; the weekly cycles step in whole weeks from
+  // budget_period_anchor (a reference start date). See src/shared/period.ts.
+  budgetPeriodFrequency: text('budget_period_frequency').notNull().default('monthly'), // 'monthly' | 'four_weekly' | 'fortnightly' | 'weekly'
+  budgetPeriodAnchor: text('budget_period_anchor'), // YYYY-MM-DD reference start for non-monthly cycles; null for monthly
   // Authentication (password + MFA) now lives on `user`, not the household. The
   // legacy household columns were migrated onto the owner user and dropped
   // (migration 0017).

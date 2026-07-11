@@ -18,6 +18,14 @@ export const householdRouter = router({
         currencyDecimalSeparator: z.enum(['.', ',']).optional(),
         locale: z.string().optional(),
         budgetPeriodStartDay: z.number().int().min(1).max(28).optional(),
+        budgetPeriodFrequency: z
+          .enum(['monthly', 'four_weekly', 'fortnightly', 'weekly'])
+          .optional(),
+        budgetPeriodAnchor: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD')
+          .nullable()
+          .optional(),
         weekStart: z.enum(['monday', 'sunday']).optional(),
         dateFormat: z.enum(['iso', 'numeric', 'medium', 'long']).optional(),
         backupFrequency: z.enum(['off', 'daily', 'weekly']).optional(),

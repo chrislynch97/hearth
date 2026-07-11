@@ -7,7 +7,7 @@ import { computeFundingPlan } from '../plan/funding'
 import { computeIncomeByMember } from '../income/service'
 import { allocationByCategory } from '../dashboard/summary'
 import { categoryBreakdown, monthlyTotals, monthOverMonth, perMemberVsJoint, spendVsAllocation } from '../reports/reports'
-import { periodForDate } from '../../shared/period'
+import { periodForDate, periodConfig } from '../../shared/period'
 import { subtractMonths, todayIso } from '../../shared/dates'
 import type { Recurrence } from '../../shared/recurrence'
 
@@ -27,12 +27,11 @@ export const reportsRouter = router({
     .query(async ({ ctx, input }) => {
       const today = todayIso()
       const [householdRow] = await ctx.db.select().from(household).where(eq(household.id, ctx.householdId))
-      const startDay = householdRow?.budgetPeriodStartDay ?? 1
       const jointBasis = (householdRow?.jointContributionBasis ?? 'equal') as
         | 'equal'
         | 'income_proportional'
         | 'custom'
-      const period = periodForDate(input?.periodStart ?? today, startDay)
+      const period = periodForDate(input?.periodStart ?? today, periodConfig(householdRow ?? 1))
       const months = input?.months ?? 6
 
       const members = await ctx.db

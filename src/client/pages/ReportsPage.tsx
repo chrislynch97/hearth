@@ -18,7 +18,7 @@ import type { inferRouterOutputs } from '@trpc/server'
 import { trpc } from '../trpc'
 import type { AppRouter } from '../../server/trpc/router'
 import { formatMoney, fromMinor } from '../../shared/money'
-import { periodForDate, shiftPeriod } from '../../shared/period'
+import { periodForDate, shiftPeriod, periodConfig } from '../../shared/period'
 import { downloadCsv } from '../csv'
 import { useMoney } from '../useMoney'
 import type { MoneyFormat } from '../useMoney'
@@ -39,7 +39,7 @@ function ExportButton({ onClick }: { onClick: () => void }) {
 export function ReportsPage() {
   const money = useMoney()
   const ctx = trpc.bootstrap.context.useQuery()
-  const startDay = ctx.data?.household?.budgetPeriodStartDay ?? 1
+  const periodCfg = periodConfig(ctx.data?.household ?? 1)
   const members = (ctx.data?.members ?? []).filter((m) => m.archivedAt === null)
 
   const [periodStart, setPeriodStart] = useState<string | undefined>(undefined)
@@ -55,8 +55,8 @@ export function ReportsPage() {
   const dp = money.decimalPlaces
 
   function shift(delta: number) {
-    const base = report?.period ?? periodForDate(new Date().toISOString().slice(0, 10), startDay)
-    setPeriodStart(shiftPeriod(base, delta, startDay).start)
+    const base = report?.period ?? periodForDate(new Date().toISOString().slice(0, 10), periodCfg)
+    setPeriodStart(shiftPeriod(base, delta, periodCfg).start)
   }
 
   return (

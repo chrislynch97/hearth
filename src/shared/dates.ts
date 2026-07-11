@@ -37,6 +37,14 @@ export function addDays(iso: string, days: number): string {
   return `${pad(dt.getUTCFullYear(), 4)}-${pad(dt.getUTCMonth() + 1, 2)}-${pad(dt.getUTCDate(), 2)}`
 }
 
+/** Whole days from `fromIso` to `toIso` (`toIso - fromIso`); negative if `toIso`
+ *  is earlier. Both are calendar days, so DST never enters into it. */
+export function diffDays(fromIso: string, toIso: string): number {
+  const [ay, am, ad] = fromIso.split('-').map(Number) as [number, number, number]
+  const [by, bm, bd] = toIso.split('-').map(Number) as [number, number, number]
+  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000)
+}
+
 function daysInMonth(year: number, monthZeroBased: number): number {
   // Day 0 of the next month is the last day of this month.
   return new Date(Date.UTC(year, monthZeroBased + 1, 0)).getUTCDate()

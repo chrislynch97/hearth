@@ -8,7 +8,7 @@ import { computeFundingPlan } from '../plan/funding'
 import { computeIncomeByMember, loadPayslipSummaries } from '../income/service'
 import { allocationByCategory, monthlyNetTrend } from '../dashboard/summary'
 import { projectUpcoming, type UpcomingExpenseInput } from '../plan/upcoming'
-import { periodForDate } from '../../shared/period'
+import { periodForDate, periodConfig } from '../../shared/period'
 import { addDays, todayIso } from '../../shared/dates'
 import type { Recurrence } from '../../shared/recurrence'
 
@@ -66,12 +66,11 @@ export const dashboardRouter = router({
       ])
 
       const householdRow = householdRows[0]
-      const startDay = householdRow?.budgetPeriodStartDay ?? 1
       const jointBasis = (householdRow?.jointContributionBasis ?? 'equal') as
         | 'equal'
         | 'income_proportional'
         | 'custom'
-      const period = periodForDate(input?.periodStart ?? today, startDay)
+      const period = periodForDate(input?.periodStart ?? today, periodConfig(householdRow ?? 1))
 
       // B / C — funding plan (per-person set-aside, remainder, income share).
       const funding = computeFundingPlan({
