@@ -9,7 +9,7 @@
 #
 # Force a fresh re-seed (wipe + repopulate the demo data) before serving:
 #   docker compose -f docker-compose.demo.yml run --rm --service-ports \
-#     hearth-demo node --import tsx scripts/demo-server.ts --seed
+#     hearth-demo node dist/demo-server.js --seed
 services:
   hearth-demo:
     build: .
@@ -22,10 +22,12 @@ services:
       # Demo PGlite folder, NOT the real database. demo-server.ts seeds this on first run.
       - DATABASE_URL=pglite:/data/demo
       - CLIENT_DIR=/app/dist/client
-    # Seed the demo db (idempotent) then serve it. Run node directly (not `npm run
-    # demo`) so SIGTERM reaches the process and the graceful-shutdown handler
-    # closes the database cleanly — npm as the child swallows the signal.
-    command: ["node", "--import", "tsx", "scripts/demo-server.ts"]
+    # Seed the demo db (idempotent) then serve it. Run node directly on the
+    # compiled bundle (not `npm run demo`) so SIGTERM reaches the process and the
+    # graceful-shutdown handler closes the database cleanly — npm as the child
+    # swallows the signal. tsx isn't in the production image, so this runs the
+    # esbuild-bundled dist/demo-server.js.
+    command: ["node", "dist/demo-server.js"]
     # Proper PID 1 (tini) so SIGTERM reaches node for a clean shutdown.
     init: true
     restart: unless-stopped
