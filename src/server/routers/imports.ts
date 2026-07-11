@@ -6,8 +6,9 @@ import { assertMember, scopeWhere } from '../trpc/tenant'
 import { spendTransaction, importBatch, household } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { parseCsvTable } from '../../shared/csvParse'
-import { mapMonzoRows } from '../import/monzo'
-import type { MappedRow } from '../import/monzo'
+import { mapRows } from '../import/map'
+import type { MappedRow } from '../import/map'
+import { getProfile, listProfiles } from '../import/profiles'
 import { suggestPot } from '../spending/suggest'
 
 export interface PreviewRow extends MappedRow {
@@ -15,12 +16,17 @@ export interface PreviewRow extends MappedRow {
 }
 
 export const importsRouter = router({
-  /** Parse + classify a Monzo CSV against current data, with pot suggestions.
-   *  Read-only: nothing is written until commit. */
+  /** The banks the UI can import from (id, label, export instructions). */
+  profiles: publicProcedure.query(() => listProfiles()),
+
+  /** Parse + classify a bank CSV against current data, with pot suggestions,
+   *  using the chosen bank profile. Read-only: nothing is written until commit. */
   preview: publicProcedure
-    .input(z.object({ ownerId: z.string(), csvText: z.string() }))
+    .input(z.object({ ownerId: z.string(), csvText: z.string(), source: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       await assertMember(ctx.db, ctx.householdId, input.ownerId)
+
+      const profile = getProfile(input.source)
 
       const [hh] = await ctx.db.select().from(household).where(eq(household.id, ctx.householdId))
       const decimalPlaces = hh?.currencyDecimalPlaces ?? 2
@@ -41,7 +47,12 @@ export const importsRouter = router({
         .filter((p) => p.potId !== null)
         .map((p) => ({ description: p.description, ownerId: p.ownerId, potId: p.potId, date: p.date }))
 
-      const mapped = mapMonzoRows(rows, { currencyCode, decimalPlaces, existingRefs })
+      const { rows: mapped, mapping } = mapRows(
+        rows,
+        profile,
+        { currencyCode, decimalPlaces, existingRefs },
+        headers,
+      )
 
       const previewRows: PreviewRow[] = mapped.map((r) => {
         // Only suggest for rows we'd actually import.
@@ -61,7 +72,15 @@ export const importsRouter = router({
         error: previewRows.filter((r) => r.status === 'error').length,
       }
 
-      return { headers, rows: previewRows, summary, currencyCode, decimalPlaces }
+      return {
+        headers,
+        rows: previewRows,
+        summary,
+        currencyCode,
+        decimalPlaces,
+        source: profile.id,
+        mapping,
+      }
     }),
 
   /** Commit the chosen rows: create an ImportBatch and insert the spends
@@ -71,6 +90,8 @@ export const importsRouter = router({
       z.object({
         ownerId: z.string(),
         filename: z.string().nullable().optional(),
+        source: z.string().optional(),
+        mapping: z.unknown().optional(),
         totalRows: z.number().int().optional(),
         rows: z
           .array(
@@ -119,12 +140,12 @@ export const importsRouter = router({
         await tx.insert(importBatch).values({
           id: batchId,
           householdId: ctx.householdId,
-          source: 'monzo_csv',
+          source: getProfile(input.source).id,
           filename: input.filename ?? null,
           rowCount: totalRows,
           importedCount,
           skippedCount,
-          mapping: null,
+          mapping: input.mapping ? JSON.stringify(input.mapping) : null,
           importedAt: now,
           createdAt: now,
           updatedAt: now,

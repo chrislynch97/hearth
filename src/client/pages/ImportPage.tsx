@@ -40,14 +40,17 @@ export function ImportPage() {
 
   const membersQuery = trpc.members.list.useQuery()
   const potsQuery = trpc.pots.list.useQuery()
+  const profilesQuery = trpc.imports.profiles.useQuery()
   const preview = trpc.imports.preview.useMutation()
   const commit = trpc.imports.commit.useMutation()
 
   const members = (membersQuery.data ?? []).filter((m) => m.archivedAt === null)
   const pots = potsQuery.data ?? []
   const potData = pots.map((p) => ({ value: p.id, label: p.name }))
+  const profiles = profilesQuery.data ?? []
 
   const [ownerId, setOwnerId] = useState<string | null>(null)
+  const [source, setSource] = useState<string | null>(null)
   const [csvText, setCsvText] = useState('')
   const [filename, setFilename] = useState('')
   const [decisions, setDecisions] = useState<Record<number, Decision>>({})
@@ -56,6 +59,13 @@ export function ImportPage() {
   useEffect(() => {
     if (members.length > 0 && !ownerId) setOwnerId(members[0]!.id)
   }, [members, ownerId])
+
+  useEffect(() => {
+    const list = profilesQuery.data ?? []
+    if (list.length > 0 && !source) setSource(list[0]!.id)
+  }, [profilesQuery.data, source])
+
+  const activeProfile = profiles.find((p) => p.id === source)
 
   const data = preview.data
   // Seed per-row decisions when a preview arrives: import new + foreign by default.
@@ -80,9 +90,9 @@ export function ImportPage() {
   }
 
   async function runPreview() {
-    if (!ownerId || !csvText) return
+    if (!ownerId || !csvText || !source) return
     setResult(null)
-    await preview.mutateAsync({ ownerId, csvText })
+    await preview.mutateAsync({ ownerId, csvText, source })
   }
 
   function setDecision(index: number, patch: Partial<Decision>) {
@@ -108,6 +118,8 @@ export function ImportPage() {
     const res = await commit.mutateAsync({
       ownerId,
       filename: filename || null,
+      source: data.source,
+      mapping: data.mapping,
       totalRows: data.summary.total,
       rows,
     })
@@ -124,14 +136,23 @@ export function ImportPage() {
 
   return (
     <Stack gap="lg" maw={960} mx="auto">
-      <Title order={2}>Import from Monzo</Title>
+      <Title order={2}>Import a bank statement</Title>
       <Text size="sm" c="dimmed">
-        Export a statement from Monzo (Statements → Download as CSV) and drop it here. You'll review
-        everything before anything is saved. One export is one person's account.
+        Export a CSV statement from your bank and drop it here. You'll review everything before
+        anything is saved. One export is one person's account.
+        {activeProfile ? ` ${activeProfile.instructions}` : ''}
       </Text>
 
       <Card withBorder padding="md" radius="md">
         <Group align="flex-end" gap="md" wrap="wrap">
+          <Select
+            label="Bank"
+            data={profiles.map((p) => ({ value: p.id, label: p.label }))}
+            value={source}
+            onChange={setSource}
+            allowDeselect={false}
+            w={220}
+          />
           <Select
             label="Whose account?"
             data={members.map((m) => ({ value: m.id, label: m.displayName }))}
