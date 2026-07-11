@@ -17,6 +17,7 @@ import { parseSessionCookie } from './auth/cookies'
 import { getValidSession, isInstanceLocked } from './auth/session'
 import { PUBLIC_PROCEDURES } from './trpc/trpc'
 import { allProceduresIn, isLoopbackHost, trpcProcedures } from './auth/gate'
+import { parseTrustProxy } from './auth/trustProxy'
 
 // On an OPEN (password-less) instance the owner fallback resolves every
 // anonymous request as the owner — safe on a trusted LAN, catastrophic if the
@@ -79,15 +80,16 @@ async function main() {
   startBackupScheduler(db)
 
   // 64 MB body limit so restoring a large JSON export isn't rejected (default 1 MB).
-  // `trustProxy` is opt-in (HEARTH_TRUST_PROXY=1): only enable it when a reverse
-  // proxy / tunnel sits in front, so the login rate limiter keys on the real
-  // client IP (X-Forwarded-For) instead of the proxy. Enabling it while directly
-  // exposed would let clients spoof that header and evade the limiter, so it
-  // defaults off.
+  // `trustProxy` is opt-in (HEARTH_TRUST_PROXY): only set it when a reverse proxy /
+  // tunnel sits in front, so the login rate limiter keys on the real client IP
+  // (X-Forwarded-For) instead of the proxy. Set it to the number of proxy hops in
+  // front (a single proxy = `1`), NOT boolean `true` — trusting the whole XFF
+  // chain would let a client prepend a fake IP and dodge the limiter. Defaults off
+  // (directly exposed). See parseTrustProxy for the accepted forms.
   app = Fastify({
     logger: true,
     bodyLimit: 64 * 1024 * 1024,
-    trustProxy: process.env.HEARTH_TRUST_PROXY === '1',
+    trustProxy: parseTrustProxy(process.env.HEARTH_TRUST_PROXY),
   })
 
   // Security headers (defence-in-depth for a directly internet-exposed instance;

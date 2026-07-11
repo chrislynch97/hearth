@@ -101,7 +101,7 @@ All configuration is via environment variables:
 | `DATABASE_URL` | `file:./data/app.db` | SQLite location (libsql). Can point at a [Turso](https://turso.tech) URL. |
 | `CLIENT_DIR` | `../client` (source) | Where the built UI is served from. **Set to `./dist/client` for a non-Docker production run.** |
 | `HEARTH_SECURE_COOKIES` | unset | Set to `1` to force `Secure` session cookies when behind a reverse proxy that doesn't send `x-forwarded-proto: https`. |
-| `HEARTH_TRUST_PROXY` | unset | Set to `1` **only when behind a reverse proxy / tunnel** so the login rate limiter keys on the real client IP (`X-Forwarded-For`). Leave unset when directly exposed, or clients could spoof that header. |
+| `HEARTH_TRUST_PROXY` | unset | Set to the **number of proxy hops** in front of Hearth (a single reverse proxy / tunnel = `1`) so the login rate limiter keys on the real client IP (`X-Forwarded-For`). Leave unset when directly exposed. Do **not** set it to `true`/all — trusting the whole `X-Forwarded-For` chain lets a client spoof the header and dodge the limiter. Your proxy must **overwrite** (not append to) `X-Forwarded-For`. Accepts a hop count, or a comma-separated list of trusted proxy IPs/CIDRs. |
 | `HEARTH_ALLOW_OPEN` | unset | Set to `1` to allow running **open** (no owner password) while bound to a non-loopback address. Without it, an open instance on `0.0.0.0` serves only the login/first-run endpoints and refuses budgeting data — so a public deploy can't accidentally hand anonymous callers full owner access. Set an owner password instead of using this in production. |
 
 ## Security

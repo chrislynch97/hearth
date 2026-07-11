@@ -45,6 +45,17 @@ const loginLimiter = new RateLimiter({
   blockMs: 15 * 60 * 1000,
 })
 
+// Second, account-scoped throttle keyed on the target username, to catch a
+// *distributed* brute-force of one account (an attacker rotating source IPs to
+// stay under the per-IP cap). The cap is deliberately higher than the per-IP cap
+// so a single client — already limited to 10 — can never trip it, which stops an
+// attacker from locking a known victim out of their own account (griefing).
+const loginAccountLimiter = new RateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxAttempts: 50,
+  blockMs: 15 * 60 * 1000,
+})
+
 // Throttle self-registration so an open instance can't be spammed into creating
 // unbounded accounts + households: 10 per hour per client, then a 1-hour block.
 const registerLimiter = new RateLimiter({
@@ -90,13 +101,22 @@ export const authRouter = router({
       if (!(await isInstanceLocked(ctx.db))) return { ok: true as const } // open instance
 
       const key = ctx.clientKey ?? 'unknown'
+      const acctKey = normalizeUsername(input.username)
       const now = Date.now()
-      const limit = loginLimiter.check(key, now)
-      if (!limit.allowed) {
+      const ipLimit = loginLimiter.check(key, now)
+      const acctLimit = loginAccountLimiter.check(acctKey, now)
+      if (!ipLimit.allowed || !acctLimit.allowed) {
+        const retryAfterMs = Math.max(ipLimit.retryAfterMs, acctLimit.retryAfterMs)
         throw new TRPCError({
           code: 'TOO_MANY_REQUESTS',
-          message: `Too many attempts. Try again in ${Math.ceil(limit.retryAfterMs / 60000)} minute(s).`,
+          message: `Too many attempts. Try again in ${Math.ceil(retryAfterMs / 60000)} minute(s).`,
         })
+      }
+
+      // Record a failed attempt against both the per-IP and per-account limiters.
+      const recordFail = () => {
+        loginLimiter.fail(key, now)
+        loginAccountLimiter.fail(acctKey, now)
       }
 
       const u = await getUserByUsername(ctx.db, input.username.trim())
@@ -108,19 +128,20 @@ export const authRouter = router({
           ? await verifyPassword(input.password, u.passwordHash)
           : await verifyPasswordDummy(input.password)
       if (!u || !ok) {
-        loginLimiter.fail(key, now)
+        recordFail()
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect username or password' })
       }
 
       if (u.mfaEnabledAt && u.mfaSecret) {
         if (!input.code) return { ok: false as const, mfaRequired: true as const }
         if (!(await verifyMfaCode(ctx.db, u, input.code))) {
-          loginLimiter.fail(key, now)
+          recordFail()
           throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect authentication code' })
         }
       }
 
       loginLimiter.reset(key)
+      loginAccountLimiter.reset(acctKey)
       const householdId = await defaultHouseholdFor(ctx.db, u.id)
       ctx.setSessionCookie?.(await createSession(ctx.db, u.id, householdId))
       return { ok: true as const }

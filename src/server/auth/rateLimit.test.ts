@@ -40,4 +40,29 @@ describe('RateLimiter', () => {
     rl.reset('a')
     expect(rl.check('a', 0).allowed).toBe(true)
   })
+
+  it('prunes stale entries so the map cannot grow without bound', () => {
+    const rl = new RateLimiter(cfg)
+    // A stream of distinct one-off keys (e.g. rotating spoofed IPs), each seen once.
+    for (let i = 0; i < 100; i++) rl.fail(`ip-${i}`, i)
+    expect(rl.size).toBe(100)
+    // A later attempt, well past the window, triggers a sweep of expired entries.
+    rl.fail('fresh', 100 + cfg.windowMs + 1)
+    expect(rl.size).toBe(1)
+  })
+
+  it('keeps still-blocked entries during a sweep', () => {
+    const rl = new RateLimiter(cfg)
+    for (let i = 0; i < 3; i++) rl.fail('blocked', 0) // → blocked until blockMs (5000)
+    for (let i = 0; i < 3; i++) rl.fail('old', 0)
+    // Sweep at t=2000: past the 1000ms window, but 'blocked' is still blocked
+    // (blockedUntil=5000 > now), so it must survive; 'old' expired identically but
+    // is also still blocked here — advance past the block to prove pruning.
+    rl.fail('trigger', 2000)
+    expect(rl.check('blocked', 2000).allowed).toBe(false)
+    // Past the block window: now the swept entry is truly stale and dropped.
+    rl.fail('trigger2', 6000)
+    expect(rl.check('blocked', 6000).allowed).toBe(true)
+    expect(rl.size).toBeLessThan(4)
+  })
 })

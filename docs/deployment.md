@@ -121,13 +121,15 @@ Update later: `git pull && npm install && npm run build && sudo systemctl restar
 | `DATABASE_URL` | `file:./data/app.db` | SQLite location (libsql `file:` URL). Can also point at a [Turso](https://turso.tech) remote URL to decouple data from local disk. |
 | `CLIENT_DIR` | `../client` (source) | Directory of the built UI. Set to `./dist/client` for a non-Docker production run. The Docker image sets this for you. |
 | `HEARTH_SECURE_COOKIES` | unset | Set to `1` to force `Secure` session cookies when behind a reverse proxy that terminates TLS but doesn't forward `x-forwarded-proto: https`. |
-| `HEARTH_TRUST_PROXY` | unset | Set to `1` **only when a reverse proxy / tunnel sits in front** so Fastify reads the real client IP from `X-Forwarded-For` and the login rate limiter throttles per-client. Leave unset when directly exposed — otherwise a client could spoof `X-Forwarded-For` to dodge the limiter. |
+| `HEARTH_TRUST_PROXY` | unset | Set to the **number of proxy hops** in front of Hearth (a single reverse proxy / tunnel = `1`) so Fastify reads the real client IP from `X-Forwarded-For` and the login rate limiter throttles per-client. Leave unset when directly exposed. Do **not** set it to `true`/all — trusting the whole chain lets a client spoof `X-Forwarded-For` and dodge the limiter. Your proxy must **overwrite** (not append to) `X-Forwarded-For`. Also accepts a comma-separated list of trusted proxy IPs/CIDRs. |
 
 Hearth auto-detects HTTPS from `x-forwarded-proto: https` (or a direct HTTPS
 connection) and marks the session cookie `Secure` accordingly; `HEARTH_SECURE_COOKIES=1`
 is the manual override for proxies that don't set that header. When you front Hearth
-with a proxy or tunnel, also set `HEARTH_TRUST_PROXY=1` so the rate limiter sees the
-real client IP rather than the proxy's.
+with a single proxy or tunnel, also set `HEARTH_TRUST_PROXY=1` (the hop count) so the
+rate limiter sees the real client IP rather than the proxy's. Configure that proxy to
+**overwrite** `X-Forwarded-For` with the connecting client's address — if it appends
+instead, a client-supplied header value survives and can be used to spoof the IP.
 
 ---
 
@@ -226,11 +228,13 @@ where you'd add HTTPS with a local certificate. Optional.
 - **HTTPS matters for the cookie.** The session cookie holds a server-side session id
   and is only marked `Secure` over HTTPS. Terminate TLS at a reverse proxy / tunnel
   and, if it doesn't forward `x-forwarded-proto: https`, set `HEARTH_SECURE_COOKIES=1`.
-- **Login is rate-limited** (10 attempts / 15 min per client, then a 15-minute
-  block) to slow brute-forcing; **self-registration** is likewise capped (10 / hour
-  per client) so an open instance can't be spammed into mass-creating households.
-  Behind a proxy, set `HEARTH_TRUST_PROXY=1` so the limit is per real client IP, not
-  per proxy.
+- **Login is rate-limited** — 10 attempts / 15 min per client IP, plus a looser
+  per-account cap (50 / 15 min) that catches a distributed brute-force of one
+  account without letting a single client lock a victim out. **Self-registration**
+  is likewise capped (10 / hour per client) so an open instance can't be spammed
+  into mass-creating households. Behind a proxy, set `HEARTH_TRUST_PROXY` to the hop
+  count (a single proxy = `1`) so the per-IP limit keys on the real client IP, not
+  the proxy — and make the proxy overwrite `X-Forwarded-For`.
 - **The database is not encrypted at rest.** Password hashes, TOTP secrets and
   recovery-code hashes live in the same SQLite file as your data, so two-factor
   protects the *login path*, not someone who already has the file. Keep the data
