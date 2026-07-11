@@ -30,6 +30,7 @@ import { downloadBlob, downloadJson, toCsv } from '../csv'
 import { zipStore } from '../zip'
 import { MIN_PASSWORD_LENGTH, validatePassword } from '../../shared/password-policy'
 import { formatMoney } from '../../shared/money'
+import { LOCALES } from '../setup/locales'
 
 // ---------------------------------------------------------------------------
 // General household settings
@@ -69,6 +70,7 @@ interface GeneralForm {
   decimalPlaces: number | string
   symbolPosition: string
   numberFormat: string
+  locale: string
   weekStart: string
   dateFormat: string
   emergencyMonths: number | string
@@ -84,6 +86,7 @@ function generalFormFrom(hh: Household): GeneralForm {
     decimalPlaces: hh.currencyDecimalPlaces,
     symbolPosition: hh.currencySymbolPosition,
     numberFormat: numberFormatKey(hh.currencyGroupSeparator, hh.currencyDecimalSeparator),
+    locale: hh.locale,
     weekStart: hh.weekStart,
     dateFormat: hh.dateFormat,
     emergencyMonths: hh.emergencyFundMonths,
@@ -122,6 +125,7 @@ function GeneralSection() {
       budgetPeriodStartDay: Number(form.startDay),
       jointContributionBasis: form.jointBasis as 'equal' | 'income_proportional' | 'custom',
       incomeBasisDefault: form.incomeBasis as 'regular_net' | 'latest_payslip' | 'rolling_12m',
+      locale: form.locale,
       weekStart: form.weekStart as 'monday' | 'sunday',
       dateFormat: form.dateFormat as 'iso' | 'numeric' | 'medium' | 'long',
       emergencyFundMonths: Number(form.emergencyMonths),
@@ -225,6 +229,18 @@ function GeneralSection() {
             onChange={(v) => set('incomeBasis', v ?? 'regular_net')}
             allowDeselect={false}
           />
+        </Group>
+        <Group grow>
+          <Select
+            label="Region"
+            description="Sets how dates are shown (numeric day/month order and month names)."
+            data={LOCALES}
+            value={form.locale}
+            searchable
+            onChange={(v) => set('locale', v ?? 'en-GB')}
+            allowDeselect={false}
+          />
+          <div />
         </Group>
         <Group grow>
           <Select

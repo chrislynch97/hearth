@@ -17,6 +17,7 @@ import {
 import { useMediaQuery } from '@mantine/hooks'
 import { trpc } from '../trpc'
 import { CURRENCIES, findCurrency } from './currencies'
+import { LOCALES } from './locales'
 
 // ---------------------------------------------------------------------------
 // Step 1 – Household
@@ -25,12 +26,14 @@ import { CURRENCIES, findCurrency } from './currencies'
 interface HouseholdStepProps {
   initialName: string
   initialCurrencyCode: string
+  initialLocale: string
   onNext: () => void
 }
 
-function HouseholdStep({ initialName, initialCurrencyCode, onNext }: HouseholdStepProps) {
+function HouseholdStep({ initialName, initialCurrencyCode, initialLocale, onNext }: HouseholdStepProps) {
   const [name, setName] = useState(initialName)
   const [currencyCode, setCurrencyCode] = useState(initialCurrencyCode)
+  const [locale, setLocale] = useState(initialLocale)
   const updateHousehold = trpc.household.update.useMutation()
 
   const currencyOptions = CURRENCIES.map((c) => ({ value: c.code, label: c.label }))
@@ -42,6 +45,7 @@ function HouseholdStep({ initialName, initialCurrencyCode, onNext }: HouseholdSt
       currencyCode,
       currencySymbol: preset?.symbol ?? '£',
       currencyDecimalPlaces: preset?.decimalPlaces ?? 2,
+      locale,
     })
     onNext()
   }
@@ -61,6 +65,15 @@ function HouseholdStep({ initialName, initialCurrencyCode, onNext }: HouseholdSt
         value={currencyCode}
         searchable
         onChange={(v) => setCurrencyCode(v ?? 'GBP')}
+        allowDeselect={false}
+      />
+      <Select
+        label="Region"
+        description="Sets how dates are shown (numeric day/month order and month names)."
+        data={LOCALES}
+        value={locale}
+        searchable
+        onChange={(v) => setLocale(v ?? 'en-GB')}
         allowDeselect={false}
       />
       {updateHousehold.error && (
@@ -344,9 +357,10 @@ function RestoreBackupControl() {
 interface SetupWizardProps {
   householdName: string
   currencyCode: string
+  locale: string
 }
 
-export function SetupWizard({ householdName, currencyCode }: SetupWizardProps) {
+export function SetupWizard({ householdName, currencyCode, locale }: SetupWizardProps) {
   const [active, setActive] = useState(0)
   const isMobile = useMediaQuery('(max-width: 48em)')
 
@@ -361,6 +375,7 @@ export function SetupWizard({ householdName, currencyCode }: SetupWizardProps) {
           <HouseholdStep
             initialName={householdName}
             initialCurrencyCode={currencyCode}
+            initialLocale={locale}
             onNext={() => setActive(1)}
           />
         </Stepper.Step>
