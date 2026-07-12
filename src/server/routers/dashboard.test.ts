@@ -26,7 +26,7 @@ describe('dashboard.summary', () => {
     expect(summary.period.start <= summary.period.end).toBe(true)
 
     // Funding: Alice's Rent pot funded at 100000/mo.
-    expect(summary.funding.pots.find((p) => p.potId === pot.id)?.fundingPerMonth).toBe(100000)
+    expect(summary.funding.pots.find((p) => p.potId === pot.id)?.fundingPerPeriod).toBe(100000)
 
     // Backlog picks up the un-reconciled spend.
     expect(summary.backlog.grandTotal).toBe(4200)
@@ -58,6 +58,6 @@ describe('dashboard.summary', () => {
     expect(summary.allocation.perCategory).toEqual([])
     expect(summary.upcoming).toEqual([])
     expect(summary.recentActivity).toEqual([])
-    expect(summary.householdMonthlyIncome).toBe(0)
+    expect(summary.householdPeriodIncome).toBe(0)
   })
 })

@@ -5,11 +5,11 @@ describe('allocationByCategory', () => {
   it('groups pot funding by category, sorted by funding desc, with uncategorised last-resolved', () => {
     const result = allocationByCategory({
       pots: [
-        { id: 'p1', categoryId: 'bills', fundingPerMonth: 5000 },
-        { id: 'p2', categoryId: 'bills', fundingPerMonth: 3000 },
-        { id: 'p3', categoryId: 'fun', fundingPerMonth: 10000 },
-        { id: 'p4', categoryId: null, fundingPerMonth: 2000 },
-        { id: 'p5', categoryId: 'bills', fundingPerMonth: 0 }, // zero funding ignored
+        { id: 'p1', categoryId: 'bills', fundingPerPeriod: 5000 },
+        { id: 'p2', categoryId: 'bills', fundingPerPeriod: 3000 },
+        { id: 'p3', categoryId: 'fun', fundingPerPeriod: 10000 },
+        { id: 'p4', categoryId: null, fundingPerPeriod: 2000 },
+        { id: 'p5', categoryId: 'bills', fundingPerPeriod: 0 }, // zero funding ignored
       ],
       categories: [
         { id: 'bills', name: 'Bills' },
@@ -25,7 +25,7 @@ describe('allocationByCategory', () => {
   })
 
   it('is empty when nothing is funded', () => {
-    const result = allocationByCategory({ pots: [{ id: 'p1', categoryId: 'x', fundingPerMonth: 0 }], categories: [] })
+    const result = allocationByCategory({ pots: [{ id: 'p1', categoryId: 'x', fundingPerPeriod: 0 }], categories: [] })
     expect(result).toEqual({ perCategory: [], total: 0 })
   })
 })

@@ -65,12 +65,12 @@ describe('computeFundingPlan', () => {
     const bobPot = plan.pots.find((p) => p.potId === 'bob-pot')!
     const jointPot = plan.pots.find((p) => p.potId === 'joint-pot')!
 
-    expect(alicePot.fundingPerMonth).toBe(5000)
-    expect(bobPot.fundingPerMonth).toBe(1000)
-    expect(jointPot.fundingPerMonth).toBe(2000)
+    expect(alicePot.fundingPerPeriod).toBe(5000)
+    expect(bobPot.fundingPerPeriod).toBe(1000)
+    expect(jointPot.fundingPerPeriod).toBe(2000)
 
     expect(plan.jointPotFundingTotal).toBe(2000)
-    expect(plan.unassignedFundingPerMonth).toBe(1000)
+    expect(plan.unassignedFundingPerPeriod).toBe(1000)
 
     const alice = plan.perPerson.find((p) => p.memberId === 'alice')!
     const bob = plan.perPerson.find((p) => p.memberId === 'bob')!
@@ -170,8 +170,8 @@ describe('computeFundingPlan', () => {
 
     const plan = computeFundingPlan({ pots, bills: toBills(expenses), setAsides: [], members, jointContributionBasis: 'equal' })
     const alicePot = plan.pots.find((p) => p.potId === 'alice-pot')!
-    expect(alicePot.fundingPerMonth).toBe(0)
-    expect(plan.unassignedFundingPerMonth).toBe(0)
+    expect(alicePot.fundingPerPeriod).toBe(0)
+    expect(plan.unassignedFundingPerPeriod).toBe(0)
   })
 
   it('every funded pot counts toward personalPotFunding and jointPotFundingTotal', () => {
@@ -196,7 +196,7 @@ describe('computeFundingPlan', () => {
     ]
 
     const plan = computeFundingPlan({ pots, bills: toBills(expenses), setAsides: [], members, jointContributionBasis: 'equal' })
-    expect(plan.pots.find((p) => p.potId === 'alice-savings')!.fundingPerMonth).toBe(5000)
+    expect(plan.pots.find((p) => p.potId === 'alice-savings')!.fundingPerPeriod).toBe(5000)
     expect(plan.perPerson.find((p) => p.memberId === 'alice')!.personalPotFunding).toBe(5000)
     expect(plan.jointPotFundingTotal).toBe(3000)
   })
@@ -300,7 +300,7 @@ describe('computeFundingPlan', () => {
     const alice = plan.perPerson.find((p) => p.memberId === 'alice')!
     // set-aside = 40000 personal + 20000 joint (only person) = 60000; remainder = 250000 − 60000
     expect(alice.setAside).toBe(60000)
-    expect(alice.monthlyIncome).toBe(250000)
+    expect(alice.periodIncome).toBe(250000)
     expect(alice.remainder).toBe(190000)
   })
 
@@ -341,6 +341,29 @@ describe('computeFundingPlan', () => {
     const plan = computeFundingPlan({ pots, bills, setAsides: [], members, jointContributionBasis: 'equal' })
     expect(plan.emergencyFund.months).toBe(3)
     expect(plan.emergencyFund.total).toBe(30000)
+  })
+
+  it('normalises funding and income onto a non-monthly budget period', () => {
+    const members = [
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 260000 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
+    ]
+    const pots = [{ id: 'alice-pot', name: 'Alice Personal', ownerId: 'alice' }]
+    // A £120/mo bill on a four-weekly household: £1440/yr ÷ 13 periods = £110.77/period.
+    const bills = [
+      { recurrence: 'monthly' as const, active: true, funding: 'pot_manual' as const, potId: 'alice-pot', categoryId: null, amount: 12000 },
+    ]
+
+    const plan = computeFundingPlan({ pots, bills, setAsides: [], members, jointContributionBasis: 'equal', frequency: 'four_weekly' })
+    const alicePot = plan.pots.find((p) => p.potId === 'alice-pot')!
+    const alice = plan.perPerson.find((p) => p.memberId === 'alice')!
+
+    expect(alicePot.fundingPerPeriod).toBe(Math.round((12000 * 12) / 13)) // 11077
+    // Income re-based onto the four-weekly period: £2600/mo → ÷13 × 12.
+    expect(alice.periodIncome).toBe(Math.round((260000 * 12) / 13)) // 240000
+    expect(alice.remainder).toBe(alice.periodIncome - alice.setAside)
+    // Emergency fund stays monthly regardless of budget period.
+    expect(plan.emergencyFund.perOwner.find((o) => o.memberId === 'alice')!.monthlyBills).toBe(12000)
   })
 
   it('no persons yields empty perPerson split', () => {

@@ -86,7 +86,7 @@ describe('setAside router', () => {
 
     const plan = await caller.plan.funding()
     const potFunding = plan.pots.find((p) => p.potId === pot.id)!
-    expect(potFunding.fundingPerMonth).toBe(10000)
+    expect(potFunding.fundingPerPeriod).toBe(10000)
     const person = plan.perPerson.find((p) => p.memberId === alice.id)!
     expect(person.personalPotFunding).toBe(10000)
   })

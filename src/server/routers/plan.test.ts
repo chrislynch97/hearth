@@ -38,9 +38,9 @@ describe('plan router', () => {
     const bobPotFunding = plan.pots.find((p) => p.potId === bobPot.id)!
     const jointPotFunding = plan.pots.find((p) => p.potId === jointPot.id)!
 
-    expect(alicePotFunding.fundingPerMonth).toBe(5000)
-    expect(bobPotFunding.fundingPerMonth).toBe(1000)
-    expect(jointPotFunding.fundingPerMonth).toBe(2000)
+    expect(alicePotFunding.fundingPerPeriod).toBe(5000)
+    expect(bobPotFunding.fundingPerPeriod).toBe(1000)
+    expect(jointPotFunding.fundingPerPeriod).toBe(2000)
 
     expect(plan.jointPotFundingTotal).toBe(2000)
 
@@ -54,7 +54,7 @@ describe('plan router', () => {
     expect(alicePerson.setAside).toBe(6000) // 5000 personal + 1000 joint
     expect(bobPerson.setAside).toBe(2000) // 1000 personal + 1000 joint
 
-    expect(plan.unassignedFundingPerMonth).toBe(0)
+    expect(plan.unassignedFundingPerPeriod).toBe(0)
   })
 
   it('archived expenses and pots are excluded from the plan', async () => {
@@ -73,7 +73,7 @@ describe('plan router', () => {
 
     const plan = await caller.plan.funding()
     const potFunding = plan.pots.find((p) => p.potId === pot.id)!
-    expect(potFunding.fundingPerMonth).toBe(0)
+    expect(potFunding.fundingPerPeriod).toBe(0)
   })
 
   it('recentlyDue lists dated bills near today, nearest first, with funding', async () => {

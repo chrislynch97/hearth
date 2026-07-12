@@ -6,6 +6,7 @@ import { expense, setAside, household, member, pot } from '../db/schema'
 import { computeFundingPlan } from '../plan/funding'
 import { computeIncomeByMember } from '../income/service'
 import { projectUpcoming, type UpcomingExpenseInput } from '../plan/upcoming'
+import { periodConfig } from '../../shared/period'
 import { addDays, todayIso } from '../../shared/dates'
 import type { Recurrence } from '../../shared/recurrence'
 
@@ -73,6 +74,7 @@ export const planRouter = router({
         monthlyIncome: incomeByMember.get(m.id)?.monthlyIncome ?? 0,
       })),
       jointContributionBasis,
+      frequency: periodConfig(householdRow ?? 1).frequency,
       emergencyFundMonths: householdRow?.emergencyFundMonths ?? 3,
     })
   }),

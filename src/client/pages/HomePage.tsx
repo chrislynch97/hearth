@@ -106,7 +106,7 @@ function SnapshotSection({
   coupleSurplus,
   money,
 }: {
-  perPerson: Array<{ memberId: string; displayName: string; monthlyIncome: number; setAside: number; remainder: number }>
+  perPerson: Array<{ memberId: string; displayName: string; periodIncome: number; setAside: number; remainder: number }>
   jointPotFundingTotal: number
   coupleSurplus: number
   money: MoneyFormat
@@ -114,7 +114,7 @@ function SnapshotSection({
   if (perPerson.length === 0) {
     return (
       <Text c="dimmed" size="sm">
-        Set up your outgoings and income to see your monthly snapshot here.
+        Set up your outgoings and income to see your snapshot for this period here.
       </Text>
     )
   }
@@ -130,7 +130,7 @@ function SnapshotSection({
               <Text size="sm" c="dimmed">
                 Income
               </Text>
-              <Text size="sm">{formatMoney(p.monthlyIncome, money)}</Text>
+              <Text size="sm">{formatMoney(p.periodIncome, money)}</Text>
             </Group>
             <Group justify="space-between">
               <Text size="sm" c="dimmed">
@@ -516,7 +516,7 @@ export function HomePage() {
           />
           {accountsSummary.data && <NetWorthTile data={accountsSummary.data} money={money} />}
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
-            <AllocationCard allocation={summary.allocation} householdIncome={summary.householdMonthlyIncome} money={money} />
+            <AllocationCard allocation={summary.allocation} householdIncome={summary.householdPeriodIncome} money={money} />
             <TrendCard trend={summary.incomeTrend} money={money} />
           </SimpleGrid>
           <UpcomingCard upcoming={summary.upcoming} money={money} />

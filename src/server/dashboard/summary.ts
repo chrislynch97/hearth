@@ -8,9 +8,9 @@ export interface CategoryAllocation {
 }
 
 /** Planned funding grouped by category (null = Uncategorised), zero-funding pots
- *  omitted, sorted by funding descending. */
+ *  omitted, sorted by funding descending. Amounts are per budget period. */
 export function allocationByCategory(input: {
-  pots: Array<{ id: string; categoryId: string | null; fundingPerMonth: number }>
+  pots: Array<{ id: string; categoryId: string | null; fundingPerPeriod: number }>
   categories: Array<{ id: string; name: string }>
 }): { perCategory: CategoryAllocation[]; total: number } {
   const nameById = new Map(input.categories.map((c) => [c.id, c.name]))
@@ -18,9 +18,9 @@ export function allocationByCategory(input: {
   let total = 0
 
   for (const p of input.pots) {
-    if (p.fundingPerMonth === 0) continue
-    byCategory.set(p.categoryId, (byCategory.get(p.categoryId) ?? 0) + p.fundingPerMonth)
-    total += p.fundingPerMonth
+    if (p.fundingPerPeriod === 0) continue
+    byCategory.set(p.categoryId, (byCategory.get(p.categoryId) ?? 0) + p.fundingPerPeriod)
+    total += p.fundingPerPeriod
   }
 
   const perCategory: CategoryAllocation[] = [...byCategory.entries()]

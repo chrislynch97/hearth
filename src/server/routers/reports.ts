@@ -31,7 +31,8 @@ export const reportsRouter = router({
         | 'equal'
         | 'income_proportional'
         | 'custom'
-      const period = periodForDate(input?.periodStart ?? today, periodConfig(householdRow ?? 1))
+      const cfg = periodConfig(householdRow ?? 1)
+      const period = periodForDate(input?.periodStart ?? today, cfg)
       const months = input?.months ?? 6
 
       const members = await ctx.db
@@ -87,21 +88,24 @@ export const reportsRouter = router({
           monthlyIncome: incomeByMember.get(m.id)?.monthlyIncome ?? 0,
         })),
         jointContributionBasis: jointBasis,
+        frequency: cfg.frequency,
       })
       const potCategory = new Map(pots.map((p) => [p.id, p.categoryId]))
+      // Planned funding is per budget period, matching the single-period actual
+      // spend (`inPeriod`) it's compared against in spendVsAllocation.
       const allocation = allocationByCategory({
         pots: [
           ...funding.pots.map((p) => ({
             id: p.potId,
             categoryId: potCategory.get(p.potId) ?? null,
-            fundingPerMonth: p.fundingPerMonth,
+            fundingPerPeriod: p.fundingPerPeriod,
           })),
           // Bills paid straight from the main account (funding='main') are part of
           // the plan too — without them these categories read as planned £0.
           ...funding.mainAccountByCategory.map((m, i) => ({
             id: `main:${i}`,
             categoryId: m.categoryId,
-            fundingPerMonth: m.fundingPerMonth,
+            fundingPerPeriod: m.fundingPerPeriod,
           })),
         ],
         categories: categories.map((c) => ({ id: c.id, name: c.name })),

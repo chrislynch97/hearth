@@ -10,7 +10,7 @@ import { allocationByCategory, monthlyNetTrend } from '../dashboard/summary'
 import { projectUpcoming, type UpcomingExpenseInput } from '../plan/upcoming'
 import { periodForDate, periodConfig } from '../../shared/period'
 import { addDays, todayIso } from '../../shared/dates'
-import type { Recurrence } from '../../shared/recurrence'
+import { monthlyToPeriod, roundMinor, type Recurrence } from '../../shared/recurrence'
 
 const UPCOMING_HORIZON_DAYS = 30
 
@@ -70,7 +70,8 @@ export const dashboardRouter = router({
         | 'equal'
         | 'income_proportional'
         | 'custom'
-      const period = periodForDate(input?.periodStart ?? today, periodConfig(householdRow ?? 1))
+      const cfg = periodConfig(householdRow ?? 1)
+      const period = periodForDate(input?.periodStart ?? today, cfg)
 
       // B / C — funding plan (per-person set-aside, remainder, income share).
       const funding = computeFundingPlan({
@@ -97,6 +98,7 @@ export const dashboardRouter = router({
           monthlyIncome: incomeByMember.get(m.id)?.monthlyIncome ?? 0,
         })),
         jointContributionBasis: jointBasis,
+        frequency: cfg.frequency,
       })
 
       // A — catch-up backlog (all-time un-reconciled).
@@ -121,14 +123,14 @@ export const dashboardRouter = router({
           ...funding.pots.map((p) => ({
             id: p.potId,
             categoryId: potCategoryById.get(p.potId) ?? null,
-            fundingPerMonth: p.fundingPerMonth,
+            fundingPerPeriod: p.fundingPerPeriod,
           })),
           // Bills paid straight from the main account (funding='main') are part of
           // the plan too — without them these categories read as planned £0.
           ...funding.mainAccountByCategory.map((m, i) => ({
             id: `main:${i}`,
             categoryId: m.categoryId,
-            fundingPerMonth: m.fundingPerMonth,
+            fundingPerPeriod: m.fundingPerPeriod,
           })),
         ],
         categories: categories.map((c) => ({ id: c.id, name: c.name })),
@@ -167,7 +169,10 @@ export const dashboardRouter = router({
       }))
       const upcoming = projectUpcoming({ expenses: upcomingExpenses, from: today, to: addDays(today, UPCOMING_HORIZON_DAYS) })
 
-      const householdMonthlyIncome = [...incomeByMember.values()].reduce((acc, i) => acc + i.monthlyIncome, 0)
+      // Re-base household income onto the budget period so it lines up with the
+      // per-period allocation and surplus figures below.
+      const householdMonthly = [...incomeByMember.values()].reduce((acc, i) => acc + i.monthlyIncome, 0)
+      const householdPeriodIncome = roundMinor(monthlyToPeriod(householdMonthly, cfg.frequency))
       const coupleSurplus = funding.perPerson.reduce((acc, p) => acc + p.remainder, 0)
 
       return {
@@ -178,7 +183,7 @@ export const dashboardRouter = router({
         incomeTrend,
         recentActivity,
         upcoming,
-        householdMonthlyIncome,
+        householdPeriodIncome,
         coupleSurplus,
       }
     }),

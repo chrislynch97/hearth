@@ -105,6 +105,37 @@ export function periodForDate(iso: string, config: PeriodConfig | number): Perio
     : weeklyPeriodForDate(iso, cfg)
 }
 
+// ---- Display helpers ----------------------------------------------------
+
+/** Short per-period suffix for money figures, e.g. `£120/mo`, `£120/4 wks`. */
+export function periodUnitLabel(frequency: PeriodFrequency): string {
+  switch (frequency) {
+    case 'monthly':
+      return '/mo'
+    case 'four_weekly':
+      return '/4 wks'
+    case 'fortnightly':
+      return '/2 wks'
+    case 'weekly':
+      return '/wk'
+  }
+}
+
+/** Adverbial phrase for prose, e.g. "set aside this much each month" /
+ *  "every 4 weeks". */
+export function periodAdverb(frequency: PeriodFrequency): string {
+  switch (frequency) {
+    case 'monthly':
+      return 'each month'
+    case 'four_weekly':
+      return 'every 4 weeks'
+    case 'fortnightly':
+      return 'every 2 weeks'
+    case 'weekly':
+      return 'each week'
+  }
+}
+
 /** Move a period forward (`delta > 0`) or back by whole periods. */
 export function shiftPeriod(period: Period, delta: number, config: PeriodConfig | number): Period {
   const cfg = resolveConfig(config)

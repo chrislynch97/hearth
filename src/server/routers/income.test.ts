@@ -53,7 +53,7 @@ describe('income router', () => {
 
     const plan = await caller.plan.funding()
     const aliceRow = plan.perPerson.find((p) => p.memberId === alice.id)!
-    expect(aliceRow.monthlyIncome).toBe(240000)
+    expect(aliceRow.periodIncome).toBe(240000)
     expect(aliceRow.setAside).toBe(40000)
     expect(aliceRow.remainder).toBe(200000)
   })

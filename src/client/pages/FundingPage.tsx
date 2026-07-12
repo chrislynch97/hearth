@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { Alert, Button, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { trpc } from '../trpc'
 import { formatMoney } from '../../shared/money'
+import { periodConfig, periodUnitLabel, periodAdverb } from '../../shared/period'
 import { useMoney, type MoneyFormat } from '../useMoney'
 import type { PotFunding } from '../../server/plan/funding'
 
-/** The per-person standing orders as plaintext, ready to paste into a bank. */
+/** The per-person standing orders as plaintext, ready to paste into a bank.
+ *  `unit` is the household's per-period suffix (e.g. `/mo`, `/4 wks`). */
 function buildPlanText(
   perPerson: Array<{
     memberId: string
@@ -16,20 +18,21 @@ function buildPlanText(
   potsByOwner: Map<string, PotFunding[]>,
   jointTotal: number,
   money: MoneyFormat,
+  unit: string,
 ): string {
-  const lines: string[] = ['Hearth — monthly funding plan', '']
+  const lines: string[] = ['Hearth — funding plan', '']
   for (const person of perPerson) {
     lines.push(`${person.displayName}:`)
     for (const p of potsByOwner.get(person.memberId) ?? []) {
-      lines.push(`  ${p.name}  ${formatMoney(p.fundingPerMonth, money)}/mo`)
+      lines.push(`  ${p.name}  ${formatMoney(p.fundingPerPeriod, money)}${unit}`)
     }
     if (person.jointContribution > 0) {
-      lines.push(`  Joint contribution  ${formatMoney(person.jointContribution, money)}/mo`)
+      lines.push(`  Joint contribution  ${formatMoney(person.jointContribution, money)}${unit}`)
     }
-    lines.push(`  → Set aside  ${formatMoney(person.setAside, money)}/mo`)
+    lines.push(`  → Set aside  ${formatMoney(person.setAside, money)}${unit}`)
     lines.push('')
   }
-  lines.push(`Joint pots total: ${formatMoney(jointTotal, money)}/mo`)
+  lines.push(`Joint pots total: ${formatMoney(jointTotal, money)}${unit}`)
   return lines.join('\n')
 }
 
@@ -37,8 +40,11 @@ export function FundingPage() {
   const fundingQuery = trpc.plan.funding.useQuery()
   const membersQuery = trpc.members.list.useQuery()
   const categoriesQuery = trpc.categories.list.useQuery()
+  const ctx = trpc.bootstrap.context.useQuery()
 
   const money = useMoney()
+  const frequency = periodConfig(ctx.data?.household ?? 1).frequency
+  const unit = periodUnitLabel(frequency)
 
   const isLoading = fundingQuery.isLoading || membersQuery.isLoading
   const plan = fundingQuery.data
@@ -51,7 +57,7 @@ export function FundingPage() {
   const potsByOwner = new Map<string, PotFunding[]>()
   if (plan) {
     for (const p of plan.pots) {
-      if (p.fundingPerMonth === 0) continue
+      if (p.fundingPerPeriod === 0) continue
       const list = potsByOwner.get(p.ownerId) ?? []
       list.push(p)
       potsByOwner.set(p.ownerId, list)
@@ -61,7 +67,7 @@ export function FundingPage() {
   const [copied, setCopied] = useState(false)
   async function handleCopy() {
     if (!plan) return
-    const text = buildPlanText(plan.perPerson, potsByOwner, plan.jointPotFundingTotal, money)
+    const text = buildPlanText(plan.perPerson, potsByOwner, plan.jointPotFundingTotal, money, unit)
     try {
       await navigator.clipboard.writeText(text)
       setCopied(true)
@@ -95,12 +101,12 @@ export function FundingPage() {
       {!isLoading && plan && hasAnything && (
         <>
           <Text size="sm" c="dimmed">
-            This is what to set up as standing orders in Monzo (or your bank) each month.
+            This is what to set up as standing orders in Monzo (or your bank) {periodAdverb(frequency)}.
           </Text>
 
-          {plan.unassignedFundingPerMonth > 0 && (
+          {plan.unassignedFundingPerPeriod > 0 && (
             <Alert color="apricot" title="Unassigned outgoings">
-              {formatMoney(plan.unassignedFundingPerMonth, money)} of outgoings isn't assigned to a pot.
+              {formatMoney(plan.unassignedFundingPerPeriod, money)} of outgoings isn't assigned to a pot.
             </Alert>
           )}
 
@@ -141,26 +147,26 @@ export function FundingPage() {
             </Group>
           </Card>
 
-          {plan.mainAccountFundingPerMonth > 0 && (
+          {plan.mainAccountFundingPerPeriod > 0 && (
             <Card withBorder padding="md">
               <Stack gap="sm">
                 <div>
                   <Title order={4}>Paid from the main account</Title>
                   <Text size="xs" c="dimmed">
-                    Bills with no pot — leave this much in the main account each month to cover them.
+                    Bills with no pot — leave this much in the main account {periodAdverb(frequency)} to cover them.
                   </Text>
                 </div>
                 <Stack gap={2}>
                   {plan.mainAccountByCategory.map((row) => (
                     <Group key={row.categoryId ?? 'none'} justify="space-between" px="xs" py={4}>
                       <Text size="sm">{row.categoryId ? categoryById.get(row.categoryId)?.name ?? 'Uncategorised' : 'Uncategorised'}</Text>
-                      <Text size="sm">{formatMoney(row.fundingPerMonth, money)}/mo</Text>
+                      <Text size="sm">{formatMoney(row.fundingPerPeriod, money)}{unit}</Text>
                     </Group>
                   ))}
                 </Stack>
                 <Group justify="space-between" pt={4} style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
                   <Text fw={600}>Main account total</Text>
-                  <Text fw={600}>{formatMoney(plan.mainAccountFundingPerMonth, money)}/mo</Text>
+                  <Text fw={600}>{formatMoney(plan.mainAccountFundingPerPeriod, money)}{unit}</Text>
                 </Group>
               </Stack>
             </Card>
@@ -213,7 +219,7 @@ export function FundingPage() {
                       {pots.map((p) => (
                         <Group key={p.potId} justify="space-between" px="xs" py={4}>
                           <Text size="sm">{p.name}</Text>
-                          <Text size="sm">{formatMoney(p.fundingPerMonth, money)}/mo</Text>
+                          <Text size="sm">{formatMoney(p.fundingPerPeriod, money)}{unit}</Text>
                         </Group>
                       ))}
                     </Stack>
