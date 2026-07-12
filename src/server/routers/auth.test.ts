@@ -41,6 +41,40 @@ describe('auth router', () => {
     expect(status.user?.username).toBe(USER)
   })
 
+  it('flags firstRunRequired only for an open instance exposed off-box (#34)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { caller } = makeCaller(db)
+    const prevHost = process.env.HOST
+    const prevAllow = process.env.HEARTH_ALLOW_OPEN
+    try {
+      // Open + off-box + no opt-in: the app is otherwise bricked, so the client
+      // must show the first-run set-password screen.
+      process.env.HOST = '0.0.0.0'
+      delete process.env.HEARTH_ALLOW_OPEN
+      expect((await caller.auth.status()).firstRunRequired).toBe(true)
+
+      // Loopback bind is reachable only on-box, so no first-run gate is needed.
+      process.env.HOST = '127.0.0.1'
+      expect((await caller.auth.status()).firstRunRequired).toBe(false)
+
+      // Explicit opt-in also clears it.
+      process.env.HOST = '0.0.0.0'
+      process.env.HEARTH_ALLOW_OPEN = '1'
+      expect((await caller.auth.status()).firstRunRequired).toBe(false)
+
+      // Once a password is set the instance is locked, so it's never first-run.
+      delete process.env.HEARTH_ALLOW_OPEN
+      await makeCaller(db).caller.auth.setPassword({ newPassword: PW })
+      expect((await caller.auth.status()).firstRunRequired).toBe(false)
+    } finally {
+      if (prevHost === undefined) delete process.env.HOST
+      else process.env.HOST = prevHost
+      if (prevAllow === undefined) delete process.env.HEARTH_ALLOW_OPEN
+      else process.env.HEARTH_ALLOW_OPEN = prevAllow
+    }
+  })
+
   it('setPassword locks the instance; wrong login is rejected, correct login sets a cookie', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)

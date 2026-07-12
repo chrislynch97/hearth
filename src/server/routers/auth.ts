@@ -33,6 +33,7 @@ import {
   matchTotpStep,
   verifyTotp,
 } from '../auth/totp'
+import { isOpenAccessBlocked, openGuardConfig } from '../auth/gate'
 import { validatePassword } from '../../shared/password-policy'
 import { RateLimiter } from '../auth/rateLimit'
 import type { Context } from '../trpc/context'
@@ -87,9 +88,16 @@ export const authRouter = router({
     const owner = await getOwnerUser(ctx.db)
     const s = await getValidSession(ctx.db, ctx.sessionToken)
     const cur = s ? await getUser(ctx.db, s.userId) : locked ? null : owner
+    const { bindIsLoopback, allowOpen } = openGuardConfig()
     return {
       passwordSet: locked,
       authenticated: locked ? s !== null : true,
+      // When true the instance is open but exposed off-box with no opt-in, so the
+      // HTTP gate blocks every protected procedure. The SPA renders a first-run
+      // "set your owner password" screen instead of a dead app (#34). `auth.status`
+      // and `auth.setPassword` are on the gate's allowlist, so this reaches the
+      // client and the gate can act on it.
+      firstRunRequired: isOpenAccessBlocked({ locked, bindIsLoopback, allowOpen }),
       mfaEnabled: (cur?.mfaEnabledAt ?? null) !== null,
       user: cur ? { id: cur.id, username: cur.username, displayName: cur.displayName } : null,
     }

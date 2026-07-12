@@ -16,7 +16,7 @@ import { startBackupScheduler } from './backup/runner'
 import { parseSessionCookie } from './auth/cookies'
 import { getValidSession, isInstanceLocked, startSessionPurgeScheduler } from './auth/session'
 import { PUBLIC_PROCEDURES } from './trpc/trpc'
-import { allProceduresIn, isLoopbackHost, trpcProcedures } from './auth/gate'
+import { allProceduresIn, openGuardConfig, trpcProcedures } from './auth/gate'
 import { parseTrustProxy } from './auth/trustProxy'
 
 // On an OPEN (password-less) instance the owner fallback resolves every
@@ -30,8 +30,10 @@ const OPEN_ON_PUBLIC_ALLOWED = new Set([...PUBLIC_PROCEDURES, 'auth.setPassword'
 
 const PORT = Number(process.env.PORT ?? 8787)
 const HOST = process.env.HOST ?? '0.0.0.0'
-const BIND_IS_LOOPBACK = isLoopbackHost(HOST)
-const ALLOW_OPEN = process.env.HEARTH_ALLOW_OPEN === '1'
+// Read the open-on-public guard config through the shared helper so this gate and
+// `auth.status` (which tells the client whether to show the first-run screen) can
+// never disagree on how "reachable off-box" / "operator opted in" are computed.
+const { bindIsLoopback: BIND_IS_LOOPBACK, allowOpen: ALLOW_OPEN } = openGuardConfig()
 
 // A rejected promise or thrown error *outside* a request would otherwise take the
 // whole process down with no explanation — the exact shape of "ran fine, then

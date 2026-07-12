@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router-dom'
 import { trpc } from '@/trpc'
 import { ConnectionError } from './ErrorState'
 import { LoginGate } from './LoginGate'
+import { FirstRunGate } from './FirstRunGate'
 import { AcceptInvite } from './AcceptInvite'
 import { SetupWizard } from './setup/SetupWizard'
 import { AppLayout } from './layout/AppLayout'
@@ -48,6 +49,13 @@ export function App() {
 
   if (authStatus.isError) {
     return <ConnectionError onRetry={() => void authStatus.refetch()} retrying={authStatus.isFetching} />
+  }
+
+  // Open instance exposed off-box with no opt-in: every protected procedure is
+  // 403'd by the server gate, so the app can't boot normally. Offer a first-run
+  // "set your owner password" screen instead of a dead app (#34).
+  if (authStatus.data?.firstRunRequired) {
+    return <FirstRunGate />
   }
 
   if (authStatus.data?.passwordSet && !authStatus.data.authenticated) {

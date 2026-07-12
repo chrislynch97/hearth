@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { MantineProvider } from '@mantine/core'
 import { Notifications } from '@mantine/notifications'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { httpBatchLink } from '@trpc/client'
+import { httpBatchLink, httpLink, splitLink } from '@trpc/client'
 import superjson from 'superjson'
 import { BrowserRouter } from 'react-router-dom'
 import { trpc } from './trpc'
@@ -18,7 +18,22 @@ export function AppProviders({ children }: { children: ReactNode }) {
   // lifetime (TanStack Query's recommended pattern), never rebuilt on re-render.
   const [queryClient] = useState(createQueryClient)
   const [trpcClient] = useState(() =>
-    trpc.createClient({ links: [httpBatchLink({ url: '/trpc', transformer: superjson })] }),
+    trpc.createClient({
+      links: [
+        splitLink({
+          // Send `auth.*` calls unbatched, on their own HTTP request. The
+          // open-on-public guard (server index.ts) gates per HTTP request: a batch
+          // mixing a blocked procedure (e.g. bootstrap.context) with a public one
+          // (auth.status) 403s as a whole, so the SPA could never even read
+          // auth.status to discover it should show a first-run password screen.
+          // Keeping auth.status / auth.setPassword off the batch lets them reach
+          // the gate's allowlist and drive first-run recovery (#34).
+          condition: (op) => op.path.startsWith('auth.'),
+          true: httpLink({ url: '/trpc', transformer: superjson }),
+          false: httpBatchLink({ url: '/trpc', transformer: superjson }),
+        }),
+      ],
+    }),
   )
 
   return (
