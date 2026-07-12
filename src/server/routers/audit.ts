@@ -2,8 +2,9 @@ import { z } from 'zod'
 import { and, desc, eq, lt } from 'drizzle-orm'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertRole, scopeWhere } from '../trpc/tenant'
-import { auditLog } from '../db/schema'
+import { auditLog, household } from '../db/schema'
 import type { AuditLog } from '../db/schema'
+import { pruneAuditLog, retentionCutoff } from '../audit/prune'
 
 /** One audit row with its `changes` JSON parsed back into an object, so the
  *  client gets `{ kind, after | before | fields }` rather than a raw string. */
@@ -50,5 +51,30 @@ export const auditRouter = router({
         .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
         .limit(input?.limit ?? 100)
       return rows.map((r) => ({ ...r, changes: r.changes ? JSON.parse(r.changes) : null }))
+    }),
+
+  /** Prune old audit entries for the household (issue #41) — the one sanctioned
+   *  bulk-delete on the append-only trail, kept off the write path. Owner-gated:
+   *  reading the log needs `admin`, but destroying it is a heavier act reserved
+   *  for the household owner. Deletes entries older than `olderThanDays`, or —
+   *  when that is omitted — older than the household's configured
+   *  `auditRetentionDays`. A no-op (returns `{ pruned: 0 }`) when neither yields a
+   *  window, so calling it on a retention-off household never deletes anything. */
+  prune: publicProcedure
+    .input(z.object({ olderThanDays: z.number().int().min(1).max(3650).optional() }).optional())
+    .mutation(async ({ ctx, input }): Promise<{ pruned: number; cutoff: Date | null }> => {
+      assertRole(ctx.role, 'owner')
+      let days = input?.olderThanDays
+      if (days == null) {
+        const [hh] = await ctx.db
+          .select({ retention: household.auditRetentionDays })
+          .from(household)
+          .where(eq(household.id, ctx.householdId))
+        days = hh?.retention ?? 0
+      }
+      const cutoff = retentionCutoff(days, Date.now())
+      if (!cutoff) return { pruned: 0, cutoff: null }
+      const pruned = await pruneAuditLog(ctx.db, ctx.householdId, cutoff)
+      return { pruned, cutoff }
     }),
 })

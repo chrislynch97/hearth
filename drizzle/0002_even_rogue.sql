@@ -1,0 +1,2 @@
+ALTER TABLE "household" ADD COLUMN "audit_retention_days" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+CREATE INDEX "audit_log_household_created_idx" ON "audit_log" USING btree ("household_id","created_at");

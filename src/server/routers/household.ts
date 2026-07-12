@@ -30,6 +30,8 @@ export const householdRouter = router({
         weekStart: z.enum(['monday', 'sunday']).optional(),
         dateFormat: z.enum(['iso', 'numeric', 'medium', 'long']).optional(),
         backupFrequency: z.enum(['off', 'daily', 'weekly']).optional(),
+        // Audit-log retention window in days (issue #41); 0 = keep forever.
+        auditRetentionDays: z.number().int().min(0).max(3650).optional(),
         incomeBasisDefault: z
           .enum(['regular_net', 'latest_payslip', 'rolling_12m'])
           .optional(),

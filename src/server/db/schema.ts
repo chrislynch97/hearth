@@ -65,6 +65,11 @@ export const household = pgTable('household', {
   dateFormat: text('date_format').notNull().default('medium'), // 'iso' | 'numeric' | 'medium' | 'long'
   backupFrequency: text('backup_frequency').notNull().default('off'), // 'off' | 'daily' | 'weekly'
   backupLastAt: timestamp('backup_last_at', { withTimezone: true, mode: 'date' }),
+  // Audit-log retention window in days (issue #41). 0 = keep forever (the
+  // default); N>0 prunes entries older than N days, both on the manual
+  // `audit.prune` and via the hourly background pruner (audit/prune.ts). Pruning
+  // is the one sanctioned bulk-delete on the otherwise append-only trail.
+  auditRetentionDays: integer('audit_retention_days').notNull().default(0),
   setupCompletedAt: timestamp('setup_completed_at', { withTimezone: true, mode: 'date' }),
   incomeBasisDefault: text('income_basis_default').notNull().default('regular_net'),
   jointContributionBasis: text('joint_contribution_basis').notNull().default('equal'),
@@ -538,6 +543,10 @@ export const auditLog = pgTable('audit_log', {
   householdIdx: index('audit_log_household_id_idx').on(t.householdId),
   // The common lookup: "history for this one entity", newest first.
   entityIdx: index('audit_log_entity_idx').on(t.householdId, t.entityType, t.entityId),
+  // Retention prune (issue #41) scans by age within a household:
+  // WHERE household_id = ? AND created_at < cutoff. This index makes that a range
+  // scan rather than a full-table sweep for long-lived households.
+  createdIdx: index('audit_log_household_created_idx').on(t.householdId, t.createdAt),
 }))
 
 export type AuditLog = typeof auditLog.$inferSelect

@@ -13,6 +13,7 @@ import { runMigrations } from './db/migrate'
 import { ensureSeed } from './db/seed'
 import { db, closeDb } from './db/client'
 import { startBackupScheduler } from './backup/runner'
+import { startAuditPruneScheduler } from './audit/prune'
 import { parseSessionCookie } from './auth/cookies'
 import { getValidSession, isInstanceLocked, startSessionPurgeScheduler } from './auth/session'
 import { PUBLIC_PROCEDURES } from './trpc/trpc'
@@ -79,6 +80,7 @@ async function main() {
   await runMigrations()
   await ensureSeed(db)
   startBackupScheduler(db)
+  startAuditPruneScheduler(db)
   startSessionPurgeScheduler(db)
 
   // 64 MB body limit so restoring a large JSON export isn't rejected (default 1 MB).

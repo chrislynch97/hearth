@@ -15,6 +15,13 @@
       "when": 1783847194758,
       "tag": "0001_busy_toad_men",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783880546534,
+      "tag": "0002_even_rogue",
+      "breakpoints": true
     }
   ]
 }

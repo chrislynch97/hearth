@@ -1,10 +1,29 @@
 import { describe, it, expect } from 'vitest'
+import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
 import { appRouter } from '../trpc/router'
 import { getOwnerUser } from '../auth/session'
-import { household } from '../db/schema'
+import { auditLog, household } from '../db/schema'
+import { newId } from '../../shared/ids'
 import type { DB } from '../db/client'
+
+const DAY = 86_400_000
+
+/** Insert an audit row `ageDays` old for the household under test. */
+async function seedEntry(db: DB, ageDays: number): Promise<void> {
+  await db.insert(auditLog).values({
+    id: newId(),
+    householdId: 'household',
+    actorUserId: null,
+    actorLabel: null,
+    entityType: 'category',
+    entityId: newId(),
+    action: 'create',
+    changes: JSON.stringify({ kind: 'create', after: {} }),
+    createdAt: new Date(Date.now() - ageDays * DAY),
+  })
+}
 
 /** A caller acting as the seeded owner (so audit rows capture a real actor). */
 async function ownerCaller(db: DB, householdId = 'household') {
@@ -151,6 +170,54 @@ describe('audit log (issue #35)', () => {
     const changes = entry!.changes as { fields: Record<string, unknown> }
     // Only note changed — the identical lines array must not appear in the diff.
     expect(Object.keys(changes.fields)).toEqual(['note'])
+  })
+
+  it('prunes entries older than an explicit window (issue #41)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { caller } = await ownerCaller(db)
+
+    await seedEntry(db, 40)
+    await seedEntry(db, 10)
+
+    const res = await caller.audit.prune({ olderThanDays: 30 })
+    expect(res.pruned).toBe(1)
+    const remaining = await db.select().from(auditLog).where(eq(auditLog.householdId, 'household'))
+    expect(remaining.length).toBe(1)
+  })
+
+  it('prunes using the household retention window when none is passed', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { caller } = await ownerCaller(db)
+
+    await seedEntry(db, 40)
+    await db.update(household).set({ auditRetentionDays: 30 }).where(eq(household.id, 'household'))
+
+    const res = await caller.audit.prune()
+    expect(res.pruned).toBe(1)
+  })
+
+  it('is a no-op when retention is off and no window is given', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { caller } = await ownerCaller(db)
+
+    await seedEntry(db, 40)
+    // Seeded household defaults to auditRetentionDays = 0 (keep forever).
+    const res = await caller.audit.prune()
+    expect(res).toEqual({ pruned: 0, cutoff: null })
+    const remaining = await db.select().from(auditLog).where(eq(auditLog.householdId, 'household'))
+    expect(remaining.length).toBe(1)
+  })
+
+  it('gates prune behind the owner role', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const admin = appRouter.createCaller({ db, householdId: 'household', role: 'admin' })
+
+    // Reading is admin-gated, but destroying the trail needs owner.
+    await expect(admin.audit.prune({ olderThanDays: 30 })).rejects.toMatchObject({ code: 'FORBIDDEN' })
   })
 
   it('returns entries newest-first', async () => {
