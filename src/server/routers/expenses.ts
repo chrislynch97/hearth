@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
+import { recordAudit } from '../trpc/audit'
 import { expense, category, pot } from '../db/schema'
 import type { Expense } from '../db/schema'
 import { newId } from '../../shared/ids'
@@ -103,7 +104,9 @@ export const expensesRouter = router({
       updatedAt: now,
     })
 
-    return loadExpense(ctx.db, ctx.householdId, id)
+    const created = await loadExpense(ctx.db, ctx.householdId, id)
+    recordAudit(ctx, { entityType: 'expense', entityId: id, action: 'create', after: created })
+    return created
   }),
 
   update: publicProcedure
@@ -159,17 +162,20 @@ export const expensesRouter = router({
           .where(scopeWhere(ctx.householdId, expense.householdId, eq(expense.id, id)))
         throwStaleWrite('Bill', current != null)
       }
-      return loadExpense(ctx.db, ctx.householdId, id)
+      const after = await loadExpense(ctx.db, ctx.householdId, id)
+      recordAudit(ctx, { entityType: 'expense', entityId: id, action: 'update', before: target, after })
+      return after
     }),
 
   archive: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await loadExpense(ctx.db, ctx.householdId, input.id)
+      const target = await loadExpense(ctx.db, ctx.householdId, input.id)
       const now = new Date()
       await ctx.db
         .update(expense)
         .set({ archivedAt: now, updatedAt: now })
         .where(scopeWhere(ctx.householdId, expense.householdId, eq(expense.id, input.id)))
+      recordAudit(ctx, { entityType: 'expense', entityId: input.id, action: 'archive', before: target })
     }),
 })

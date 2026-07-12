@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertPerson, scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
+import { recordAudit } from '../trpc/audit'
 import { payslipComponentType } from '../db/schema'
 import { newId } from '../../shared/ids'
 
@@ -61,6 +62,7 @@ export const payslipComponentsRouter = router({
           updatedAt: now,
         })
         .returning()
+      recordAudit(ctx, { entityType: 'payslipComponent', entityId: id, action: 'create', after: inserted })
       return inserted!
     }),
 
@@ -81,12 +83,20 @@ export const payslipComponentsRouter = router({
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (isVariable !== undefined) setFields['isVariable'] = isVariable ? 1 : 0
 
+      const [before] = await ctx.db
+        .select()
+        .from(payslipComponentType)
+        .where(scopeWhere(ctx.householdId, payslipComponentType.householdId, eq(payslipComponentType.id, id)))
+
       const [updated] = await ctx.db
         .update(payslipComponentType)
         .set(setFields)
         .where(scopeWhere(ctx.householdId, payslipComponentType.householdId, eq(payslipComponentType.id, id), versionGuard(payslipComponentType.updatedAt, expectedUpdatedAt)))
         .returning()
-      if (updated) return updated
+      if (updated) {
+        recordAudit(ctx, { entityType: 'payslipComponent', entityId: id, action: 'update', before, after: updated })
+        return updated
+      }
 
       const [current] = await ctx.db
         .select({ id: payslipComponentType.id })
@@ -110,5 +120,6 @@ export const payslipComponentsRouter = router({
         .update(payslipComponentType)
         .set({ archivedAt: now, updatedAt: now })
         .where(scopeWhere(ctx.householdId, payslipComponentType.householdId, eq(payslipComponentType.id, input.id)))
+      recordAudit(ctx, { entityType: 'payslipComponent', entityId: input.id, action: 'archive', before: target })
     }),
 })

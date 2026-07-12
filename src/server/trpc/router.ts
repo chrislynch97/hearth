@@ -23,6 +23,7 @@ import { importsRouter } from '../routers/imports'
 import { usersRouter } from '../routers/users'
 import { invitationsRouter } from '../routers/invitations'
 import { accessRouter } from '../routers/access'
+import { auditRouter } from '../routers/audit'
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({ status: 'ok' as const })),
@@ -50,6 +51,7 @@ export const appRouter = router({
   users: usersRouter,
   invitations: invitationsRouter,
   access: accessRouter,
+  audit: auditRouter,
 })
 
 export type AppRouter = typeof appRouter

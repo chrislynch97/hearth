@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
+import { recordAudit } from '../trpc/audit'
 import { category } from '../db/schema'
 import { newId } from '../../shared/ids'
 
@@ -39,6 +40,7 @@ export const categoriesRouter = router({
           updatedAt: now,
         })
         .returning()
+      recordAudit(ctx, { entityType: 'category', entityId: id, action: 'create', after: inserted })
       return inserted!
     }),
 
@@ -55,13 +57,21 @@ export const categoriesRouter = router({
       const { id, expectedUpdatedAt, ...fields } = input
       const now = new Date()
 
+      const [before] = await ctx.db
+        .select()
+        .from(category)
+        .where(scopeWhere(ctx.householdId, category.householdId, eq(category.id, id)))
+
       const [updated] = await ctx.db
         .update(category)
         .set({ ...fields, updatedAt: now })
         .where(scopeWhere(ctx.householdId, category.householdId, eq(category.id, id), versionGuard(category.updatedAt, expectedUpdatedAt)))
         .returning()
 
-      if (updated) return updated
+      if (updated) {
+        recordAudit(ctx, { entityType: 'category', entityId: id, action: 'update', before, after: updated })
+        return updated
+      }
 
       const [current] = await ctx.db
         .select({ id: category.id })
@@ -87,5 +97,6 @@ export const categoriesRouter = router({
         .update(category)
         .set({ archivedAt: now, updatedAt: now })
         .where(scopeWhere(ctx.householdId, category.householdId, eq(category.id, input.id)))
+      recordAudit(ctx, { entityType: 'category', entityId: input.id, action: 'archive', before: target })
     }),
 })

@@ -2,6 +2,7 @@ import { initTRPC, TRPCError } from '@trpc/server'
 import superjson from 'superjson'
 import type { Context } from './context'
 import { hasRole } from './tenant'
+import { flushAuditEntries } from './audit'
 import { getValidSession, isInstanceLocked } from '../auth/session'
 
 // tRPC procedures reachable WITHOUT authentication. A locked instance must still
@@ -121,8 +122,30 @@ const enforceAuthenticated = t.middleware(async ({ ctx, path, next }) => {
   return next()
 })
 
+/** Append-only audit trail (issue #35). A resolver stages changes via
+ *  `recordAudit(ctx, …)`; this middleware writes them once the mutation has
+ *  succeeded, so every router's audit rows land through one code path (household,
+ *  actor and timestamp filled uniformly). Best-effort: a failure to write the
+ *  trail is logged, never propagated — audit must never break a real mutation.
+ *  Only successful mutations flush; a resolver that threw leaves nothing staged
+ *  to write, and `next()` surfaces the failure as `{ ok: false }`. */
+const recordAuditMiddleware = t.middleware(async ({ ctx, type, next }) => {
+  const result = await next()
+  if (type === 'mutation' && result.ok) {
+    try {
+      await flushAuditEntries(ctx)
+    } catch (err) {
+      console.error('[audit] failed to write audit log entries', err)
+    }
+  }
+  return result
+})
+
 /** The base procedure. Despite the historical name it is NOT anonymous-open:
  *  every procedure built from it is authenticated-by-default (enforceAuthenticated)
  *  unless its path is in PUBLIC_PROCEDURES, and write mutations additionally need a
  *  writable household role (enforceWriteRole). */
-export const publicProcedure = t.procedure.use(enforceAuthenticated).use(enforceWriteRole)
+export const publicProcedure = t.procedure
+  .use(enforceAuthenticated)
+  .use(enforceWriteRole)
+  .use(recordAuditMiddleware)

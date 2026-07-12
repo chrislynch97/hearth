@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertMember, scopeWhere } from '../trpc/tenant'
+import { recordAudit } from '../trpc/audit'
 import { spendTransaction, importBatch, household } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { parseCsvTable } from '../../shared/csvParse'
@@ -171,6 +172,14 @@ export const importsRouter = router({
           })
         }
       })
+
+      // One audit entry for the whole import (the batch); each imported spend
+      // carries importBatchId back to it, so per-row audit rows would be noise.
+      const [batch] = await ctx.db
+        .select()
+        .from(importBatch)
+        .where(scopeWhere(ctx.householdId, importBatch.householdId, eq(importBatch.id, batchId)))
+      recordAudit(ctx, { entityType: 'importBatch', entityId: batchId, action: 'create', after: batch })
 
       return { batchId, imported: importedCount, skipped: skippedCount }
     }),

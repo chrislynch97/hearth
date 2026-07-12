@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertMember, scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
+import { recordAudit } from '../trpc/audit'
 import { pot, expense, setAside, spendTransaction, reconciliationBatch } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { contributionLineInput, insertContributionLines } from './setAside'
@@ -81,6 +82,7 @@ export const potsRouter = router({
           updatedAt: now,
         })
         .returning()
+      recordAudit(ctx, { entityType: 'pot', entityId: id, action: 'create', after: inserted })
       return inserted!
     }),
 
@@ -128,6 +130,7 @@ export const potsRouter = router({
           .returning()
 
         await insertContributionLines(tx, ctx.householdId, inserted!, input.lines, now)
+        recordAudit(ctx, { entityType: 'pot', entityId: inserted!.id, action: 'create', after: inserted })
         return inserted!
       })
     }),
@@ -154,13 +157,21 @@ export const potsRouter = router({
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (ownerId !== undefined) setFields['ownerId'] = ownerId
 
+      const [before] = await ctx.db
+        .select()
+        .from(pot)
+        .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, id)))
+
       const [updated] = await ctx.db
         .update(pot)
         .set(setFields)
         .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, id), versionGuard(pot.updatedAt, expectedUpdatedAt)))
         .returning()
 
-      if (updated) return updated
+      if (updated) {
+        recordAudit(ctx, { entityType: 'pot', entityId: id, action: 'update', before, after: updated })
+        return updated
+      }
 
       const [current] = await ctx.db
         .select({ id: pot.id })
@@ -186,5 +197,6 @@ export const potsRouter = router({
         .update(pot)
         .set({ archivedAt: now, updatedAt: now })
         .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, input.id)))
+      recordAudit(ctx, { entityType: 'pot', entityId: input.id, action: 'archive', before: target })
     }),
 })

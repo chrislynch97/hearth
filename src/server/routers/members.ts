@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertRole, scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
+import { recordAudit } from '../trpc/audit'
 import { member } from '../db/schema'
 import { acceptedMembership } from '../auth/session'
 import { newId } from '../../shared/ids'
@@ -52,6 +53,7 @@ export const membersRouter = router({
           updatedAt: now,
         })
         .returning()
+      recordAudit(ctx, { entityType: 'member', entityId: id, action: 'create', after: inserted })
       return inserted!
     }),
 
@@ -71,13 +73,21 @@ export const membersRouter = router({
       const { id, expectedUpdatedAt, ...fields } = input
       const now = new Date()
 
+      const [before] = await ctx.db
+        .select()
+        .from(member)
+        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, id)))
+
       const [updated] = await ctx.db
         .update(member)
         .set({ ...fields, updatedAt: now })
         .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, id), versionGuard(member.updatedAt, expectedUpdatedAt)))
         .returning()
 
-      if (updated) return updated
+      if (updated) {
+        recordAudit(ctx, { entityType: 'member', entityId: id, action: 'update', before, after: updated })
+        return updated
+      }
 
       const [current] = await ctx.db
         .select({ id: member.id })
@@ -117,6 +127,12 @@ export const membersRouter = router({
         .update(member)
         .set({ userId: input.userId, updatedAt: now })
         .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, input.memberId)))
+
+      const [after] = await ctx.db
+        .select()
+        .from(member)
+        .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, input.memberId)))
+      recordAudit(ctx, { entityType: 'member', entityId: input.memberId, action: 'update', before: target, after })
       return { ok: true as const }
     }),
 
@@ -149,6 +165,7 @@ export const membersRouter = router({
         .select()
         .from(member)
         .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, input.id)))
+      recordAudit(ctx, { entityType: 'member', entityId: input.id, action: 'archive', before: target })
       return updated
     }),
 })

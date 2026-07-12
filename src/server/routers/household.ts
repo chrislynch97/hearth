@@ -3,6 +3,7 @@ import { eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertRole, scopeWhere } from '../trpc/tenant'
+import { recordAudit } from '../trpc/audit'
 import { household, member } from '../db/schema'
 
 export const householdRouter = router({
@@ -41,6 +42,7 @@ export const householdRouter = router({
     .mutation(async ({ ctx, input }) => {
       assertRole(ctx.role, 'admin')
       const now = new Date()
+      const [before] = await ctx.db.select().from(household).where(eq(household.id, ctx.householdId))
       await ctx.db
         .update(household)
         .set({ ...input, updatedAt: now })
@@ -55,6 +57,7 @@ export const householdRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Household not found' })
       }
 
+      recordAudit(ctx, { entityType: 'household', entityId: ctx.householdId, action: 'update', before, after: updated })
       return updated
     }),
 
@@ -75,6 +78,7 @@ export const householdRouter = router({
     }
 
     const now = new Date()
+    const [before] = await ctx.db.select().from(household).where(eq(household.id, ctx.householdId))
     await ctx.db
       .update(household)
       .set({ setupCompletedAt: now, updatedAt: now })
@@ -89,6 +93,7 @@ export const householdRouter = router({
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Household not found' })
     }
 
+    recordAudit(ctx, { entityType: 'household', entityId: ctx.householdId, action: 'update', before, after: updated })
     return updated
   }),
 })

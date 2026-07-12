@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertMember, scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
+import { recordAudit } from '../trpc/audit'
 import { incomeSource } from '../db/schema'
 import { newId } from '../../shared/ids'
 
@@ -52,6 +53,7 @@ export const incomeSourcesRouter = router({
           updatedAt: now,
         })
         .returning()
+      recordAudit(ctx, { entityType: 'incomeSource', entityId: id, action: 'create', after: inserted })
       return inserted!
     }),
 
@@ -74,12 +76,20 @@ export const incomeSourcesRouter = router({
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (active !== undefined) setFields['active'] = active ? 1 : 0
 
+      const [before] = await ctx.db
+        .select()
+        .from(incomeSource)
+        .where(scopeWhere(ctx.householdId, incomeSource.householdId, eq(incomeSource.id, id)))
+
       const [updated] = await ctx.db
         .update(incomeSource)
         .set(setFields)
         .where(scopeWhere(ctx.householdId, incomeSource.householdId, eq(incomeSource.id, id), versionGuard(incomeSource.updatedAt, expectedUpdatedAt)))
         .returning()
-      if (updated) return updated
+      if (updated) {
+        recordAudit(ctx, { entityType: 'incomeSource', entityId: id, action: 'update', before, after: updated })
+        return updated
+      }
 
       const [current] = await ctx.db
         .select({ id: incomeSource.id })
@@ -103,5 +113,6 @@ export const incomeSourcesRouter = router({
         .update(incomeSource)
         .set({ archivedAt: now, updatedAt: now })
         .where(scopeWhere(ctx.householdId, incomeSource.householdId, eq(incomeSource.id, input.id)))
+      recordAudit(ctx, { entityType: 'incomeSource', entityId: input.id, action: 'archive', before: target })
     }),
 })

@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertPerson, scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
+import { recordAudit } from '../trpc/audit'
 import { raise } from '../db/schema'
 import type { Raise } from '../db/schema'
 import { newId } from '../../shared/ids'
@@ -61,6 +62,7 @@ export const raisesRouter = router({
           updatedAt: now,
         })
         .returning()
+      recordAudit(ctx, { entityType: 'raise', entityId: id, action: 'create', after: inserted })
       return inserted!
     }),
 
@@ -79,12 +81,19 @@ export const raisesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, expectedUpdatedAt, ...rest } = input
       const now = new Date()
+      const [before] = await ctx.db
+        .select()
+        .from(raise)
+        .where(scopeWhere(ctx.householdId, raise.householdId, eq(raise.id, id)))
       const [updated] = await ctx.db
         .update(raise)
         .set({ ...rest, updatedAt: now })
         .where(scopeWhere(ctx.householdId, raise.householdId, eq(raise.id, id), versionGuard(raise.updatedAt, expectedUpdatedAt)))
         .returning()
-      if (updated) return updated
+      if (updated) {
+        recordAudit(ctx, { entityType: 'raise', entityId: id, action: 'update', before, after: updated })
+        return updated
+      }
 
       const [current] = await ctx.db
         .select({ id: raise.id })
@@ -104,5 +113,6 @@ export const raisesRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Raise not found' })
       }
       await ctx.db.delete(raise).where(scopeWhere(ctx.householdId, raise.householdId, eq(raise.id, input.id)))
+      recordAudit(ctx, { entityType: 'raise', entityId: input.id, action: 'delete', before: target })
     }),
 })

@@ -3,6 +3,7 @@ import { desc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { scopeWhere } from '../trpc/tenant'
+import { recordAudit } from '../trpc/audit'
 import { spendTransaction, pot, reconciliationBatch } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { computeBacklog } from '../spending/backlog'
@@ -83,6 +84,7 @@ export const reconcileRouter = router({
         .set({ reconciled: 1, reconciledAt: now, reconciliationBatchId: batchId, updatedAt: now })
         .where(scope())
 
+      recordAudit(ctx, { entityType: 'reconciliationBatch', entityId: batchId, action: 'create', after: batch })
       return batch!
     }),
 
@@ -115,6 +117,11 @@ export const reconcileRouter = router({
           ),
         )
 
+      const [after] = await ctx.db
+        .select()
+        .from(reconciliationBatch)
+        .where(scopeWhere(ctx.householdId, reconciliationBatch.householdId, eq(reconciliationBatch.id, input.batchId)))
+      recordAudit(ctx, { entityType: 'reconciliationBatch', entityId: input.batchId, action: 'update', before: batch, after })
       return { batchId: input.batchId }
     }),
 

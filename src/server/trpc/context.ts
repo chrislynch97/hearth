@@ -7,6 +7,7 @@ import type { Session } from '../db/schema'
 import { parseSessionCookie, serializeSessionCookie } from '../auth/cookies'
 import { getOwnerUser, getValidSession, isInstanceLocked } from '../auth/session'
 import { DEFAULT_HOUSEHOLD_ID } from './tenant'
+import type { StagedAudit } from './audit'
 
 // The HTTP auth gate (index.ts) already validates the session for locked,
 // authenticated requests. Stash that result keyed by the request object so
@@ -36,6 +37,9 @@ export interface Context {
   clientKey?: string
   /** Set (or clear, with `null`) the session cookie on the response. */
   setSessionCookie?: (token: string | null) => void
+  /** Per-request buffer of audit-log entries a mutation resolver has staged via
+   *  `recordAudit`; flushed to `audit_log` by the audit middleware on success. */
+  auditEntries?: StagedAudit[]
 }
 
 function isHttps(req: CreateFastifyContextOptions['req'] | undefined): boolean {
@@ -122,6 +126,7 @@ export async function createContext(opts?: CreateFastifyContextOptions): Promise
     sessionId: identity.sessionId,
     sessionToken,
     clientKey: req?.ip,
+    auditEntries: [],
     setSessionCookie: res
       ? (token) => {
           void res.header('set-cookie', serializeSessionCookie(token, secure))

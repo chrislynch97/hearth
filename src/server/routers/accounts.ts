@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertMember, scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
+import { recordAudit } from '../trpc/audit'
 import { account, accountBalance } from '../db/schema'
 import type { Account, AccountBalance } from '../db/schema'
 import { newId } from '../../shared/ids'
@@ -112,7 +113,9 @@ export const accountsRouter = router({
         createdAt: now,
         updatedAt: now,
       })
-      return getAccount(ctx.db, ctx.householdId, id)
+      const created = await getAccount(ctx.db, ctx.householdId, id)
+      recordAudit(ctx, { entityType: 'account', entityId: id, action: 'create', after: created })
+      return created
     }),
 
   update: publicProcedure
@@ -134,6 +137,7 @@ export const accountsRouter = router({
       if (ownerId !== undefined) await assertMember(ctx.db, ctx.householdId, ownerId)
       const setFields: Record<string, unknown> = { ...rest, updatedAt: new Date() }
       if (ownerId !== undefined) setFields['ownerId'] = ownerId
+      const before = await getAccount(ctx.db, ctx.householdId, id)
       const [written] = await ctx.db
         .update(account)
         .set(setFields)
@@ -146,26 +150,30 @@ export const accountsRouter = router({
           .where(scopeWhere(ctx.householdId, account.householdId, eq(account.id, id)))
         throwStaleWrite('Account', current != null)
       }
-      return getAccount(ctx.db, ctx.householdId, id)
+      const after = await getAccount(ctx.db, ctx.householdId, id)
+      recordAudit(ctx, { entityType: 'account', entityId: id, action: 'update', before, after })
+      return after
     }),
 
   archive: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await getAccount(ctx.db, ctx.householdId, input.id)
+      const target = await getAccount(ctx.db, ctx.householdId, input.id)
       const now = new Date()
       await ctx.db
         .update(account)
         .set({ archivedAt: now, updatedAt: now })
         .where(scopeWhere(ctx.householdId, account.householdId, eq(account.id, input.id)))
+      recordAudit(ctx, { entityType: 'account', entityId: input.id, action: 'archive', before: target })
     }),
 
   /** Hard-delete an account and its balances (cascade). */
   remove: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await getAccount(ctx.db, ctx.householdId, input.id)
+      const target = await getAccount(ctx.db, ctx.householdId, input.id)
       await ctx.db.delete(account).where(scopeWhere(ctx.householdId, account.householdId, eq(account.id, input.id)))
+      recordAudit(ctx, { entityType: 'account', entityId: input.id, action: 'delete', before: target })
     }),
 
   // -- Balances ------------------------------------------------------------
@@ -216,6 +224,7 @@ export const accountsRouter = router({
           .select()
           .from(accountBalance)
           .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, match.id)))
+        recordAudit(ctx, { entityType: 'accountBalance', entityId: match.id, action: 'update', before: match, after: updated })
         return updated!
       }
 
@@ -234,6 +243,7 @@ export const accountsRouter = router({
         .select()
         .from(accountBalance)
         .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, id)))
+      recordAudit(ctx, { entityType: 'accountBalance', entityId: id, action: 'create', after: inserted })
       return inserted!
     }),
 
@@ -249,12 +259,19 @@ export const accountsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, expectedUpdatedAt, ...rest } = input
+      const [before] = await ctx.db
+        .select()
+        .from(accountBalance)
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, id)))
       const [updated] = await ctx.db
         .update(accountBalance)
         .set({ ...rest, updatedAt: new Date() })
         .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, id), versionGuard(accountBalance.updatedAt, expectedUpdatedAt)))
         .returning()
-      if (updated) return updated
+      if (updated) {
+        recordAudit(ctx, { entityType: 'accountBalance', entityId: id, action: 'update', before, after: updated })
+        return updated
+      }
 
       const [current] = await ctx.db
         .select({ id: accountBalance.id })
@@ -274,5 +291,6 @@ export const accountsRouter = router({
       await ctx.db
         .delete(accountBalance)
         .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, input.id)))
+      recordAudit(ctx, { entityType: 'accountBalance', entityId: input.id, action: 'delete', before: target })
     }),
 })

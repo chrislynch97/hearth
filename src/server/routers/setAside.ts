@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertMember, scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
+import { recordAudit } from '../trpc/audit'
 import { setAside, pot } from '../db/schema'
 import type { SetAside, Pot } from '../db/schema'
 import { newId } from '../../shared/ids'
@@ -106,7 +107,9 @@ export const setAsideRouter = router({
       createdAt: now,
       updatedAt: now,
     })
-    return load(ctx.db, ctx.householdId, id)
+    const created = await load(ctx.db, ctx.householdId, id)
+    recordAudit(ctx, { entityType: 'setAside', entityId: id, action: 'create', after: created })
+    return created
   }),
 
   update: publicProcedure
@@ -148,18 +151,21 @@ export const setAsideRouter = router({
           .where(scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.id, id)))
         throwStaleWrite('Set-aside', current != null)
       }
-      return load(ctx.db, ctx.householdId, id)
+      const after = await load(ctx.db, ctx.householdId, id)
+      recordAudit(ctx, { entityType: 'setAside', entityId: id, action: 'update', before: target, after })
+      return after
     }),
 
   archive: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await load(ctx.db, ctx.householdId, input.id)
+      const target = await load(ctx.db, ctx.householdId, input.id)
       const now = new Date()
       await ctx.db
         .update(setAside)
         .set({ archivedAt: now, updatedAt: now })
         .where(scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.id, input.id)))
+      recordAudit(ctx, { entityType: 'setAside', entityId: input.id, action: 'archive', before: target })
     }),
 
   /**
@@ -178,6 +184,7 @@ export const setAsideRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const now = new Date()
+      const scopePot = () => scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.potId, input.potId))
       await ctx.db.transaction(async (tx) => {
         const [p] = await tx
           .select()
@@ -185,14 +192,20 @@ export const setAsideRouter = router({
           .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, input.potId)))
         if (!p) throw new TRPCError({ code: 'BAD_REQUEST', message: 'potId does not refer to an existing pot' })
 
-        await tx
-          .delete(setAside)
-          .where(scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.potId, input.potId)))
+        // Capture the pot's contributions before/after so a wiped or reshaped set
+        // can be recovered — the whole replace is one audit entry keyed on the pot.
+        const before = await tx.select().from(setAside).where(scopePot())
+        await tx.delete(setAside).where(scopePot())
         await insertContributionLines(tx, ctx.householdId, p, input.lines, now)
+        const after = await tx.select().from(setAside).where(scopePot())
+        recordAudit(ctx, {
+          entityType: 'potContributions',
+          entityId: input.potId,
+          action: 'update',
+          before: { contributions: before },
+          after: { contributions: after },
+        })
       })
-      return ctx.db
-        .select()
-        .from(setAside)
-        .where(scopeWhere(ctx.householdId, setAside.householdId, eq(setAside.potId, input.potId)))
+      return ctx.db.select().from(setAside).where(scopePot())
     }),
 })

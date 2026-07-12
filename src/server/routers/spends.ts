@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertMember, scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
+import { recordAudit } from '../trpc/audit'
 import { spendTransaction, pot, category, reconciliationBatch } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { suggestPot } from '../spending/suggest'
@@ -112,6 +113,7 @@ export const spendsRouter = router({
           updatedAt: now,
         })
         .returning()
+      recordAudit(ctx, { entityType: 'spend', entityId: id, action: 'create', after: inserted })
       return inserted!
     }),
 
@@ -155,7 +157,10 @@ export const spendsRouter = router({
         .set({ ...rest, ...(settledAtSource !== undefined ? { settledAtSource: settledAtSource ? 1 : 0 } : {}), updatedAt: now })
         .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.id, id), versionGuard(spendTransaction.updatedAt, expectedUpdatedAt)))
         .returning()
-      if (updated) return updated
+      if (updated) {
+        recordAudit(ctx, { entityType: 'spend', entityId: id, action: 'update', before: target, after: updated })
+        return updated
+      }
 
       const [current] = await ctx.db
         .select({ id: spendTransaction.id })
@@ -174,6 +179,9 @@ export const spendsRouter = router({
       await ctx.db
         .delete(spendTransaction)
         .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.id, input.id)))
+      if (target) {
+        recordAudit(ctx, { entityType: 'spend', entityId: input.id, action: 'delete', before: target })
+      }
 
       // If this spend was part of a reconciliation batch, keep that batch honest.
       // Recompute its totals from what's left, and delete it entirely once its
@@ -302,10 +310,20 @@ export const spendsRouter = router({
         })
       }
 
-      return ctx.db
+      const group = await ctx.db
         .select()
         .from(spendTransaction)
         .where(scopeWhere(ctx.householdId, spendTransaction.householdId, eq(spendTransaction.splitGroupId, splitGroupId)))
+
+      // The original row was reshaped into the first part; the rest are brand new.
+      for (const row of group) {
+        if (row.id === original.id) {
+          recordAudit(ctx, { entityType: 'spend', entityId: row.id, action: 'update', before: original, after: row })
+        } else {
+          recordAudit(ctx, { entityType: 'spend', entityId: row.id, action: 'create', after: row })
+        }
+      }
+      return group
     }),
 
   suggestPot: publicProcedure
