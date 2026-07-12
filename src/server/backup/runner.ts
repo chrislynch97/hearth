@@ -47,7 +47,16 @@ const BACKUP_MODE = 0o600
 
 /** `./data/backups`, alongside the local data directory. For an embedded PGlite
  *  target the backups sit next to its data dir; for a real Postgres server (or
- *  when DATABASE_URL is unset) they fall back to `./data/backups`. */
+ *  when DATABASE_URL is unset) they fall back to `./data/backups`.
+ *
+ *  Note (see #40): there is deliberately no per-driver branch here. The snapshot
+ *  is a *logical* backup taken through drizzle (`buildSnapshot` → `db.select()`),
+ *  so it is engine-agnostic — the same JSON snapshot/restore path runs against
+ *  both PGlite and a real `postgres://` server, and `verifyRestores` proves each
+ *  one by restoring into an in-memory PGlite. Operators running a real Postgres
+ *  server should additionally rely on physical backups at the infra level
+ *  (`pg_dump` / PITR / a managed snapshot); the app-level snapshot is the portable
+ *  logical copy, not a replacement for those. */
 function backupDir(): string {
   const url = process.env.DATABASE_URL
   let base = './data'
