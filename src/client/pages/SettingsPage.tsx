@@ -31,6 +31,7 @@ import { zipStore } from '../zip'
 import { MIN_PASSWORD_LENGTH, validatePassword } from '../../shared/password-policy'
 import { formatMoney } from '../../shared/money'
 import { LOCALES } from '../setup/locales'
+import { AuditLogSection } from './AuditLogSection'
 
 // ---------------------------------------------------------------------------
 // General household settings
@@ -1554,6 +1555,7 @@ export function HouseholdSettingsPage() {
       <GeneralSection />
       <MembersSection />
       <HouseholdAccessSection />
+      <AuditLogSection />
     </Stack>
   )
 }
