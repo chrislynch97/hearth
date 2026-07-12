@@ -20,11 +20,27 @@ import * as schema from '../db/schema'
 import { ALL_TABLES } from '../db/tables'
 import { applySnapshot, buildSnapshot, type Snapshot } from '../db/snapshot'
 import { shouldBackup, type BackupFrequency } from './schedule'
+import { resolveOffsiteConfig, uploadOffsite } from './offsite'
 import type { PgTable } from 'drizzle-orm/pg-core'
 
 const KEEP_BACKUPS = 14
 const CHECK_INTERVAL_MS = 60 * 60 * 1000 // check hourly; frequency gates the actual write
 const PREFIX = 'hearth-backup-'
+
+/** Outcome of the optional off-site copy, surfaced on the backup result so the
+ *  manual "Back up now" UI can tell the operator whether it landed. Absent when
+ *  off-site backups are disabled (the default). */
+export interface OffsiteOutcome {
+  kind: string
+  ok: boolean
+  error?: string
+}
+
+export interface BackupResult {
+  file: string
+  at: number
+  offsite?: OffsiteOutcome
+}
 // Owner-only: the snapshot holds password hashes and MFA secrets, so it must not
 // be world-readable on a host-mounted volume. (No-op on Windows, harmless there.)
 const BACKUP_MODE = 0o600
@@ -93,14 +109,15 @@ async function verifyRestores(snapshot: Snapshot): Promise<void> {
  *  The snapshot is written atomically and then verified by restoring it into a
  *  throwaway database; if verification fails we throw before pruning or stamping,
  *  so a bad backup can't evict good older ones and the household stays "due". */
-export async function runBackup(db: DB, stampHouseholdIds: string[]): Promise<{ file: string; at: number }> {
+export async function runBackup(db: DB, stampHouseholdIds: string[]): Promise<BackupResult> {
   const snapshot = await buildSnapshot(db)
   const dir = backupDir()
   mkdirSync(dir, { recursive: true })
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
   const file = join(dir, `${PREFIX}${stamp}.json`)
-  writeFileAtomic(file, JSON.stringify(snapshot))
+  const json = JSON.stringify(snapshot)
+  writeFileAtomic(file, json)
 
   // Verify the bytes we just wrote actually restore — read the file back (not the
   // in-memory object) so we also exercise the on-disk write and JSON round-trip.
@@ -121,7 +138,38 @@ export async function runBackup(db: DB, stampHouseholdIds: string[]): Promise<{ 
       .set({ backupLastAt: atDate, updatedAt: atDate })
       .where(inArray(household.id, stampHouseholdIds))
   }
-  return { file, at }
+
+  // Ship a verified snapshot off-site (opt-in, #39). Best-effort: the local backup
+  // above is already written, verified and stamped, so a misconfigured or flaky
+  // off-site target is logged and reported but never fails the local backup (which
+  // would otherwise re-run and re-write every hour) or evicts a good local copy.
+  const offsite = await pushOffsite(`${PREFIX}${stamp}.json.enc`, json)
+  return { file, at, offsite }
+}
+
+/** Encrypt and push the snapshot to the configured off-site target. Returns
+ *  `undefined` when off-site backups are disabled, and never throws — any
+ *  misconfiguration or upload failure is logged and returned as `{ ok: false }`. */
+async function pushOffsite(name: string, json: string): Promise<OffsiteOutcome | undefined> {
+  let config
+  try {
+    config = resolveOffsiteConfig()
+  } catch (err) {
+    console.error('Off-site backup is misconfigured (local backup is unaffected):', err)
+    return { kind: 'unknown', ok: false, error: errorText(err) }
+  }
+  if (!config) return undefined
+  try {
+    await uploadOffsite(config, name, json)
+    return { kind: config.target.kind, ok: true }
+  } catch (err) {
+    console.error('Off-site backup upload failed (local backup is unaffected):', err)
+    return { kind: config.target.kind, ok: false, error: errorText(err) }
+  }
+}
+
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
 }
 
 /** Start the periodic auto-backup check. Every household sets its own

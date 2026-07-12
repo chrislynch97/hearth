@@ -21,6 +21,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "db:generate": "drizzle-kit generate",
     "db:migrate-from-sqlite": "tsx scripts/migrate-from-sqlite.ts",
+    "backup:decrypt": "tsx scripts/decrypt-backup.ts",
     "demo:seed": "tsx scripts/seed-demo.ts",
     "demo": "tsx scripts/demo-server.ts"
   },

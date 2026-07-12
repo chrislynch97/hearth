@@ -126,6 +126,11 @@ Update later: `git pull && npm install && npm run build && sudo systemctl restar
 | `CLIENT_DIR` | `../client` (source) | Directory of the built UI. Set to `./dist/client` for a non-Docker production run. The Docker image sets this for you. |
 | `HEARTH_SECURE_COOKIES` | unset | Set to `1` to force `Secure` session cookies when behind a reverse proxy that terminates TLS but doesn't forward `x-forwarded-proto: https`. |
 | `HEARTH_TRUST_PROXY` | unset | Set to the **number of proxy hops** in front of Hearth (a single reverse proxy / tunnel = `1`) so Fastify reads the real client IP from `X-Forwarded-For` and the login rate limiter throttles per-client. Leave unset when directly exposed. Do **not** set it to `true`/all — trusting the whole chain lets a client spoof `X-Forwarded-For` and dodge the limiter. Your proxy must **overwrite** (not append to) `X-Forwarded-For`. Also accepts a comma-separated list of trusted proxy IPs/CIDRs. |
+| `HEARTH_BACKUP_OFFSITE` | `off` | Push each verified backup, **encrypted**, to a second location so a lost data volume doesn't lose every backup too (see [Off-site backups](#off-site-backups-optional)). `off` (default) \| `directory` (copy to `HEARTH_BACKUP_DIR`) \| `webhook` (POST to `HEARTH_BACKUP_WEBHOOK_URL`). |
+| `HEARTH_BACKUP_PASSPHRASE` | unset | **Required** when `HEARTH_BACKUP_OFFSITE` is enabled. The passphrase used to encrypt off-site copies (AES-256-GCM). Keep it somewhere separate from the backups — you need it to restore. |
+| `HEARTH_BACKUP_DIR` | unset | `directory` mode: the path to copy encrypted backups into. Point it at a **different physical volume** (a second disk, or an NFS/CIFS/rsync mount) — a path on the same volume as the data gives no protection. |
+| `HEARTH_BACKUP_WEBHOOK_URL` | unset | `webhook` mode: the endpoint the encrypted backup is `POST`ed to (`application/octet-stream` body; the filename is sent in an `X-Hearth-Backup` header). Use a presigned object-store URL or your own collector. |
+| `HEARTH_BACKUP_WEBHOOK_AUTH` | unset | `webhook` mode (optional): a value sent verbatim as the `Authorization` header, e.g. `Bearer <token>`. |
 
 Hearth auto-detects HTTPS from `x-forwarded-proto: https` (or a direct HTTPS
 connection) and marks the session cookie `Secure` accordingly; `HEARTH_SECURE_COOKIES=1`
@@ -161,7 +166,45 @@ Notes:
 
 - **Neither layer is off-site by default** — both sit on the host disk. For
   protection against the machine dying, periodically copy `./data` (or export the
-  JSON) to another device or a cloud target.
+  JSON) to another device or a cloud target, or enable Hearth's built-in
+  [off-site backups](#off-site-backups-optional) below.
+
+### Off-site backups (optional)
+
+Hearth's own backups (above) land on the same volume as the database, so losing
+that volume loses the database *and* every backup with it. Optionally have the
+backup runner push each **verified** snapshot to a second location as well, so a
+copy survives the primary volume dying. It's **off by default** — a self-host on
+trusted storage with good local backups may not need it.
+
+Because a snapshot contains password hashes and MFA/TOTP secrets, off-site copies
+are **always encrypted** (AES-256-GCM, key derived from your passphrase). Set the
+target and passphrase via [environment variables](#configuration-reference):
+
+```bash
+# Copy each backup to a second mounted volume:
+HEARTH_BACKUP_OFFSITE=directory
+HEARTH_BACKUP_DIR=/mnt/backup-drive/hearth
+HEARTH_BACKUP_PASSPHRASE=<a long random passphrase>
+
+# ...or POST each backup to an endpoint (presigned S3 URL, your own collector):
+HEARTH_BACKUP_OFFSITE=webhook
+HEARTH_BACKUP_WEBHOOK_URL=https://example.com/hearth-backup
+HEARTH_BACKUP_WEBHOOK_AUTH=Bearer <token>      # optional
+HEARTH_BACKUP_PASSPHRASE=<a long random passphrase>
+```
+
+Off-site upload is **best-effort**: the local backup is written, verified and kept
+regardless, and an off-site failure is logged (and surfaced on **Settings → Data →
+Back up now**) but never fails or blocks the local backup. Keep the passphrase
+somewhere separate from the backups — you need it to restore.
+
+**Restoring an off-site copy.** The files are `*.json.enc`. Decrypt one back to a
+normal Hearth JSON snapshot, then import it from **Settings → Data → Import**:
+
+```bash
+HEARTH_BACKUP_PASSPHRASE=<passphrase> npm run backup:decrypt -- backup.json.enc
+```
 
 ---
 

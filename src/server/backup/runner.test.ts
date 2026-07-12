@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../db/testdb'
 import { household } from '../db/schema'
 import { applySnapshot, type Snapshot } from '../db/snapshot'
+import { decryptSnapshot } from './encrypt'
 import { runBackup } from './runner'
 
 // runBackup writes into `<DATABASE_URL dir>/backups`; point it at a throwaway
@@ -23,6 +24,11 @@ beforeEach(() => {
 afterEach(() => {
   if (prevUrl === undefined) delete process.env.DATABASE_URL
   else process.env.DATABASE_URL = prevUrl
+  // Clear any off-site config a test set, so it can't leak into other tests.
+  for (const k of Object.keys(process.env)) {
+    if (k.startsWith('HEARTH_BACKUP_')) delete process.env[k]
+  }
+  vi.restoreAllMocks()
   rmSync(tmp, { recursive: true, force: true })
 })
 
@@ -91,5 +97,69 @@ describe('runBackup', () => {
     const { file } = await runBackup(db, ['household'])
 
     expect(statSync(file).mode & 0o777).toBe(0o600)
+  })
+
+  it('reports no off-site outcome when off-site backups are disabled (the default)', async () => {
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+
+    const result = await runBackup(db, ['household'])
+
+    expect(result.offsite).toBeUndefined()
+  })
+
+  it('ships an encrypted off-site copy when configured, decryptable back to the snapshot', async () => {
+    const offsiteDir = join(tmp, 'offsite')
+    process.env.HEARTH_BACKUP_OFFSITE = 'directory'
+    process.env.HEARTH_BACKUP_DIR = offsiteDir
+    process.env.HEARTH_BACKUP_PASSPHRASE = 'test-passphrase'
+
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+    await addHousehold(db, 'secondary', 'weekly')
+
+    const result = await runBackup(db, ['household'])
+
+    expect(result.offsite).toEqual({ kind: 'directory', ok: true })
+    const [encFile] = readdirSync(offsiteDir)
+    expect(encFile).toMatch(/^hearth-backup-.*\.json\.enc$/)
+    const snapshot = JSON.parse(
+      decryptSnapshot(readFileSync(join(offsiteDir, encFile!)), 'test-passphrase'),
+    ) as Snapshot
+    expect(snapshot.tables.household!.map((r) => r['id']).sort()).toEqual(['household', 'secondary'])
+  })
+
+  it('still writes a good local backup when the off-site upload fails', async () => {
+    process.env.HEARTH_BACKUP_OFFSITE = 'webhook'
+    process.env.HEARTH_BACKUP_WEBHOOK_URL = 'https://example.test/backup'
+    process.env.HEARTH_BACKUP_PASSPHRASE = 'test-passphrase'
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('boom', { status: 500, statusText: 'err' })))
+
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+
+    const { file, offsite } = await runBackup(db, ['household'])
+
+    // Local backup is written and the household is still stamped as backed up...
+    expect(readdirSync(dirname(file)).filter((f) => f.endsWith('.json')).length).toBe(1)
+    const [row] = await db.select().from(household).where(eq(household.id, 'household'))
+    expect(row!.backupLastAt).not.toBeNull()
+    // ...but the off-site failure is reported, not thrown.
+    expect(offsite?.ok).toBe(false)
+    expect(offsite?.kind).toBe('webhook')
+  })
+
+  it('does not fail the local backup when off-site is misconfigured', async () => {
+    process.env.HEARTH_BACKUP_OFFSITE = 'directory' // missing HEARTH_BACKUP_DIR / passphrase
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+
+    const { file, offsite } = await runBackup(db, ['household'])
+
+    expect(readdirSync(dirname(file)).filter((f) => f.endsWith('.json')).length).toBe(1)
+    expect(offsite?.ok).toBe(false)
   })
 })

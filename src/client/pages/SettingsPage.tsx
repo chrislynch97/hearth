@@ -527,7 +527,13 @@ function DataSection() {
     setError('')
     const result = await backupNow.mutateAsync()
     await utils.bootstrap.context.invalidate()
-    setMessage(`Backup written to ${result.file}`)
+    if (result.offsite && !result.offsite.ok) {
+      setMessage(`Backup written to ${result.file}.`)
+      setError(`Off-site copy failed: ${result.offsite.error}`)
+      return
+    }
+    const offsite = result.offsite?.ok ? ` Off-site copy uploaded (${result.offsite.kind}).` : ''
+    setMessage(`Backup written to ${result.file}.${offsite}`)
   }
 
   async function handleExport() {
