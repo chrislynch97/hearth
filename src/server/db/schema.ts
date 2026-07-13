@@ -70,6 +70,12 @@ export const household = pgTable('household', {
   // `audit.prune` and via the hourly background pruner (audit/prune.ts). Pruning
   // is the one sanctioned bulk-delete on the otherwise append-only trail.
   auditRetentionDays: integer('audit_retention_days').notNull().default(0),
+  // Archive-before-prune toggle (issue #43). 0 = hard-delete (the default,
+  // matching #41's behaviour); 1 = export the to-be-pruned range to an
+  // owner-only JSON file (audit/archive.ts) before deleting, so the trail is
+  // preserved rather than silently dropped. Boolean stored 0/1 per this file's
+  // convention. Applies to both the manual `audit.prune` and the hourly pruner.
+  auditPruneArchive: integer('audit_prune_archive').notNull().default(0),
   setupCompletedAt: timestamp('setup_completed_at', { withTimezone: true, mode: 'date' }),
   incomeBasisDefault: text('income_basis_default').notNull().default('regular_net'),
   jointContributionBasis: text('joint_contribution_basis').notNull().default('equal'),

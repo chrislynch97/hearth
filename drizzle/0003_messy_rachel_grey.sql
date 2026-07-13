@@ -1,0 +1,1 @@
+ALTER TABLE "household" ADD COLUMN "audit_prune_archive" integer DEFAULT 0 NOT NULL;

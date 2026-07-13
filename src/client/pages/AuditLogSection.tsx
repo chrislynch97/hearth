@@ -10,6 +10,7 @@ import {
     Modal,
     NumberInput,
     Stack,
+    Switch,
     Text,
     Title,
 } from "@mantine/core";
@@ -203,10 +204,16 @@ export const AuditLogSection = () => {
     // NumberInput from flashing 0 over a real value).
     const update = trpc.household.update.useMutation();
     const [retention, setRetention] = useState<number | string | null>(null);
+    // Archive-before-prune toggle (issue #43); null until the household loads so
+    // the Switch doesn't flash off over a real "on" value.
+    const [archive, setArchive] = useState<boolean | null>(null);
     const [savedRetention, setSavedRetention] = useState(false);
 
     useEffect(() => {
-        if (hh) setRetention((prev) => prev ?? hh.auditRetentionDays);
+        if (hh) {
+            setRetention((prev) => prev ?? hh.auditRetentionDays);
+            setArchive((prev) => prev ?? hh.auditPruneArchive === 1);
+        }
     }, [hh]);
 
     const prune = trpc.audit.prune.useMutation();
@@ -219,7 +226,10 @@ export const AuditLogSection = () => {
     const handleSaveRetention = async () => {
         setError("");
         try {
-            await update.mutateAsync({ auditRetentionDays: Number(retention) });
+            await update.mutateAsync({
+                auditRetentionDays: Number(retention),
+                auditPruneArchive: archive ? 1 : 0,
+            });
             // The save itself is an audited household edit, so refresh the viewer
             // alongside the household (which feeds the retention field).
             await Promise.all([
@@ -251,7 +261,11 @@ export const AuditLogSection = () => {
                           (result.cutoff ?? new Date()).toLocaleDateString(
                               "en-CA"
                           )
-                      )}.`
+                      )}.${
+                          result.archived
+                              ? " A copy was archived to disk first."
+                              : ""
+                      }`
             );
         } catch (e) {
             setError(
@@ -310,6 +324,25 @@ export const AuditLogSection = () => {
                         </Text>
                     )}
                 </Group>
+            </Group>
+
+            {/* Archive-before-prune (issue #43). */}
+            <Group justify="space-between" align="center" mt="sm">
+                <div>
+                    <Text size="sm" fw={500}>
+                        Archive before pruning
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                        Export pruned entries to an owner-only file on disk
+                        before deleting them, so the trail is kept. Off by
+                        default.
+                    </Text>
+                </div>
+                <Switch
+                    aria-label="Archive pruned audit entries to disk"
+                    checked={archive ?? false}
+                    onChange={(e) => setArchive(e.currentTarget.checked)}
+                />
             </Group>
 
             {isOwner && (

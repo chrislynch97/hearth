@@ -32,6 +32,9 @@ export const householdRouter = router({
         backupFrequency: z.enum(['off', 'daily', 'weekly']).optional(),
         // Audit-log retention window in days (issue #41); 0 = keep forever.
         auditRetentionDays: z.number().int().min(0).max(3650).optional(),
+        // Archive pruned audit ranges to disk before deleting (issue #43); stored
+        // 0/1 per the schema's boolean convention.
+        auditPruneArchive: z.number().int().min(0).max(1).optional(),
         incomeBasisDefault: z
           .enum(['regular_net', 'latest_payslip', 'rolling_12m'])
           .optional(),

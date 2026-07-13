@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
@@ -206,9 +209,50 @@ describe('audit log (issue #35)', () => {
     await seedEntry(db, 40)
     // Seeded household defaults to auditRetentionDays = 0 (keep forever).
     const res = await caller.audit.prune()
-    expect(res).toEqual({ pruned: 0, cutoff: null })
+    expect(res).toEqual({ pruned: 0, cutoff: null, archived: false })
     const remaining = await db.select().from(auditLog).where(eq(auditLog.householdId, 'household'))
     expect(remaining.length).toBe(1)
+  })
+
+  it('does not archive when the household has not opted in (issue #43)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { caller } = await ownerCaller(db)
+
+    await seedEntry(db, 40)
+    const res = await caller.audit.prune({ olderThanDays: 30 })
+    expect(res).toMatchObject({ pruned: 1, archived: false })
+  })
+
+  it('archives the pruned range to disk when opted in (issue #43)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { caller } = await ownerCaller(db)
+
+    // Redirect the archive dir into a scratch location so the test never writes
+    // into the repo's ./data. auditArchiveDir() derives its base from a
+    // pglite:// DATABASE_URL (see audit/archive.ts); makeTestDb is unaffected.
+    const scratch = mkdtempSync(join(tmpdir(), 'hearth-audit-'))
+    const prevUrl = process.env.DATABASE_URL
+    process.env.DATABASE_URL = `pglite://${join(scratch, 'data', 'pgdata')}`
+    try {
+      await seedEntry(db, 40)
+      await db.update(household).set({ auditPruneArchive: 1 }).where(eq(household.id, 'household'))
+
+      const res = await caller.audit.prune({ olderThanDays: 30 })
+      expect(res).toMatchObject({ pruned: 1, archived: true })
+
+      const archiveDir = join(scratch, 'data', 'audit-archive')
+      const files = readdirSync(archiveDir).filter((f) => f.endsWith('.json'))
+      expect(files.length).toBe(1)
+      const archive = JSON.parse(readFileSync(join(archiveDir, files[0]!), 'utf8'))
+      expect(archive).toMatchObject({ householdId: 'household', count: 1 })
+      expect(archive.entries.length).toBe(1)
+    } finally {
+      if (prevUrl === undefined) delete process.env.DATABASE_URL
+      else process.env.DATABASE_URL = prevUrl
+      rmSync(scratch, { recursive: true, force: true })
+    }
   })
 
   it('gates prune behind the owner role', async () => {

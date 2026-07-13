@@ -5,6 +5,7 @@ import { assertRole, scopeWhere } from '../trpc/tenant'
 import { auditLog, household } from '../db/schema'
 import type { AuditLog } from '../db/schema'
 import { pruneAuditLog, retentionCutoff } from '../audit/prune'
+import { auditArchiveDir } from '../audit/archive'
 
 /** One audit row with its `changes` JSON parsed back into an object, so the
  *  client gets `{ kind, after | before | fields }` rather than a raw string. */
@@ -59,22 +60,25 @@ export const auditRouter = router({
    *  for the household owner. Deletes entries older than `olderThanDays`, or —
    *  when that is omitted — older than the household's configured
    *  `auditRetentionDays`. A no-op (returns `{ pruned: 0 }`) when neither yields a
-   *  window, so calling it on a retention-off household never deletes anything. */
+   *  window, so calling it on a retention-off household never deletes anything.
+   *  When the household has opted into `auditPruneArchive` (issue #43), the pruned
+   *  range is exported to an owner-only JSON archive before deletion; `archived`
+   *  reports whether that happened. */
   prune: publicProcedure
     .input(z.object({ olderThanDays: z.number().int().min(1).max(3650).optional() }).optional())
-    .mutation(async ({ ctx, input }): Promise<{ pruned: number; cutoff: Date | null }> => {
+    .mutation(async ({ ctx, input }): Promise<{ pruned: number; cutoff: Date | null; archived: boolean }> => {
       assertRole(ctx.role, 'owner')
-      let days = input?.olderThanDays
-      if (days == null) {
-        const [hh] = await ctx.db
-          .select({ retention: household.auditRetentionDays })
-          .from(household)
-          .where(eq(household.id, ctx.householdId))
-        days = hh?.retention ?? 0
-      }
+      // Always read the household: we need the archive flag, and the retention
+      // window too when `olderThanDays` was omitted.
+      const [hh] = await ctx.db
+        .select({ retention: household.auditRetentionDays, archive: household.auditPruneArchive })
+        .from(household)
+        .where(eq(household.id, ctx.householdId))
+      const days = input?.olderThanDays ?? hh?.retention ?? 0
       const cutoff = retentionCutoff(days, Date.now())
-      if (!cutoff) return { pruned: 0, cutoff: null }
-      const pruned = await pruneAuditLog(ctx.db, ctx.householdId, cutoff)
-      return { pruned, cutoff }
+      if (!cutoff) return { pruned: 0, cutoff: null, archived: false }
+      const archiveDir = hh?.archive ? auditArchiveDir() : undefined
+      const pruned = await pruneAuditLog(ctx.db, ctx.householdId, cutoff, { archiveDir })
+      return { pruned, cutoff, archived: !!archiveDir && pruned > 0 }
     }),
 })
