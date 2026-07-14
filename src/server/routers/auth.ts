@@ -171,7 +171,8 @@ export const authRouter = router({
   /** Whether anyone may self-register a new household. Public — the login screen
    *  reads it to decide whether to offer "create an account". */
   registrationOpen: publicProcedure.query(async ({ ctx }) => {
-    return await getInstanceSettings(ctx.db)
+    const { allowOpenRegistration } = await getInstanceSettings(ctx.db)
+    return { allowOpenRegistration }
   }),
 
   /** Turn open registration on/off. Instance-wide, so restricted to the instance
