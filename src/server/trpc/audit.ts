@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { inArray } from 'drizzle-orm'
 import { auditLog, user } from '../db/schema'
 import type { DBOrTx } from '../db/client'
 import { newId } from '../../shared/ids'
@@ -21,17 +21,49 @@ import { newId } from '../../shared/ids'
 
 export type AuditAction = 'create' | 'update' | 'archive' | 'delete'
 
+/** Security / access-control events (issue #49). Unlike data mutations these have
+ *  no before/after row to diff — they record *that something happened* (a sign-in,
+ *  a role change, a password reset) with a curated, secret-free `details` payload.
+ *  Never store a password, hash, TOTP secret or token: for a credential change we
+ *  log only the event, never the value. Rendered from the `event` payload kind. */
+export type SecurityAction =
+  | 'login'
+  | 'login_failed'
+  | 'logout'
+  | 'password_changed'
+  | 'password_removed'
+  | 'password_reset'
+  | 'mfa_enroll_started'
+  | 'mfa_enabled'
+  | 'mfa_disabled'
+  | 'registration_changed'
+  | 'role_changed'
+  | 'access_removed'
+  | 'invite_created'
+  | 'invite_revoked'
+  | 'invite_accepted'
+
 type Row = Record<string, unknown>
 
-/** One staged change, as a resolver reports it. `before`/`after` are whole entity
- *  rows; the helper derives the stored payload (full snapshot vs field diff) from
- *  `action`, so callers just pass the rows they already have in hand. */
+/** One staged change, as a resolver reports it. For a data mutation, `before`/
+ *  `after` are whole entity rows and the helper derives the stored payload (full
+ *  snapshot vs field diff) from `action`. For a security event, `details` carries
+ *  the curated payload instead. `householdId`/`actorUserId` override the request
+ *  context for entries whose scope or actor differs from it — e.g. a login, which
+ *  runs *before* the session (and thus the context's identity) exists. */
 export interface StagedAudit {
   entityType: string
   entityId: string
-  action: AuditAction
+  action: AuditAction | SecurityAction
   before?: Row | null
   after?: Row | null
+  /** Curated, secret-free payload for a security event (never a raw row). */
+  details?: Record<string, unknown>
+  /** Household this entry belongs to; falls back to `ctx.householdId`. */
+  householdId?: string
+  /** Acting user (`null` = deliberately no actor, e.g. a failed login by an
+   *  attacker); `undefined` falls back to `ctx.userId`. */
+  actorUserId?: string | null
 }
 
 /** The slice of the tRPC context the audit helpers touch. `Context` satisfies it. */
@@ -94,6 +126,9 @@ function buildChanges(entry: StagedAudit): string {
         kind: 'update',
         fields: entry.before && entry.after ? diffFields(entry.before, entry.after) : {},
       })
+    default:
+      // Security event (issue #49): store the curated payload verbatim.
+      return JSON.stringify({ kind: 'event', details: entry.details ?? {} })
   }
 }
 
@@ -105,6 +140,65 @@ export function recordAudit(ctx: AuditCtx, entry: StagedAudit): void {
   ;(ctx.auditEntries ??= []).push(entry)
 }
 
+/** A security / access-control event for this request (issue #49). Same staging
+ *  as `recordAudit`, so it rides the same flush after a successful mutation, but
+ *  carries a curated `details` payload and may override the scope/actor for events
+ *  that run before the session context reflects them (login, invite acceptance). */
+export function recordSecurityEvent(
+  ctx: AuditCtx,
+  entry: {
+    entityType: string
+    entityId: string
+    action: SecurityAction
+    details?: Record<string, unknown>
+    householdId?: string
+    actorUserId?: string | null
+  },
+): void {
+  ;(ctx.auditEntries ??= []).push(entry)
+}
+
+/** Resolve display-name labels for a set of actor ids in one query, so a batch of
+ *  entries with different actors captures each name (history survives a rename or
+ *  removal). Ids with no matching user simply get no label. */
+async function resolveActorLabels(db: DBOrTx, ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map()
+  const rows = await db.select({ id: user.id, displayName: user.displayName }).from(user).where(inArray(user.id, ids))
+  return new Map(rows.map((r) => [r.id, r.displayName]))
+}
+
+/** Turn staged entries into audit rows, filling household/actor from each entry's
+ *  own override or the request-context fallback, and stamping actor label + time.
+ *  Shared by the flush (success path) and the direct write (failed-login path). */
+async function buildAuditRows(
+  db: DBOrTx,
+  entries: StagedAudit[],
+  fallback: { householdId: string; actorUserId: string | null },
+): Promise<Array<typeof auditLog.$inferInsert>> {
+  const actorOf = (e: StagedAudit) => (e.actorUserId !== undefined ? e.actorUserId : fallback.actorUserId)
+  const actorIds = new Set<string>()
+  for (const e of entries) {
+    const a = actorOf(e)
+    if (a) actorIds.add(a)
+  }
+  const labels = await resolveActorLabels(db, [...actorIds])
+  const now = new Date()
+  return entries.map((e) => {
+    const actorUserId = actorOf(e)
+    return {
+      id: newId(),
+      householdId: e.householdId ?? fallback.householdId,
+      actorUserId: actorUserId ?? null,
+      actorLabel: actorUserId ? (labels.get(actorUserId) ?? null) : null,
+      entityType: e.entityType,
+      entityId: e.entityId,
+      action: e.action,
+      changes: buildChanges(e),
+      createdAt: now,
+    }
+  })
+}
+
 /** Write every staged entry for this request as one insert, stamping household,
  *  actor (id + display name captured now, so history survives a rename/removal)
  *  and time. Called by the audit middleware after a successful mutation; a no-op
@@ -113,24 +207,40 @@ export async function flushAuditEntries(ctx: AuditCtx): Promise<void> {
   const entries = ctx.auditEntries
   if (!entries || entries.length === 0) return
 
-  let actorLabel: string | null = null
-  if (ctx.userId) {
-    const [u] = await ctx.db.select({ displayName: user.displayName }).from(user).where(eq(user.id, ctx.userId))
-    actorLabel = u?.displayName ?? null
-  }
-
-  const now = new Date()
-  const rows = entries.map((e) => ({
-    id: newId(),
+  const rows = await buildAuditRows(ctx.db, entries, {
     householdId: ctx.householdId,
     actorUserId: ctx.userId ?? null,
-    actorLabel,
-    entityType: e.entityType,
-    entityId: e.entityId,
-    action: e.action,
-    changes: buildChanges(e),
-    createdAt: now,
-  }))
+  })
   await ctx.db.insert(auditLog).values(rows)
   entries.length = 0
+}
+
+/** Write a single security event immediately, outside the staged flush. For the
+ *  one case staging can't cover: a failed login, where the resolver *throws* — so
+ *  `recordAuditMiddleware` never flushes — yet the attempt must still be recorded.
+ *  Best-effort at the call site (a failure here must never mask the auth error). */
+export async function writeSecurityEvent(
+  db: DBOrTx,
+  entry: {
+    householdId: string
+    actorUserId?: string | null
+    entityType: string
+    entityId: string
+    action: SecurityAction
+    details?: Record<string, unknown>
+  },
+): Promise<void> {
+  const rows = await buildAuditRows(
+    db,
+    [
+      {
+        entityType: entry.entityType,
+        entityId: entry.entityId,
+        action: entry.action,
+        details: entry.details,
+      },
+    ],
+    { householdId: entry.householdId, actorUserId: entry.actorUserId ?? null },
+  )
+  await db.insert(auditLog).values(rows)
 }

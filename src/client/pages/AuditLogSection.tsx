@@ -31,6 +31,9 @@ type Changes =
     | { kind: "archive"; before: Snapshot }
     | { kind: "delete"; before: Snapshot }
     | { kind: "update"; fields: FieldDiff }
+    // Security / access-control events (issue #49): no row diff, just a curated,
+    // secret-free payload.
+    | { kind: "event"; details: Record<string, unknown> }
     | null;
 
 // How many entries to show at first, and how much each "Load more" reveals. The
@@ -38,12 +41,29 @@ type Changes =
 const PAGE_SIZE = 25;
 const MAX_ENTRIES = 500;
 
-// Per-action badge styling for the viewer.
+// Per-action badge styling for the viewer. Data mutations (issue #35) plus
+// security / access-control events (issue #49).
 const ACTION_META: Record<string, { color: string; label: string }> = {
     create: { color: "moss", label: "Created" },
     update: { color: "blue", label: "Updated" },
     archive: { color: "gray", label: "Archived" },
     delete: { color: "red", label: "Deleted" },
+    // Security events.
+    login: { color: "teal", label: "Signed in" },
+    login_failed: { color: "red", label: "Failed sign-in" },
+    logout: { color: "gray", label: "Signed out" },
+    password_changed: { color: "orange", label: "Password changed" },
+    password_removed: { color: "orange", label: "Password removed" },
+    password_reset: { color: "orange", label: "Password reset" },
+    mfa_enroll_started: { color: "blue", label: "MFA enrolment started" },
+    mfa_enabled: { color: "teal", label: "MFA enabled" },
+    mfa_disabled: { color: "red", label: "MFA disabled" },
+    registration_changed: { color: "blue", label: "Registration setting" },
+    role_changed: { color: "grape", label: "Role changed" },
+    access_removed: { color: "red", label: "Access removed" },
+    invite_created: { color: "moss", label: "Invite created" },
+    invite_revoked: { color: "gray", label: "Invite revoked" },
+    invite_accepted: { color: "teal", label: "Invite accepted" },
 };
 
 /** camelCase entity type → a human "Income source" label. */
@@ -99,6 +119,33 @@ const ChangeDetail = ({ changes }: { changes: Changes }) => {
                         →{" "}
                         <Text span ff="monospace">
                             {formatValue(after)}
+                        </Text>
+                    </Text>
+                ))}
+            </Stack>
+        );
+    }
+
+    // Security event: a curated set of detail fields (issue #49). Never a raw
+    // row, so it's shown inline rather than collapsed.
+    if (changes.kind === "event") {
+        const details = Object.entries(changes.details ?? {});
+        if (details.length === 0) {
+            return (
+                <Text size="xs" c="dimmed">
+                    No further details.
+                </Text>
+            );
+        }
+        return (
+            <Stack gap={2}>
+                {details.map(([field, value]) => (
+                    <Text key={field} size="xs">
+                        <Text span fw={500}>
+                            {entityLabel(field)}:
+                        </Text>{" "}
+                        <Text span ff="monospace">
+                            {formatValue(value)}
                         </Text>
                     </Text>
                 ))}
@@ -284,8 +331,9 @@ export const AuditLogSection = () => {
                 Audit log
             </Title>
             <Text size="xs" c="dimmed" mb="sm">
-                A record of who created, changed, archived or deleted household
-                data. Visible to admins.
+                A record of who changed household data, plus sign-ins and
+                access-control events (role changes, invitations, password and
+                two-factor changes). Visible to admins.
             </Text>
 
             {/* Retention window + manual prune. */}

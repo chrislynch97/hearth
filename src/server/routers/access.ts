@@ -3,6 +3,7 @@ import { eq, inArray } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertRole, scopeWhere, type Role } from '../trpc/tenant'
+import { recordSecurityEvent } from '../trpc/audit'
 import { membership, user } from '../db/schema'
 import type { DB } from '../db/client'
 import { hashPassword } from '../auth/password'
@@ -20,6 +21,13 @@ async function ownerCount(db: DB, householdId: string): Promise<number> {
     .from(membership)
     .where(scopeWhere(householdId, membership.householdId, eq(membership.role, 'owner')))
   return owners.filter((g) => g.acceptedAt !== null).length
+}
+
+/** A readable label for the member an access change targets, captured at event
+ *  time so the audit trail stays legible after a later rename. */
+async function memberLabel(db: DB, userId: string): Promise<string> {
+  const [u] = await db.select({ displayName: user.displayName, username: user.username }).from(user).where(eq(user.id, userId))
+  return u?.displayName ?? u?.username ?? userId
 }
 
 /** Managing a target with an owner/admin role is owner-only; managing a
@@ -87,6 +95,12 @@ export const accessRouter = router({
         .update(membership)
         .set({ role: input.role, updatedAt: new Date() })
         .where(scopeWhere(ctx.householdId, membership.householdId, eq(membership.userId, input.userId)))
+      recordSecurityEvent(ctx, {
+        entityType: 'membership',
+        entityId: input.userId,
+        action: 'role_changed',
+        details: { member: await memberLabel(ctx.db, input.userId), from: target.role, to: input.role },
+      })
       return { ok: true as const }
     }),
 
@@ -106,11 +120,18 @@ export const accessRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'A household must keep at least one owner.' })
       }
 
+      const label = await memberLabel(ctx.db, input.userId)
       await ctx.db
         .delete(membership)
         .where(scopeWhere(ctx.householdId, membership.householdId, eq(membership.userId, input.userId)))
       // Their sessions (which may point at this household) are now invalid.
       await deleteUserSessions(ctx.db, input.userId)
+      recordSecurityEvent(ctx, {
+        entityType: 'membership',
+        entityId: input.userId,
+        action: 'access_removed',
+        details: { member: label, role: target.role },
+      })
       return { ok: true as const }
     }),
 
@@ -152,6 +173,13 @@ export const accessRouter = router({
         .set({ passwordHash: await hashPassword(input.newPassword), updatedAt: new Date() })
         .where(eq(user.id, input.userId))
       await deleteUserSessions(ctx.db, input.userId)
+      // Record the reset, never the new password (issue #49).
+      recordSecurityEvent(ctx, {
+        entityType: 'user',
+        entityId: input.userId,
+        action: 'password_reset',
+        details: { member: await memberLabel(ctx.db, input.userId) },
+      })
       return { ok: true as const }
     }),
 })

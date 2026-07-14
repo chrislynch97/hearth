@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { household, member, membership, session, user } from '../db/schema'
 import { scopeWhere } from '../trpc/tenant'
+import { recordAudit } from '../trpc/audit'
 import { acceptedMembership, getUser, getUserByUsername, getValidSession, isInstanceOwner, normalizeUsername } from '../auth/session'
 
 export const usersRouter = router({
@@ -72,6 +73,8 @@ export const usersRouter = router({
         }
       }
 
+      const before = await getUser(ctx.db, ctx.userId)
+
       await ctx.db
         .update(user)
         .set({
@@ -83,6 +86,16 @@ export const usersRouter = router({
         .where(eq(user.id, ctx.userId))
 
       const updated = await getUser(ctx.db, ctx.userId)
+      // Audit only the profile fields (issue #49) — never the password hash or MFA
+      // columns that also live on the user row.
+      const fields = (u: typeof updated) => ({ username: u!.username, displayName: u!.displayName, email: u!.email })
+      recordAudit(ctx, {
+        entityType: 'user',
+        entityId: ctx.userId,
+        action: 'update',
+        before: fields(before),
+        after: fields(updated),
+      })
       return { id: updated!.id, username: updated!.username, displayName: updated!.displayName, email: updated!.email }
     }),
 

@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import QRCode from 'qrcode'
 import { router, publicProcedure } from '../trpc/trpc'
+import { recordSecurityEvent, writeSecurityEvent } from '../trpc/audit'
 import { user } from '../db/schema'
 import type { User } from '../db/schema'
 import { getInstanceSettings, setAllowOpenRegistration } from '../db/instanceSettings'
@@ -81,6 +82,29 @@ async function requireCurrentUser(ctx: Context): Promise<User> {
   return u
 }
 
+/** Record a failed sign-in (issue #49). A failure throws, so the staged-flush
+ *  path never runs — write it directly, before the throw. Best-effort: an audit
+ *  failure must never mask the auth error. Only attempts against a *real* account
+ *  are recorded (they have a household to attribute the attempt to, and are the
+ *  ones worth reviewing); attempts on an unknown username are rate-limited noise
+ *  with no owning household, so they are deliberately not written. The actor is
+ *  left null — a failed attempt does not prove the account holder made it. */
+async function recordLoginFailure(db: DB, u: User | null, username: string, reason: string): Promise<void> {
+  if (!u) return
+  try {
+    await writeSecurityEvent(db, {
+      householdId: await defaultHouseholdFor(db, u.id),
+      actorUserId: null,
+      entityType: 'auth',
+      entityId: u.id,
+      action: 'login_failed',
+      details: { username, reason },
+    })
+  } catch (err) {
+    console.error('[audit] failed to record login failure', err)
+  }
+}
+
 export const authRouter = router({
   /** Whether the instance requires login, whether the current user has MFA on,
    *  whether this request is authenticated, and who it is. */
@@ -144,6 +168,7 @@ export const authRouter = router({
           : await verifyPasswordDummy(input.password)
       if (!u || !ok) {
         recordFail()
+        await recordLoginFailure(ctx.db, u ?? null, acctKey, 'bad_password')
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect username or password' })
       }
 
@@ -151,6 +176,7 @@ export const authRouter = router({
         if (!input.code) return { ok: false as const, mfaRequired: true as const }
         if (!(await verifyMfaCode(ctx.db, u, input.code))) {
           recordFail()
+          await recordLoginFailure(ctx.db, u, acctKey, 'bad_mfa')
           throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect authentication code' })
         }
       }
@@ -158,6 +184,17 @@ export const authRouter = router({
       loginLimiter.reset(key)
       loginAccountLimiter.reset(acctKey)
       const householdId = await defaultHouseholdFor(ctx.db, u.id)
+      // Record the successful sign-in against the household the session lands in.
+      // The request context has no identity yet (the session is created next), so
+      // pass the actor + household explicitly (issue #49).
+      recordSecurityEvent(ctx, {
+        entityType: 'auth',
+        entityId: u.id,
+        action: 'login',
+        details: { mfa: Boolean(u.mfaEnabledAt && u.mfaSecret) },
+        householdId,
+        actorUserId: u.id,
+      })
       ctx.setSessionCookie?.(await createSession(ctx.db, u.id, householdId))
       return { ok: true as const }
     }),
@@ -165,6 +202,11 @@ export const authRouter = router({
   logout: publicProcedure.mutation(async ({ ctx }) => {
     if (ctx.sessionToken) await deleteSession(ctx.db, ctx.sessionToken)
     ctx.setSessionCookie?.(null)
+    // Only a real, logged-in session is worth recording — not the owner-fallback
+    // identity an open instance hands every request (issue #49).
+    if (ctx.sessionId && ctx.userId) {
+      recordSecurityEvent(ctx, { entityType: 'auth', entityId: ctx.userId, action: 'logout' })
+    }
     return { ok: true as const }
   }),
 
@@ -182,6 +224,12 @@ export const authRouter = router({
     .mutation(async ({ ctx, input }) => {
       await assertInstanceOwner(ctx.db, ctx.userId)
       await setAllowOpenRegistration(ctx.db, input.open)
+      recordSecurityEvent(ctx, {
+        entityType: 'instance',
+        entityId: 'registration',
+        action: 'registration_changed',
+        details: { open: input.open },
+      })
       return { allowOpenRegistration: input.open }
     }),
 
@@ -273,6 +321,7 @@ export const authRouter = router({
       const weak = validatePassword(input.newPassword)
       if (weak) throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
 
+      const firstTime = me.passwordHash === null
       const newHash = await hashPassword(input.newPassword)
       await ctx.db.update(user).set({ passwordHash: newHash, updatedAt: new Date() }).where(eq(user.id, me.id))
       await deleteUserSessions(ctx.db, me.id)
@@ -280,6 +329,16 @@ export const authRouter = router({
       // fails closed regardless of how the owner is later resolved.
       await syncAuthRequired(ctx.db)
       const householdId = await defaultHouseholdFor(ctx.db, me.id)
+      // Record the event, never the password (issue #49). The new session below
+      // means the request context won't reflect this user, so pass actor/household.
+      recordSecurityEvent(ctx, {
+        entityType: 'user',
+        entityId: me.id,
+        action: 'password_changed',
+        details: { firstTime },
+        householdId,
+        actorUserId: me.id,
+      })
       ctx.setSessionCookie?.(await createSession(ctx.db, me.id, householdId))
       return { ok: true as const }
     }),
@@ -311,6 +370,15 @@ export const authRouter = router({
         .where(eq(user.id, me.id))
       await deleteUserSessions(ctx.db, me.id)
       await syncAuthRequired(ctx.db) // owner has no password again → instance is open
+      // Record before clearing the cookie: pass actor/household so the entry is
+      // attributed even though the session is about to end (issue #49).
+      recordSecurityEvent(ctx, {
+        entityType: 'user',
+        entityId: me.id,
+        action: 'password_removed',
+        householdId: await defaultHouseholdFor(ctx.db, me.id),
+        actorUserId: me.id,
+      })
       ctx.setSessionCookie?.(null)
       return { ok: true as const }
     }),
@@ -331,8 +399,17 @@ export const authRouter = router({
           throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Current password is incorrect' })
         }
       }
+      const reenroll = Boolean(me.mfaEnabledAt && me.mfaSecret)
       const secret = generateTotpSecret()
       await ctx.db.update(user).set({ mfaSecret: secret, mfaEnabledAt: null, updatedAt: new Date() }).where(eq(user.id, me.id))
+      // Re-enrolling clears mfaEnabledAt (a downgrade until reconfirmed), so the
+      // start of enrolment is itself worth recording (issue #49).
+      recordSecurityEvent(ctx, {
+        entityType: 'user',
+        entityId: me.id,
+        action: 'mfa_enroll_started',
+        details: { reenroll },
+      })
       const otpauthUrl = buildOtpauthUrl(secret, me.displayName || me.username)
       const qrSvg = await QRCode.toString(otpauthUrl, { type: 'svg', margin: 1, width: 200 })
       return { secret, otpauthUrl, qrSvg }
@@ -358,6 +435,8 @@ export const authRouter = router({
           updatedAt: new Date(),
         })
         .where(eq(user.id, me.id))
+      // Record the event, never the recovery codes (issue #49).
+      recordSecurityEvent(ctx, { entityType: 'user', entityId: me.id, action: 'mfa_enabled' })
       return { ok: true as const, recoveryCodes }
     }),
 
@@ -370,10 +449,16 @@ export const authRouter = router({
       if (!(await verifyPassword(input.currentPassword, me.passwordHash))) {
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Current password is incorrect' })
       }
+      const wasEnabled = Boolean(me.mfaEnabledAt)
       await ctx.db
         .update(user)
         .set({ mfaSecret: null, mfaEnabledAt: null, mfaRecoveryCodes: null, updatedAt: new Date() })
         .where(eq(user.id, me.id))
+      // Only a real turn-off is worth recording — not a no-op call when MFA was
+      // already off (issue #49).
+      if (wasEnabled) {
+        recordSecurityEvent(ctx, { entityType: 'user', entityId: me.id, action: 'mfa_disabled' })
+      }
       return { ok: true as const }
     }),
 })

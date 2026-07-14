@@ -3,6 +3,7 @@ import { and, desc, eq, gt, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertRole, scopeWhere } from '../trpc/tenant'
+import { recordSecurityEvent } from '../trpc/audit'
 import { household, invitation } from '../db/schema'
 import { isUniqueViolation } from '../db/errors'
 import { hashPassword } from '../auth/password'
@@ -47,8 +48,9 @@ export const invitationsRouter = router({
       const now = new Date()
       const expiresAt = new Date(now.getTime() + INVITE_TTL_MS)
       const token = newSessionId()
+      const id = newId()
       await ctx.db.insert(invitation).values({
-        id: newId(),
+        id,
         tokenHash: hashToken(token),
         householdId: ctx.householdId,
         role: input.role,
@@ -58,6 +60,13 @@ export const invitationsRouter = router({
         expiresAt,
         acceptedAt: null,
       })
+      // Record the invite, never the token (issue #49).
+      recordSecurityEvent(ctx, {
+        entityType: 'invitation',
+        entityId: id,
+        action: 'invite_created',
+        details: { role: input.role, email: input.email ?? null },
+      })
       return { token, role: input.role, expiresAt }
     }),
 
@@ -65,9 +74,22 @@ export const invitationsRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       assertRole(ctx.role, 'admin')
+      // Read the invite first so the audit entry can describe what was revoked.
+      const [inv] = await ctx.db
+        .select()
+        .from(invitation)
+        .where(scopeWhere(ctx.householdId, invitation.householdId, eq(invitation.id, input.id)))
       await ctx.db
         .delete(invitation)
         .where(scopeWhere(ctx.householdId, invitation.householdId, eq(invitation.id, input.id)))
+      if (inv) {
+        recordSecurityEvent(ctx, {
+          entityType: 'invitation',
+          entityId: input.id,
+          action: 'invite_revoked',
+          details: { role: inv.role, email: inv.email },
+        })
+      }
       return { ok: true as const }
     }),
 
@@ -117,7 +139,7 @@ export const invitationsRouter = router({
 
       const now = new Date()
       const passwordHash = await hashPassword(input.password)
-      let result: { userId: string; householdId: string } | null
+      let result: { userId: string; householdId: string; role: string } | null
       try {
         result = await ctx.db.transaction(async (tx) => {
           // Claim the invite atomically: mark it accepted only if it's still
@@ -141,7 +163,7 @@ export const invitationsRouter = router({
             role: claimed.role,
             invitedAt: claimed.createdAt,
           })
-          return { userId, householdId: claimed.householdId }
+          return { userId, householdId: claimed.householdId, role: claimed.role }
         })
       } catch (err) {
         if (isUniqueViolation(err)) {
@@ -156,6 +178,17 @@ export const invitationsRouter = router({
       }
 
       acceptLimiter.reset(key)
+      // The new member is both actor and subject; the request context has no
+      // identity yet (the session is created below), so record with explicit
+      // household + actor so the entry lands in the joined household's trail.
+      recordSecurityEvent(ctx, {
+        entityType: 'membership',
+        entityId: result.userId,
+        action: 'invite_accepted',
+        details: { member: input.displayName.trim(), role: result.role },
+        householdId: result.householdId,
+        actorUserId: result.userId,
+      })
       ctx.setSessionCookie?.(await createSession(ctx.db, result.userId, result.householdId))
       return { ok: true as const }
     }),
