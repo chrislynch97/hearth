@@ -29,6 +29,15 @@ import { parseTrustProxy } from './auth/trustProxy'
 // a password (which locks the instance) from an otherwise-blocked UI.
 const OPEN_ON_PUBLIC_ALLOWED = new Set([...PUBLIC_PROCEDURES, 'auth.setPassword'])
 
+// The 64 MB bodyLimit below exists solely so `data.import` can restore a large
+// JSON export. Every other /trpc route — including the unauthenticated auth
+// endpoints — only ever carries a few KB, so we cap their bodies well below
+// 64 MB. Without this a pre-auth caller could POST a multi-megabyte body (e.g. a
+// giant "password", whose scrypt cost scales with length) at a public endpoint
+// and make the server do proportional work. #45
+const IMPORT_PROCEDURES = new Set(['data.import'])
+const PUBLIC_BODY_LIMIT = 1 * 1024 * 1024 // 1 MB — Fastify's own default
+
 const PORT = Number(process.env.PORT ?? 8787)
 const HOST = process.env.HOST ?? '0.0.0.0'
 // Read the open-on-public guard config through the shared helper so this gate and
@@ -134,6 +143,21 @@ async function main() {
   // touching the DB or serving the SPA. Suitable as a Docker/orchestrator health
   // check target.
   app.get('/health', async () => ({ status: 'ok' }))
+
+  // Cap request-body size per /trpc route ahead of the auth gate and any body
+  // parsing. `data.import` keeps the full 64 MB headroom (set at Fastify
+  // construction); every other route — the public auth endpoints included — is
+  // held to PUBLIC_BODY_LIMIT so an unauthenticated caller can't ship a huge body
+  // to a pre-auth endpoint. A body sent without a Content-Length (chunked) still
+  // falls back to the global 64 MB hard limit enforced during parsing. #45
+  app.addHook('onRequest', async (req, reply) => {
+    if (!req.url.startsWith('/trpc/')) return
+    if (allProceduresIn(trpcProcedures(req.url), IMPORT_PROCEDURES)) return
+    const declaredLength = Number(req.headers['content-length'])
+    if (Number.isFinite(declaredLength) && declaredLength > PUBLIC_BODY_LIMIT) {
+      return reply.code(413).send({ error: 'Request body too large' })
+    }
+  })
 
   // Coarse outer auth gate. Authorization is also enforced in-band by the tRPC
   // `enforceAuthenticated` middleware (trpc/trpc.ts); this is a cheap first line

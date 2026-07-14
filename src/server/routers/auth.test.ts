@@ -102,6 +102,24 @@ describe('auth router', () => {
     expect((await authed.caller.auth.status()).authenticated).toBe(true)
   })
 
+  it('caps the length of unauthenticated inputs, before any scrypt work (#45)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const set = makeCaller(db)
+    await set.caller.auth.setPassword({ newPassword: PW }) // lock the instance
+
+    const anon = makeCaller(db)
+    // A multi-megabyte "password" must be rejected by zod (BAD_REQUEST), not fed
+    // to scrypt — the login rate limiter counts a scrypt-spending attempt.
+    await expect(
+      anon.caller.auth.login({ username: USER, password: 'x'.repeat(256 + 1) }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    // An oversized username is likewise rejected up front.
+    await expect(
+      anon.caller.auth.login({ username: 'u'.repeat(100 + 1), password: PW }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
   it('rejects weak passwords', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)

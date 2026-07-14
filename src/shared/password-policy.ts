@@ -9,6 +9,12 @@
 
 export const MIN_PASSWORD_LENGTH = 10
 
+// Upper bound on accepted passwords. scrypt's cost scales with input length, so
+// an unbounded password on an unauthenticated endpoint (login/register/accept)
+// lets an attacker burn CPU by POSTing multi-megabyte "passwords". 256 is far
+// above any real passphrase while capping the per-attempt hashing work.
+export const MAX_PASSWORD_LENGTH = 256
+
 // Lower-cased; membership is checked case-insensitively. Deliberately tiny — this
 // is a guard-rail against the worst offenders, not a full dictionary check.
 const COMMON_PASSWORDS = new Set([
@@ -24,6 +30,9 @@ const COMMON_PASSWORDS = new Set([
 export function validatePassword(password: string): string | null {
   if (password.length < MIN_PASSWORD_LENGTH) {
     return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
+  }
+  if (password.length > MAX_PASSWORD_LENGTH) {
+    return `Password must be at most ${MAX_PASSWORD_LENGTH} characters.`
   }
   if (password.trim().length === 0) {
     return 'Password cannot be only whitespace.'

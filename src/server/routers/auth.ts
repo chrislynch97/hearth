@@ -34,7 +34,8 @@ import {
   verifyTotp,
 } from '../auth/totp'
 import { isOpenAccessBlocked, openGuardConfig } from '../auth/gate'
-import { validatePassword } from '../../shared/password-policy'
+import { validatePassword, MAX_PASSWORD_LENGTH } from '../../shared/password-policy'
+import { MAX_CODE_LENGTH, MAX_NAME_LENGTH } from '../../shared/input-limits'
 import { RateLimiter } from '../auth/rateLimit'
 import type { Context } from '../trpc/context'
 import type { DB } from '../db/client'
@@ -104,7 +105,13 @@ export const authRouter = router({
   }),
 
   login: publicProcedure
-    .input(z.object({ username: z.string(), password: z.string(), code: z.string().optional() }))
+    .input(
+      z.object({
+        username: z.string().max(MAX_NAME_LENGTH),
+        password: z.string().max(MAX_PASSWORD_LENGTH),
+        code: z.string().max(MAX_CODE_LENGTH).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       if (!(await isInstanceLocked(ctx.db))) return { ok: true as const } // open instance
 
@@ -182,10 +189,10 @@ export const authRouter = router({
   register: publicProcedure
     .input(
       z.object({
-        username: z.string().min(1),
-        displayName: z.string().min(1),
-        password: z.string(),
-        householdName: z.string().min(1),
+        username: z.string().min(1).max(MAX_NAME_LENGTH),
+        displayName: z.string().min(1).max(MAX_NAME_LENGTH),
+        password: z.string().max(MAX_PASSWORD_LENGTH),
+        householdName: z.string().min(1).max(MAX_NAME_LENGTH),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -251,7 +258,12 @@ export const authRouter = router({
   /** Set or change the current user's password. Requires the current password
    *  if one is set; revokes existing sessions and keeps the setter logged in. */
   setPassword: publicProcedure
-    .input(z.object({ currentPassword: z.string().optional(), newPassword: z.string() }))
+    .input(
+      z.object({
+        currentPassword: z.string().max(MAX_PASSWORD_LENGTH).optional(),
+        newPassword: z.string().max(MAX_PASSWORD_LENGTH),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const me = await requireCurrentUser(ctx)
       if (me.passwordHash !== null && !(await verifyPassword(input.currentPassword ?? '', me.passwordHash))) {
@@ -274,7 +286,7 @@ export const authRouter = router({
   /** Remove the password, returning the instance to no-auth. Owner-only, and only
    *  when they're the sole account (can't reopen past other people's logins). */
   clearPassword: publicProcedure
-    .input(z.object({ currentPassword: z.string() }))
+    .input(z.object({ currentPassword: z.string().max(MAX_PASSWORD_LENGTH) }))
     .mutation(async ({ ctx, input }) => {
       const me = await requireCurrentUser(ctx)
       if (me.passwordHash === null) return { ok: true as const }
@@ -307,7 +319,7 @@ export const authRouter = router({
    *  turn enforcement off (see the login gate) — a downgrade. Require the
    *  current password in that case, matching `disableMfa`. */
   enrollMfa: publicProcedure
-    .input(z.object({ currentPassword: z.string() }).optional())
+    .input(z.object({ currentPassword: z.string().max(MAX_PASSWORD_LENGTH) }).optional())
     .mutation(async ({ ctx, input }) => {
       const me = await requireCurrentUser(ctx)
       if (me.passwordHash === null) {
@@ -327,7 +339,7 @@ export const authRouter = router({
 
   /** Confirm enrolment with a code; turns MFA on and returns recovery codes. */
   confirmMfa: publicProcedure
-    .input(z.object({ code: z.string() }))
+    .input(z.object({ code: z.string().max(MAX_CODE_LENGTH) }))
     .mutation(async ({ ctx, input }) => {
       const me = await requireCurrentUser(ctx)
       if (me.passwordHash === null) throw new TRPCError({ code: 'BAD_REQUEST', message: 'No password set.' })
@@ -350,7 +362,7 @@ export const authRouter = router({
 
   /** Turn MFA off. Requires the current password (a sensitive downgrade). */
   disableMfa: publicProcedure
-    .input(z.object({ currentPassword: z.string() }))
+    .input(z.object({ currentPassword: z.string().max(MAX_PASSWORD_LENGTH) }))
     .mutation(async ({ ctx, input }) => {
       const me = await requireCurrentUser(ctx)
       if (me.passwordHash === null) return { ok: true as const }

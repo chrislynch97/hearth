@@ -7,7 +7,8 @@ import { household, invitation } from '../db/schema'
 import { isUniqueViolation } from '../db/errors'
 import { hashPassword } from '../auth/password'
 import { createSession, createUserWithMembership, getUserByUsername, newSessionId, normalizeUsername } from '../auth/session'
-import { validatePassword } from '../../shared/password-policy'
+import { validatePassword, MAX_PASSWORD_LENGTH } from '../../shared/password-policy'
+import { MAX_NAME_LENGTH, MAX_TOKEN_LENGTH } from '../../shared/input-limits'
 import { RateLimiter } from '../auth/rateLimit'
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
@@ -69,7 +70,7 @@ export const invitationsRouter = router({
     }),
 
   /** Public: describe an invite for the accept screen (or null if invalid). */
-  info: publicProcedure.input(z.object({ token: z.string() })).query(async ({ ctx, input }) => {
+  info: publicProcedure.input(z.object({ token: z.string().max(MAX_TOKEN_LENGTH) })).query(async ({ ctx, input }) => {
     const [inv] = await ctx.db.select().from(invitation).where(eq(invitation.id, input.token))
     if (!inv || inv.acceptedAt !== null || inv.expiresAt.getTime() < Date.now()) return null
     const [hh] = await ctx.db.select().from(household).where(eq(household.id, inv.householdId))
@@ -81,10 +82,10 @@ export const invitationsRouter = router({
   accept: publicProcedure
     .input(
       z.object({
-        token: z.string(),
-        username: z.string().min(1),
-        displayName: z.string().min(1),
-        password: z.string(),
+        token: z.string().max(MAX_TOKEN_LENGTH),
+        username: z.string().min(1).max(MAX_NAME_LENGTH),
+        displayName: z.string().min(1).max(MAX_NAME_LENGTH),
+        password: z.string().max(MAX_PASSWORD_LENGTH),
       }),
     )
     .mutation(async ({ ctx, input }) => {
