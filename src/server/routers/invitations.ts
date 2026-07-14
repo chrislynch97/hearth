@@ -6,7 +6,8 @@ import { assertRole, scopeWhere } from '../trpc/tenant'
 import { household, invitation } from '../db/schema'
 import { isUniqueViolation } from '../db/errors'
 import { hashPassword } from '../auth/password'
-import { createSession, createUserWithMembership, getUserByUsername, newSessionId, normalizeUsername } from '../auth/session'
+import { createSession, createUserWithMembership, getUserByUsername, hashToken, newSessionId, normalizeUsername } from '../auth/session'
+import { newId } from '../../shared/ids'
 import { validatePassword, MAX_PASSWORD_LENGTH } from '../../shared/password-policy'
 import { MAX_NAME_LENGTH, MAX_TOKEN_LENGTH } from '../../shared/input-limits'
 import { RateLimiter } from '../auth/rateLimit'
@@ -47,7 +48,8 @@ export const invitationsRouter = router({
       const expiresAt = new Date(now.getTime() + INVITE_TTL_MS)
       const token = newSessionId()
       await ctx.db.insert(invitation).values({
-        id: token,
+        id: newId(),
+        tokenHash: hashToken(token),
         householdId: ctx.householdId,
         role: input.role,
         email: input.email ?? null,
@@ -71,7 +73,7 @@ export const invitationsRouter = router({
 
   /** Public: describe an invite for the accept screen (or null if invalid). */
   info: publicProcedure.input(z.object({ token: z.string().max(MAX_TOKEN_LENGTH) })).query(async ({ ctx, input }) => {
-    const [inv] = await ctx.db.select().from(invitation).where(eq(invitation.id, input.token))
+    const [inv] = await ctx.db.select().from(invitation).where(eq(invitation.tokenHash, hashToken(input.token)))
     if (!inv || inv.acceptedAt !== null || inv.expiresAt.getTime() < Date.now()) return null
     const [hh] = await ctx.db.select().from(household).where(eq(household.id, inv.householdId))
     return { householdName: hh?.displayName ?? 'Household', role: inv.role }
@@ -95,7 +97,8 @@ export const invitationsRouter = router({
         throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many attempts. Try again later.' })
       }
 
-      const [preview] = await ctx.db.select().from(invitation).where(eq(invitation.id, input.token))
+      const tokenHash = hashToken(input.token)
+      const [preview] = await ctx.db.select().from(invitation).where(eq(invitation.tokenHash, tokenHash))
       if (!preview || preview.acceptedAt !== null || preview.expiresAt.getTime() < Date.now()) {
         acceptLimiter.fail(key, nowCheck)
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'This invitation is invalid or has expired.' })
@@ -125,7 +128,7 @@ export const invitationsRouter = router({
             .update(invitation)
             .set({ acceptedAt: now })
             .where(
-              and(eq(invitation.id, input.token), isNull(invitation.acceptedAt), gt(invitation.expiresAt, now)),
+              and(eq(invitation.tokenHash, tokenHash), isNull(invitation.acceptedAt), gt(invitation.expiresAt, now)),
             )
             .returning()
           if (!claimed) return null

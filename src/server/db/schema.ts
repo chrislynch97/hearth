@@ -121,11 +121,13 @@ export const membership = pgTable('membership', {
   householdIdx: index('membership_household_id_idx').on(t.householdId),
 }))
 
-// A logged-in session. The cookie holds this row's id; each request resolves the
-// user and their active household from it. Server-side (unlike the old stateless
-// shared-password token) so it carries user identity and supports logout,
-// multiple users, and a per-session active household. Not part of the data
-// portability contract — deliberately excluded from ALL_TABLES.
+// A logged-in session. The cookie holds a 256-bit random token; this row's id is
+// its sha256, so a leaked database/backup exposes only hashes, not live login
+// tokens (the raw token is never persisted). Each request hashes the presented
+// cookie and resolves the user + active household from the matching row.
+// Server-side (unlike the old stateless shared-password token) so it carries
+// user identity and supports logout, multiple users, and a per-session active
+// household. Not part of the data portability contract — excluded from ALL_TABLES.
 export const session = pgTable('session', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
@@ -165,10 +167,14 @@ export const instanceSettings = pgTable('instance_settings', {
 
 export type InstanceSettings = typeof instanceSettings.$inferSelect
 
-// A pending invitation for someone to join a household. The row id is the
-// unguessable invite token; accepting it creates the user + membership.
+// A pending invitation for someone to join a household. The row id is an opaque,
+// non-secret identifier (safe to list and revoke by); the shareable invite token
+// itself is a separate 256-bit random value stored only as its sha256 in
+// `tokenHash`. Accepting a token hashes it, matches the row, and creates the
+// user + membership. The raw token is shown once at creation and never persisted.
 export const invitation = pgTable('invitation', {
   id: text('id').primaryKey(),
+  tokenHash: text('token_hash').notNull(),
   householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   role: text('role').notNull().default('member'), // 'admin' | 'member' | 'viewer'
   email: text('email'), // optional, informational (who it was sent to)
@@ -178,6 +184,7 @@ export const invitation = pgTable('invitation', {
   acceptedAt: timestamp('accepted_at', { withTimezone: true, mode: 'date' }),
 }, (t) => ({
   householdIdx: index('invitation_household_id_idx').on(t.householdId),
+  tokenHashIdx: index('invitation_token_hash_idx').on(t.tokenHash),
 }))
 
 export type Invitation = typeof invitation.$inferSelect

@@ -3,8 +3,9 @@ import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
 import { appRouter } from '../trpc/router'
-import { getOwnerUser } from '../auth/session'
+import { getOwnerUser, hashToken, newSessionId } from '../auth/session'
 import { invitation, membership } from '../db/schema'
+import { newId } from '../../shared/ids'
 import type { DB } from '../db/client'
 
 function caller(
@@ -26,12 +27,16 @@ function caller(
 const DAY_MS = 24 * 60 * 60 * 1000
 
 /** Insert an invitation row directly so we can control its expiry/accepted state
- *  — the create procedure always stamps a fresh 7-day, unaccepted token. */
+ *  — the create procedure always stamps a fresh 7-day, unaccepted token. Returns
+ *  the raw token (to present to info/accept) and the opaque row id (to list/revoke
+ *  by); the row stores only the token's hash, matching production. */
 async function seedInvite(db: DB, over: Partial<typeof invitation.$inferInsert> = {}) {
   const now = new Date()
-  const id = `inv-${Math.random().toString(36).slice(2)}`
+  const id = newId()
+  const token = newSessionId()
   await db.insert(invitation).values({
     id,
+    tokenHash: hashToken(token),
     householdId: 'household',
     role: 'member',
     email: null,
@@ -41,7 +46,7 @@ async function seedInvite(db: DB, over: Partial<typeof invitation.$inferInsert> 
     acceptedAt: null,
     ...over,
   })
-  return id
+  return { id, token }
 }
 
 describe('invitations.create', () => {
@@ -72,7 +77,7 @@ describe('invitations.info', () => {
   it('describes a valid invite', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const token = await seedInvite(db, { role: 'viewer' })
+    const { token } = await seedInvite(db, { role: 'viewer' })
 
     const info = await caller(db).c.invitations.info({ token })
     expect(info).toMatchObject({ role: 'viewer' })
@@ -86,10 +91,10 @@ describe('invitations.info', () => {
     expect(await caller(db).c.invitations.info({ token: 'nope' })).toBeNull()
 
     const expired = await seedInvite(db, { expiresAt: new Date(Date.now() - DAY_MS) })
-    expect(await caller(db).c.invitations.info({ token: expired })).toBeNull()
+    expect(await caller(db).c.invitations.info({ token: expired.token })).toBeNull()
 
     const accepted = await seedInvite(db, { acceptedAt: new Date() })
-    expect(await caller(db).c.invitations.info({ token: accepted })).toBeNull()
+    expect(await caller(db).c.invitations.info({ token: accepted.token })).toBeNull()
   })
 })
 
@@ -103,12 +108,15 @@ describe('invitations.list / revoke', () => {
     await seedInvite(db, { email: 'y@example.com', acceptedAt: new Date() }) // accepted
 
     const listed = await caller(db, { role: 'admin' }).c.invitations.list()
-    expect(listed.map((r) => r.id)).toEqual([pending])
+    expect(listed.map((r) => r.id)).toEqual([pending.id])
+
+    // list must never leak the bearer token — only the opaque id is returned.
+    expect(JSON.stringify(listed)).not.toContain(pending.token)
 
     // Non-admins can't enumerate invites.
     await expect(caller(db, { role: 'member' }).c.invitations.list()).rejects.toMatchObject({ code: 'FORBIDDEN' })
 
-    await caller(db, { role: 'admin' }).c.invitations.revoke({ id: pending })
+    await caller(db, { role: 'admin' }).c.invitations.revoke({ id: pending.id })
     expect(await caller(db, { role: 'admin' }).c.invitations.list()).toHaveLength(0)
   })
 })
@@ -117,7 +125,7 @@ describe('invitations.accept', () => {
   it('creates an account + membership and logs the invitee in', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const token = await seedInvite(db, { role: 'member' })
+    const { id, token } = await seedInvite(db, { role: 'member' })
 
     const invitee = caller(db, { clientKey: 'ok' })
     const res = await invitee.c.invitations.accept({
@@ -130,7 +138,7 @@ describe('invitations.accept', () => {
     expect(invitee.cookies.at(-1)).toBeTruthy()
 
     // The invite is now spent and the membership exists.
-    const [inv] = await db.select().from(invitation).where(eq(invitation.id, token))
+    const [inv] = await db.select().from(invitation).where(eq(invitation.id, id))
     expect(inv?.acceptedAt).not.toBeNull()
     const grants = await db.select().from(membership).where(eq(membership.householdId, 'household'))
     expect(grants.length).toBeGreaterThanOrEqual(2) // owner + ben
@@ -139,7 +147,7 @@ describe('invitations.accept', () => {
   it('rejects an expired invite', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const token = await seedInvite(db, { expiresAt: new Date(Date.now() - DAY_MS) })
+    const { token } = await seedInvite(db, { expiresAt: new Date(Date.now() - DAY_MS) })
 
     await expect(
       caller(db, { clientKey: 'expiry' }).c.invitations.accept({
@@ -154,7 +162,7 @@ describe('invitations.accept', () => {
   it('rejects a second accept of an already-accepted invite', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const token = await seedInvite(db)
+    const { token } = await seedInvite(db)
 
     await caller(db, { clientKey: 'first' }).c.invitations.accept({
       token,
@@ -183,7 +191,7 @@ describe('invitations.accept', () => {
     const weakToken = await seedInvite(db)
     await expect(
       caller(db, { clientKey: 'weak' }).c.invitations.accept({
-        token: weakToken,
+        token: weakToken.token,
         username: 'wendy',
         displayName: 'Wendy',
         password: 'short',
@@ -193,7 +201,7 @@ describe('invitations.accept', () => {
     const takenToken = await seedInvite(db)
     await expect(
       caller(db, { clientKey: 'taken' }).c.invitations.accept({
-        token: takenToken,
+        token: takenToken.token,
         username: 'owner', // already the seeded owner's username
         displayName: 'Impostor',
         password: 'a-strong-password',
@@ -223,7 +231,7 @@ describe('invitations.accept', () => {
     const good = await seedInvite(db)
     await expect(
       caller(db, { clientKey: key }).c.invitations.accept({
-        token: good,
+        token: good.token,
         username: 'blocked',
         displayName: 'Blocked',
         password: 'a-strong-password',

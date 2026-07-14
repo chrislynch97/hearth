@@ -29,6 +29,13 @@
       "when": 1783969261339,
       "tag": "0003_messy_rachel_grey",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784064586801,
+      "tag": "0004_hash_bearer_tokens",
+      "breakpoints": true
     }
   ]
 }

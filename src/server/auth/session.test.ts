@@ -102,9 +102,10 @@ describe('instance owner / lock resolution', () => {
 
     await deleteExpiredSessions(db, now)
 
-    // The expired row is gone; the live session still resolves.
+    // The expired row is gone; the live session still resolves. `liveId` is the
+    // raw cookie token; the row is keyed by its hash, so compare on userId.
     expect(await db.select().from(session).where(eq(session.id, expiredId))).toHaveLength(0)
-    expect((await getValidSession(db, liveId))?.id).toBe(liveId)
+    expect((await getValidSession(db, liveId))?.userId).toBe(owner.id)
   })
 
   it('ignores an unaccepted owner grant when deriving (no stored id yet)', async () => {

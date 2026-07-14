@@ -2,7 +2,7 @@
  *  authenticated when that id resolves to a live (unexpired) session row.
  *  Replaces the old stateless HMAC(password) token so sessions can carry user
  *  identity and be revoked (logout, password change, "sign out everywhere"). */
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { and, asc, eq, isNotNull, lt } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import type { DB, DBOrTx } from '../db/client'
@@ -58,36 +58,46 @@ export async function createUserWithMembership(
   return userId
 }
 
-/** A fresh, unguessable session id (256 bits). */
+/** A fresh, unguessable bearer token (256 bits). Used for both session cookies
+ *  and invite links — the raw value goes to the client; only its hash is stored. */
 export function newSessionId(): string {
   return randomBytes(32).toString('hex')
 }
 
-/** Create a session for a user's active household; returns the cookie value. */
+/** Storage form of a bearer token: sha256(token) as hex. The tokens are 256-bit
+ *  random, so a single fast hash (no KDF) makes lookups cheap while ensuring a
+ *  leaked database or backup exposes only hashes, never usable credentials. */
+export function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+/** Create a session for a user's active household; returns the cookie value (the
+ *  raw token). Only its hash is persisted as the row id. */
 export async function createSession(db: DB, userId: string, householdId: string): Promise<string> {
-  const id = newSessionId()
+  const token = newSessionId()
   const now = new Date()
   await db
     .insert(session)
     .values({
-      id,
+      id: hashToken(token),
       userId,
       activeHouseholdId: householdId,
       createdAt: now,
       expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
     })
-  return id
+  return token
 }
 
-/** The live session for a cookie value, or null if missing/unknown/expired. */
-export async function getValidSession(db: DB, id: string | undefined): Promise<Session | null> {
-  if (!id) return null
-  const [s] = await db.select().from(session).where(eq(session.id, id))
+/** The live session for a cookie value, or null if missing/unknown/expired. The
+ *  presented token is hashed before lookup — rows are keyed by hash, not token. */
+export async function getValidSession(db: DB, token: string | undefined): Promise<Session | null> {
+  if (!token) return null
+  const [s] = await db.select().from(session).where(eq(session.id, hashToken(token)))
   return s && s.expiresAt.getTime() > Date.now() ? s : null
 }
 
-export async function deleteSession(db: DB, id: string): Promise<void> {
-  await db.delete(session).where(eq(session.id, id))
+export async function deleteSession(db: DB, token: string): Promise<void> {
+  await db.delete(session).where(eq(session.id, hashToken(token)))
 }
 
 /** Revoke every session for a user (used on password change / clear). */
