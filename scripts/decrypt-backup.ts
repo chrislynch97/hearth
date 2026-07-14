@@ -1,9 +1,11 @@
-// Decrypt an off-site Hearth backup (`*.json.enc`) back to portable JSON (#39).
+// Decrypt an encrypted Hearth backup (`*.json.enc`) back to portable JSON (#39, #46).
+// Works for both off-site copies and the local `<data>/backups` snapshots produced
+// when HEARTH_BACKUP_PASSPHRASE is set — they share the same AES-256-GCM envelope.
 //
 //   HEARTH_BACKUP_PASSPHRASE=... npm run backup:decrypt -- <in.json.enc> [out.json]
 //
 // The passphrase is read from HEARTH_BACKUP_PASSPHRASE (the same value used to
-// encrypt the off-site copies). With no <out.json>, writes alongside the input
+// encrypt the backups). With no <out.json>, writes alongside the input
 // with the `.enc` suffix stripped. The resulting JSON is a normal Hearth snapshot,
 // restorable via Settings → Data → Import.
 import { readFileSync, writeFileSync } from 'node:fs'

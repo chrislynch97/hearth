@@ -21,6 +21,7 @@ import { ALL_TABLES } from '../db/tables'
 import { applySnapshot, buildSnapshot, type Snapshot } from '../db/snapshot'
 import { shouldBackup, type BackupFrequency } from './schedule'
 import { resolveOffsiteConfig, uploadOffsite } from './offsite'
+import { encryptSnapshot, decryptSnapshot } from './encrypt'
 import type { PgTable } from 'drizzle-orm/pg-core'
 
 const KEEP_BACKUPS = 14
@@ -67,10 +68,22 @@ function backupDir(): string {
   return join(base, 'backups')
 }
 
+/** The passphrase used to encrypt backups at rest, or `null` for plaintext. A
+ *  snapshot holds password hashes and MFA/TOTP secrets, so when a passphrase is
+ *  configured we encrypt the *local* copy too (not just the off-site one, #46) —
+ *  the local files live on a host-mounted volume that host-level tooling can copy.
+ *  Plaintext stays the default only when no passphrase is set (issue #46). This is
+ *  the same `HEARTH_BACKUP_PASSPHRASE` that gates off-site encryption, so one
+ *  passphrase protects both copies. */
+function localPassphrase(env: NodeJS.ProcessEnv = process.env): string | null {
+  const passphrase = env.HEARTH_BACKUP_PASSPHRASE ?? ''
+  return passphrase.length > 0 ? passphrase : null
+}
+
 /** Serialize `data` to `file` durably and atomically: write a sibling temp file,
  *  fsync it, then `rename` into place. A crash mid-write leaves the `.tmp` — never
- *  a truncated `.json` that would sort as "newest" and be picked for a restore. */
-function writeFileAtomic(file: string, data: string): void {
+ *  a truncated backup that would sort as "newest" and be picked for a restore. */
+function writeFileAtomic(file: string, data: Uint8Array): void {
   const tmp = `${file}.tmp`
   const fd = openSync(tmp, 'w', BACKUP_MODE)
   try {
@@ -110,10 +123,12 @@ async function verifyRestores(snapshot: Snapshot): Promise<void> {
   }
 }
 
-/** Write a JSON snapshot to disk, prune old ones, and stamp `backupLastAt` on the
+/** Write a snapshot to disk, prune old ones, and stamp `backupLastAt` on the
  *  given households. The snapshot is whole-database, so a single file backs up
  *  every household; `stampHouseholdIds` records the backup against each household
- *  it was run for (e.g. the caller's, or every household that was due).
+ *  it was run for (e.g. the caller's, or every household that was due). The local
+ *  file is plaintext JSON by default, or an encrypted `.json.enc` envelope when
+ *  `HEARTH_BACKUP_PASSPHRASE` is set (#46).
  *
  *  The snapshot is written atomically and then verified by restoring it into a
  *  throwaway database; if verification fails we throw before pruning or stamping,
@@ -123,17 +138,24 @@ export async function runBackup(db: DB, stampHouseholdIds: string[]): Promise<Ba
   const dir = backupDir()
   mkdirSync(dir, { recursive: true })
 
+  // When a passphrase is set, the local snapshot is encrypted at rest (`.json.enc`);
+  // otherwise it stays plaintext JSON (issue #46). The off-site copy below is always
+  // encrypted regardless — this only decides the local file's format.
+  const passphrase = localPassphrase()
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-  const file = join(dir, `${PREFIX}${stamp}.json`)
   const json = JSON.stringify(snapshot)
-  writeFileAtomic(file, json)
+  const file = join(dir, `${PREFIX}${stamp}${passphrase ? '.json.enc' : '.json'}`)
+  writeFileAtomic(file, passphrase ? encryptSnapshot(json, passphrase) : Buffer.from(json, 'utf8'))
 
   // Verify the bytes we just wrote actually restore — read the file back (not the
-  // in-memory object) so we also exercise the on-disk write and JSON round-trip.
-  await verifyRestores(JSON.parse(readFileSync(file, 'utf8')) as Snapshot)
+  // in-memory object) so we also exercise the on-disk write and (de)serialization
+  // round-trip, decrypting first when the local copy is encrypted.
+  const written = readFileSync(file)
+  const restoredJson = passphrase ? decryptSnapshot(written, passphrase) : written.toString('utf8')
+  await verifyRestores(JSON.parse(restoredJson) as Snapshot)
 
   const existing = readdirSync(dir)
-    .filter((f) => f.startsWith(PREFIX) && f.endsWith('.json'))
+    .filter((f) => f.startsWith(PREFIX) && (f.endsWith('.json') || f.endsWith('.json.enc')))
     .sort()
   for (const old of existing.slice(0, Math.max(0, existing.length - KEEP_BACKUPS))) {
     rmSync(join(dir, old), { force: true })

@@ -99,6 +99,37 @@ describe('runBackup', () => {
     expect(statSync(file).mode & 0o777).toBe(0o600)
   })
 
+  it('writes a plaintext .json backup when no passphrase is set (the default)', async () => {
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+
+    const { file } = await runBackup(db, ['household'])
+
+    expect(file.endsWith('.json')).toBe(true)
+    expect(file.endsWith('.json.enc')).toBe(false)
+  })
+
+  it('encrypts the local backup at rest when HEARTH_BACKUP_PASSPHRASE is set (#46)', async () => {
+    process.env.HEARTH_BACKUP_PASSPHRASE = 'test-passphrase'
+
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+    await addHousehold(db, 'secondary', 'weekly')
+
+    const { file, at } = await runBackup(db, ['household'])
+
+    // The on-disk file is the encrypted envelope, not plaintext JSON...
+    expect(file.endsWith('.json.enc')).toBe(true)
+    const bytes = readFileSync(file)
+    expect(() => JSON.parse(bytes.toString('utf8'))).toThrow() // not readable as plaintext
+    // ...but decrypts back to a snapshot that restores every household...
+    const snapshot = JSON.parse(decryptSnapshot(bytes, 'test-passphrase')) as Snapshot
+    expect(snapshot.tables.household!.map((r) => r['id']).sort()).toEqual(['household', 'secondary'])
+    // ...and the run still verified and stamped the household as backed up.
+    const [row] = await db.select().from(household).where(eq(household.id, 'household'))
+    expect(row!.backupLastAt?.getTime()).toBe(at)
+  })
+
   it('reports no off-site outcome when off-site backups are disabled (the default)', async () => {
     const db = await makeTestDb()
     await addHousehold(db, 'household', 'daily')
@@ -141,8 +172,10 @@ describe('runBackup', () => {
 
     const { file, offsite } = await runBackup(db, ['household'])
 
-    // Local backup is written and the household is still stamped as backed up...
-    expect(readdirSync(dirname(file)).filter((f) => f.endsWith('.json')).length).toBe(1)
+    // Local backup is written and the household is still stamped as backed up.
+    // (A passphrase is set, so the local copy is the encrypted `.json.enc`.)
+    expect(file.endsWith('.json.enc')).toBe(true)
+    expect(readdirSync(dirname(file)).filter((f) => f.endsWith('.json.enc')).length).toBe(1)
     const [row] = await db.select().from(household).where(eq(household.id, 'household'))
     expect(row!.backupLastAt).not.toBeNull()
     // ...but the off-site failure is reported, not thrown.
