@@ -5,6 +5,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Code,
   CopyButton,
   Divider,
@@ -1382,8 +1383,10 @@ function AccountSection() {
 
 /** The people with accepted access to the active household: change a role,
  *  reset a locked-out member's password, or revoke access. Admin+ only; the
- *  server enforces that only owners touch owners/admins. */
-function AccessList({ isOwner }: { isOwner: boolean }) {
+ *  server enforces that only owners touch owners/admins.
+ *
+ *  Exported for its unit test (see AccessList.test.tsx), not for reuse. */
+export function AccessList({ isOwner }: { isOwner: boolean }) {
   const utils = trpc.useUtils()
   const list = trpc.access.list.useQuery()
   const setRole = trpc.access.setRole.useMutation()
@@ -1391,8 +1394,9 @@ function AccessList({ isOwner }: { isOwner: boolean }) {
   const resetPassword = trpc.access.resetPassword.useMutation()
 
   const [pendingRemove, setPendingRemove] = useState<string | null>(null)
-  const [resetFor, setResetFor] = useState<{ userId: string; name: string } | null>(null)
+  const [resetFor, setResetFor] = useState<{ userId: string; name: string; mfaEnabled: boolean } | null>(null)
   const [newPw, setNewPw] = useState('')
+  const [clearMfa, setClearMfa] = useState(false)
   const [resetMsg, setResetMsg] = useState('')
   const [error, setError] = useState('')
 
@@ -1434,10 +1438,13 @@ function AccessList({ isOwner }: { isOwner: boolean }) {
     const weak = validatePassword(newPw)
     if (weak) return setError(weak)
     try {
-      await resetPassword.mutateAsync({ userId: resetFor.userId, newPassword: newPw })
-      setResetMsg(`Password reset for ${resetFor.name}. Share it with them; they'll be signed out.`)
+      await resetPassword.mutateAsync({ userId: resetFor.userId, newPassword: newPw, clearMfa })
+      const twoFactor = clearMfa && resetFor.mfaEnabled ? ' Their 2FA is off — ask them to set it up again.' : ''
+      setResetMsg(`Password reset for ${resetFor.name}. Share it with them; they'll be signed out.${twoFactor}`)
       setResetFor(null)
       setNewPw('')
+      setClearMfa(false)
+      await utils.access.list.invalidate()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not reset the password.')
     }
@@ -1494,7 +1501,8 @@ function AccessList({ isOwner }: { isOwner: boolean }) {
                     variant="subtle"
                     onClick={() => {
                       setResetMsg('')
-                      setResetFor({ userId: r.userId, name: r.displayName })
+                      setClearMfa(false)
+                      setResetFor({ userId: r.userId, name: r.displayName, mfaEnabled: r.mfaEnabled })
                     }}
                   >
                     Reset password
@@ -1538,6 +1546,14 @@ function AccessList({ isOwner }: { isOwner: boolean }) {
             onChange={(e) => setNewPw(e.currentTarget.value)}
             description={`At least ${MIN_PASSWORD_LENGTH} characters.`}
           />
+          {resetFor?.mfaEnabled && (
+            <Checkbox
+              checked={clearMfa}
+              onChange={(e) => setClearMfa(e.currentTarget.checked)}
+              label="Also turn off two-factor authentication"
+              description="Tick this if they've lost their authenticator and their recovery codes — otherwise a new password alone won't get them in."
+            />
+          )}
           <Group justify="flex-end">
             <Button variant="default" onClick={() => setResetFor(null)}>
               Cancel

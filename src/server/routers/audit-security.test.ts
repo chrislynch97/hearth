@@ -120,9 +120,46 @@ describe('access-control audit events (issue #49)', () => {
 
     const [ev] = await eventsWithAction(db, 'password_reset')
     expect(ev).toMatchObject({ entityType: 'user', entityId: ben, actorUserId: owner })
-    expect(ev!.changes.details).toEqual({ member: 'ben' })
+    expect(ev!.changes.details).toEqual({ member: 'ben', mfaCleared: false })
     // The password must not leak into the trail in any form.
     expect(JSON.stringify(ev!.changes)).not.toContain(secret)
+  })
+
+  it('records an MFA clear alongside the reset that caused it (issue #51)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await ownerId(db)
+    const ben = await addMember(db, 'ben', 'member')
+    await db.update(user).set({ mfaSecret: 'SECRET', mfaEnabledAt: new Date() }).where(eq(user.id, ben))
+
+    await caller(db, { role: 'owner', userId: owner }).c.access.resetPassword({
+      userId: ben,
+      newPassword: 'super-secret-new-pw-9!',
+      clearMfa: true,
+    })
+
+    const [reset] = await eventsWithAction(db, 'password_reset')
+    expect(reset!.changes.details).toMatchObject({ mfaCleared: true })
+    const [disabled] = await eventsWithAction(db, 'mfa_disabled')
+    expect(disabled).toMatchObject({ entityType: 'user', entityId: ben, actorUserId: owner })
+    expect(disabled!.changes.details).toEqual({ member: 'ben', via: 'admin_reset' })
+    // The TOTP secret is a credential — the trail records the event, not the value.
+    expect(JSON.stringify(disabled!.changes)).not.toContain('SECRET')
+  })
+
+  it('records nothing about MFA when clearMfa is asked for but MFA was never on', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await ownerId(db)
+    const ben = await addMember(db, 'ben', 'member')
+
+    await caller(db, { role: 'owner', userId: owner }).c.access.resetPassword({
+      userId: ben,
+      newPassword: 'super-secret-new-pw-9!',
+      clearMfa: true,
+    })
+
+    expect(await eventsWithAction(db, 'mfa_disabled')).toHaveLength(0)
   })
 })
 

@@ -4,6 +4,7 @@ import { drizzle as drizzlePglite } from 'drizzle-orm/pglite'
 import { Pool } from 'pg'
 import { PGlite } from '@electric-sql/pglite'
 import * as schema from './schema'
+import { isServerPgUrl, pgliteDir } from './target'
 
 // DATABASE_URL selects the engine:
 //   postgres:// | postgresql://  → real Postgres server via node-postgres Pool
@@ -17,14 +18,9 @@ import * as schema from './schema'
 // Both share one pg-core schema and one query API, so nothing downstream
 // (routers, snapshot, tests) cares which engine is live.
 
-const DEFAULT_PGLITE_DIR = './data/pgdata'
-
-function pgliteDir(url: string | undefined): string {
-  if (!url) return DEFAULT_PGLITE_DIR
-  // Accept `pglite:./path`, `pglite://./path`, or a bare filesystem path.
-  const stripped = url.replace(/^pglite:(\/\/)?/, '')
-  return stripped.length > 0 ? stripped : DEFAULT_PGLITE_DIR
-}
+// How a URL maps to an engine and a location lives in `target.ts`, so tools can
+// ask what a DATABASE_URL means without importing this module (and thereby
+// opening — or creating — the database).
 
 /** The canonical database type. Both engines expose the identical pg-core query
  *  API; we type against node-postgres (the production driver) and treat the
@@ -33,9 +29,8 @@ export type DB = NodePgDatabase<typeof schema>
 
 function makeDb(): { db: DB; close: () => Promise<void> } {
   const url = process.env.DATABASE_URL
-  const isServerPg = !!url && (url.startsWith('postgres://') || url.startsWith('postgresql://'))
 
-  if (isServerPg) {
+  if (isServerPgUrl(url)) {
     const pool = new Pool({ connectionString: url })
     return { db: drizzleNodePg(pool, { schema }), close: () => pool.end() }
   }
@@ -53,22 +48,7 @@ export const db = created.db
 /** Close the underlying connection cleanly on shutdown (pool.end / pglite.close). */
 export const closeDb = created.close
 
-/** A human-readable, credential-free description of the live database, safe to
- *  send to the client (shown on the About screen). Never includes the password
- *  or username from a `postgres://user:pass@host` URL. */
-export function describeDatabase(url = process.env.DATABASE_URL): string {
-  if (url && (url.startsWith('postgres://') || url.startsWith('postgresql://'))) {
-    try {
-      const parsed = new URL(url)
-      const dbName = parsed.pathname.replace(/^\//, '')
-      const location = [parsed.host, dbName].filter(Boolean).join('/')
-      return location ? `PostgreSQL (${location})` : 'PostgreSQL'
-    } catch {
-      return 'PostgreSQL'
-    }
-  }
-  return `PGlite (${pgliteDir(url)})`
-}
+export { describeDatabase } from './target'
 
 /** The handle drizzle passes to a `db.transaction(tx => …)` callback. */
 export type Tx = Parameters<Parameters<DB['transaction']>[0]>[0]

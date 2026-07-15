@@ -136,9 +136,15 @@ export const accessRouter = router({
     }),
 
   /** Set a new password for a member who's locked out (no email-based reset in
-   *  self-host). Owner-only for admins/owners; ends the member's sessions. */
+   *  self-host). Owner-only for admins/owners; ends the member's sessions.
+   *
+   *  `clearMfa` also drops their two-factor enrolment, for the lockout a password
+   *  alone doesn't fix: a lost phone with the recovery codes gone (issue #51).
+   *  It's opt-in rather than implied by every reset — silently stripping a member's
+   *  second factor is a security downgrade they never agreed to, and one they'd
+   *  only discover the next time they signed in without being asked for a code. */
   resetPassword: publicProcedure
-    .input(z.object({ userId: z.string(), newPassword: z.string() }))
+    .input(z.object({ userId: z.string(), newPassword: z.string(), clearMfa: z.boolean().optional() }))
     .mutation(async ({ ctx, input }) => {
       assertRole(ctx.role, 'admin')
       if (input.userId === ctx.userId) {
@@ -168,18 +174,38 @@ export const accessRouter = router({
       const weak = validatePassword(input.newPassword)
       if (weak) throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
 
+      // Only a real turn-off counts: `clearMfa` on a member who never had it is a
+      // no-op, and shouldn't leave an "MFA disabled" entry in the trail.
+      const [targetUser] = await ctx.db.select().from(user).where(eq(user.id, input.userId))
+      const mfaCleared = Boolean(input.clearMfa && targetUser?.mfaEnabledAt)
+
       await ctx.db
         .update(user)
-        .set({ passwordHash: await hashPassword(input.newPassword), updatedAt: new Date() })
+        .set({
+          passwordHash: await hashPassword(input.newPassword),
+          ...(input.clearMfa ? { mfaSecret: null, mfaEnabledAt: null, mfaRecoveryCodes: null, mfaLastStep: null } : {}),
+          updatedAt: new Date(),
+        })
         .where(eq(user.id, input.userId))
       await deleteUserSessions(ctx.db, input.userId)
       // Record the reset, never the new password (issue #49).
+      const member = await memberLabel(ctx.db, input.userId)
       recordSecurityEvent(ctx, {
         entityType: 'user',
         entityId: input.userId,
         action: 'password_reset',
-        details: { member: await memberLabel(ctx.db, input.userId) },
+        details: { member, mfaCleared },
       })
+      // Losing a second factor is its own security event, not a footnote to the
+      // password reset — give it the entry (and the badge) it has everywhere else.
+      if (mfaCleared) {
+        recordSecurityEvent(ctx, {
+          entityType: 'user',
+          entityId: input.userId,
+          action: 'mfa_disabled',
+          details: { member, via: 'admin_reset' },
+        })
+      }
       return { ok: true as const }
     }),
 })

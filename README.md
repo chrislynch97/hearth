@@ -141,7 +141,25 @@ recovery codes.
 **Roles** — *owner* (full control, incl. billing/reset), *admin* (manage data,
 members and invites), *member* (edit budgeting data), *viewer* (read-only).
 Owners/admins manage who has access — change roles, remove access, or reset a
-locked-out member's password — under **Settings → Households & access**.
+locked-out member's password — under **Settings → Households & access**. If the
+member has lost their authenticator too (and their recovery codes are gone), tick
+**Also turn off two-factor authentication** when resetting; they can enrol a new
+device once they're back in.
+
+**Locked out of the owner account?** No one outranks the owner, so there's no
+in-app reset for them. Recover from the box itself:
+
+```bash
+npm run reset-owner-password    # prompts for a new password, clears the owner's
+                                # 2FA, and signs out their sessions
+```
+
+Run it in the instance's directory (or with `DATABASE_URL` set the same way the
+server has it) — it prints which database it resolved and asks you to confirm
+before writing. It needs shell access to the host, which already means access to
+the database, so this hands an attacker nothing new; it just means a lost password
+or a lost phone doesn't need a SQL prompt to fix. The reset is recorded in the
+audit log as a console event.
 
 **Multiple households & sign-up** — an account can belong to more than one
 household (switch between them from the account menu). The **instance owner** (the

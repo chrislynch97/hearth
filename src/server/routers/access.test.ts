@@ -154,6 +154,50 @@ describe('access.resetPassword', () => {
     expect(await caller(db).c.auth.login({ username: 'ben', password: 'brand-new-strong-pw' })).toEqual({ ok: true })
   })
 
+  it('leaves MFA alone by default, and clears it only when asked', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const ben = await addMember(db, 'ben', 'member')
+    const enrolled = { mfaSecret: 'SECRET', mfaEnabledAt: new Date(), mfaRecoveryCodes: '["hash"]', mfaLastStep: 1 }
+    await db.update(user).set(enrolled).where(eq(user.id, ben))
+
+    // The realistic lockout is a lost phone, but a reset must not strip the
+    // second factor unless the admin says so (issue #51).
+    await caller(db, { role: 'admin' }).c.access.resetPassword({ userId: ben, newPassword: 'brand-new-strong-pw' })
+    const [stillOn] = await db.select().from(user).where(eq(user.id, ben))
+    expect(stillOn!.mfaEnabledAt).not.toBeNull()
+    expect(stillOn!.mfaSecret).toBe('SECRET')
+
+    await caller(db, { role: 'admin' }).c.access.resetPassword({
+      userId: ben,
+      newPassword: 'another-strong-pw',
+      clearMfa: true,
+    })
+    const [cleared] = await db.select().from(user).where(eq(user.id, ben))
+    expect(cleared!.mfaEnabledAt).toBeNull()
+    expect(cleared!.mfaSecret).toBeNull()
+    expect(cleared!.mfaRecoveryCodes).toBeNull()
+    expect(cleared!.mfaLastStep).toBeNull()
+  })
+
+  it('clearMfa obeys the same authority checks as the reset itself', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const ada = await addMember(db, 'ada', 'admin')
+    await db.update(user).set({ mfaSecret: 'SECRET', mfaEnabledAt: new Date() }).where(eq(user.id, ada))
+
+    // An admin can't reset a peer admin — and so can't strip their MFA either.
+    await expect(
+      caller(db, { role: 'admin' }).c.access.resetPassword({
+        userId: ada,
+        newPassword: 'brand-new-strong-pw',
+        clearMfa: true,
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    const [untouched] = await db.select().from(user).where(eq(user.id, ada))
+    expect(untouched!.mfaSecret).toBe('SECRET')
+  })
+
   it('admins cannot reset an owner/admin password', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
