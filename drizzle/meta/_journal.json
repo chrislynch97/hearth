@@ -36,6 +36,13 @@
       "when": 1784064586801,
       "tag": "0004_hash_bearer_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784145832166,
+      "tag": "0005_session_hardening",
+      "breakpoints": true
     }
   ]
 }

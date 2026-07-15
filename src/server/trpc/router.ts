@@ -21,6 +21,7 @@ import { authRouter } from '../routers/auth'
 import { accountsRouter } from '../routers/accounts'
 import { importsRouter } from '../routers/imports'
 import { usersRouter } from '../routers/users'
+import { sessionsRouter } from '../routers/sessions'
 import { invitationsRouter } from '../routers/invitations'
 import { accessRouter } from '../routers/access'
 import { auditRouter } from '../routers/audit'
@@ -49,6 +50,7 @@ export const appRouter = router({
   accounts: accountsRouter,
   imports: importsRouter,
   users: usersRouter,
+  sessions: sessionsRouter,
   invitations: invitationsRouter,
   access: accessRouter,
   audit: auditRouter,

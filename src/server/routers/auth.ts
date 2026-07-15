@@ -195,7 +195,7 @@ export const authRouter = router({
         householdId,
         actorUserId: u.id,
       })
-      ctx.setSessionCookie?.(await createSession(ctx.db, u.id, householdId))
+      ctx.setSessionCookie?.(await createSession(ctx.db, u.id, householdId, ctx.sessionOrigin))
       return { ok: true as const }
     }),
 
@@ -300,7 +300,7 @@ export const authRouter = router({
       }
 
       registerLimiter.fail(key, now) // count this sign-up toward the per-client cap
-      ctx.setSessionCookie?.(await createSession(ctx.db, userId, householdId))
+      ctx.setSessionCookie?.(await createSession(ctx.db, userId, householdId, ctx.sessionOrigin))
       return { ok: true as const }
     }),
 
@@ -339,7 +339,7 @@ export const authRouter = router({
         householdId,
         actorUserId: me.id,
       })
-      ctx.setSessionCookie?.(await createSession(ctx.db, me.id, householdId))
+      ctx.setSessionCookie?.(await createSession(ctx.db, me.id, householdId, ctx.sessionOrigin))
       return { ok: true as const }
     }),
 
@@ -415,7 +415,13 @@ export const authRouter = router({
       return { secret, otpauthUrl, qrSvg }
     }),
 
-  /** Confirm enrolment with a code; turns MFA on and returns recovery codes. */
+  /** Confirm enrolment with a code; turns MFA on and returns recovery codes.
+   *
+   *  Revokes every other session and re-issues this one, mirroring `setPassword`.
+   *  Someone turning MFA on *because* they think their account is compromised
+   *  would otherwise leave the attacker's existing session untouched — MFA only
+   *  gates new logins, so the intruder simply keeps the one they already hold and
+   *  the whole point of the action is lost (issue #50). */
   confirmMfa: publicProcedure
     .input(z.object({ code: z.string().max(MAX_CODE_LENGTH) }))
     .mutation(async ({ ctx, input }) => {
@@ -435,8 +441,19 @@ export const authRouter = router({
           updatedAt: new Date(),
         })
         .where(eq(user.id, me.id))
-      // Record the event, never the recovery codes (issue #49).
-      recordSecurityEvent(ctx, { entityType: 'user', entityId: me.id, action: 'mfa_enabled' })
+      await deleteUserSessions(ctx.db, me.id)
+      const householdId = await defaultHouseholdFor(ctx.db, me.id)
+      // Record the event, never the recovery codes (issue #49). The new session
+      // below means the request context won't reflect this user, so pass
+      // actor/household explicitly.
+      recordSecurityEvent(ctx, {
+        entityType: 'user',
+        entityId: me.id,
+        action: 'mfa_enabled',
+        householdId,
+        actorUserId: me.id,
+      })
+      ctx.setSessionCookie?.(await createSession(ctx.db, me.id, householdId, ctx.sessionOrigin))
       return { ok: true as const, recoveryCodes }
     }),
 

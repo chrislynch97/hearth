@@ -875,7 +875,9 @@ function MfaSection() {
       const result = await confirmMfa.mutateAsync({ code: code.trim() })
       setRecoveryCodes(result.recoveryCodes)
       setEnroll(null)
-      await utils.auth.status.invalidate()
+      // Enabling MFA revokes every other session (#50), so the sessions list is
+      // now stale as well as the auth status.
+      await Promise.all([utils.auth.status.invalidate(), utils.sessions.list.invalidate()])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not verify the code.')
     }
@@ -956,6 +958,10 @@ function MfaSection() {
       {passwordSet && !recoveryCodes && enroll && (
         <Stack gap="sm">
           <Text size="sm">Scan this with your authenticator app, then enter the 6-digit code it shows.</Text>
+          <Text size="sm" c="dimmed">
+            Turning this on signs you out on every other device, so anyone already signed in as you is locked out too.
+            You&apos;ll stay signed in here.
+          </Text>
           <Group align="flex-start" gap="lg">
             {/* Render the server-generated SVG as an image (a data URI) rather than
                 injecting raw HTML, so it can't introduce markup into the page. */}
@@ -1098,6 +1104,171 @@ function AboutSection() {
 }
 
 // ---------------------------------------------------------------------------
+// Active sessions (issue #50)
+// ---------------------------------------------------------------------------
+
+/** Turn a raw user-agent into something a person can recognise their own device
+ *  by. Deliberately crude: this only has to be good enough to tell "the laptop I
+ *  am on" from "something I don't recognise", and a full UA parser would be a
+ *  dependency and a maintenance burden for a label. Unknown agents fall back to
+ *  the raw string rather than a confident-sounding guess. */
+const describeUserAgent = (ua: string | null): string => {
+    if (!ua) return "Unknown device";
+    const browser =
+        /Edg\//.test(ua) ? "Edge"
+        : /OPR\//.test(ua) ? "Opera"
+        : /Firefox\//.test(ua) ? "Firefox"
+        : /Chrome\//.test(ua) ? "Chrome"
+        : /Safari\//.test(ua) ? "Safari"
+        : null;
+    const os =
+        /Windows/.test(ua) ? "Windows"
+        : /Android/.test(ua) ? "Android"
+        : /iPhone|iPad|iOS/.test(ua) ? "iOS"
+        : /Mac OS X/.test(ua) ? "macOS"
+        : /Linux/.test(ua) ? "Linux"
+        : null;
+    if (!browser && !os) return ua.slice(0, 60);
+    return [browser, os].filter(Boolean).join(" on ");
+};
+
+const SessionsSection = () => {
+    const utils = trpc.useUtils();
+    const sessions = trpc.sessions.list.useQuery();
+    const revoke = trpc.sessions.revoke.useMutation();
+    const revokeOthers = trpc.sessions.revokeOthers.useMutation();
+    const formatDate = useFormatDate();
+    const [error, setError] = useState("");
+    const [message, setMessage] = useState("");
+
+    const refresh = async () => {
+        await Promise.all([utils.sessions.list.invalidate(), utils.auth.status.invalidate()]);
+    };
+
+    const handleRevoke = async (ref: string) => {
+        setError("");
+        setMessage("");
+        try {
+            const res = await revoke.mutateAsync({ ref });
+            // Ending the session you're on is a logout: the cookie is already
+            // gone, so send the app back through the front door.
+            if (res.endedCurrent) {
+                window.location.href = "/";
+                return;
+            }
+            await refresh();
+            setMessage("Session ended.");
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Could not end that session.");
+        }
+    };
+
+    const handleRevokeOthers = async () => {
+        setError("");
+        setMessage("");
+        try {
+            const { count } = await revokeOthers.mutateAsync();
+            await refresh();
+            setMessage(count === 0 ? "No other sessions to end." : `Ended ${count} other session(s).`);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Could not sign out your other sessions.");
+        }
+    };
+
+    const rows = sessions.data ?? [];
+    const others = rows.filter((s) => !s.current).length;
+
+    return (
+        <Card withBorder padding="md" radius="md">
+            <Title order={4} mb="xs">
+                Active sessions
+            </Title>
+            <Text size="sm" c="dimmed" mb="sm">
+                Every device currently signed in as you. A session ends on its own after 14 days of inactivity, and
+                after 90 days regardless. If you don’t recognise one, end it — then change your password.
+            </Text>
+            {sessions.isLoading ? (
+                <Loader size="sm" />
+            ) : (
+                <Table verticalSpacing={6}>
+                    <Table.Thead>
+                        <Table.Tr>
+                            <Table.Th>Device</Table.Th>
+                            <Table.Th>From</Table.Th>
+                            <Table.Th>Last active</Table.Th>
+                            <Table.Th />
+                        </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                        {rows.map((s) => (
+                            <Table.Tr key={s.ref}>
+                                <Table.Td>
+                                    <Group gap="xs">
+                                        <Text size="sm">{describeUserAgent(s.userAgent)}</Text>
+                                        {s.current && (
+                                            <Text size="xs" c="dimmed">
+                                                (this device)
+                                            </Text>
+                                        )}
+                                    </Group>
+                                </Table.Td>
+                                <Table.Td>
+                                    <Text size="sm" c="dimmed">
+                                        {s.ip ?? "—"}
+                                    </Text>
+                                </Table.Td>
+                                <Table.Td>
+                                    <Text size="sm" c="dimmed">
+                                        {/* en-CA renders as YYYY-MM-DD, which is what the
+                                            household date formatter parses (see AuditLogSection).
+                                            The time matters here — "yesterday" is not enough to
+                                            recognise a session by — so show it alongside. */}
+                                        {formatDate(s.lastSeenAt.toLocaleDateString("en-CA"))}{" "}
+                                        {s.lastSeenAt.toLocaleTimeString()}
+                                    </Text>
+                                </Table.Td>
+                                <Table.Td ta="right">
+                                    <Button
+                                        size="compact-xs"
+                                        variant="subtle"
+                                        color="red"
+                                        loading={revoke.isPending}
+                                        onClick={() => void handleRevoke(s.ref)}
+                                    >
+                                        {s.current ? "Sign out" : "End"}
+                                    </Button>
+                                </Table.Td>
+                            </Table.Tr>
+                        ))}
+                    </Table.Tbody>
+                </Table>
+            )}
+            {error && (
+                <Alert color="red" title="Error" mt="sm">
+                    {error}
+                </Alert>
+            )}
+            {message && (
+                <Text size="sm" c="dimmed" mt="sm">
+                    {message}
+                </Text>
+            )}
+            <Group justify="flex-end" mt="sm">
+                <Button
+                    variant="light"
+                    color="red"
+                    disabled={others === 0}
+                    loading={revokeOthers.isPending}
+                    onClick={() => void handleRevokeOthers()}
+                >
+                    Sign out everywhere else
+                </Button>
+            </Group>
+        </Card>
+    );
+};
+
+// ---------------------------------------------------------------------------
 // Account (the current user)
 // ---------------------------------------------------------------------------
 
@@ -1110,10 +1281,12 @@ interface AccountForm {
 function AccountSection() {
   const utils = trpc.useUtils()
   const me = trpc.users.me.useQuery()
+  const status = trpc.auth.status.useQuery()
   const update = trpc.users.updateProfile.useMutation()
 
   // One seeded form object (see GeneralSection) — no per-field copy line.
   const [form, setForm] = useState<AccountForm | null>(null)
+  const [currentPassword, setCurrentPassword] = useState('')
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
@@ -1127,7 +1300,15 @@ function AccountSection() {
 
   if (!form) return null
 
-  async function handleSave() {
+  // The server requires the current password to change the username or the email
+  // (#50) — both are identity-bearing, so a stolen session must not be able to
+  // move them. Mirror that condition here so the field only appears when it will
+  // actually be asked for, rather than on every cosmetic edit.
+  const changesUsername = form.username.trim().toLowerCase() !== (me.data?.username ?? '')
+  const changesEmail = (form.email.trim() || null) !== (me.data?.email ?? null)
+  const needsPassword = Boolean(status.data?.passwordSet) && (changesUsername || changesEmail)
+
+  const handleSave = async () => {
     if (!form) return
     setError('')
     try {
@@ -1135,8 +1316,10 @@ function AccountSection() {
         username: form.username.trim(),
         displayName: form.displayName.trim(),
         email: form.email.trim() || null,
+        currentPassword: needsPassword ? currentPassword : undefined,
       })
       await Promise.all([utils.users.me.invalidate(), utils.auth.status.invalidate()])
+      setCurrentPassword('')
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
@@ -1161,6 +1344,14 @@ function AccountSection() {
           onChange={(e) => set('email', e.currentTarget.value)}
           type="email"
         />
+        {needsPassword && (
+          <PasswordInput
+            label="Current password"
+            description="Changing your username or email needs your password, so a stolen session can’t take the account over."
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.currentTarget.value)}
+          />
+        )}
         {error && (
           <Alert color="red" title="Error">
             {error}
@@ -1172,7 +1363,11 @@ function AccountSection() {
               Saved ✓
             </Text>
           )}
-          <Button onClick={() => void handleSave()} loading={update.isPending}>
+          <Button
+            onClick={() => void handleSave()}
+            loading={update.isPending}
+            disabled={needsPassword && !currentPassword}
+          >
             Save
           </Button>
         </Group>
@@ -1545,6 +1740,7 @@ export function AccountSettingsPage() {
       <AccountSection />
       <SecuritySection />
       <MfaSection />
+      <SessionsSection />
     </Stack>
   )
 }

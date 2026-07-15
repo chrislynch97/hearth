@@ -8,13 +8,21 @@ import { DEFAULT_HOUSEHOLD_ID } from '../trpc/tenant'
 import { newId } from '../../shared/ids'
 import { hashPassword } from './password'
 import {
+  SESSION_ABSOLUTE_TTL_MS,
+  SESSION_IDLE_TTL_MS,
+  SESSION_TOUCH_INTERVAL_MS,
   createSession,
   deleteExpiredSessions,
+  deleteOtherUserSessions,
+  deleteUserSessionById,
   getOwnerUser,
   getValidSession,
+  hashToken,
   isInstanceLocked,
   isInstanceOwner,
+  listUserSessions,
   syncAuthRequired,
+  touchSession,
 } from './session'
 
 
@@ -87,17 +95,20 @@ describe('instance owner / lock resolution', () => {
     await ensureSeed(db)
     const owner = (await getOwnerUser(db))!
 
-    // A live session (createSession sets a 30-day TTL) and a hand-written
-    // already-expired one under the same user/household.
+    // A live session and a hand-written already-expired one under the same
+    // user/household.
     const liveId = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
     const expiredId = newId()
     const now = new Date()
+    const createdAt = new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000)
     await db.insert(session).values({
       id: expiredId,
       userId: owner.id,
       activeHouseholdId: DEFAULT_HOUSEHOLD_ID,
-      createdAt: new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000),
+      createdAt,
+      lastSeenAt: createdAt,
       expiresAt: new Date(now.getTime() - 1),
+      absoluteExpiresAt: new Date(now.getTime() + SESSION_ABSOLUTE_TTL_MS),
     })
 
     await deleteExpiredSessions(db, now)
@@ -131,5 +142,181 @@ describe('instance owner / lock resolution', () => {
     })
 
     expect((await getOwnerUser(db))?.id).toBe(owner.id)
+  })
+})
+
+/** The session row behind a raw cookie token, straight from the table. */
+async function rowFor(db: Awaited<ReturnType<typeof makeTestDb>>, token: string) {
+  return (await getValidSession(db, token))!
+}
+
+describe('session lifetime (issue #50)', () => {
+  it('creates a session with a sliding idle window and a fixed absolute ceiling', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = (await getOwnerUser(db))!
+
+    const before = Date.now()
+    const token = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+    const s = await rowFor(db, token)
+
+    expect(s.expiresAt.getTime()).toBeGreaterThanOrEqual(before + SESSION_IDLE_TTL_MS - 5_000)
+    expect(s.absoluteExpiresAt.getTime()).toBeGreaterThanOrEqual(before + SESSION_ABSOLUTE_TTL_MS - 5_000)
+    expect(s.lastSeenAt.getTime()).toBeGreaterThanOrEqual(before - 5_000)
+  })
+
+  it('records where the session was established, truncating a huge user agent', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = (await getOwnerUser(db))!
+
+    const token = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID, {
+      userAgent: 'U'.repeat(5_000),
+      ip: '192.168.1.9',
+    })
+    const s = await rowFor(db, token)
+    expect(s.ip).toBe('192.168.1.9')
+    expect(s.userAgent).toHaveLength(400) // attacker-controlled and unbounded; stored as a slice
+  })
+
+  it('slides the idle window forward when the session is used', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = (await getOwnerUser(db))!
+    const token = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+    const s = await rowFor(db, token)
+
+    // Two hours on: past the touch interval, so the deadline moves out with us.
+    const later = Date.now() + 2 * 60 * 60 * 1000
+    const moved = await touchSession(db, s, later)
+    expect(moved).not.toBeNull()
+
+    const after = await rowFor(db, token)
+    expect(after.expiresAt.getTime()).toBeGreaterThan(s.expiresAt.getTime())
+    expect(after.expiresAt.getTime()).toBe(later + SESSION_IDLE_TTL_MS)
+    expect(after.lastSeenAt.getTime()).toBe(later)
+  })
+
+  it('skips the write when the session was seen moments ago', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = (await getOwnerUser(db))!
+    const token = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+    const s = await rowFor(db, token)
+
+    // Just inside the touch interval: not worth a write on every request.
+    expect(await touchSession(db, s, s.lastSeenAt.getTime() + SESSION_TOUCH_INTERVAL_MS - 1)).toBeNull()
+    expect((await rowFor(db, token)).expiresAt.getTime()).toBe(s.expiresAt.getTime())
+  })
+
+  it('never slides the idle window past the absolute ceiling', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = (await getOwnerUser(db))!
+    const token = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+    const s = await rowFor(db, token)
+
+    // Someone active on day 89: the sliding window would happily run to day 103,
+    // but the cap is the whole point — it must win.
+    const nearCap = s.absoluteExpiresAt.getTime() - 24 * 60 * 60 * 1000
+    await touchSession(db, s, nearCap)
+    const after = await rowFor(db, token)
+    expect(after.expiresAt.getTime()).toBe(s.absoluteExpiresAt.getTime())
+  })
+
+  it('treats a session past its absolute ceiling as dead however recently it was used', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = (await getOwnerUser(db))!
+
+    // A cookie an attacker kept warm: idle window wide open, ceiling long gone.
+    const token = 'kept-warm-token'
+    const now = new Date()
+    await db.insert(session).values({
+      id: hashToken(token),
+      userId: owner.id,
+      activeHouseholdId: DEFAULT_HOUSEHOLD_ID,
+      createdAt: new Date(now.getTime() - SESSION_ABSOLUTE_TTL_MS - 1000),
+      lastSeenAt: now,
+      expiresAt: new Date(now.getTime() + SESSION_IDLE_TTL_MS),
+      absoluteExpiresAt: new Date(now.getTime() - 1),
+    })
+
+    expect(await getValidSession(db, token)).toBeNull()
+    await deleteExpiredSessions(db, now)
+    expect(await db.select().from(session).where(eq(session.id, hashToken(token)))).toHaveLength(0)
+  })
+})
+
+describe('listing and revoking sessions (issue #50)', () => {
+  it('lists a user’s live sessions, most recently active first', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = (await getOwnerUser(db))!
+
+    const a = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+    const b = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+    // Make `b` the more recently active one.
+    await touchSession(db, await rowFor(db, b), Date.now() + 2 * 60 * 60 * 1000)
+
+    const rows = await listUserSessions(db, owner.id)
+    expect(rows.map((s) => s.id)).toEqual([hashToken(b), hashToken(a)])
+  })
+
+  it('excludes dead sessions and other users’ sessions', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = (await getOwnerUser(db))!
+
+    const live = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+    const now = new Date()
+    await db.insert(session).values({
+      id: hashToken('dead'),
+      userId: owner.id,
+      activeHouseholdId: DEFAULT_HOUSEHOLD_ID,
+      createdAt: now,
+      lastSeenAt: now,
+      expiresAt: new Date(now.getTime() - 1),
+      absoluteExpiresAt: new Date(now.getTime() + SESSION_ABSOLUTE_TTL_MS),
+    })
+
+    const other = newId()
+    await db.insert(user).values({ id: other, username: 'o2', displayName: 'O2', createdAt: now, updatedAt: now })
+    await createSession(db, other, DEFAULT_HOUSEHOLD_ID)
+
+    expect((await listUserSessions(db, owner.id)).map((s) => s.id)).toEqual([hashToken(live)])
+  })
+
+  it('revokes one session by id, and only its owner’s', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = (await getOwnerUser(db))!
+    const mine = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+
+    const other = newId()
+    const now = new Date()
+    await db.insert(user).values({ id: other, username: 'o2', displayName: 'O2', createdAt: now, updatedAt: now })
+    const theirs = await createSession(db, other, DEFAULT_HOUSEHOLD_ID)
+
+    // Scoped to the owner: naming someone else's session id does nothing.
+    expect(await deleteUserSessionById(db, owner.id, hashToken(theirs))).toBe(false)
+    expect(await getValidSession(db, theirs)).not.toBeNull()
+
+    expect(await deleteUserSessionById(db, owner.id, hashToken(mine))).toBe(true)
+    expect(await getValidSession(db, mine)).toBeNull()
+  })
+
+  it('signs out everywhere else, keeping the caller’s own session', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = (await getOwnerUser(db))!
+    const keep = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+    const drop1 = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+    const drop2 = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+
+    expect(await deleteOtherUserSessions(db, owner.id, hashToken(keep))).toBe(2)
+    expect(await getValidSession(db, keep)).not.toBeNull()
+    expect(await getValidSession(db, drop1)).toBeNull()
+    expect(await getValidSession(db, drop2)).toBeNull()
   })
 })

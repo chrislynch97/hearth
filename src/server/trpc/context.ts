@@ -5,7 +5,8 @@ import { db } from '../db/client'
 import { membership } from '../db/schema'
 import type { Session } from '../db/schema'
 import { parseSessionCookie, serializeSessionCookie } from '../auth/cookies'
-import { getOwnerUser, getValidSession, isInstanceLocked } from '../auth/session'
+import { getOwnerUser, getValidSession, isInstanceLocked, touchSession } from '../auth/session'
+import type { SessionOrigin } from '../auth/session'
 import { DEFAULT_HOUSEHOLD_ID } from './tenant'
 import type { StagedAudit } from './audit'
 
@@ -33,10 +34,15 @@ export interface Context {
   sessionId?: string
   /** Raw session-cookie value from the request, if any. */
   sessionToken?: string
+  /** Where a session created by this request would be coming from (user agent +
+   *  IP), recorded on the row so `sessions.list` can describe it (issue #50). */
+  sessionOrigin?: SessionOrigin
   /** Client identifier (IP) for rate limiting. */
   clientKey?: string
-  /** Set (or clear, with `null`) the session cookie on the response. */
-  setSessionCookie?: (token: string | null) => void
+  /** Set (or clear, with `null`) the session cookie on the response. `maxAgeSeconds`
+   *  defaults to the idle window; the sliding-expiry path passes the session's real
+   *  remaining life. */
+  setSessionCookie?: (token: string | null, maxAgeSeconds?: number) => void
   /** Per-request buffer of audit-log entries a mutation resolver has staged via
    *  `recordAudit`; flushed to `audit_log` by the audit middleware on success. */
   auditEntries?: StagedAudit[]
@@ -62,7 +68,7 @@ export async function resolveIdentity(
   database: DB,
   sessionToken: string | undefined,
   preresolvedSession: Session | null | undefined,
-): Promise<{ userId?: string; householdId: string; sessionId?: string; role?: string }> {
+): Promise<{ userId?: string; householdId: string; sessionId?: string; role?: string; session?: Session }> {
   let userId: string | undefined
   let householdId = DEFAULT_HOUSEHOLD_ID
   let sessionId: string | undefined
@@ -108,7 +114,7 @@ export async function resolveIdentity(
     role = m?.role
   }
 
-  return { userId, householdId, sessionId, role }
+  return { userId, householdId, sessionId, role, session: s ?? undefined }
 }
 
 export async function createContext(opts?: CreateFastifyContextOptions): Promise<Context> {
@@ -118,6 +124,23 @@ export async function createContext(opts?: CreateFastifyContextOptions): Promise
   const sessionToken = parseSessionCookie(req?.headers.cookie)
   const preresolved = req ? validatedSessionByRequest.get(req) : undefined
   const identity = await resolveIdentity(db, sessionToken, preresolved)
+
+  const setSessionCookie = res
+    ? (token: string | null, maxAgeSeconds?: number) => {
+        void res.header('set-cookie', serializeSessionCookie(token, secure, maxAgeSeconds))
+      }
+    : undefined
+
+  // Sliding expiry (issue #50): using the app keeps the session alive. Done here
+  // rather than in `getValidSession` so the write happens once per request, and
+  // only when the row is actually stale enough to be worth one. When the window
+  // moves, re-issue the cookie with the row's real remaining life so browser and
+  // server agree on when it dies.
+  if (identity.session && sessionToken) {
+    const expiresAt = await touchSession(db, identity.session)
+    if (expiresAt) setSessionCookie?.(sessionToken, (expiresAt.getTime() - Date.now()) / 1000)
+  }
+
   return {
     db,
     householdId: identity.householdId,
@@ -125,12 +148,9 @@ export async function createContext(opts?: CreateFastifyContextOptions): Promise
     role: identity.role,
     sessionId: identity.sessionId,
     sessionToken,
+    sessionOrigin: { userAgent: req?.headers['user-agent'] ?? null, ip: req?.ip ?? null },
     clientKey: req?.ip,
     auditEntries: [],
-    setSessionCookie: res
-      ? (token) => {
-          void res.header('set-cookie', serializeSessionCookie(token, secure))
-        }
-      : undefined,
+    setSessionCookie,
   }
 }

@@ -58,6 +58,7 @@ const ACTION_META: Record<string, { color: string; label: string }> = {
     mfa_enroll_started: { color: "blue", label: "MFA enrolment started" },
     mfa_enabled: { color: "teal", label: "MFA enabled" },
     mfa_disabled: { color: "red", label: "MFA disabled" },
+    sessions_revoked: { color: "orange", label: "Sessions revoked" },
     registration_changed: { color: "blue", label: "Registration setting" },
     role_changed: { color: "grape", label: "Role changed" },
     access_removed: { color: "red", label: "Access removed" },

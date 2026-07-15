@@ -69,6 +69,8 @@ const WRITE_ROLE_EXEMPT = new Set([
   'users.updateProfile',
   'users.switchHousehold',
   'users.setPassword',
+  'sessions.revoke',
+  'sessions.revokeOthers',
   // Pre-membership joins: authenticated by an invite token / open-registration
   // gate, not by a household role, so the caller legitimately has no role yet.
   // Each self-gates (token validity / registration-open + throttle).

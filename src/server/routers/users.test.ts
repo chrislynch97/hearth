@@ -3,9 +3,12 @@ import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
 import { appRouter } from '../trpc/router'
-import { getOwnerUser } from '../auth/session'
+import { getOwnerUser, getUser } from '../auth/session'
 import { household, membership, session, user } from '../db/schema'
 import type { DB } from '../db/client'
+
+// A password comfortably clearing the strength policy.
+const PW = 'correct-horse-staple'
 
 function caller(db: DB, opts: { role?: string; userId?: string; sessionToken?: string } = {}) {
   const cookies: Array<string | null> = []
@@ -118,6 +121,116 @@ describe('users.updateProfile', () => {
     await expect(
       caller(db, { userId: owner!.id }).c.users.updateProfile({ username: 'owner' }),
     ).resolves.toMatchObject({ username: 'owner' })
+  })
+})
+
+// A stolen session must not be able to quietly take the account over by renaming
+// it and repointing the (recovery-relevant) email (issue #50).
+describe('users.updateProfile password confirmation (issue #50)', () => {
+  /** Lock the instance by giving the owner a password; returns the owner id. */
+  async function lockedOwner(db: DB) {
+    const owner = (await getOwnerUser(db))!
+    await caller(db, { role: 'owner', userId: owner.id }).c.auth.setPassword({ newPassword: PW })
+    return owner.id
+  }
+
+  it('demands the current password to change the username', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const userId = await lockedOwner(db)
+    const me = caller(db, { userId }).c
+
+    await expect(me.users.updateProfile({ username: 'stolen' })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+    await expect(
+      me.users.updateProfile({ username: 'stolen', currentPassword: 'wrong-password-x' }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+
+    // Unchanged: neither attempt got through.
+    expect((await getUser(db, userId))!.username).toBe('owner')
+
+    await expect(me.users.updateProfile({ username: 'renamed', currentPassword: PW })).resolves.toMatchObject({
+      username: 'renamed',
+    })
+  })
+
+  it('demands the current password to change the email', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const userId = await lockedOwner(db)
+    const me = caller(db, { userId }).c
+
+    await expect(me.users.updateProfile({ email: 'attacker@evil.example' })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+    expect((await getUser(db, userId))!.email).not.toBe('attacker@evil.example')
+
+    await expect(
+      me.users.updateProfile({ email: 'me@example.com', currentPassword: PW }),
+    ).resolves.toMatchObject({ email: 'me@example.com' })
+  })
+
+  it('lets a display-name-only change through without a password', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const userId = await lockedOwner(db)
+
+    await expect(
+      caller(db, { userId }).c.users.updateProfile({ displayName: 'New Name' }),
+    ).resolves.toMatchObject({ displayName: 'New Name' })
+  })
+
+  it('does not demand a password when username/email are re-submitted unchanged', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const userId = await lockedOwner(db)
+    await caller(db, { userId }).c.users.updateProfile({ email: 'me@example.com', currentPassword: PW })
+
+    // A form that posts every field on every save must not demand a password for
+    // what is, in substance, a display-name edit.
+    await expect(
+      caller(db, { userId }).c.users.updateProfile({
+        username: 'OWNER', // same after normalisation
+        email: 'me@example.com',
+        displayName: 'Cosmetic',
+      }),
+    ).resolves.toMatchObject({ displayName: 'Cosmetic', username: 'owner' })
+  })
+
+  it('needs no password on an open instance, which has none to confirm', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = (await getOwnerUser(db))! // no password set: instance is open
+
+    await expect(
+      caller(db, { userId: owner.id }).c.users.updateProfile({ username: 'renamed' }),
+    ).resolves.toMatchObject({ username: 'renamed' })
+  })
+
+  it('reports a lost username race as “taken”, not a raw 500', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const userId = await lockedOwner(db)
+
+    // The real race — two renames passing the friendly pre-check, then the unique
+    // index rejecting the loser's write — can't be staged deterministically
+    // in-process. Make the write fail exactly as Postgres would instead
+    // (SQLSTATE 23505), which is the input the resolver has to handle.
+    const dup = Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' })
+    const racingDb = new Proxy(db, {
+      get(target, prop, receiver) {
+        if (prop === 'update') {
+          return () => {
+            throw dup
+          }
+        }
+        const value = Reflect.get(target, prop, receiver)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    }) as DB
+
+    await expect(
+      caller(racingDb, { userId }).c.users.updateProfile({ username: 'free-name', currentPassword: PW }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'That username is taken.' })
   })
 })
 

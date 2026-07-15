@@ -1,11 +1,74 @@
 import { describe, it, expect } from 'vitest'
 import {
   allProceduresIn,
+  allowedOrigins,
+  isAllowedOrigin,
   isLoopbackHost,
   isOpenAccessBlocked,
   openGuardConfig,
   trpcProcedures,
 } from './gate'
+
+describe('isAllowedOrigin', () => {
+  it('allows an origin whose host matches the request Host', () => {
+    expect(isAllowedOrigin({ origin: 'http://hearth.local:8787', host: 'hearth.local:8787' })).toBe(true)
+  })
+
+  it('rejects a cross-site origin — the forged-write case', () => {
+    expect(isAllowedOrigin({ origin: 'https://evil.example', host: 'hearth.local:8787' })).toBe(false)
+  })
+
+  it('ignores the scheme, so a TLS-terminating proxy still works', () => {
+    // The browser used HTTPS; the hop behind the proxy describes itself as the
+    // same host. Comparing schemes here would break every reverse-proxy install.
+    expect(isAllowedOrigin({ origin: 'https://hearth.example.com', host: 'hearth.example.com' })).toBe(true)
+  })
+
+  it('distinguishes hosts that differ only by port', () => {
+    expect(isAllowedOrigin({ origin: 'http://hearth.local:5173', host: 'hearth.local:8787' })).toBe(false)
+  })
+
+  it('allows a missing Origin (curl, scripts, health checks — not browsers)', () => {
+    expect(isAllowedOrigin({ origin: undefined, host: 'hearth.local:8787' })).toBe(true)
+  })
+
+  it('rejects the opaque "null" origin rather than treating it as absent', () => {
+    // A sandboxed iframe or a stripping redirect: a real browser deliberately
+    // withholding its origin, which is not the same as a non-browser client.
+    expect(isAllowedOrigin({ origin: 'null', host: 'hearth.local:8787' })).toBe(false)
+  })
+
+  it('rejects an unparseable Origin', () => {
+    expect(isAllowedOrigin({ origin: 'not a url', host: 'hearth.local:8787' })).toBe(false)
+  })
+
+  it('rejects when the request carries no Host to compare against', () => {
+    expect(isAllowedOrigin({ origin: 'https://hearth.example.com', host: undefined })).toBe(false)
+  })
+
+  it('honours an explicitly allow-listed origin whose host differs', () => {
+    expect(
+      isAllowedOrigin({
+        origin: 'https://hearth.example.com',
+        host: 'internal-8787',
+        allowed: ['https://hearth.example.com'],
+      }),
+    ).toBe(true)
+  })
+})
+
+describe('allowedOrigins', () => {
+  it('is empty by default', () => {
+    expect(allowedOrigins({})).toEqual([])
+  })
+
+  it('splits, trims and drops blanks', () => {
+    expect(allowedOrigins({ HEARTH_ALLOWED_ORIGINS: 'https://a.example, https://b.example ,' })).toEqual([
+      'https://a.example',
+      'https://b.example',
+    ])
+  })
+})
 
 describe('trpcProcedures', () => {
   it('extracts a single procedure and strips the query string', () => {

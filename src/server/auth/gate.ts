@@ -38,6 +38,60 @@ export function isOpenAccessBlocked(opts: {
   return !opts.locked && !opts.bindIsLoopback && !opts.allowOpen
 }
 
+/** Origins the operator has explicitly declared safe, from HEARTH_ALLOWED_ORIGINS
+ *  (comma-separated, e.g. `https://hearth.example.com,http://192.168.1.10:8787`).
+ *  Only needed when something in front rewrites the Host header so it no longer
+ *  matches the origin the browser actually used; the default same-host comparison
+ *  covers the ordinary deployments. */
+export function allowedOrigins(env: NodeJS.ProcessEnv = process.env): string[] {
+  return (env.HEARTH_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean)
+}
+
+/** The `host:port` of an origin, or null if it isn't a parseable absolute URL.
+ *  Comparison is on host, not scheme: a TLS-terminating proxy legitimately sends
+ *  `Origin: https://…` while the Host header behind it describes a plain-HTTP
+ *  hop, and rejecting that would break the common reverse-proxy deployment. */
+function originHost(origin: string): string | null {
+  try {
+    return new URL(origin).host || null
+  } catch {
+    return null
+  }
+}
+
+/** Whether a state-changing request's `Origin` is acceptable (issue #50).
+ *
+ * A second, independent layer behind `SameSite=Lax`. Lax already stops a
+ * cross-site POST from carrying the session cookie, and is sound for tRPC's JSON
+ * POSTs in a current browser — but the cookie is not `Secure` on a plain-HTTP LAN
+ * deployment, and "the browser is current and implements Lax the way we assume"
+ * is the entire guarantee. This costs one header comparison and doesn't share
+ * that assumption.
+ *
+ * A missing Origin is allowed: browsers attach one to every cross-site POST and
+ * to every `fetch`, so its absence means the caller isn't a browser doing the
+ * thing we're defending against (curl, a script, a health check). Rejecting it
+ * would break non-browser clients to stop an attack that shape of request can't
+ * mount — the request forgery we care about needs a browser with a cookie jar.
+ *
+ * `null` (an opaque origin — a sandboxed iframe, a redirect that stripped it) is
+ * NOT treated as missing: it's a real browser deliberately withholding, so it
+ * falls through to the host comparison and fails.
+ */
+export function isAllowedOrigin(opts: {
+  origin: string | undefined
+  host: string | undefined
+  allowed?: string[]
+}): boolean {
+  if (opts.origin === undefined) return true
+  if ((opts.allowed ?? []).includes(opts.origin)) return true
+  const from = originHost(opts.origin)
+  return from !== null && from === opts.host
+}
+
 /** The tRPC procedure path(s) a `/trpc/...` URL targets. tRPC batches
  *  comma-separate them in the path segment and percent-encode the dots, so we
  *  strip the prefix + query string, split on commas and decode each — mirroring

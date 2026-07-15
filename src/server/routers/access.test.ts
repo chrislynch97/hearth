@@ -106,7 +106,9 @@ describe('access.remove', () => {
       userId: ben,
       activeHouseholdId: 'household',
       createdAt: new Date(),
+      lastSeenAt: new Date(),
       expiresAt: new Date(Date.now() + 1_000_000),
+      absoluteExpiresAt: new Date(Date.now() + 1_000_000),
     })
 
     await expect(caller(db, { role: 'admin' }).c.access.remove({ userId: ben })).resolves.toEqual({ ok: true })

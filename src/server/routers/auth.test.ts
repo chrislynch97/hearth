@@ -3,6 +3,7 @@ import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
 import { appRouter } from '../trpc/router'
 import { generateTotp } from '../auth/totp'
+import { getValidSession } from '../auth/session'
 import type { DB } from '../db/client'
 
 // A password comfortably clearing the strength policy (>= 10 chars, not common).
@@ -28,6 +29,16 @@ async function lockAndLogin(db: DB) {
   await setup.caller.auth.setPassword({ newPassword: PW })
   const token = setup.cookies.at(-1) as string
   return { token, authed: makeCaller(db, token) }
+}
+
+/** Enrol and confirm MFA, returning the secret and a caller on the session that
+ *  confirming left behind. `confirmMfa` revokes every existing session and
+ *  re-issues one (#50), so the token that went in is dead on the way out — a real
+ *  browser just follows the new Set-Cookie, which is what this mirrors. */
+async function enableMfa(db: DB, authed: ReturnType<typeof makeCaller>) {
+  const enroll = await authed.caller.auth.enrollMfa()
+  const { recoveryCodes } = await authed.caller.auth.confirmMfa({ code: generateTotp(enroll.secret) })
+  return { secret: enroll.secret, recoveryCodes, authed: makeCaller(db, authed.cookies.at(-1) as string) }
 }
 
 describe('auth router', () => {
@@ -182,15 +193,38 @@ describe('MFA', () => {
 
     const confirm = await authed.caller.auth.confirmMfa({ code: generateTotp(enroll.secret) })
     expect(confirm.recoveryCodes).toHaveLength(10)
-    expect((await authed.caller.auth.status()).mfaEnabled).toBe(true)
+    // Confirming re-issues the session, so read status through the new cookie.
+    const after = makeCaller(db, authed.cookies.at(-1) as string)
+    expect((await after.caller.auth.status()).mfaEnabled).toBe(true)
+  })
+
+  it('turning MFA on revokes every other session and keeps the enabler in (#50)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { authed } = await lockAndLogin(db)
+
+    // A second session, standing in for an attacker who already holds a stolen
+    // cookie: enabling MFA only gates *new* logins, so unless we revoke it the
+    // intruder keeps the access the user is trying to shut off.
+    const attacker = makeCaller(db)
+    await attacker.caller.auth.login({ username: USER, password: PW })
+    const attackerToken = attacker.cookies.at(-1) as string
+    expect(await getValidSession(db, attackerToken)).not.toBeNull()
+
+    const { authed: after } = await enableMfa(db, authed)
+
+    expect(await getValidSession(db, attackerToken)).toBeNull()
+    expect((await makeCaller(db, attackerToken).caller.auth.status()).authenticated).toBe(false)
+    // The person who enabled it stays signed in on a fresh session.
+    expect((await after.caller.auth.status()).mfaEnabled).toBe(true)
+    expect((await after.caller.auth.status()).authenticated).toBe(true)
   })
 
   it('login demands a code once MFA is on, accepts a TOTP', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
     const { authed } = await lockAndLogin(db)
-    const enroll = await authed.caller.auth.enrollMfa()
-    await authed.caller.auth.confirmMfa({ code: generateTotp(enroll.secret) })
+    const { secret } = await enableMfa(db, authed)
 
     const step1 = makeCaller(db)
     expect(await step1.caller.auth.login({ username: USER, password: PW })).toEqual({ ok: false, mfaRequired: true })
@@ -201,7 +235,7 @@ describe('MFA', () => {
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
 
     const step2 = makeCaller(db)
-    const ok = await step2.caller.auth.login({ username: USER, password: PW, code: generateTotp(enroll.secret) })
+    const ok = await step2.caller.auth.login({ username: USER, password: PW, code: generateTotp(secret) })
     expect(ok).toEqual({ ok: true })
     expect(step2.cookies.at(-1)).toBeTruthy()
   })
@@ -210,8 +244,7 @@ describe('MFA', () => {
     const db = await makeTestDb()
     await ensureSeed(db)
     const { authed } = await lockAndLogin(db)
-    const enroll = await authed.caller.auth.enrollMfa()
-    const { recoveryCodes } = await authed.caller.auth.confirmMfa({ code: generateTotp(enroll.secret) })
+    const { recoveryCodes } = await enableMfa(db, authed)
     const code = recoveryCodes[0]!
 
     const first = makeCaller(db)
@@ -226,10 +259,9 @@ describe('MFA', () => {
     const db = await makeTestDb()
     await ensureSeed(db)
     const { authed } = await lockAndLogin(db)
-    const enroll = await authed.caller.auth.enrollMfa()
-    await authed.caller.auth.confirmMfa({ code: generateTotp(enroll.secret) })
+    const { secret } = await enableMfa(db, authed)
 
-    const code = generateTotp(enroll.secret)
+    const code = generateTotp(secret)
     const first = makeCaller(db)
     expect(await first.caller.auth.login({ username: USER, password: PW, code })).toEqual({ ok: true })
 
@@ -243,16 +275,14 @@ describe('MFA', () => {
   it('disableMfa needs the password and turns MFA back off', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const { authed } = await lockAndLogin(db)
-    const enroll = await authed.caller.auth.enrollMfa()
-    await authed.caller.auth.confirmMfa({ code: generateTotp(enroll.secret) })
+    const { authed: after } = await enableMfa(db, (await lockAndLogin(db)).authed)
 
-    await expect(authed.caller.auth.disableMfa({ currentPassword: 'wrong-password-x' })).rejects.toMatchObject({
+    await expect(after.caller.auth.disableMfa({ currentPassword: 'wrong-password-x' })).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
     })
 
-    await authed.caller.auth.disableMfa({ currentPassword: PW })
-    expect((await authed.caller.auth.status()).mfaEnabled).toBe(false)
+    await after.caller.auth.disableMfa({ currentPassword: PW })
+    expect((await after.caller.auth.status()).mfaEnabled).toBe(false)
 
     const login = makeCaller(db)
     expect(await login.caller.auth.login({ username: USER, password: PW })).toEqual({ ok: true })
@@ -261,20 +291,18 @@ describe('MFA', () => {
   it('re-enrolling while MFA is active needs the password (no silent downgrade)', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
-    const { authed } = await lockAndLogin(db)
-    const enroll = await authed.caller.auth.enrollMfa()
-    await authed.caller.auth.confirmMfa({ code: generateTotp(enroll.secret) })
-    expect((await authed.caller.auth.status()).mfaEnabled).toBe(true)
+    const { authed: after } = await enableMfa(db, (await lockAndLogin(db)).authed)
+    expect((await after.caller.auth.status()).mfaEnabled).toBe(true)
 
     // Session alone (or a wrong password) must not overwrite the secret / clear enforcement.
-    await expect(authed.caller.auth.enrollMfa()).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
-    await expect(authed.caller.auth.enrollMfa({ currentPassword: 'wrong-password-x' })).rejects.toMatchObject({
+    await expect(after.caller.auth.enrollMfa()).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+    await expect(after.caller.auth.enrollMfa({ currentPassword: 'wrong-password-x' })).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
     })
-    expect((await authed.caller.auth.status()).mfaEnabled).toBe(true)
+    expect((await after.caller.auth.status()).mfaEnabled).toBe(true)
 
     // With the password it proceeds (starts a fresh pending secret).
-    const re = await authed.caller.auth.enrollMfa({ currentPassword: PW })
+    const re = await after.caller.auth.enrollMfa({ currentPassword: PW })
     expect(re.secret).toBeTruthy()
   })
 })

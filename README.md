@@ -106,6 +106,7 @@ All configuration is via environment variables:
 | `HEARTH_SECURE_COOKIES` | unset | Set to `1` to force `Secure` session cookies when behind a reverse proxy that doesn't send `x-forwarded-proto: https`. |
 | `HEARTH_TRUST_PROXY` | unset | Set to the **number of proxy hops** in front of Hearth (a single reverse proxy / tunnel = `1`) so the login rate limiter keys on the real client IP (`X-Forwarded-For`). Leave unset when directly exposed. Do **not** set it to `true`/all — trusting the whole `X-Forwarded-For` chain lets a client spoof the header and dodge the limiter. Your proxy must **overwrite** (not append to) `X-Forwarded-For`. Accepts a hop count, or a comma-separated list of trusted proxy IPs/CIDRs. |
 | `HEARTH_ALLOW_OPEN` | unset | Set to `1` to allow running **open** (no owner password) while bound to a non-loopback address. Without it, an open instance on `0.0.0.0` serves only the login/first-run endpoints and refuses budgeting data — so a public deploy can't accidentally hand anonymous callers full owner access. Set an owner password instead of using this in production. |
+| `HEARTH_ALLOWED_ORIGINS` | unset | Extra origins allowed to make state-changing requests, comma-separated (`https://hearth.example.com`). Writes must come from the same origin the app is served on; you only need this if a proxy in front rewrites the `Host` header so it no longer matches the address the browser actually used. Requests without an `Origin` header (curl, scripts, health checks) are unaffected. |
 
 ## Security
 

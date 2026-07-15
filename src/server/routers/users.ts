@@ -5,6 +5,10 @@ import { router, publicProcedure } from '../trpc/trpc'
 import { household, member, membership, session, user } from '../db/schema'
 import { scopeWhere } from '../trpc/tenant'
 import { recordAudit } from '../trpc/audit'
+import { isUniqueViolation } from '../db/errors'
+import { verifyPassword } from '../auth/password'
+import { MAX_PASSWORD_LENGTH } from '../../shared/password-policy'
+import { MAX_NAME_LENGTH } from '../../shared/input-limits'
 import { acceptedMembership, getUser, getUserByUsername, getValidSession, isInstanceOwner, normalizeUsername } from '../auth/session'
 
 export const usersRouter = router({
@@ -54,18 +58,42 @@ export const usersRouter = router({
     }
   }),
 
-  /** Update the current user's own profile. */
+  /** Update the current user's own profile.
+   *
+   *  Changing the username or the email requires the current password, mirroring
+   *  `disableMfa`. Both are identity-bearing: the username is what you log in
+   *  with, and the email is the future recovery address. A stolen session could
+   *  otherwise silently rename the account and point recovery at the attacker,
+   *  locking the real owner out of their own instance without ever knowing the
+   *  password (issue #50). `displayName` is cosmetic and stays unconfirmed. */
   updateProfile: publicProcedure
     .input(
       z.object({
-        username: z.string().min(1).optional(),
-        displayName: z.string().min(1).optional(),
-        email: z.string().email().nullable().optional(),
+        username: z.string().min(1).max(MAX_NAME_LENGTH).optional(),
+        displayName: z.string().min(1).max(MAX_NAME_LENGTH).optional(),
+        email: z.string().email().max(MAX_NAME_LENGTH).nullable().optional(),
+        currentPassword: z.string().max(MAX_PASSWORD_LENGTH).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       if (!ctx.userId) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
+      const before = await getUser(ctx.db, ctx.userId)
+      if (!before) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
 
+      // Compare against the stored values, not merely "the field was supplied":
+      // a form that always posts every field would otherwise demand a password
+      // for a display-name-only edit. An open (password-less) instance has no
+      // password to confirm, so there is nothing to check.
+      const changesUsername = input.username !== undefined && normalizeUsername(input.username) !== before.username
+      const changesEmail = input.email !== undefined && (input.email || null) !== before.email
+      if ((changesUsername || changesEmail) && before.passwordHash !== null) {
+        if (!(await verifyPassword(input.currentPassword ?? '', before.passwordHash))) {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Current password is incorrect' })
+        }
+      }
+
+      // Friendly best-effort check; the unique index on user.username is the real
+      // guard against a concurrent same-username race (handled below).
       if (input.username !== undefined) {
         const clash = await getUserByUsername(ctx.db, input.username.trim())
         if (clash && clash.id !== ctx.userId) {
@@ -73,17 +101,27 @@ export const usersRouter = router({
         }
       }
 
-      const before = await getUser(ctx.db, ctx.userId)
-
-      await ctx.db
-        .update(user)
-        .set({
-          ...(input.username !== undefined ? { username: normalizeUsername(input.username) } : {}),
-          ...(input.displayName !== undefined ? { displayName: input.displayName.trim() } : {}),
-          ...(input.email !== undefined ? { email: input.email } : {}),
-          updatedAt: new Date(),
-        })
-        .where(eq(user.id, ctx.userId))
+      try {
+        await ctx.db
+          .update(user)
+          .set({
+            ...(input.username !== undefined ? { username: normalizeUsername(input.username) } : {}),
+            ...(input.displayName !== undefined ? { displayName: input.displayName.trim() } : {}),
+            ...(input.email !== undefined ? { email: input.email } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(user.id, ctx.userId))
+      } catch (err) {
+        // Two renames to the same name can both pass the check above under
+        // Postgres's real concurrency; the unique index makes the loser throw
+        // here. Turn that into the same friendly message rather than the raw 500
+        // the constraint would otherwise surface as (issue #50), matching
+        // `auth.register`.
+        if (isUniqueViolation(err)) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'That username is taken.' })
+        }
+        throw err
+      }
 
       const updated = await getUser(ctx.db, ctx.userId)
       // Audit only the profile fields (issue #49) — never the password hash or MFA

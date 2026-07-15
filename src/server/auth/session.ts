@@ -3,7 +3,7 @@
  *  Replaces the old stateless HMAC(password) token so sessions can carry user
  *  identity and be revoked (logout, password change, "sign out everywhere"). */
 import { createHash, randomBytes } from 'node:crypto'
-import { and, asc, eq, isNotNull, lt } from 'drizzle-orm'
+import { and, asc, eq, isNotNull, lt, ne, or } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import type { DB, DBOrTx } from '../db/client'
 import { membership, session, user } from '../db/schema'
@@ -12,7 +12,21 @@ import { getInstanceSettings, setAuthRequired } from '../db/instanceSettings'
 import { DEFAULT_HOUSEHOLD_ID, ROLE_RANK, type Role } from '../trpc/tenant'
 import { newId } from '../../shared/ids'
 
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days, matching the cookie Max-Age
+/** Idle window. A session dies this long after its last use, not after its
+ *  creation — `touchSession` slides it forward while you keep using the app. The
+ *  point is that a cookie an attacker stole and then sat on goes cold on its own. */
+export const SESSION_IDLE_TTL_MS = 14 * 24 * 60 * 60 * 1000 // 14 days
+
+/** Hard ceiling on a session's total life, fixed at creation and never moved.
+ *  Without it a sliding window renews forever, so a stolen cookie that is kept
+ *  warm never expires. This forces everyone back through the login screen (and
+ *  MFA) periodically, however active they are. */
+export const SESSION_ABSOLUTE_TTL_MS = 90 * 24 * 60 * 60 * 1000 // 90 days
+
+/** How stale `lastSeenAt` may get before a request slides the window forward.
+ *  Renewing on *every* request would add a write to every authenticated call for
+ *  no security gain; an hour's granularity is invisible against a 14-day window. */
+export const SESSION_TOUCH_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 
 /** Create a new user and their accepted membership of a household in one shot.
  *  Shared by self-registration and invite acceptance (which differ only in the
@@ -71,9 +85,27 @@ export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
 
+/** Where a session was established. Recorded so `sessions.list` can show a user
+ *  something recognisable ("Firefox on Windows, from 192.168.1.9") rather than an
+ *  opaque row they can't judge. Both are client-controlled hints, never trusted
+ *  for any decision. */
+export interface SessionOrigin {
+  userAgent?: string | null
+  ip?: string | null
+}
+
+// A user-agent header is attacker-controlled and unbounded; it's only ever
+// displayed, but store a sane slice rather than whatever arrives.
+const MAX_USER_AGENT_LENGTH = 400
+
 /** Create a session for a user's active household; returns the cookie value (the
  *  raw token). Only its hash is persisted as the row id. */
-export async function createSession(db: DB, userId: string, householdId: string): Promise<string> {
+export async function createSession(
+  db: DB,
+  userId: string,
+  householdId: string,
+  origin: SessionOrigin = {},
+): Promise<string> {
   const token = newSessionId()
   const now = new Date()
   await db
@@ -83,9 +115,19 @@ export async function createSession(db: DB, userId: string, householdId: string)
       userId,
       activeHouseholdId: householdId,
       createdAt: now,
-      expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
+      lastSeenAt: now,
+      expiresAt: new Date(now.getTime() + SESSION_IDLE_TTL_MS),
+      absoluteExpiresAt: new Date(now.getTime() + SESSION_ABSOLUTE_TTL_MS),
+      userAgent: origin.userAgent?.slice(0, MAX_USER_AGENT_LENGTH) ?? null,
+      ip: origin.ip ?? null,
     })
   return token
+}
+
+/** Whether a session row is still live: both its idle window and its absolute
+ *  ceiling must still be in the future. Either one lapsing kills it. */
+export function isSessionLive(s: Session, now: number = Date.now()): boolean {
+  return s.expiresAt.getTime() > now && s.absoluteExpiresAt.getTime() > now
 }
 
 /** The live session for a cookie value, or null if missing/unknown/expired. The
@@ -93,7 +135,63 @@ export async function createSession(db: DB, userId: string, householdId: string)
 export async function getValidSession(db: DB, token: string | undefined): Promise<Session | null> {
   if (!token) return null
   const [s] = await db.select().from(session).where(eq(session.id, hashToken(token)))
-  return s && s.expiresAt.getTime() > Date.now() ? s : null
+  return s && isSessionLive(s) ? s : null
+}
+
+/** When a session's idle window next lapses, given activity at `now`: `now` + the
+ *  idle TTL, but never past the absolute ceiling — the cap always wins. */
+export function slidExpiry(s: Session, now: number = Date.now()): Date {
+  return new Date(Math.min(now + SESSION_IDLE_TTL_MS, s.absoluteExpiresAt.getTime()))
+}
+
+/** Slide a session's idle window forward because it was just used, if enough time
+ *  has passed to be worth a write (SESSION_TOUCH_INTERVAL_MS). Returns the row's
+ *  new deadline when it moved, or null when the touch was skipped — callers use
+ *  that to decide whether to re-issue the cookie with a matching Max-Age.
+ *
+ *  Best-effort: a failure here means the window didn't slide (the session stays
+ *  valid until its existing deadline), which must never fail the user's request. */
+export async function touchSession(db: DB, s: Session, now: number = Date.now()): Promise<Date | null> {
+  if (now - s.lastSeenAt.getTime() < SESSION_TOUCH_INTERVAL_MS) return null
+  const expiresAt = slidExpiry(s, now)
+  try {
+    await db
+      .update(session)
+      .set({ lastSeenAt: new Date(now), expiresAt })
+      .where(eq(session.id, s.id))
+    return expiresAt
+  } catch (err) {
+    console.error('[auth] failed to slide session expiry', err)
+    return null
+  }
+}
+
+/** A user's live sessions, most recently active first. Returns whole rows; the
+ *  router is responsible for never shipping the id (a token hash) to a client. */
+export async function listUserSessions(db: DB, userId: string): Promise<Session[]> {
+  const rows = await db.select().from(session).where(eq(session.userId, userId))
+  return rows.filter((s) => isSessionLive(s)).sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime())
+}
+
+/** Revoke one session by its row id, scoped to its owner so a caller can only
+ *  ever end their own. Returns whether a row actually went away. */
+export async function deleteUserSessionById(db: DB, userId: string, sessionId: string): Promise<boolean> {
+  const deleted = await db
+    .delete(session)
+    .where(and(eq(session.userId, userId), eq(session.id, sessionId)))
+    .returning({ id: session.id })
+  return deleted.length > 0
+}
+
+/** Revoke every session for a user EXCEPT the one given — "sign out everywhere
+ *  else", which must not log the person doing it out of the device they're on.
+ *  Returns how many were ended. */
+export async function deleteOtherUserSessions(db: DB, userId: string, keepSessionId: string): Promise<number> {
+  const deleted = await db
+    .delete(session)
+    .where(and(eq(session.userId, userId), ne(session.id, keepSessionId)))
+    .returning({ id: session.id })
+  return deleted.length
 }
 
 export async function deleteSession(db: DB, token: string): Promise<void> {
@@ -107,12 +205,12 @@ export async function deleteUserSessions(db: DB, userId: string): Promise<void> 
 
 const PURGE_INTERVAL_MS = 60 * 60 * 1000 // hourly; expiry is 30 days, so timing is not sensitive
 
-/** Delete every session whose TTL has already elapsed. `getValidSession` ignores
- *  expired rows at read time, so this only reclaims storage — but without it the
- *  `session` table grows forever on a long-running instance (one dead row per
- *  login, kept indefinitely). */
+/** Delete every session that has hit either deadline — its idle window or its
+ *  absolute ceiling. `getValidSession` ignores dead rows at read time, so this
+ *  only reclaims storage — but without it the `session` table grows forever on a
+ *  long-running instance (one dead row per login, kept indefinitely). */
 export async function deleteExpiredSessions(db: DB, now: Date = new Date()): Promise<void> {
-  await db.delete(session).where(lt(session.expiresAt, now))
+  await db.delete(session).where(or(lt(session.expiresAt, now), lt(session.absoluteExpiresAt, now)))
 }
 
 /** Start the periodic purge of expired sessions. Mirrors the backup scheduler:

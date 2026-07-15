@@ -135,8 +135,23 @@ export const session = pgTable('session', {
     .notNull()
     .references(() => household.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  // Idle deadline: slides forward on use (see touchSession). A session is dead
+  // once EITHER this or absoluteExpiresAt has passed.
   expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
-})
+  // Hard ceiling set at creation and never moved, so an attacker holding a cookie
+  // they keep warm still gets forced back to the login screen eventually.
+  absoluteExpiresAt: timestamp('absolute_expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+  // Last time this session was seen, updated lazily (TOUCH_INTERVAL_MS). Drives
+  // the sliding expiry and gives sessions.list something to sort/label by.
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true, mode: 'date' }).notNull(),
+  // Coarse provenance so a user reviewing sessions.list can recognise their own
+  // devices and spot one they don't. Captured at creation and never updated: they
+  // describe where the session was *established*, which is what identifies it.
+  userAgent: text('user_agent'),
+  ip: text('ip'),
+}, (t) => ({
+  userIdx: index('session_user_id_idx').on(t.userId),
+}))
 
 export type Session = typeof session.$inferSelect
 

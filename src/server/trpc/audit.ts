@@ -36,6 +36,7 @@ export type SecurityAction =
   | 'mfa_enroll_started'
   | 'mfa_enabled'
   | 'mfa_disabled'
+  | 'sessions_revoked'
   | 'registration_changed'
   | 'role_changed'
   | 'access_removed'

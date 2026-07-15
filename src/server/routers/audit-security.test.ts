@@ -298,11 +298,14 @@ describe('auth audit events (issue #49)', () => {
     const setup = caller(db, { role: 'owner', userId: owner })
     await setup.c.auth.setPassword({ newPassword: PW })
     const token = setup.cookies.at(-1) as string
-    const authed = caller(db, { role: 'owner', userId: owner, sessionToken: token }).c
+    const authed = caller(db, { role: 'owner', userId: owner, sessionToken: token })
 
-    const { secret } = await authed.auth.enrollMfa()
-    await authed.auth.confirmMfa({ code: generateTotp(secret) })
-    await authed.auth.disableMfa({ currentPassword: PW })
+    const { secret } = await authed.c.auth.enrollMfa()
+    await authed.c.auth.confirmMfa({ code: generateTotp(secret) })
+    // Confirming revokes every session and re-issues one (#50), so carry on
+    // through the cookie it just handed back.
+    const reissued = caller(db, { role: 'owner', userId: owner, sessionToken: authed.cookies.at(-1) as string })
+    await reissued.c.auth.disableMfa({ currentPassword: PW })
 
     expect((await eventsWithAction(db, 'mfa_enroll_started'))[0]!.changes.details).toEqual({ reenroll: false })
     expect((await eventsWithAction(db, 'mfa_enabled')).length).toBe(1)

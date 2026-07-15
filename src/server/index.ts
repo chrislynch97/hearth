@@ -17,7 +17,7 @@ import { startAuditPruneScheduler } from './audit/prune'
 import { parseSessionCookie } from './auth/cookies'
 import { getValidSession, isInstanceLocked, startSessionPurgeScheduler } from './auth/session'
 import { PUBLIC_PROCEDURES } from './trpc/trpc'
-import { allProceduresIn, openGuardConfig, trpcProcedures } from './auth/gate'
+import { allProceduresIn, allowedOrigins, isAllowedOrigin, openGuardConfig, trpcProcedures } from './auth/gate'
 import { parseTrustProxy } from './auth/trustProxy'
 
 // On an OPEN (password-less) instance the owner fallback resolves every
@@ -44,6 +44,9 @@ const HOST = process.env.HOST ?? '0.0.0.0'
 // `auth.status` (which tells the client whether to show the first-run screen) can
 // never disagree on how "reachable off-box" / "operator opted in" are computed.
 const { bindIsLoopback: BIND_IS_LOOPBACK, allowOpen: ALLOW_OPEN } = openGuardConfig()
+// Extra origins accepted by the CSRF check below, for deployments where a proxy
+// rewrites Host so it no longer matches the browser's origin. Empty by default.
+const ALLOWED_ORIGINS = allowedOrigins()
 
 // A rejected promise or thrown error *outside* a request would otherwise take the
 // whole process down with no explanation — the exact shape of "ran fine, then
@@ -157,6 +160,21 @@ async function main() {
     if (Number.isFinite(declaredLength) && declaredLength > PUBLIC_BODY_LIMIT) {
       return reply.code(413).send({ error: 'Request body too large' })
     }
+  })
+
+  // Cross-origin write guard (#50). tRPC sends every mutation as a POST, so
+  // holding POSTs to a same-origin (or explicitly allow-listed) Origin blocks a
+  // cross-site request forgery independently of the session cookie's SameSite=Lax
+  // — which is the only thing standing between a malicious page and a
+  // state-changing call today, and which we can't verify the browser honours.
+  // GETs are left alone: tRPC queries are reads, and a cross-site GET can't read
+  // the response anyway (no CORS headers are served).
+  app.addHook('onRequest', async (req, reply) => {
+    if (!req.url.startsWith('/trpc/') || req.method !== 'POST') return
+    const origin = req.headers.origin
+    if (isAllowedOrigin({ origin, host: req.headers.host, allowed: ALLOWED_ORIGINS })) return
+    req.log.warn({ origin, host: req.headers.host }, 'rejected cross-origin write')
+    return reply.code(403).send({ error: 'Cross-origin request rejected' })
   })
 
   // Coarse outer auth gate. Authorization is also enforced in-band by the tRPC
