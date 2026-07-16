@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../db/testdb'
 import { household } from '../db/schema'
 import { applySnapshot, type Snapshot } from '../db/snapshot'
 import { decryptSnapshot } from './encrypt'
-import { runBackup } from './runner'
+import { backupDir, keepBackups, runBackup } from './runner'
 
 // runBackup writes into `<DATABASE_URL dir>/backups`; point it at a throwaway
 // temp dir so tests never touch ./data. (The actual DB under test is a separate
@@ -194,5 +194,88 @@ describe('runBackup', () => {
 
     expect(readdirSync(dirname(file)).filter((f) => f.endsWith('.json')).length).toBe(1)
     expect(offsite?.ok).toBe(false)
+  })
+})
+
+// Retention and the local backup directory are operator-tunable (#53).
+describe('keepBackups', () => {
+  it('defaults to 14 when unset or empty', () => {
+    expect(keepBackups({})).toBe(14)
+    expect(keepBackups({ HEARTH_BACKUP_KEEP: '   ' })).toBe(14)
+  })
+
+  it('honours a positive integer', () => {
+    expect(keepBackups({ HEARTH_BACKUP_KEEP: '3' })).toBe(3)
+    expect(keepBackups({ HEARTH_BACKUP_KEEP: ' 30 ' })).toBe(30)
+  })
+
+  // A retention of 0 would prune the snapshot we just wrote.
+  it('clamps 0 up to 1 rather than keeping nothing', () => {
+    expect(keepBackups({ HEARTH_BACKUP_KEEP: '0' })).toBe(1)
+  })
+
+  it('falls back to the default on a non-integer, rather than failing the backup', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(keepBackups({ HEARTH_BACKUP_KEEP: 'lots' })).toBe(14)
+    expect(keepBackups({ HEARTH_BACKUP_KEEP: '-2' })).toBe(14)
+    expect(keepBackups({ HEARTH_BACKUP_KEEP: '2.5' })).toBe(14)
+  })
+})
+
+describe('backupDir', () => {
+  it('derives ./data/backups from an unset DATABASE_URL', () => {
+    expect(backupDir({})).toBe(join('./data', 'backups'))
+  })
+
+  it('sits alongside an embedded PGlite data dir', () => {
+    expect(backupDir({ DATABASE_URL: 'pglite:/srv/hearth/pgdata' })).toBe(join('/srv/hearth', 'backups'))
+  })
+
+  it('falls back to ./data/backups for a real Postgres server', () => {
+    expect(backupDir({ DATABASE_URL: 'postgres://user@host/db' })).toBe(join('./data', 'backups'))
+  })
+
+  it('lets HEARTH_BACKUP_LOCAL_DIR override the derived path', () => {
+    expect(
+      backupDir({ DATABASE_URL: 'pglite:/srv/hearth/pgdata', HEARTH_BACKUP_LOCAL_DIR: '/mnt/other/backups' }),
+    ).toBe('/mnt/other/backups')
+  })
+
+  it('ignores a blank override', () => {
+    expect(backupDir({ HEARTH_BACKUP_LOCAL_DIR: '  ' })).toBe(join('./data', 'backups'))
+  })
+})
+
+describe('backup retention', () => {
+  it('prunes to HEARTH_BACKUP_KEEP, keeping the newest', async () => {
+    process.env.HEARTH_BACKUP_KEEP = '2'
+    const dir = join(tmp, 'backups')
+    mkdirSync(dir, { recursive: true })
+    // Older snapshots, named so they sort before anything runBackup writes now.
+    for (const stamp of ['2000-01-01', '2000-01-02', '2000-01-03']) {
+      writeFileSync(join(dir, `hearth-backup-${stamp}.json`), '{}')
+    }
+
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+    const { file } = await runBackup(db, ['household'])
+
+    const left = readdirSync(dir).filter((f) => f.startsWith('hearth-backup-')).sort()
+    expect(left.length).toBe(2)
+    // The one we just wrote must survive, and the oldest must be gone.
+    expect(left).toContain(basename(file))
+    expect(left).not.toContain('hearth-backup-2000-01-01.json')
+  })
+
+  it('writes into HEARTH_BACKUP_LOCAL_DIR when set', async () => {
+    const custom = join(tmp, 'elsewhere')
+    process.env.HEARTH_BACKUP_LOCAL_DIR = custom
+
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+    const { file } = await runBackup(db, ['household'])
+
+    expect(dirname(file)).toBe(custom)
+    expect(readdirSync(custom).filter((f) => f.startsWith('hearth-backup-')).length).toBe(1)
   })
 })

@@ -24,9 +24,26 @@ import { resolveOffsiteConfig, uploadOffsite } from './offsite'
 import { encryptSnapshot, decryptSnapshot } from './encrypt'
 import type { PgTable } from 'drizzle-orm/pg-core'
 
-const KEEP_BACKUPS = 14
+const DEFAULT_KEEP_BACKUPS = 14
 const CHECK_INTERVAL_MS = 60 * 60 * 1000 // check hourly; frequency gates the actual write
 const PREFIX = 'hearth-backup-'
+
+/** How many local snapshots to keep, from `HEARTH_BACKUP_KEEP` (default 14).
+ *  Clamped to at least 1: a retention of 0 would prune the backup we just wrote,
+ *  so a typo'd or empty value must never be read as "keep nothing". Anything that
+ *  isn't a positive integer falls back to the default rather than failing the
+ *  backup — losing backups is the worse outcome. */
+export function keepBackups(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = (env.HEARTH_BACKUP_KEEP ?? '').trim()
+  if (raw === '') return DEFAULT_KEEP_BACKUPS
+  if (!/^\d+$/.test(raw)) {
+    console.error(
+      `Ignoring invalid HEARTH_BACKUP_KEEP="${raw}" (want a positive integer); keeping ${DEFAULT_KEEP_BACKUPS}.`,
+    )
+    return DEFAULT_KEEP_BACKUPS
+  }
+  return Math.max(1, Number(raw))
+}
 
 /** Outcome of the optional off-site copy, surfaced on the backup result so the
  *  manual "Back up now" UI can tell the operator whether it landed. Absent when
@@ -46,9 +63,17 @@ export interface BackupResult {
 // be world-readable on a host-mounted volume. (No-op on Windows, harmless there.)
 const BACKUP_MODE = 0o600
 
-/** `./data/backups`, alongside the local data directory. For an embedded PGlite
- *  target the backups sit next to its data dir; for a real Postgres server (or
- *  when DATABASE_URL is unset) they fall back to `./data/backups`.
+/** Where local snapshots are written.
+ *
+ *  `HEARTH_BACKUP_LOCAL_DIR` overrides everything below, so backups can land on a
+ *  different volume from the database without involving the off-site machinery
+ *  (#53). Don't confuse it with `HEARTH_BACKUP_DIR`, which is the *off-site*
+ *  `directory` target — this one is the primary local copy.
+ *
+ *  Otherwise: `./data/backups`, alongside the local data directory. For an
+ *  embedded PGlite target the backups sit next to its data dir; for a real
+ *  Postgres server (or when DATABASE_URL is unset) they fall back to
+ *  `./data/backups`.
  *
  *  Note (see #40): there is deliberately no per-driver branch here. The snapshot
  *  is a *logical* backup taken through drizzle (`buildSnapshot` → `db.select()`),
@@ -58,8 +83,10 @@ const BACKUP_MODE = 0o600
  *  server should additionally rely on physical backups at the infra level
  *  (`pg_dump` / PITR / a managed snapshot); the app-level snapshot is the portable
  *  logical copy, not a replacement for those. */
-function backupDir(): string {
-  const url = process.env.DATABASE_URL
+export function backupDir(env: NodeJS.ProcessEnv = process.env): string {
+  const override = (env.HEARTH_BACKUP_LOCAL_DIR ?? '').trim()
+  if (override !== '') return override
+  const url = env.DATABASE_URL
   let base = './data'
   if (url && /^pglite:(\/\/)?/.test(url)) {
     const dir = url.replace(/^pglite:(\/\/)?/, '')
@@ -154,10 +181,11 @@ export async function runBackup(db: DB, stampHouseholdIds: string[]): Promise<Ba
   const restoredJson = passphrase ? decryptSnapshot(written, passphrase) : written.toString('utf8')
   await verifyRestores(JSON.parse(restoredJson) as Snapshot)
 
+  const keep = keepBackups()
   const existing = readdirSync(dir)
     .filter((f) => f.startsWith(PREFIX) && (f.endsWith('.json') || f.endsWith('.json.enc')))
     .sort()
-  for (const old of existing.slice(0, Math.max(0, existing.length - KEEP_BACKUPS))) {
+  for (const old of existing.slice(0, Math.max(0, existing.length - keep))) {
     rmSync(join(dir, old), { force: true })
   }
 

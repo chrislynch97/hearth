@@ -126,6 +126,8 @@ Update later: `git pull && npm install && npm run build && sudo systemctl restar
 | `CLIENT_DIR` | `../client` (source) | Directory of the built UI. Set to `./dist/client` for a non-Docker production run. The Docker image sets this for you. |
 | `HEARTH_SECURE_COOKIES` | unset | Set to `1` to force `Secure` session cookies when behind a reverse proxy that terminates TLS but doesn't forward `x-forwarded-proto: https`. |
 | `HEARTH_TRUST_PROXY` | unset | Set to the **number of proxy hops** in front of Hearth (a single reverse proxy / tunnel = `1`) so Fastify reads the real client IP from `X-Forwarded-For` and the login rate limiter throttles per-client. Leave unset when directly exposed. Do **not** set it to `true`/all — trusting the whole chain lets a client spoof `X-Forwarded-For` and dodge the limiter. Your proxy must **overwrite** (not append to) `X-Forwarded-For`. Also accepts a comma-separated list of trusted proxy IPs/CIDRs. |
+| `HEARTH_BACKUP_KEEP` | `14` | How many local snapshots to keep; older ones are pruned after each successful backup. Minimum `1` (a `0` is clamped up rather than pruning the backup just written); a non-integer value is ignored with a warning and the default kept. |
+| `HEARTH_BACKUP_LOCAL_DIR` | unset | Absolute path for the **local** snapshots, overriding the default `<data>/backups`. Use it to land backups on a different volume from the database without setting up the off-site machinery. Not to be confused with `HEARTH_BACKUP_DIR` below, which is the *off-site* `directory` target. |
 | `HEARTH_BACKUP_OFFSITE` | `off` | Push each verified backup, **encrypted**, to a second location so a lost data volume doesn't lose every backup too (see [Off-site backups](#off-site-backups-optional)). `off` (default) \| `directory` (copy to `HEARTH_BACKUP_DIR`) \| `webhook` (POST to `HEARTH_BACKUP_WEBHOOK_URL`). |
 | `HEARTH_BACKUP_PASSPHRASE` | unset | Encrypt backups at rest (AES-256-GCM). When set, **both** the local `<data>/backups` snapshots (`*.json.enc`) and any off-site copies are encrypted with this passphrase; when unset, local snapshots are plaintext JSON. **Required** when `HEARTH_BACKUP_OFFSITE` is enabled. Keep it somewhere separate from the backups — you need it to restore. |
 | `HEARTH_BACKUP_DIR` | unset | `directory` mode: the path to copy encrypted backups into. Point it at a **different physical volume** (a second disk, or an NFS/CIFS/rsync mount) — a path on the same volume as the data gives no protection. |
@@ -154,6 +156,11 @@ portable JSON snapshots written to `<data>/backups`, restorable from within the 
 (**Settings → Data → Import**). They are the format you'd use to **migrate Hearth to
 a different host** or roll back in-app. You can also export one on demand from the
 same screen.
+
+The last 14 snapshots are kept; set `HEARTH_BACKUP_KEEP` to keep more or fewer. To
+write them somewhere other than `<data>/backups` — a second disk, say, so a lost data
+volume doesn't take the backups with it — set `HEARTH_BACKUP_LOCAL_DIR` to an
+absolute path. (Both are in the [configuration reference](#configuration-reference).)
 
 A snapshot contains password hashes and MFA/TOTP secrets, so by default the local
 files are owner-only (`0600`) but **plaintext** — on a host-mounted volume, host-side
