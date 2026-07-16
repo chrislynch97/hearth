@@ -120,16 +120,18 @@ async function main() {
   // emitted twice. HSTS is only honoured by browsers over HTTPS, so it's inert on
   // a plain-HTTP LAN deployment and doesn't need to be conditional.
   await app.register(fastifyHelmet, {
-    // Serve our own SPA + tRPC; allow the Google Fonts stylesheet/font files the
-    // client loads, Mantine's runtime-injected inline <style> tags, and data: URIs
-    // for the inline favicon and the MFA-enrolment QR image.
+    // Serve our own SPA + tRPC and nothing else: no directive names a third-party
+    // origin, so a self-hosted instance makes zero external requests and works on
+    // an offline LAN (#54 — fonts are bundled via @fontsource, not Google Fonts).
+    // Still needed: 'unsafe-inline' styles for Mantine's runtime-injected <style>
+    // tags, and data: URIs for the inline favicon and the MFA-enrolment QR image.
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         baseUri: ["'self'"],
         scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-        fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        fontSrc: ["'self'", 'data:'],
         imgSrc: ["'self'", 'data:'],
         connectSrc: ["'self'"],
         objectSrc: ["'none'"],

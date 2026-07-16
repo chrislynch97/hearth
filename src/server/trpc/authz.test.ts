@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
 import { appRouter } from './router'
+import { PUBLIC_PROCEDURES, WRITE_ROLE_EXEMPT } from './trpc'
 import { resolveIdentity } from './context'
 import { user } from '../db/schema'
 import { hashPassword } from '../auth/password'
@@ -115,5 +116,21 @@ describe('resolveIdentity owner fallback', () => {
     const identity = await resolveIdentity(db, token, undefined)
     expect(identity.userId).toBe(ownerId)
     expect(identity.role).toBe('owner')
+  })
+})
+
+// A stale allowlist entry is silent: it exempts nothing while the procedure
+// doesn't exist, then silently un-guards the day someone creates a procedure
+// with that name. `users.setPassword` sat in WRITE_ROLE_EXEMPT that way (#54).
+// Pin both allowlists to the real router so a rename or deletion fails here.
+describe('authorization allowlists match the router', () => {
+  const procedures = new Set(Object.keys(appRouter._def.procedures))
+
+  it('every WRITE_ROLE_EXEMPT entry names a real procedure', () => {
+    expect([...WRITE_ROLE_EXEMPT].filter((p) => !procedures.has(p))).toEqual([])
+  })
+
+  it('every PUBLIC_PROCEDURES entry names a real procedure', () => {
+    expect([...PUBLIC_PROCEDURES].filter((p) => !procedures.has(p))).toEqual([])
   })
 })

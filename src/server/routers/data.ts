@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { and, eq } from 'drizzle-orm'
+import { and, count, eq } from 'drizzle-orm'
 import type { PgTable } from 'drizzle-orm/pg-core'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
@@ -125,10 +125,13 @@ export const dataRouter = router({
   /** Row counts per table + the database location, for the About screen. */
   stats: publicProcedure.query(async ({ ctx }) => {
     await assertInstanceOwner(ctx.db, ctx.userId)
+    // count() aggregates in the database — selecting the rows just to read
+    // `.length` would pull the entire database into memory to render the About
+    // screen's row counts.
     const counts: Record<string, number> = {}
     for (const [name, table] of ALL_TABLES) {
-      const rows = await ctx.db.select().from(table as PgTable)
-      counts[name] = rows.length
+      const [row] = await ctx.db.select({ n: count() }).from(table as PgTable)
+      counts[name] = row?.n ?? 0
     }
     return { counts, databaseLabel: describeDatabase() }
   }),

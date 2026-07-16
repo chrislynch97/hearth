@@ -4,11 +4,19 @@
 
 /** Hosts that only accept connections from the same machine. Binding to one of
  *  these means an open instance isn't actually reachable from the network, so the
- *  open-on-public guard doesn't apply. */
-export const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost'])
+ *  open-on-public guard doesn't apply. `127.0.0.0/8` is loopback in its entirety,
+ *  not just `127.0.0.1` — binding `127.0.0.2` is as unreachable off-box as
+ *  `127.0.0.1` is (#54). */
+export const LOOPBACK_HOSTS = new Set(['::1', 'localhost'])
+
+/** Every `127.x.y.z` is loopback. Anchored and digit-bounded so a host that
+ *  merely starts with those characters (`127.0.0.1.example.com`) doesn't match. */
+const LOOPBACK_V4 = /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/
 
 export function isLoopbackHost(host: string): boolean {
-  return LOOPBACK_HOSTS.has(host)
+  // Strip the brackets Node/URLs wrap around a literal IPv6 host (`[::1]`).
+  const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host
+  return LOOPBACK_HOSTS.has(bare) || LOOPBACK_V4.test(bare)
 }
 
 /** The open-on-public guard's runtime config, read from the process environment.

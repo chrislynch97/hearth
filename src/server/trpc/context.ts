@@ -6,6 +6,7 @@ import { membership } from '../db/schema'
 import type { Session } from '../db/schema'
 import { parseSessionCookie, serializeSessionCookie } from '../auth/cookies'
 import { getOwnerUser, getValidSession, isInstanceLocked, touchSession } from '../auth/session'
+import { parseTrustProxy } from '../auth/trustProxy'
 import type { SessionOrigin } from '../auth/session'
 import { DEFAULT_HOUSEHOLD_ID } from './tenant'
 import type { StagedAudit } from './audit'
@@ -48,9 +49,21 @@ export interface Context {
   auditEntries?: StagedAudit[]
 }
 
+/** Whether this request reached us over HTTPS, deciding only the cookie's `Secure`
+ *  flag today (#54).
+ *
+ *  `x-forwarded-proto` is a client-settable header: it means something only when a
+ *  proxy we trust set it, so it is honoured only when `HEARTH_TRUST_PROXY` is
+ *  configured — the same switch that decides whether we believe that proxy's
+ *  `X-Forwarded-For`. Getting this wrong is currently harmless (the worst case is
+ *  a `Secure` cookie on a plain-HTTP instance, which fails safe by not being sent),
+ *  but the header must not be trusted by default in case this is ever reused for a
+ *  decision where it isn't. */
 function isHttps(req: CreateFastifyContextOptions['req'] | undefined): boolean {
   if (process.env.HEARTH_SECURE_COOKIES === '1') return true
-  return req?.headers['x-forwarded-proto'] === 'https' || req?.protocol === 'https'
+  if (req?.protocol === 'https') return true
+  const trustsProxy = parseTrustProxy(process.env.HEARTH_TRUST_PROXY) !== false
+  return trustsProxy && req?.headers['x-forwarded-proto'] === 'https'
 }
 
 /**

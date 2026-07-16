@@ -111,6 +111,25 @@ describe('isLoopbackHost', () => {
     expect(isLoopbackHost('0.0.0.0')).toBe(false)
     expect(isLoopbackHost('192.168.1.10')).toBe(false)
   })
+
+  // The whole 127.0.0.0/8 block is loopback, not just 127.0.0.1 (#54).
+  it('recognises the rest of the 127.0.0.0/8 block', () => {
+    expect(isLoopbackHost('127.0.0.2')).toBe(true)
+    expect(isLoopbackHost('127.1.2.3')).toBe(true)
+    expect(isLoopbackHost('127.255.255.255')).toBe(true)
+  })
+
+  it('unwraps a bracketed IPv6 literal', () => {
+    expect(isLoopbackHost('[::1]')).toBe(true)
+  })
+
+  // Fails closed: anything that merely looks loopback-ish is network-reachable.
+  it('does not match hosts that only start with 127', () => {
+    expect(isLoopbackHost('127.0.0.1.example.com')).toBe(false)
+    expect(isLoopbackHost('1270.0.0.1')).toBe(false)
+    expect(isLoopbackHost('128.0.0.1')).toBe(false)
+    expect(isLoopbackHost('localhost.example.com')).toBe(false)
+  })
 })
 
 describe('openGuardConfig', () => {

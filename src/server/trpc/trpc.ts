@@ -54,8 +54,11 @@ export const router = t.router
 // Mutations exempt from the household-write-role guard because they carry their
 // own authorization and are not household-data writes gated by a household role.
 // Everything NOT listed here that writes needs at least the `member` role.
-// Keyed by full procedure path (e.g. 'pots.create').
-const WRITE_ROLE_EXEMPT = new Set([
+// Keyed by full procedure path (e.g. 'pots.create'). Exported so a test can
+// assert every entry names a procedure that actually exists: a stale entry is
+// invisible (it exempts nothing today) right up until someone creates a
+// procedure with that name, which would then silently skip the write guard.
+export const WRITE_ROLE_EXEMPT = new Set([
   // Auth + self-service: available to any authenticated request, including one
   // whose role in the active household is unknown (e.g. a removed member still
   // holding a session), so people can still log out and manage their account.
@@ -68,7 +71,6 @@ const WRITE_ROLE_EXEMPT = new Set([
   'auth.disableMfa',
   'users.updateProfile',
   'users.switchHousehold',
-  'users.setPassword',
   'sessions.revoke',
   'sessions.revokeOthers',
   // Pre-membership joins: authenticated by an invite token / open-registration
