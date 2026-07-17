@@ -172,6 +172,41 @@ describe('spends router — expense link (#67)', () => {
   })
 })
 
+describe('spends router — lastByOwner', () => {
+  it('returns the latest spend date per owner (MAX(date), not entry time)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
+    const alice = await caller.members.addPerson({ displayName: 'Alice' })
+
+    // Enter an earlier date after a later one; MAX(date) must still win over
+    // insertion order (which is what MAX(createdAt) would track).
+    await caller.spends.add({ date: '2026-07-16', description: 'late', amount: 100, ownerId: joint.id })
+    await caller.spends.add({ date: '2026-07-10', description: 'early', amount: 100, ownerId: joint.id })
+    await caller.spends.add({ date: '2026-07-12', description: 'a', amount: 100, ownerId: alice.id })
+
+    const rows = await caller.spends.lastByOwner()
+    const byOwner = new Map(rows.map((r) => [r.ownerId, r.lastDate]))
+    expect(byOwner.get(joint.id)).toBe('2026-07-16')
+    expect(byOwner.get(alice.id)).toBe('2026-07-12')
+  })
+
+  it('omits owners with no spends (client fills these in as "none yet")', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
+    const alice = await caller.members.addPerson({ displayName: 'Alice' })
+
+    await caller.spends.add({ date: '2026-07-16', description: 'x', amount: 100, ownerId: joint.id })
+
+    const rows = await caller.spends.lastByOwner()
+    expect(rows.map((r) => r.ownerId)).toEqual([joint.id])
+    expect(rows.some((r) => r.ownerId === alice.id)).toBe(false)
+  })
+})
+
 describe('spends router', () => {
   it('add with a pot → list returns it', async () => {
     const db = await makeTestDb()
