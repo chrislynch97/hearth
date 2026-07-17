@@ -12,8 +12,7 @@ export type IconName =
     | "payslips"
     | "raises"
     | "networth"
-    | "reports"
-    | "settings";
+    | "reports";
 
 export interface NavSectionConfig {
     title: string | null;
@@ -60,10 +59,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     },
     {
         title: null,
-        items: [
-            { to: "/reports", label: "Reports", icon: "reports" },
-            { to: "/settings", label: "Settings", icon: "settings" },
-        ],
+        items: [{ to: "/reports", label: "Reports", icon: "reports" }],
     },
 ];
 

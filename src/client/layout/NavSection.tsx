@@ -36,8 +36,8 @@ export const NavSection = ({ section, index }: NavSectionProps) => {
                 </Text>
             )}
             {section.items.map((item) => {
-                // Exact match, or a sub-route of it (e.g. /settings/account keeps
-                // the Settings item active). The `+ '/'` stops '/' matching all.
+                // Exact match, or a sub-route of it (e.g. a /foo/bar page keeps
+                // the /foo item active). The `+ '/'` stops '/' matching all.
                 const isActive =
                     location.pathname === item.to ||
                     location.pathname.startsWith(item.to + "/");
