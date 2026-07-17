@@ -57,6 +57,13 @@
       "when": 1784323096100,
       "tag": "0007_catchup_moved_amount",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784330908340,
+      "tag": "0008_joint_funding_model",
+      "breakpoints": true
     }
   ]
 }
