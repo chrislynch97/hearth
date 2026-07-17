@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
+import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
 import { appRouter } from '../trpc/router'
+import { expense } from '../db/schema'
 
 describe('spends router — needsPot filter', () => {
   it('excludes main-account (settled, pot-less) spends from "needs a pot"', async () => {
@@ -89,6 +91,84 @@ describe('spends router — split', () => {
         ],
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+})
+
+describe('spends router — expense link (#67)', () => {
+  async function setup() {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
+    const pot = await caller.pots.create({ name: 'Bills', ownerId: joint.id })
+    const bill = await caller.expenses.create({
+      name: 'Netflix', recurrence: 'monthly', amount: 1099, funding: 'pot_manual', potId: pot.id,
+    })
+    return { db, caller, joint, pot, bill }
+  }
+
+  it('add persists expenseId when logged from a bill', async () => {
+    const { caller, joint, pot, bill } = await setup()
+    const s = await caller.spends.add({
+      description: 'Netflix', amount: 1099, ownerId: joint.id, potId: pot.id, expenseId: bill.id,
+    })
+    expect(s.expenseId).toBe(bill.id)
+  })
+
+  it('add leaves expenseId null for an ad-hoc spend', async () => {
+    const { caller, joint } = await setup()
+    const s = await caller.spends.add({ description: 'Cash', amount: 500, ownerId: joint.id })
+    expect(s.expenseId).toBeNull()
+  })
+
+  it('add with a bogus expenseId throws BAD_REQUEST', async () => {
+    const { caller, joint } = await setup()
+    await expect(
+      caller.spends.add({ description: 'X', amount: 100, ownerId: joint.id, expenseId: 'nope' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('update re-points a spend at a different bill', async () => {
+    const { caller, joint, pot, bill } = await setup()
+    const other = await caller.expenses.create({
+      name: 'Spotify', recurrence: 'monthly', amount: 1200, funding: 'pot_manual', potId: pot.id,
+    })
+    const s = await caller.spends.add({
+      description: 'Netflix', amount: 1099, ownerId: joint.id, potId: pot.id, expenseId: bill.id,
+    })
+    const updated = await caller.spends.update({ id: s.id, expenseId: other.id })
+    expect(updated.expenseId).toBe(other.id)
+
+    const cleared = await caller.spends.update({ id: s.id, expenseId: null })
+    expect(cleared.expenseId).toBeNull()
+  })
+
+  it('split inherits the parent expenseId across every part', async () => {
+    const { caller, joint, pot, bill } = await setup()
+    const s = await caller.spends.add({
+      description: 'Netflix', amount: 1000, ownerId: joint.id, potId: pot.id, expenseId: bill.id,
+    })
+    const group = await caller.spends.split({
+      id: s.id,
+      parts: [
+        { amount: 600, ownerId: joint.id, potId: pot.id },
+        { amount: 400, ownerId: joint.id, potId: pot.id },
+      ],
+    })
+    expect(group.every((r) => r.expenseId === bill.id)).toBe(true)
+  })
+
+  it('deleting a bill nulls the link but keeps the payment history (onDelete set null)', async () => {
+    const { db, caller, joint, pot, bill } = await setup()
+    const s = await caller.spends.add({
+      description: 'Netflix', amount: 1099, ownerId: joint.id, potId: pot.id, expenseId: bill.id,
+    })
+    await db.delete(expense).where(eq(expense.id, bill.id))
+
+    const list = await caller.spends.list({})
+    const row = list.find((t) => t.id === s.id)
+    expect(row).toBeDefined()
+    expect(row?.expenseId).toBeNull()
   })
 })
 

@@ -43,6 +43,13 @@
       "when": 1784145832166,
       "tag": "0005_session_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784321498473,
+      "tag": "0006_spend_expense_link",
+      "breakpoints": true
     }
   ]
 }

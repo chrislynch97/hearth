@@ -258,6 +258,7 @@ function AddSpendForm({
       ownerId,
       potId: potId || null,
       categoryId: potId ? null : categoryId,
+      expenseId: selectedOutgoing?.expenseId ?? null,
       settledAtSource,
     })
 
