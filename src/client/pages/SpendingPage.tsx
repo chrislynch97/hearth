@@ -27,6 +27,7 @@ import { allocate, formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { todayIso } from '../../shared/dates'
 import { useMoney, useFormatDate, useFirstDayOfWeek, type MoneyFormat } from '../useMoney'
 import { groupedPotOptions, orderMembers } from '../potOptions'
+import { CoverageStrip } from './CoverageStrip'
 
 // ---------------------------------------------------------------------------
 // Add-spend form
@@ -258,6 +259,7 @@ function AddSpendForm({
       ownerId,
       potId: potId || null,
       categoryId: potId ? null : categoryId,
+      expenseId: selectedOutgoing?.expenseId ?? null,
       settledAtSource,
     })
 
@@ -957,8 +959,19 @@ function SpendRow({
 // Register (list + filters)
 // ---------------------------------------------------------------------------
 
-function Register({ members, pots, money }: { members: Member[]; pots: Pot[]; money: MoneyFormat }) {
-  const [ownerFilter, setOwnerFilter] = useState<string | null>(null)
+function Register({
+  members,
+  pots,
+  money,
+  ownerFilter,
+  setOwnerFilter,
+}: {
+  members: Member[]
+  pots: Pot[]
+  money: MoneyFormat
+  ownerFilter: string | null
+  setOwnerFilter: (ownerId: string | null) => void
+}) {
   const [potFilter, setPotFilter] = useState<string | null>(null)
   const [reconciledFilter, setReconciledFilter] = useState<string | null>(null)
   const [needsPotOnly, setNeedsPotOnly] = useState(false)
@@ -1089,6 +1102,9 @@ export function SpendingPage() {
 
   const money = useMoney()
 
+  // Owned here so the coverage strip can filter the register on click.
+  const [ownerFilter, setOwnerFilter] = useState<string | null>(null)
+
   const members = (membersQuery.data ?? []).filter((m) => m.archivedAt === null)
   const pots = potsQuery.data ?? []
 
@@ -1108,7 +1124,14 @@ export function SpendingPage() {
         <>
           <AddSpendForm members={members} pots={pots} money={money} />
           <Divider />
-          <Register members={members} pots={pots} money={money} />
+          <CoverageStrip members={members} ownerFilter={ownerFilter} onSelectOwner={setOwnerFilter} />
+          <Register
+            members={members}
+            pots={pots}
+            money={money}
+            ownerFilter={ownerFilter}
+            setOwnerFilter={setOwnerFilter}
+          />
         </>
       )}
     </Stack>

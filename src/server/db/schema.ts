@@ -382,6 +382,10 @@ export const spendTransaction = pgTable('spend_transaction', {
   ownerId: text('owner_id').notNull().references(() => member.id),
   potId: text('pot_id').references(() => pot.id), // null = needs a pot, or a main-account spend (see settledAtSource)
   categoryId: text('category_id').references(() => category.id), // used when potId is null (unassigned or main-account)
+  // The bill this payment was for, when logged from an outgoing. Null for most
+  // spends (ad-hoc, imports) and every row predating this. `set null` on delete:
+  // removing a bill must not erase the payment history that proves what was paid.
+  expenseId: text('expense_id').references(() => expense.id, { onDelete: 'set null' }),
   // "No pot transfer needed": the money already left the right place, so this
   // spend never appears on catch-up. True for pot auto-deductions (Monzo pots)
   // and for main-account spends (potId null + categoryId set). A genuinely
@@ -404,6 +408,8 @@ export const spendTransaction = pgTable('spend_transaction', {
   // same Monzo transaction id collide with a raw SQLite error.
   uniqImportRef: uniqueIndex('spend_transaction_import_ref').on(t.householdId, t.importRef),
   householdIdx: index('spend_transaction_household_id_idx').on(t.householdId),
+  // Per-bill payment history: "what have I actually paid for this bill?"
+  expenseIdx: index('spend_transaction_household_expense_idx').on(t.householdId, t.expenseId),
 }))
 
 export type ReconciliationBatch = typeof reconciliationBatch.$inferSelect
