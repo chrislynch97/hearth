@@ -31,9 +31,6 @@ const NAV_ICONS: Record<IconName, ReactElement> = {
         <path d="M3 9.5 12 4l9 5.5M3 21h18M5 10v8M10 10v8M14 10v8M19 10v8" />
     ),
     reports: <path d="M3 21h18M6.5 18v-6M12 18V7M17.5 18v-9" />,
-    // Sliders, not a gear: gear teeth blur into a ring at 18px, whereas the
-    // handles-on-rails read cleanly and don't collide with the sun theme toggle.
-    settings: <path d="M4 6h16M4 12h16M4 18h16M9 4v4M15 10v4M7 16v4" />,
 };
 
 export interface NavIconProps {
