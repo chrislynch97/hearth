@@ -10,6 +10,7 @@ import {
   Group,
   Loader,
   Modal,
+  NavLink,
   NumberInput,
   Select,
   SegmentedControl,
@@ -24,7 +25,7 @@ import { DatePickerInput } from '@mantine/dates'
 import { trpc } from '../trpc'
 import type { Category, Member, Pot, SpendTransaction } from '../../server/db/schema'
 import { allocate, formatMoney, fromMinor, toMinor } from '../../shared/money'
-import { todayIso } from '../../shared/dates'
+import { diffDays, todayIso } from '../../shared/dates'
 import { useMoney, useFormatDate, useFirstDayOfWeek, type MoneyFormat } from '../useMoney'
 import { groupedPotOptions, orderMembers } from '../potOptions'
 
@@ -954,11 +955,98 @@ function SpendRow({
 }
 
 // ---------------------------------------------------------------------------
+// Coverage strip — how far each person's spends are recorded up to
+// ---------------------------------------------------------------------------
+
+/** How long ago a date was, relative to today, for the coverage strip. */
+function agoLabel(daysAgo: number): string {
+  if (daysAgo <= 0) return 'today'
+  if (daysAgo === 1) return 'yesterday'
+  return `${daysAgo} days ago`
+}
+
+function CoverageStrip({
+  members,
+  ownerFilter,
+  onSelectOwner,
+}: {
+  members: Member[]
+  ownerFilter: string | null
+  onSelectOwner: (ownerId: string | null) => void
+}) {
+  const fmt = useFormatDate()
+  const lastByOwnerQuery = trpc.spends.lastByOwner.useQuery()
+
+  const lastByOwner = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const row of lastByOwnerQuery.data ?? []) {
+      if (row.lastDate) map.set(row.ownerId, row.lastDate)
+    }
+    return map
+  }, [lastByOwnerQuery.data])
+
+  const today = todayIso()
+  const orderedMembers = orderMembers(members)
+
+  return (
+    <Card withBorder padding="md">
+      <Stack gap="xs">
+        <Title order={4}>Covered to</Title>
+        {lastByOwnerQuery.isLoading ? (
+          <Center>
+            <Loader size="sm" />
+          </Center>
+        ) : (
+          <Stack gap={2}>
+            {orderedMembers.map((m) => {
+              const last = lastByOwner.get(m.id)
+              const active = ownerFilter === m.id
+              return (
+                <NavLink
+                  key={m.id}
+                  active={active}
+                  onClick={() => onSelectOwner(active ? null : m.id)}
+                  label={
+                    <Group justify="space-between" gap="sm" wrap="nowrap">
+                      <Text fw={500}>{m.displayName}</Text>
+                      {last ? (
+                        <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                          covered to {fmt(last)} · {agoLabel(diffDays(last, today))}
+                        </Text>
+                      ) : (
+                        <Text size="sm" c="dimmed">
+                          none yet
+                        </Text>
+                      )}
+                    </Group>
+                  }
+                />
+              )
+            })}
+          </Stack>
+        )}
+      </Stack>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Register (list + filters)
 // ---------------------------------------------------------------------------
 
-function Register({ members, pots, money }: { members: Member[]; pots: Pot[]; money: MoneyFormat }) {
-  const [ownerFilter, setOwnerFilter] = useState<string | null>(null)
+function Register({
+  members,
+  pots,
+  money,
+  ownerFilter,
+  setOwnerFilter,
+}: {
+  members: Member[]
+  pots: Pot[]
+  money: MoneyFormat
+  ownerFilter: string | null
+  setOwnerFilter: (ownerId: string | null) => void
+}) {
   const [potFilter, setPotFilter] = useState<string | null>(null)
   const [reconciledFilter, setReconciledFilter] = useState<string | null>(null)
   const [needsPotOnly, setNeedsPotOnly] = useState(false)
@@ -1089,6 +1177,9 @@ export function SpendingPage() {
 
   const money = useMoney()
 
+  // Owned here so the coverage strip can filter the register on click.
+  const [ownerFilter, setOwnerFilter] = useState<string | null>(null)
+
   const members = (membersQuery.data ?? []).filter((m) => m.archivedAt === null)
   const pots = potsQuery.data ?? []
 
@@ -1108,7 +1199,14 @@ export function SpendingPage() {
         <>
           <AddSpendForm members={members} pots={pots} money={money} />
           <Divider />
-          <Register members={members} pots={pots} money={money} />
+          <CoverageStrip members={members} ownerFilter={ownerFilter} onSelectOwner={setOwnerFilter} />
+          <Register
+            members={members}
+            pots={pots}
+            money={money}
+            ownerFilter={ownerFilter}
+            setOwnerFilter={setOwnerFilter}
+          />
         </>
       )}
     </Stack>
