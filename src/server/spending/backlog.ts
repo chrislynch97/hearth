@@ -22,6 +22,9 @@ export interface BacklogPayerGroup {
   ownerId: string
   total: number
   count: number
+  /** Carried-over shortfall (or, if negative, credit) from earlier part-moves for
+   *  this pot/payer — a pot-level residual that adds to what needs moving now. */
+  residual: number
   spends: BacklogSpend[]
 }
 
@@ -31,8 +34,17 @@ export interface BacklogPotGroup {
   ownerId: string // the pot's owner
   total: number
   count: number
+  residual: number
   /** Breakdown by who actually paid, so catch-up can say "→ Ava £20, → Ben £14". */
   payers: BacklogPayerGroup[]
+}
+
+/** An outstanding pot-level residual from an earlier part-move (issue #72):
+ *  amount = required − moved, so positive = still short, negative = a credit. */
+export interface BacklogResidual {
+  potId: string
+  ownerId: string
+  amount: number
 }
 
 export interface BacklogResult {
@@ -51,14 +63,18 @@ export interface BacklogResult {
 export function computeBacklog(input: {
   transactions: BacklogTxn[]
   pots: Array<{ id: string; name: string; ownerId: string }>
+  residuals?: BacklogResidual[]
 }): BacklogResult {
-  const { transactions, pots } = input
+  const { transactions, pots, residuals = [] } = input
   const potById = new Map(pots.map((p) => [p.id, p]))
 
   // Only spends that actually need a pot transfer.
   const pending = transactions.filter((t) => !t.reconciled && !t.settledAtSource)
 
-  const perPot = new Map<string, { total: number; count: number; payers: Map<string, BacklogPayerGroup> }>()
+  const perPot = new Map<
+    string,
+    { total: number; count: number; residual: number; payers: Map<string, BacklogPayerGroup> }
+  >()
   const unassigned: BacklogSpend[] = []
   const perMemberTotals = new Map<string, { total: number; count: number }>()
   let unassignedTotal = 0
@@ -80,14 +96,14 @@ export function computeBacklog(input: {
     } else {
       let group = perPot.get(txn.potId)
       if (!group) {
-        group = { total: 0, count: 0, payers: new Map() }
+        group = { total: 0, count: 0, residual: 0, payers: new Map() }
         perPot.set(txn.potId, group)
       }
       group.total += txn.amount
       group.count += 1
       let payer = group.payers.get(txn.ownerId)
       if (!payer) {
-        payer = { ownerId: txn.ownerId, total: 0, count: 0, spends: [] }
+        payer = { ownerId: txn.ownerId, total: 0, count: 0, residual: 0, spends: [] }
         group.payers.set(txn.ownerId, payer)
       }
       payer.total += txn.amount
@@ -104,10 +120,33 @@ export function computeBacklog(input: {
     }
   }
 
+  // Fold pot-level residuals in: they add to what still needs moving even when no
+  // fresh spends hit the pot this period, so a residual-only pot/payer still shows.
+  for (const r of residuals) {
+    if (r.amount === 0) continue
+    let group = perPot.get(r.potId)
+    if (!group) {
+      group = { total: 0, count: 0, residual: 0, payers: new Map() }
+      perPot.set(r.potId, group)
+    }
+    group.residual += r.amount
+    let payer = group.payers.get(r.ownerId)
+    if (!payer) {
+      payer = { ownerId: r.ownerId, total: 0, count: 0, residual: 0, spends: [] }
+      group.payers.set(r.ownerId, payer)
+    }
+    payer.residual += r.amount
+    grandTotal += r.amount
+  }
+
+  // What still needs moving for a group = spends + residual; sort and pull-back
+  // detection both key on that combined figure.
+  const owed = (g: { total: number; residual: number }) => g.total + g.residual
+
   const perPotGroups: BacklogPotGroup[] = []
   for (const [potId, stats] of perPot) {
     const pot = potById.get(potId)
-    const payers = [...stats.payers.values()].sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
+    const payers = [...stats.payers.values()].sort((a, b) => Math.abs(owed(b)) - Math.abs(owed(a)))
     for (const p of payers) p.spends.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
     perPotGroups.push({
       potId,
@@ -115,10 +154,11 @@ export function computeBacklog(input: {
       ownerId: pot?.ownerId ?? '',
       total: stats.total,
       count: stats.count,
+      residual: stats.residual,
       payers,
     })
   }
-  perPotGroups.sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
+  perPotGroups.sort((a, b) => Math.abs(owed(b)) - Math.abs(owed(a)))
 
   unassigned.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
 

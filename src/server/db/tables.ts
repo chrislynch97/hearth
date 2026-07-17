@@ -57,6 +57,7 @@ export const ALL_TABLES: ReadonlyArray<readonly [string, PgTable]> = [
 export const MONEY_FIELD_NAMES: ReadonlySet<string> = new Set([
   'amount',
   'totalAmount',
+  'movedAmount',
   'netPay',
   'newSalary',
   'bonus',

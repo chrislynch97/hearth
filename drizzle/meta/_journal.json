@@ -43,6 +43,13 @@
       "when": 1784145832166,
       "tag": "0005_session_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784321719080,
+      "tag": "0006_catchup_moved_amount",
+      "breakpoints": true
     }
   ]
 }
