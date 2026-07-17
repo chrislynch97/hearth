@@ -5,7 +5,7 @@ import { router, publicProcedure } from '../trpc/trpc'
 import { assertMember, scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
 import { recordAudit } from '../trpc/audit'
-import { spendTransaction, pot, category, reconciliationBatch } from '../db/schema'
+import { spendTransaction, pot, category, expense, reconciliationBatch } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { suggestPot } from '../spending/suggest'
 import type { DB } from '../db/client'
@@ -33,6 +33,18 @@ async function validateOwnerAndPot(
     if (!c) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'categoryId does not refer to an existing category' })
     }
+  }
+}
+
+async function validateExpense(
+  db: DB,
+  householdId: string,
+  expenseId: string | null | undefined,
+): Promise<void> {
+  if (!expenseId) return
+  const [e] = await db.select().from(expense).where(scopeWhere(householdId, expense.householdId, eq(expense.id, expenseId)))
+  if (!e) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'expenseId does not refer to an existing bill' })
   }
 }
 
@@ -94,6 +106,8 @@ export const spendsRouter = router({
         ownerId: z.string(),
         potId: z.string().nullable().optional(),
         categoryId: z.string().nullable().optional(),
+        // The bill this payment was for, when logged from an outgoing.
+        expenseId: z.string().nullable().optional(),
         // "Already came out / no transfer needed" — a pot auto-deduction (Monzo)
         // or a main-account spend. Keeps it off the catch-up backlog.
         settledAtSource: z.boolean().optional(),
@@ -102,6 +116,7 @@ export const spendsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await validateOwnerAndPot(ctx.db, ctx.householdId, input.ownerId, input.potId, input.categoryId)
+      await validateExpense(ctx.db, ctx.householdId, input.expenseId)
 
       const now = new Date()
       const id = newId()
@@ -117,6 +132,7 @@ export const spendsRouter = router({
           ownerId: input.ownerId,
           potId: input.potId ?? null,
           categoryId: input.categoryId ?? null,
+          expenseId: input.expenseId ?? null,
           settledAtSource: input.settledAtSource ? 1 : 0,
           reconciled: 0,
           source: 'manual',
@@ -140,6 +156,7 @@ export const spendsRouter = router({
         ownerId: z.string().optional(),
         potId: z.string().nullable().optional(),
         categoryId: z.string().nullable().optional(),
+        expenseId: z.string().nullable().optional(),
         settledAtSource: z.boolean().optional(),
         note: z.string().optional(),
       }),
@@ -163,6 +180,7 @@ export const spendsRouter = router({
         rest.potId !== undefined ? rest.potId : target.potId,
         rest.categoryId !== undefined ? rest.categoryId : target.categoryId,
       )
+      await validateExpense(ctx.db, ctx.householdId, rest.expenseId !== undefined ? rest.expenseId : target.expenseId)
 
       const [updated] = await ctx.db
         .update(spendTransaction)
@@ -313,6 +331,8 @@ export const spendsRouter = router({
           ownerId: part.ownerId,
           potId: part.potId ?? null,
           categoryId: part.categoryId ?? null,
+          // Splits inherit the bill link from the parent spend.
+          expenseId: original.expenseId,
           reconciled: 0,
           source: original.source,
           splitGroupId,
