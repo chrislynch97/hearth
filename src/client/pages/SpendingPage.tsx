@@ -190,11 +190,11 @@ function AddSpendForm({
 
   const potById = new Map(pots.map((p) => [p.id, p]))
 
-  function resetForm(keepOwner: string | null) {
+  function resetForm(keepOwner: string | null, keepDate: string | null) {
     setAmountMajor('')
     setKind('spend')
     setDescription('')
-    setDate(todayIso())
+    setDate(keepDate)
     setPotId(null)
     setPotManuallyChosen(false)
     setSettledAtSource(false)
@@ -284,7 +284,9 @@ function AddSpendForm({
         : `Logged ${formatMoney(Math.abs(inserted.amount), money)}${potName ? ` — take from ${potName}` : ' — needs a pot'}`,
     )
 
-    resetForm(ownerId)
+    // Carry the date across submits: consecutive entries are usually the same
+    // past day's receipts (see issue #65), just like the owner is carried.
+    resetForm(ownerId, date)
   }
 
   async function applyOutgoingUpdate() {
@@ -427,7 +429,7 @@ function AddSpendForm({
           <Button
             variant="default"
             onClick={() => {
-              resetForm(ownerId)
+              resetForm(ownerId, todayIso())
               setSuccessMessage('')
               setPendingUpdate(null)
             }}
