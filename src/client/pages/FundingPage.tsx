@@ -53,6 +53,7 @@ export function FundingPage() {
   const categoryById = new Map((categoriesQuery.data ?? []).map((c) => [c.id, c]))
 
   const hasAnything = plan ? plan.perPerson.length > 0 || plan.pots.length > 0 : false
+  const pooled = plan?.jointFundingModel === 'pooled'
 
   const potsByOwner = new Map<string, PotFunding[]>()
   if (plan) {
@@ -140,12 +141,55 @@ export function FundingPage() {
             ))}
           </Group>
 
-          <Card withBorder padding="md">
-            <Group justify="space-between">
-              <Text fw={600}>Joint pots total</Text>
-              <Text fw={600}>{formatMoney(plan.jointPotFundingTotal, money)}</Text>
-            </Group>
-          </Card>
+          {pooled ? (
+            <Card withBorder padding="md">
+              <Stack gap="sm">
+                <div>
+                  <Title order={4}>Joint pool</Title>
+                  <Text size="xs" c="dimmed">
+                    Everyone's contribution flows into joint, which covers the joint costs. The leftover is the surplus.
+                  </Text>
+                </div>
+                <Group justify="space-between" px="xs">
+                  <Text size="sm" c="dimmed">
+                    Total in
+                  </Text>
+                  <Text size="sm">
+                    {formatMoney(plan.jointPool.totalIn, money)}
+                    {unit}
+                  </Text>
+                </Group>
+                <Group justify="space-between" px="xs">
+                  <Text size="sm" c="dimmed">
+                    Joint costs
+                  </Text>
+                  <Text size="sm">
+                    {formatMoney(plan.jointPool.jointCosts, money)}
+                    {unit}
+                  </Text>
+                </Group>
+                <Group
+                  justify="space-between"
+                  px="xs"
+                  pt={4}
+                  style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}
+                >
+                  <Text fw={600}>Surplus</Text>
+                  <Text fw={600} c={plan.jointPool.surplus < 0 ? 'red' : undefined}>
+                    {formatMoney(plan.jointPool.surplus, money)}
+                    {unit}
+                  </Text>
+                </Group>
+              </Stack>
+            </Card>
+          ) : (
+            <Card withBorder padding="md">
+              <Group justify="space-between">
+                <Text fw={600}>Joint pots total</Text>
+                <Text fw={600}>{formatMoney(plan.jointPotFundingTotal, money)}</Text>
+              </Group>
+            </Card>
+          )}
 
           {plan.mainAccountFundingPerPeriod > 0 && (
             <Card withBorder padding="md">

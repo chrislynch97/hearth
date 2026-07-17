@@ -55,11 +55,25 @@ export interface PersonFunding {
   memberId: string
   displayName: string
   personalPotFunding: number
+  /** In 'split' mode: this person's share of the joint costs. In 'pooled' mode:
+   *  their whole leftover income (periodIncome − personalPotFunding) paid into
+   *  the joint pool. */
   jointContribution: number
   setAside: number
   /** Spendable income re-based onto the household's budget period. */
   periodIncome: number
+  /** Leftover after set-asides. Always 0 in 'pooled' mode (the leftover flows
+   *  into joint, so any surplus lives in {@link FundingPlan.jointPool}). */
   remainder: number
+}
+
+/** The joint pool under 'pooled' funding: everyone's contributions in, joint
+ *  costs out, and the surplus (or shortfall) that remains. Computed in both
+ *  modes but only surfaced for the pooled presentation. */
+export interface JointPool {
+  totalIn: number
+  jointCosts: number
+  surplus: number
 }
 
 /** Emergency-fund target = monthly essential bills × months, per account and total. */
@@ -79,6 +93,11 @@ export interface FundingPlan {
   mainAccountFundingPerPeriod: number
   mainAccountByCategory: Array<{ categoryId: string | null; fundingPerPeriod: number }>
   emergencyFund: EmergencyFund
+  jointFundingModel: 'split' | 'pooled'
+  jointPool: JointPool
+  /** Couple surplus: Σ(income − personal set-asides) − joint costs. Identical
+   *  in both funding models (only the per-person framing differs). */
+  coupleSurplus: number
 }
 
 export function computeFundingPlan(input: {
@@ -87,6 +106,10 @@ export function computeFundingPlan(input: {
   setAsides: FundingSetAsideInput[]
   members: FundingMemberInput[]
   jointContributionBasis: 'equal' | 'income_proportional' | 'custom'
+  /** How joint costs are funded (issue #87). 'split' divides them per person by
+   *  {@link jointContributionBasis}; 'pooled' has each person contribute their
+   *  whole remainder into a joint pool. Defaults to 'split'. */
+  jointFundingModel?: 'split' | 'pooled'
   /** The household's budget-period frequency; all funding figures are normalised
    *  to one period of this length. Defaults to 'monthly' (unchanged behaviour). */
   frequency?: PeriodFrequency
@@ -94,6 +117,7 @@ export function computeFundingPlan(input: {
   emergencyFundMonths?: number
 }): FundingPlan {
   const { pots, bills, setAsides, members, jointContributionBasis } = input
+  const jointFundingModel = input.jointFundingModel ?? 'split'
   const frequency = input.frequency ?? 'monthly'
   const emergencyFundMonths = input.emergencyFundMonths ?? 3
 
@@ -175,14 +199,19 @@ export function computeFundingPlan(input: {
     weights = persons.map(() => 1) // 'equal'
   }
 
-  const jointShares = persons.length > 0 ? allocate(jointSplitBase, weights) : []
+  // Only 'split' divides the joint base by weights; 'pooled' derives each
+  // person's contribution from their own leftover income instead.
+  const jointShares = jointFundingModel === 'split' && persons.length > 0 ? allocate(jointSplitBase, weights) : []
 
   const perPerson: PersonFunding[] = persons.map((person, i) => {
     const personalPotFunding = personalPotFundingByMemberId.get(person.id) ?? 0
-    const jointContribution = jointShares[i] ?? 0
-    const setAside = personalPotFunding + jointContribution
     // Set-aside is a per-period figure, so compare against per-period income.
     const periodIncome = roundMinor(monthlyToPeriod(person.monthlyIncome, frequency))
+    // Pooled: the whole leftover income flows into joint, so nothing personal
+    // remains (any surplus is the pool's). Split: take the assigned joint share.
+    const jointContribution =
+      jointFundingModel === 'pooled' ? periodIncome - personalPotFunding : jointShares[i] ?? 0
+    const setAside = personalPotFunding + jointContribution
     return {
       memberId: person.id,
       displayName: person.displayName,
@@ -190,7 +219,7 @@ export function computeFundingPlan(input: {
       jointContribution,
       setAside,
       periodIncome,
-      remainder: periodIncome - setAside,
+      remainder: jointFundingModel === 'pooled' ? 0 : periodIncome - setAside,
     }
   })
 
@@ -222,6 +251,18 @@ export function computeFundingPlan(input: {
     perOwner: emergencyPerOwner,
   }
 
+  // Couple surplus = Σ(income − personal set-asides) − joint costs. Model-agnostic:
+  // in 'split' it equals Σ remainder; in 'pooled' it equals the pool surplus.
+  const coupleSurplus = roundMinor(
+    perPerson.reduce((acc, p) => acc + p.periodIncome - p.personalPotFunding, 0) - jointSplitBase,
+  )
+  const jointPoolIn = roundMinor(perPerson.reduce((acc, p) => acc + p.jointContribution, 0))
+  const jointPool: JointPool = {
+    totalIn: jointPoolIn,
+    jointCosts: roundMinor(jointSplitBase),
+    surplus: roundMinor(jointPoolIn - jointSplitBase),
+  }
+
   return {
     pots: potFundings,
     perPerson,
@@ -230,5 +271,8 @@ export function computeFundingPlan(input: {
     mainAccountFundingPerPeriod,
     mainAccountByCategory,
     emergencyFund,
+    jointFundingModel,
+    jointPool,
+    coupleSurplus,
   }
 }

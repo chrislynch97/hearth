@@ -100,15 +100,29 @@ function BacklogHeadline({
 // C — This-period snapshot
 // ---------------------------------------------------------------------------
 
+interface SnapshotPerson {
+  memberId: string
+  displayName: string
+  periodIncome: number
+  personalPotFunding: number
+  jointContribution: number
+  setAside: number
+  remainder: number
+}
+
 function SnapshotSection({
   perPerson,
   jointPotFundingTotal,
   coupleSurplus,
+  jointFundingModel,
+  jointPool,
   money,
 }: {
-  perPerson: Array<{ memberId: string; displayName: string; periodIncome: number; setAside: number; remainder: number }>
+  perPerson: SnapshotPerson[]
   jointPotFundingTotal: number
   coupleSurplus: number
+  jointFundingModel: 'split' | 'pooled'
+  jointPool: { totalIn: number; jointCosts: number; surplus: number }
   money: MoneyFormat
 }) {
   if (perPerson.length === 0) {
@@ -118,6 +132,7 @@ function SnapshotSection({
       </Text>
     )
   }
+  const pooled = jointFundingModel === 'pooled'
   return (
     <Stack gap="sm">
       <SimpleGrid cols={{ base: 1, xs: perPerson.length > 1 ? 2 : 1 }} spacing="sm">
@@ -132,31 +147,80 @@ function SnapshotSection({
               </Text>
               <Text size="sm">{formatMoney(p.periodIncome, money)}</Text>
             </Group>
-            <Group justify="space-between">
-              <Text size="sm" c="dimmed">
-                Set aside
-              </Text>
-              <Text size="sm">{formatMoney(p.setAside, money)}</Text>
-            </Group>
-            <Group justify="space-between">
-              <Text size="sm" fw={700} c={p.remainder < 0 ? 'red' : undefined}>
-                Remainder
-              </Text>
-              <Text size="sm" fw={700} c={p.remainder < 0 ? 'red' : undefined}>
-                {formatMoney(p.remainder, money)}
-              </Text>
-            </Group>
+            {pooled ? (
+              <>
+                <Group justify="space-between">
+                  <Text size="sm" c="dimmed">
+                    Personal set aside
+                  </Text>
+                  <Text size="sm">{formatMoney(p.personalPotFunding, money)}</Text>
+                </Group>
+                <Group justify="space-between">
+                  <Text size="sm" fw={700}>
+                    Into joint
+                  </Text>
+                  <Text size="sm" fw={700}>
+                    {formatMoney(p.jointContribution, money)}
+                  </Text>
+                </Group>
+              </>
+            ) : (
+              <>
+                <Group justify="space-between">
+                  <Text size="sm" c="dimmed">
+                    Set aside
+                  </Text>
+                  <Text size="sm">{formatMoney(p.setAside, money)}</Text>
+                </Group>
+                <Group justify="space-between">
+                  <Text size="sm" fw={700} c={p.remainder < 0 ? 'red' : undefined}>
+                    Remainder
+                  </Text>
+                  <Text size="sm" fw={700} c={p.remainder < 0 ? 'red' : undefined}>
+                    {formatMoney(p.remainder, money)}
+                  </Text>
+                </Group>
+              </>
+            )}
           </Card>
         ))}
       </SimpleGrid>
-      <Group justify="space-between" px="xs">
-        <Text size="sm" c="dimmed">
-          Joint pots total {formatMoney(jointPotFundingTotal, money)}
-        </Text>
-        <Text size="sm" fw={700} c={coupleSurplus < 0 ? 'red' : hearthTokens.semantic.positive}>
-          Couple surplus {formatMoney(coupleSurplus, money)}
-        </Text>
-      </Group>
+      {pooled ? (
+        <Card withBorder padding="md" radius="md">
+          <Text size="xs" fw={700} tt="uppercase" c="dimmed" ff="monospace" lts="0.05em" mb={6}>
+            Joint pool
+          </Text>
+          <Group justify="space-between">
+            <Text size="sm" c="dimmed">
+              Total in
+            </Text>
+            <Text size="sm">{formatMoney(jointPool.totalIn, money)}</Text>
+          </Group>
+          <Group justify="space-between">
+            <Text size="sm" c="dimmed">
+              Joint costs
+            </Text>
+            <Text size="sm">{formatMoney(jointPool.jointCosts, money)}</Text>
+          </Group>
+          <Group justify="space-between">
+            <Text size="sm" fw={700} c={jointPool.surplus < 0 ? 'red' : hearthTokens.semantic.positive}>
+              Surplus
+            </Text>
+            <Text size="sm" fw={700} c={jointPool.surplus < 0 ? 'red' : hearthTokens.semantic.positive}>
+              {formatMoney(jointPool.surplus, money)}
+            </Text>
+          </Group>
+        </Card>
+      ) : (
+        <Group justify="space-between" px="xs">
+          <Text size="sm" c="dimmed">
+            Joint pots total {formatMoney(jointPotFundingTotal, money)}
+          </Text>
+          <Text size="sm" fw={700} c={coupleSurplus < 0 ? 'red' : hearthTokens.semantic.positive}>
+            Couple surplus {formatMoney(coupleSurplus, money)}
+          </Text>
+        </Group>
+      )}
     </Stack>
   )
 }
@@ -512,6 +576,8 @@ export function HomePage() {
             perPerson={summary.funding.perPerson}
             jointPotFundingTotal={summary.funding.jointPotFundingTotal}
             coupleSurplus={summary.coupleSurplus}
+            jointFundingModel={summary.funding.jointFundingModel}
+            jointPool={summary.funding.jointPool}
             money={money}
           />
           {accountsSummary.data && <NetWorthTile data={accountsSummary.data} money={money} />}

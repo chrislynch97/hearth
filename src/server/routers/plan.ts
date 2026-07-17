@@ -40,6 +40,7 @@ export const planRouter = router({
       | 'equal'
       | 'income_proportional'
       | 'custom'
+    const jointFundingModel = (householdRow?.jointFundingModel ?? 'split') as 'split' | 'pooled'
 
     const setAsides = await ctx.db
       .select()
@@ -74,6 +75,7 @@ export const planRouter = router({
         monthlyIncome: incomeByMember.get(m.id)?.monthlyIncome ?? 0,
       })),
       jointContributionBasis,
+      jointFundingModel,
       frequency: periodConfig(householdRow ?? 1).frequency,
       emergencyFundMonths: householdRow?.emergencyFundMonths ?? 3,
     })

@@ -381,4 +381,80 @@ describe('computeFundingPlan', () => {
     expect(plan.perPerson).toEqual([])
     expect(plan.jointPotFundingTotal).toBe(5000)
   })
+
+  it('defaults to the split model and exposes a couple surplus matching Σ remainder', () => {
+    const members = [
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 300000 },
+      { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: null, monthlyIncome: 150000 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
+    ]
+    const pots = [{ id: 'joint-pot', name: 'Joint', ownerId: 'joint' }]
+    const bills = [{ recurrence: 'monthly' as const, active: true, funding: 'pot_manual' as const, potId: 'joint-pot', categoryId: null, amount: 100000 }]
+
+    const plan = computeFundingPlan({ pots, bills, setAsides: [], members, jointContributionBasis: 'equal' })
+    expect(plan.jointFundingModel).toBe('split')
+    const sumRemainder = plan.perPerson.reduce((a, p) => a + p.remainder, 0)
+    expect(plan.coupleSurplus).toBe(sumRemainder)
+    // 300000 + 150000 income − 100000 joint costs = 350000.
+    expect(plan.coupleSurplus).toBe(350000)
+  })
+
+  it('pooled model: each person contributes their whole remainder into the joint pool', () => {
+    const members = [
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 300000 },
+      { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: null, monthlyIncome: 150000 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
+    ]
+    const pots = [
+      { id: 'alice-pot', name: 'Alice Personal', ownerId: 'alice' },
+      { id: 'joint-pot', name: 'Joint', ownerId: 'joint' },
+    ]
+    const bills = [
+      { recurrence: 'monthly' as const, active: true, funding: 'pot_manual' as const, potId: 'alice-pot', categoryId: null, amount: 40000 },
+      { recurrence: 'monthly' as const, active: true, funding: 'pot_manual' as const, potId: 'joint-pot', categoryId: null, amount: 100000 },
+    ]
+
+    const plan = computeFundingPlan({ pots, bills, setAsides: [], members, jointContributionBasis: 'equal', jointFundingModel: 'pooled' })
+    const alice = plan.perPerson.find((p) => p.memberId === 'alice')!
+    const bob = plan.perPerson.find((p) => p.memberId === 'bob')!
+
+    // Alice: 300000 income − 40000 personal = 260000 into joint; Bob: 150000 − 0.
+    expect(alice.jointContribution).toBe(260000)
+    expect(alice.setAside).toBe(alice.periodIncome)
+    expect(alice.remainder).toBe(0)
+    expect(bob.jointContribution).toBe(150000)
+    expect(bob.remainder).toBe(0)
+
+    // Pool: 410000 in − 100000 joint costs = 310000 surplus.
+    expect(plan.jointPool.totalIn).toBe(410000)
+    expect(plan.jointPool.jointCosts).toBe(100000)
+    expect(plan.jointPool.surplus).toBe(310000)
+  })
+
+  it('couple surplus is identical under split and pooled for the same inputs', () => {
+    const members = [
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 300000 },
+      { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: null, monthlyIncome: 90000 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
+    ]
+    const pots = [
+      { id: 'bob-pot', name: 'Bob Personal', ownerId: 'bob' },
+      { id: 'joint-pot', name: 'Joint', ownerId: 'joint' },
+    ]
+    // A joint cost big enough that an equal split would push Bob's remainder negative.
+    const bills = [
+      { recurrence: 'monthly' as const, active: true, funding: 'pot_manual' as const, potId: 'bob-pot', categoryId: null, amount: 20000 },
+      { recurrence: 'monthly' as const, active: true, funding: 'pot_manual' as const, potId: 'joint-pot', categoryId: null, amount: 200000 },
+    ]
+
+    const split = computeFundingPlan({ pots, bills, setAsides: [], members, jointContributionBasis: 'equal', jointFundingModel: 'split' })
+    const pooled = computeFundingPlan({ pots, bills, setAsides: [], members, jointContributionBasis: 'equal', jointFundingModel: 'pooled' })
+
+    // Split pushes Bob negative; pooled never does (his figure is his contribution).
+    expect(split.perPerson.find((p) => p.memberId === 'bob')!.remainder).toBeLessThan(0)
+    expect(pooled.perPerson.every((p) => p.remainder === 0)).toBe(true)
+    // But the aggregate is the same either way.
+    expect(pooled.coupleSurplus).toBe(split.coupleSurplus)
+    expect(pooled.jointPool.surplus).toBe(pooled.coupleSurplus)
+  })
 })

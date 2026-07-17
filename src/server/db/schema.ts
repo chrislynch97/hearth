@@ -79,6 +79,11 @@ export const household = pgTable('household', {
   setupCompletedAt: timestamp('setup_completed_at', { withTimezone: true, mode: 'date' }),
   incomeBasisDefault: text('income_basis_default').notNull().default('regular_net'),
   jointContributionBasis: text('joint_contribution_basis').notNull().default('equal'),
+  // How joint costs are funded (issue #87). 'split' = joint costs divided per
+  // person by jointContributionBasis (the deficit-prone default); 'pooled' =
+  // each person contributes their whole remainder into joint, which then covers
+  // the joint costs. 'split' by default to preserve existing behaviour.
+  jointFundingModel: text('joint_funding_model').notNull().default('split'), // 'split' | 'pooled'
   // Emergency fund target = this many months of essential bills (spec: 3 months rule of thumb).
   emergencyFundMonths: integer('emergency_fund_months').notNull().default(3),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
