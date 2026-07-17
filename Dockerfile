@@ -5,8 +5,16 @@ FROM node:24-slim AS build
 WORKDIR /app
 
 # Reproducible install from the committed lockfile. `npm ci` is strict, so keep
-# package-lock.json in sync (it is — cross-arch drift shows up as EUSAGE; resolve
-# the lockfile rather than dropping to `npm install`).
+# package-lock.json in sync (it is — cross-arch drift shows up as EUSAGE).
+#
+# Note on the @emnapi/* pins in package.json's devDependencies: they exist solely
+# to keep this build working. @rolldown/binding-wasm32-wasi (a dev-only, optional
+# dep of Vite) pins @emnapi/core nested inside itself, while @napi-rs/wasm-runtime
+# peer-requires it at a looser range. Resolving on Windows omits the top-level
+# entry; Linux needs it, so `npm ci` here fails with
+# "Missing: @emnapi/core@… from lock file". Re-resolving the lockfile does NOT
+# fix it — an `npm install` on Windows strips the entry again. Declaring the
+# packages directly makes the resolution deterministic on both platforms.
 COPY package*.json ./
 RUN npm ci --no-audit --no-fund
 

@@ -1,0 +1,79 @@
+# Hearth against a REAL Postgres server, rather than the embedded PGlite default
+# in docker-compose.yml. Both the database and the app run as containers here, so
+# this is still a single-command self-host — it just uses a full Postgres engine,
+# which is the right shape for a long-lived instance you leave running.
+#
+# Set POSTGRES_PASSWORD in a .env file next to this one (compose reads it
+# automatically). It's only reachable from the app container, but it's still a
+# credential — generate a random one and don't reuse it:
+#
+#   POSTGRES_PASSWORD=<random>
+#   # optional, defaults below:
+#   HEARTH_PORT=9787
+#
+#   docker compose -f docker-compose.postgres.yml up -d --build   # → http://localhost:9787
+#   docker compose -f docker-compose.postgres.yml down            # stop
+#   docker compose -f docker-compose.postgres.yml logs -f         # follow logs
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      - POSTGRES_USER=hearth
+      - POSTGRES_DB=hearth
+      # No default and no `-` fallback: compose refuses to start rather than
+      # silently bringing up a database with a guessable password.
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    # A named volume, not a bind mount: Postgres' data directory wants POSIX
+    # ownership semantics that a Windows/macOS bind mount doesn't reproduce.
+    # Mounted at /var/lib/postgresql, NOT .../data: the 18+ images store data in a
+    # major-version-specific subdirectory so `pg_upgrade --link` can run without
+    # tripping over a mount-point boundary. Mounting .../data directly makes the
+    # image refuse to start. See docker-library/postgres#1259.
+    volumes:
+      - hearth-pgdata:/var/lib/postgresql
+    # No `ports:` — the database is reachable only from the app container on the
+    # compose network. Nothing on the LAN can connect to it.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hearth -d hearth"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    init: true
+    restart: unless-stopped
+
+  hearth:
+    build: .
+    ports:
+      # Host port is configurable so this can run alongside a dev server on 8787.
+      # Container-side stays 8787 (the app's own default).
+      - "${HEARTH_PORT:-9787}:8787"
+    volumes:
+      # Backups only — the database itself lives in the `db` service's volume.
+      - ./data:/data
+    environment:
+      - PORT=8787
+      # `db` is the service name above, resolved on the compose network.
+      - DATABASE_URL=postgres://hearth:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/hearth
+      - CLIENT_DIR=/app/dist/client
+      # On a postgres:// URL the backup runner defaults to ./data/backups relative
+      # to the container's /app — i.e. inside the container, gone on every rebuild.
+      # Point it at the mounted volume so snapshots survive on the host.
+      - HEARTH_BACKUP_LOCAL_DIR=/data/backups
+      # Password-less on a trusted home LAN: launch with the env var set, e.g.
+      #   HEARTH_ALLOW_OPEN=1 docker compose -f docker-compose.postgres.yml up -d
+      # Left unset it defaults to 0 (safe): an open instance on a network address
+      # refuses to serve data until you set an owner password. Do NOT set it to 1
+      # on an internet-exposed host — anyone who can reach it gets owner access.
+      - HEARTH_ALLOW_OPEN=${HEARTH_ALLOW_OPEN:-0}
+    # Wait for Postgres to accept connections before booting: the app runs
+    # migrations on startup and would otherwise crash-loop until the db is up.
+    depends_on:
+      db:
+        condition: service_healthy
+    # Proper PID 1 (tini) so SIGTERM reaches node for a clean shutdown.
+    init: true
+    restart: unless-stopped
+
+volumes:
+  hearth-pgdata:
