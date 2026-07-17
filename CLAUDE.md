@@ -1,5 +1,16 @@
 # Hearth — notes for Claude
 
+## Working from a GitHub issue link
+
+When I send a GitHub issue link, follow this workflow:
+
+1. Create a git worktree + branch for it, named to match the issue: the issue
+   number followed by a short kebab-case slug of the title (e.g. issue #65
+   "keep the selected date…" ⇒ `65-keep-spend-date`).
+2. Do the work on that branch.
+3. Open a PR into `main` for me to review — reference the issue in the PR body
+   (e.g. `Closes #65`).
+
 ## Running / testing the app: use DEMO MODE, never real data
 
 This is a real household's live budgeting app. The database is **Postgres**
