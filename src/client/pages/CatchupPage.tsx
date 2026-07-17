@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { ActionIcon, Alert, Badge, Button, Card, Center, Divider, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { ActionIcon, Alert, Badge, Button, Card, Center, Divider, Group, Loader, NumberInput, Stack, Text, Title } from '@mantine/core'
 import { Link } from 'react-router-dom'
 import { trpc } from '../trpc'
 import type { Member } from '../../server/db/schema'
-import { formatMoney } from '../../shared/money'
+import { formatMoney, fromMinor, toMinor } from '../../shared/money'
 import { useMoney, useFormatDate, type MoneyFormat } from '../useMoney'
 
 interface BacklogSpend {
@@ -17,6 +17,7 @@ interface BacklogPayer {
   ownerId: string
   total: number
   count: number
+  residual: number
   spends: BacklogSpend[]
 }
 interface BacklogPot {
@@ -25,6 +26,7 @@ interface BacklogPot {
   ownerId: string
   total: number
   count: number
+  residual: number
   payers: BacklogPayer[]
 }
 
@@ -46,23 +48,70 @@ function PayerRow({
   const utils = trpc.useUtils()
   const fmtDate = useFormatDate()
   const markMoved = trpc.reconcile.markPotMoved.useMutation()
+  const clearResidual = trpc.reconcile.clearResidual.useMutation()
   const [open, setOpen] = useState(false)
+
+  // What still needs moving = spends + any residual carried from earlier part-moves.
+  const required = payer.total + payer.residual
+  const direction = required < 0 ? -1 : 1
+  const hasSpends = payer.count > 0
+  // The field holds the magnitude actually moved; sign comes from `direction`.
+  const [moved, setMoved] = useState<number | string>(fromMinor(Math.abs(required), money.decimalPlaces))
 
   const payerMember = members.find((m) => m.id === payer.ownerId)
   const isJoint = payerMember?.kind === 'joint'
-  const isPullBack = payer.total < 0
+  const isPullBack = required < 0
 
-  async function handleMarkMoved() {
-    await markMoved.mutateAsync({ potId, ownerId: payer.ownerId })
-    await Promise.all([
+  const invalidate = () =>
+    Promise.all([
       utils.reconcile.backlog.invalidate(),
       utils.reconcile.batches.invalidate(),
       utils.spends.list.invalidate(),
     ])
+
+  const handleMove = async () => {
+    const magnitude = moved === '' ? 0 : toMinor(Number(moved), money.decimalPlaces)
+    await markMoved.mutateAsync({ potId, ownerId: payer.ownerId, movedAmount: direction * magnitude })
+    await invalidate()
+  }
+
+  const handleClear = async () => {
+    await clearResidual.mutateAsync({ potId, ownerId: payer.ownerId })
+    await invalidate()
   }
 
   // "→ Ava" means the money should come back to Ava; joint = it stays in the joint account.
   const arrow = isJoint ? 'stays with Joint' : `→ ${payerMember?.displayName ?? 'someone'}`
+  const movedMinor = moved === '' ? 0 : toMinor(Number(moved), money.decimalPlaces)
+  const overshoot = hasSpends && movedMinor > Math.abs(required)
+  const error = markMoved.error ?? clearResidual.error
+
+  // Residual-only row: no fresh spends, just a shortfall/credit carried over. There
+  // are no spends to reconcile, so the only action is to write it off.
+  if (!hasSpends) {
+    const short = payer.residual > 0
+    return (
+      <Stack gap={4}>
+        <Group justify="space-between" wrap="nowrap">
+          <Text size="sm" fw={500}>
+            {formatMoney(Math.abs(payer.residual), money)} {short ? 'short' : 'credit'} {arrow}
+            <Text span size="xs" c="dimmed">
+              {' '}
+              · carried over
+            </Text>
+          </Text>
+          <Button size="xs" variant="default" onClick={() => void handleClear()} loading={clearResidual.isPending}>
+            Clear
+          </Button>
+        </Group>
+        {error && (
+          <Alert color="red" title="Error">
+            {error.message}
+          </Alert>
+        )}
+      </Stack>
+    )
+  }
 
   return (
     <Stack gap={4}>
@@ -73,16 +122,39 @@ function PayerRow({
           </ActionIcon>
           <Text size="sm" fw={500}>
             {isPullBack ? 'Pull back ' : ''}
-            {formatMoney(Math.abs(payer.total), money)} {arrow}
+            {formatMoney(Math.abs(required), money)} {arrow}
           </Text>
           <Text size="xs" c="dimmed">
             {payer.count} spend{payer.count === 1 ? '' : 's'}
+            {payer.residual !== 0 &&
+              ` · incl. ${formatMoney(Math.abs(payer.residual), money)} ${payer.residual > 0 ? 'carried over' : 'credit'}`}
           </Text>
         </Group>
-        <Button size="xs" variant="light" onClick={() => void handleMarkMoved()} loading={markMoved.isPending}>
-          Mark moved
-        </Button>
+        <Group gap={6} wrap="nowrap">
+          <NumberInput
+            aria-label="Amount moved"
+            prefix={money.symbol}
+            decimalScale={money.decimalPlaces}
+            fixedDecimalScale
+            min={0}
+            value={moved}
+            onChange={setMoved}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void handleMove()
+            }}
+            w={110}
+            size="xs"
+          />
+          <Button size="xs" variant="light" onClick={() => void handleMove()} loading={markMoved.isPending}>
+            Move
+          </Button>
+        </Group>
       </Group>
+      {overshoot && (
+        <Text size="xs" c="dimmed" pl={30}>
+          More than needed — the extra {formatMoney(movedMinor - Math.abs(required), money)} becomes a credit next time.
+        </Text>
+      )}
       {open && (
         <Stack gap={2} pl={30} pb={4}>
           {payer.spends.map((s) => (
@@ -97,9 +169,9 @@ function PayerRow({
           ))}
         </Stack>
       )}
-      {markMoved.error && (
+      {error && (
         <Alert color="red" title="Error">
-          {markMoved.error.message}
+          {error.message}
         </Alert>
       )}
     </Stack>
@@ -112,14 +184,15 @@ function PayerRow({
 
 function PotBacklogRow({ pot, members, money }: { pot: BacklogPot; members: Member[]; money: MoneyFormat }) {
   const owner = members.find((m) => m.id === pot.ownerId)
-  const isPullBack = pot.total < 0
+  const owed = pot.total + pot.residual
+  const isPullBack = owed < 0
 
   return (
     <Card withBorder padding="sm">
       <Stack gap="xs">
         <Group gap="xs" wrap="wrap">
           <Text fw={600}>
-            {isPullBack ? 'Pull' : 'Transfer'} {formatMoney(Math.abs(pot.total), money)}{' '}
+            {isPullBack ? 'Pull' : 'Transfer'} {formatMoney(Math.abs(owed), money)}{' '}
             {isPullBack ? 'into' : 'out of'} {pot.potName}
           </Text>
           {owner && (
@@ -185,6 +258,10 @@ function HistorySection({ money }: { money: MoneyFormat }) {
           {batches.map((b) => {
             const potName = b.potId ? potById.get(b.potId)?.name ?? 'Unknown pot' : 'Mixed'
             const isReversed = b.reversedAt !== null
+            const isWriteOff = b.transactionCount === 0
+            // A part-move records what actually left the account alongside what was
+            // required; the gap is the residual it created or cleared.
+            const partial = !isWriteOff && b.movedAmount !== null && b.movedAmount !== b.totalAmount
             return (
               <Group
                 key={b.id}
@@ -207,12 +284,22 @@ function HistorySection({ money }: { money: MoneyFormat }) {
                   >
                     {potName}
                   </Text>
-                  <Text size="sm" c="dimmed" td={isReversed ? 'line-through' : undefined}>
-                    {formatMoney(Math.abs(b.totalAmount), money)}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {b.transactionCount} txn{b.transactionCount === 1 ? '' : 's'}
-                  </Text>
+                  {isWriteOff ? (
+                    <Text size="sm" c="dimmed" td={isReversed ? 'line-through' : undefined}>
+                      wrote off {formatMoney(Math.abs(b.movedAmount ?? 0), money)}
+                    </Text>
+                  ) : (
+                    <Text size="sm" c="dimmed" td={isReversed ? 'line-through' : undefined}>
+                      {partial
+                        ? `moved ${formatMoney(Math.abs(b.movedAmount!), money)} of ${formatMoney(Math.abs(b.totalAmount), money)}`
+                        : formatMoney(Math.abs(b.totalAmount), money)}
+                    </Text>
+                  )}
+                  {!isWriteOff && (
+                    <Text size="xs" c="dimmed">
+                      {b.transactionCount} txn{b.transactionCount === 1 ? '' : 's'}
+                    </Text>
+                  )}
                   {isReversed && (
                     <Badge size="sm" color="sand" variant="light">
                       Reversed

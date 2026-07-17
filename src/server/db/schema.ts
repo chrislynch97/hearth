@@ -337,7 +337,15 @@ export const reconciliationBatch = pgTable('reconciliation_batch', {
   householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   potId: text('pot_id').references(() => pot.id), // null = mixed/multi-pot
   ownerId: text('owner_id').references(() => member.id), // the payer this batch settled; null = whole-pot / legacy
+  // What the reconciled spends *required* moving (the sum of their amounts).
   totalAmount: integer('total_amount').notNull(),
+  // What actually left the account. Null = "moved in full" — the legacy default
+  // and today's one-click behaviour. When it differs from totalAmount the gap is
+  // a pot-level residual (totalAmount − movedAmount): positive = short, negative
+  // = a credit that reduces what's needed next time. See issue #72. A write-off
+  // batch (transactionCount 0) carries the residual being cleared here, so its
+  // 0 − movedAmount contribution cancels the outstanding residual.
+  movedAmount: integer('moved_amount'),
   transactionCount: integer('transaction_count').notNull(),
   reversedAt: timestamp('reversed_at', { withTimezone: true, mode: 'date' }),
   note: text('note'),
