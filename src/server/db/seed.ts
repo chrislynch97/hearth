@@ -4,6 +4,7 @@ import { household, member, membership, user } from './schema'
 import { getInstanceSettings, setAuthRequired, setInstanceOwnerId } from './instanceSettings'
 import { DEFAULT_HOUSEHOLD_ID } from '../trpc/tenant'
 import { newId } from '../../shared/ids'
+import { SEEDED_OWNER_DISPLAY_NAME, SEEDED_OWNER_USERNAME } from '../../shared/setup'
 
 const HOUSEHOLD_ID = DEFAULT_HOUSEHOLD_ID
 
@@ -71,13 +72,14 @@ export async function ensureSeed(database: DB): Promise<void> {
       .from(membership)
       .where(eq(membership.householdId, HOUSEHOLD_ID))
     if (owners.length === 0) {
-      const [hh] = await tx.select().from(household).where(eq(household.id, HOUSEHOLD_ID))
       const userId = newId()
       await tx.insert(user).values({
         id: userId,
-        username: 'owner',
+        username: SEEDED_OWNER_USERNAME,
         email: null,
-        displayName: hh?.displayName || 'Owner',
+        // A placeholder until the wizard's You step asks who you are — naming the
+        // account after the household made the first person "My Household" (#61).
+        displayName: SEEDED_OWNER_DISPLAY_NAME,
         passwordHash: null,
         createdAt: now,
         updatedAt: now,
