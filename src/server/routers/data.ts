@@ -3,7 +3,7 @@ import { and, count, eq } from 'drizzle-orm'
 import type { PgTable } from 'drizzle-orm/pg-core'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
-import { assertInstanceOwner } from '../auth/session'
+import { assertInstanceOwner, reconcileInstanceOwner } from '../auth/session'
 import { assertRole } from '../trpc/tenant'
 import { household } from '../db/schema'
 import { describeDatabase } from '../db/client'
@@ -50,7 +50,13 @@ export const dataRouter = router({
       }
 
       // Atomic delete-all + insert-all in a single batch (see makeTestDb note).
-      return applySnapshot(ctx.db, input.tables)
+      const result = await applySnapshot(ctx.db, input.tables)
+      // The snapshot replaced the user table but not `instance_settings` (which
+      // isn't exported), so the pre-import owner id + lock flag can now be stale —
+      // importing an open snapshot into a locked instance would otherwise strand
+      // the owner behind a password that no longer exists (issue #63).
+      await reconcileInstanceOwner(ctx.db)
+      return result
     }),
 
   /** Wipe everything and re-seed a blank household (returns to the setup wizard). */
