@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { desc, eq, isNull } from 'drizzle-orm'
+import { desc, eq, isNull, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertMember, scopeWhere } from '../trpc/tenant'
@@ -72,6 +72,18 @@ export const spendsRouter = router({
         .orderBy(desc(spendTransaction.date), desc(spendTransaction.createdAt))
       return input?.limit !== undefined ? base.limit(input.limit) : base
     }),
+
+  /** Latest recorded spend date per owner, across all sources (manual + import).
+   *  Answers "how far is each person covered to?" without scanning the register.
+   *  Members with no spends won't appear here — the client fills those in as
+   *  "none yet" by joining against the member list. */
+  lastByOwner: publicProcedure.query(async ({ ctx }) => {
+    return ctx.db
+      .select({ ownerId: spendTransaction.ownerId, lastDate: max(spendTransaction.date) })
+      .from(spendTransaction)
+      .where(scopeWhere(ctx.householdId, spendTransaction.householdId))
+      .groupBy(spendTransaction.ownerId)
+  }),
 
   add: publicProcedure
     .input(
