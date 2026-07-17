@@ -5,5 +5,10 @@ data
 .DS_Store
 .idea/
 
+# Local secrets. docker-compose.postgres.yml reads POSTGRES_PASSWORD from here.
+.env
+.env.*
+!.env.example
+
 # Playwright MCP scratch output
 .playwright-mcp/
