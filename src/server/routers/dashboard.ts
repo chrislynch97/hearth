@@ -70,6 +70,7 @@ export const dashboardRouter = router({
         | 'equal'
         | 'income_proportional'
         | 'custom'
+      const jointFundingModel = (householdRow?.jointFundingModel ?? 'split') as 'split' | 'pooled'
       const cfg = periodConfig(householdRow ?? 1)
       const period = periodForDate(input?.periodStart ?? today, cfg)
 
@@ -98,6 +99,7 @@ export const dashboardRouter = router({
           monthlyIncome: incomeByMember.get(m.id)?.monthlyIncome ?? 0,
         })),
         jointContributionBasis: jointBasis,
+        jointFundingModel,
         frequency: cfg.frequency,
       })
 
@@ -173,7 +175,9 @@ export const dashboardRouter = router({
       // per-period allocation and surplus figures below.
       const householdMonthly = [...incomeByMember.values()].reduce((acc, i) => acc + i.monthlyIncome, 0)
       const householdPeriodIncome = roundMinor(monthlyToPeriod(householdMonthly, cfg.frequency))
-      const coupleSurplus = funding.perPerson.reduce((acc, p) => acc + p.remainder, 0)
+      // Model-agnostic; in 'pooled' mode per-person remainders are 0, so the
+      // surplus lives on the plan instead of summing remainders here.
+      const coupleSurplus = funding.coupleSurplus
 
       return {
         period,

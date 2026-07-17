@@ -72,6 +72,7 @@ interface GeneralForm {
   periodFrequency: string
   periodAnchor: string
   jointBasis: string
+  jointFundingModel: string
   incomeBasis: string
   decimalPlaces: number | string
   symbolPosition: string
@@ -90,6 +91,7 @@ function generalFormFrom(hh: Household): GeneralForm {
     periodFrequency: hh.budgetPeriodFrequency,
     periodAnchor: hh.budgetPeriodAnchor ?? '',
     jointBasis: hh.jointContributionBasis,
+    jointFundingModel: hh.jointFundingModel,
     incomeBasis: hh.incomeBasisDefault,
     decimalPlaces: hh.currencyDecimalPlaces,
     symbolPosition: hh.currencySymbolPosition,
@@ -139,6 +141,7 @@ function GeneralSection() {
           ? null
           : form.periodAnchor || new Date().toISOString().slice(0, 10),
       jointContributionBasis: form.jointBasis as 'equal' | 'income_proportional' | 'custom',
+      jointFundingModel: form.jointFundingModel as 'split' | 'pooled',
       incomeBasisDefault: form.incomeBasis as 'regular_net' | 'latest_payslip' | 'rolling_12m',
       locale: form.locale,
       weekStart: form.weekStart as 'monday' | 'sunday',
@@ -257,7 +260,23 @@ function GeneralSection() {
         </Text>
         <Group grow>
           <Select
+            label="Joint funding model"
+            description={
+              form.jointFundingModel === 'pooled'
+                ? 'Each person contributes their whole remainder into a joint pool that covers joint costs.'
+                : 'Joint costs are split per person by the contribution basis.'
+            }
+            data={[
+              { value: 'split', label: 'Split joint costs' },
+              { value: 'pooled', label: 'Pool remainders' },
+            ]}
+            value={form.jointFundingModel}
+            onChange={(v) => set('jointFundingModel', v ?? 'split')}
+            allowDeselect={false}
+          />
+          <Select
             label="Joint contribution basis"
+            description={form.jointFundingModel === 'pooled' ? 'Not used when remainders are pooled.' : undefined}
             data={[
               { value: 'equal', label: 'Equal' },
               { value: 'income_proportional', label: 'Income proportional' },
@@ -265,6 +284,7 @@ function GeneralSection() {
             ]}
             value={form.jointBasis}
             onChange={(v) => set('jointBasis', v ?? 'equal')}
+            disabled={form.jointFundingModel === 'pooled'}
             allowDeselect={false}
           />
           <Select
