@@ -9,7 +9,6 @@ import { NavPalette } from "@/layout/NavPalette";
 import { ShortcutsHelp } from "@/layout/ShortcutsHelp";
 import { UserMenu } from "@/layout/UserMenu";
 import { NavSection } from "@/layout/NavSection";
-import { ThemeToggle } from "@/layout/ThemeToggle";
 import { HearthLink } from "@/layout/HearthLink";
 
 export function AppLayout() {
@@ -151,7 +150,6 @@ export function AppLayout() {
                 >
                     <Group gap={8} justify={"center"}>
                         <UserMenu />
-                        <ThemeToggle />
                     </Group>
                 </AppShell.Section>
             </AppShell.Navbar>
