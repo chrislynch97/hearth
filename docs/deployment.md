@@ -126,6 +126,8 @@ Update later: `git pull && npm install && npm run build && sudo systemctl restar
 | `CLIENT_DIR` | `../client` (source) | Directory of the built UI. Set to `./dist/client` for a non-Docker production run. The Docker image sets this for you. |
 | `HEARTH_SECURE_COOKIES` | unset | Set to `1` to force `Secure` session cookies when behind a reverse proxy that terminates TLS but doesn't forward `x-forwarded-proto: https`. |
 | `HEARTH_TRUST_PROXY` | unset | Set to the **number of proxy hops** in front of Hearth (a single reverse proxy / tunnel = `1`) so Fastify reads the real client IP from `X-Forwarded-For` and the login rate limiter throttles per-client. Leave unset when directly exposed. Do **not** set it to `true`/all — trusting the whole chain lets a client spoof `X-Forwarded-For` and dodge the limiter. Your proxy must **overwrite** (not append to) `X-Forwarded-For`. Also accepts a comma-separated list of trusted proxy IPs/CIDRs. |
+| `HEARTH_PUBLIC` | unset | Set to `1` on an **internet-facing** instance. Hearth checks its own configuration at startup and, with this set, **refuses to start** rather than come up in a state that would expose your data — `HEARTH_ALLOW_OPEN=1` on a non-loopback bind, or open registration with no owner password. Left unset (a home LAN, where both are legitimate) those same states only log a warning. `NODE_ENV` can't stand in for this: the Docker image sets it to `production` for every deployment, LAN ones included. |
+| `HEARTH_ALLOW_OPEN` | unset | Set to `1` to allow running **open** (no owner password) while bound to a non-loopback address — a trusted home LAN. Without it, an open instance on `0.0.0.0` serves only the login/first-run endpoints and refuses budgeting data, so an accidental public deploy can't hand anonymous callers owner access. Never set it on a public host; set an owner password instead. |
 | `HEARTH_BACKUP_KEEP` | `14` | How many local snapshots to keep; older ones are pruned after each successful backup. Minimum `1` (a `0` is clamped up rather than pruning the backup just written); a non-integer value is ignored with a warning and the default kept. |
 | `HEARTH_BACKUP_LOCAL_DIR` | unset | Absolute path for the **local** snapshots, overriding the default `<data>/backups`. Use it to land backups on a different volume from the database without setting up the off-site machinery. Not to be confused with `HEARTH_BACKUP_DIR` below, which is the *off-site* `directory` target. |
 | `HEARTH_BACKUP_OFFSITE` | `off` | Push each verified backup, **encrypted**, to a second location so a lost data volume doesn't lose every backup too (see [Off-site backups](#off-site-backups-optional)). `off` (default) \| `directory` (copy to `HEARTH_BACKUP_DIR`) \| `webhook` (POST to `HEARTH_BACKUP_WEBHOOK_URL`). |
@@ -267,6 +269,13 @@ where you'd add HTTPS with a local certificate. Optional.
   account (**Settings → Security**) to turn login on — from then on everyone signs in
   with their own username + password. Passwords must be at least 10 characters and
   very common ones are rejected.
+- **Tell Hearth it's public** by setting `HEARTH_PUBLIC=1` on anything reachable from
+  the internet. A config mistake is the likeliest way a self-host gets exposed, so
+  Hearth checks its own configuration on every boot and, with this set, **refuses to
+  start** instead of coming up in a state that would serve your finances to strangers
+  (a stray `HEARTH_ALLOW_OPEN=1`, or open registration with no owner password). It
+  costs nothing when the config is right, and turns a silent exposure into an obvious
+  failure. Without it those states only warn — which is what a home LAN wants.
 - **Invite others with roles** (**Settings → Households & access**). An admin creates
   a single-use invite link (expires in 7 days); the recipient opens it, picks a
   username + password, and joins. Roles: **owner** (full control), **admin** (manage

@@ -17,6 +17,10 @@ services:
       # refuses to serve data until you set an owner password. Do NOT set it to 1
       # on an internet-exposed host — anyone who can reach it gets owner access.
       - HEARTH_ALLOW_OPEN=${HEARTH_ALLOW_OPEN:-0}
+      # Set to 1 on an internet-facing instance: the startup safety checks then
+      # refuse to boot on a config that would expose your data (e.g. the flag
+      # above left at 1), instead of only warning. Leave 0 on a home LAN.
+      - HEARTH_PUBLIC=${HEARTH_PUBLIC:-0}
     # Proper PID 1 (tini) so SIGTERM reaches node for a clean shutdown.
     init: true
     restart: unless-stopped

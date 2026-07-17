@@ -18,6 +18,8 @@ import { parseSessionCookie } from './auth/cookies'
 import { getValidSession, isInstanceLocked, startSessionPurgeScheduler } from './auth/session'
 import { PUBLIC_PROCEDURES } from './trpc/trpc'
 import { allProceduresIn, allowedOrigins, isAllowedOrigin, openGuardConfig, trpcProcedures } from './auth/gate'
+import { isPublicDeploy, startupSafetyProblems } from './auth/startup'
+import { getInstanceSettings } from './db/instanceSettings'
 import { parseTrustProxy } from './auth/trustProxy'
 
 // On an OPEN (password-less) instance the owner fallback resolves every
@@ -44,6 +46,10 @@ const HOST = process.env.HOST ?? '0.0.0.0'
 // `auth.status` (which tells the client whether to show the first-run screen) can
 // never disagree on how "reachable off-box" / "operator opted in" are computed.
 const { bindIsLoopback: BIND_IS_LOOPBACK, allowOpen: ALLOW_OPEN } = openGuardConfig()
+// Whether the operator has declared this instance internet-facing
+// (HEARTH_PUBLIC=1). Only affects how loudly the startup safety checks below
+// complain: fatal when public, a warning otherwise. See auth/startup.ts.
+const IS_PUBLIC = isPublicDeploy()
 // Extra origins accepted by the CSRF check below, for deployments where a proxy
 // rewrites Host so it no longer matches the browser's origin. Empty by default.
 const ALLOWED_ORIGINS = allowedOrigins()
@@ -91,6 +97,16 @@ async function main() {
 
   await runMigrations()
   await ensureSeed(db)
+
+  // Startup safety assertions (#55). Runs after migrate + seed (it reads the
+  // instance settings) but before we construct Fastify, so a public instance
+  // with a dangerous config never binds the port at all. On a declared-public
+  // deploy an unsafe config is fatal — a config mistake is the likeliest way
+  // this instance gets exposed, and failing to start is far cheaper than
+  // serving a household's finances to the internet. Everywhere else (home LAN,
+  // dev, demo) the same states are legitimate, so we only warn.
+  await assertStartupSafety()
+
   startBackupScheduler(db)
   startAuditPruneScheduler(db)
   startSessionPurgeScheduler(db)
@@ -232,15 +248,40 @@ async function main() {
 
   await app.listen({ port: PORT, host: HOST })
   console.log(`[hearth] listening on ${HOST}:${PORT}`)
+}
 
-  // Warn loudly if we're serving an open (password-less) instance on a
-  // network-reachable address only because the operator opted in.
-  if (!BIND_IS_LOOPBACK && ALLOW_OPEN && !(await isInstanceLocked(db))) {
-    console.warn(
-      `[hearth] WARNING: running OPEN (no owner password) on ${HOST} with HEARTH_ALLOW_OPEN=1 — ` +
-        'anyone who can reach this address has full owner access. Set an owner password.',
+/** Check the boot-time config for states that are unsafe on a public instance,
+ *  and refuse to start if this is one (see auth/startup.ts). Exits rather than
+ *  throwing so the operator gets the problem list and nothing else — a stack
+ *  trace here would bury the one thing they need to read. */
+async function assertStartupSafety(): Promise<void> {
+  const { allowOpenRegistration } = await getInstanceSettings(db)
+  const problems = startupSafetyProblems({
+    host: HOST,
+    bindIsLoopback: BIND_IS_LOOPBACK,
+    allowOpen: ALLOW_OPEN,
+    locked: await isInstanceLocked(db),
+    allowOpenRegistration,
+  })
+  if (problems.length === 0) return
+
+  const label = IS_PUBLIC ? 'REFUSING TO START' : 'WARNING'
+  for (const problem of problems) console.error(`[hearth] ${label}: ${problem}`)
+
+  if (!IS_PUBLIC) {
+    console.error(
+      '[hearth] The above is safe only on a trusted network. If this instance is reachable from ' +
+        'the internet, fix it and set HEARTH_PUBLIC=1 so a config mistake stops the server ' +
+        'instead of exposing your data.',
     )
+    return
   }
+  console.error(
+    '[hearth] HEARTH_PUBLIC=1 declares this instance internet-facing, so the above is fatal. ' +
+      'Fix the configuration and start again.',
+  )
+  await closeDb()
+  process.exit(1)
 }
 
 main().catch((err) => {

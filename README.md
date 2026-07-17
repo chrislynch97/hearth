@@ -106,6 +106,7 @@ All configuration is via environment variables:
 | `HEARTH_SECURE_COOKIES` | unset | Set to `1` to force `Secure` session cookies when behind a reverse proxy that doesn't send `x-forwarded-proto: https`. |
 | `HEARTH_TRUST_PROXY` | unset | Set to the **number of proxy hops** in front of Hearth (a single reverse proxy / tunnel = `1`) so the login rate limiter keys on the real client IP (`X-Forwarded-For`). Leave unset when directly exposed. Do **not** set it to `true`/all — trusting the whole `X-Forwarded-For` chain lets a client spoof the header and dodge the limiter. Your proxy must **overwrite** (not append to) `X-Forwarded-For`. Accepts a hop count, or a comma-separated list of trusted proxy IPs/CIDRs. |
 | `HEARTH_ALLOW_OPEN` | unset | Set to `1` to allow running **open** (no owner password) while bound to a non-loopback address. Without it, an open instance on `0.0.0.0` serves only the login/first-run endpoints and refuses budgeting data — so a public deploy can't accidentally hand anonymous callers full owner access. Set an owner password instead of using this in production. |
+| `HEARTH_PUBLIC` | unset | Set to `1` on an **internet-facing** instance. Turns the startup safety checks fatal: the server **refuses to start** if the config would expose your data (`HEARTH_ALLOW_OPEN=1` on a non-loopback bind, or open registration with no owner password) instead of merely warning. Recommended for any public deploy — a config mistake then stops the server rather than exposing a household's finances. Leave unset on a home LAN, where those states are legitimate. |
 | `HEARTH_ALLOWED_ORIGINS` | unset | Extra origins allowed to make state-changing requests, comma-separated (`https://hearth.example.com`). Writes must come from the same origin the app is served on; you only need this if a proxy in front rewrites the `Host` header so it no longer matches the address the browser actually used. Requests without an `Origin` header (curl, scripts, health checks) are unaffected. |
 
 ## Security
@@ -130,7 +131,9 @@ hand anonymous callers full owner access. Two ways forward:
 > it — run it locally first (either of the password-less setups above, or with
 > `HEARTH_ALLOW_OPEN=1` for a single boot), set a password under **Settings →
 > Security**, then deploy without the flag. Once locked, login works normally on
-> any address.
+> any address. Also set **`HEARTH_PUBLIC=1`** on the deployed instance: it makes
+> the startup safety checks refuse to boot on exactly the config mistakes above,
+> so a stray flag can't quietly expose your data.
 
 From a locked (password-set) instance you can then
 invite others with a single-use link and a **role** (owner / admin / member /
