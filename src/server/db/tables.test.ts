@@ -20,6 +20,7 @@ describe('MONEY_COLUMNS (derived from schema)', () => {
         'payslipLine.amount',
         'raise.bonus',
         'raise.newSalary',
+        'reconciliationBatch.movedAmount',
         'reconciliationBatch.totalAmount',
         'setAside.amount',
         'spendTransaction.amount',

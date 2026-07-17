@@ -35,6 +35,32 @@ describe('data router', () => {
     expect(spends[0]?.description).toBe('Tesco')
   })
 
+  it('importing an open snapshot into a locked instance restores the first-run screen (issue #63)', async () => {
+    // Instance A is open (no owner password); its export carries users with null
+    // password hashes.
+    const dbA = await makeTestDb()
+    await ensureSeed(dbA)
+    const ownerA = await getOwnerUser(dbA)
+    const callerA = appRouter.createCaller({ db: dbA, householdId: 'household', role: 'owner', userId: ownerA!.id })
+    const openSnapshot = await callerA.data.export()
+
+    // Instance B is locked: setting the owner password persists auth_required.
+    const dbB = await makeTestDb()
+    await ensureSeed(dbB)
+    const ownerB = await getOwnerUser(dbB)
+    const callerB = appRouter.createCaller({ db: dbB, householdId: 'household', role: 'owner', userId: ownerB!.id })
+    await callerB.auth.setPassword({ newPassword: 'correct horse battery staple' })
+    expect((await callerB.auth.status()).passwordSet).toBe(true)
+
+    // Restoring A's open snapshot must not strand B behind a password that no
+    // account carries anymore — the instance reopens to the first-run screen.
+    await callerB.data.import(openSnapshot)
+
+    const status = await callerB.auth.status()
+    expect(status.passwordSet).toBe(false)
+    expect(status.firstRunRequired).toBe(true)
+  })
+
   it('import rejects a snapshot with no household', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)

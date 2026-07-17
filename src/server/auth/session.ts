@@ -8,7 +8,7 @@ import { TRPCError } from '@trpc/server'
 import type { DB, DBOrTx } from '../db/client'
 import { membership, session, user } from '../db/schema'
 import type { Session, User } from '../db/schema'
-import { getInstanceSettings, setAuthRequired } from '../db/instanceSettings'
+import { getInstanceSettings, setAuthRequired, setInstanceOwnerId } from '../db/instanceSettings'
 import { DEFAULT_HOUSEHOLD_ID, ROLE_RANK, type Role } from '../trpc/tenant'
 import { newId } from '../../shared/ids'
 
@@ -280,9 +280,24 @@ export async function getUser(db: DB, userId: string): Promise<User | null> {
  *  without the gate engaging. */
 export async function isInstanceLocked(db: DB): Promise<boolean> {
   const { authRequired } = await getInstanceSettings(db)
-  if (authRequired) return true
+  if (authRequired) {
+    // Self-heal a provably stale flag: `instance_settings` is outside any
+    // snapshot, so a restore that replaced the user table can leave this set
+    // even though no imported account carries a password (issue #63). Failing
+    // closed is right when the owner is merely *unresolvable* — but when the
+    // database positively states no password exists anywhere, there is nothing
+    // to authenticate against and the lock would only strand the owner.
+    return anyPasswordExists(db)
+  }
   const owner = await getOwnerUser(db)
   return (owner?.passwordHash ?? null) !== null
+}
+
+/** Whether any account holds a password hash — the credential the login gate
+ *  checks against. False means the lock flag, if set, is stale. */
+async function anyPasswordExists(db: DB): Promise<boolean> {
+  const [row] = await db.select({ id: user.id }).from(user).where(isNotNull(user.passwordHash)).limit(1)
+  return row !== undefined
 }
 
 /** Recompute and persist the lock flag from the instance owner's current
@@ -290,6 +305,17 @@ export async function isInstanceLocked(db: DB): Promise<boolean> {
 export async function syncAuthRequired(db: DB): Promise<void> {
   const owner = await getOwnerUser(db)
   await setAuthRequired(db, (owner?.passwordHash ?? null) !== null)
+}
+
+/** Reconcile the persisted owner id + lock flag after a restore. `instance_settings`
+ *  lives outside the snapshot, so an import that replaced the user table can leave
+ *  `ownerUserId` dangling at a deleted account and `authRequired` stale. Re-point
+ *  the owner id at the resolvable owner and recompute the flag from its password,
+ *  so a legitimate restore can't lock the operator out of their own instance. */
+export async function reconcileInstanceOwner(db: DB): Promise<void> {
+  const owner = await getOwnerUser(db)
+  await setInstanceOwnerId(db, owner?.id ?? null)
+  await syncAuthRequired(db)
 }
 
 /** True if the user is the instance operator — the single account that controls
