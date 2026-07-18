@@ -1,0 +1,55 @@
+name: Release
+
+# Cutting a release is pushing a semver tag:  git tag v0.1.0 && git push origin v0.1.0
+# That builds the runtime image with the tag baked in (HEARTH_VERSION -> the
+# in-app update check reports it), pushes it to GHCR, and publishes a GitHub
+# Release. Local `build: .` deploys can't see git (.git is dockerignored), so the
+# published image is the only build that carries a real version.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # publish the GitHub Release
+  packages: write # push the image to GHCR
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ghcr.io/<owner>/hearth tagged x.y.z, x.y, and latest (the leading `v` is
+      # stripped for the image tag; HEARTH_VERSION below keeps it, matching the
+      # release tag_name the checker compares against).
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          # Single-arch (amd64) for now — QEMU-emulating an arm64 npm build is
+          # slow. Add `platforms: linux/amd64,linux/arm64` here when arm is needed.
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            HEARTH_VERSION=${{ github.ref_name }}
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
