@@ -38,6 +38,7 @@ export type SecurityAction =
   | 'mfa_disabled'
   | 'sessions_revoked'
   | 'registration_changed'
+  | 'update_settings_changed'
   | 'role_changed'
   | 'access_removed'
   | 'invite_created'

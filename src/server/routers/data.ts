@@ -13,7 +13,10 @@ import { rescaleMinor } from '../../shared/money'
 import { applySnapshot, buildSnapshot, EXPORT_VERSION } from '../db/snapshot'
 import { runBackup } from '../backup/runner'
 import { appVersion } from '../version'
-import { checkForUpdates } from '../updates'
+import { checkForUpdates, deployMode } from '../updates'
+import { getInstanceSettings, setUpdateSettings } from '../db/instanceSettings'
+import { getCachedUpdateStatus } from '../updateScheduler'
+import { recordSecurityEvent } from '../trpc/audit'
 
 // NOTE: export / import / reset / stats and the on-disk backup are instance-wide
 // (they operate over every table, ALL households) — the self-host backup
@@ -151,9 +154,61 @@ export const dataRouter = router({
   }),
 
   /** Compare the running version against the latest GitHub release and return
-   *  the guided-update details. Degrades gracefully when GitHub is unreachable. */
+   *  the guided-update details. Degrades gracefully when GitHub is unreachable.
+   *  On-demand: fired by the "Check for updates" button. */
   checkForUpdates: publicProcedure.query(async ({ ctx }) => {
     await assertInstanceOwner(ctx.db, ctx.userId)
     return checkForUpdates()
   }),
+
+  /** The cheap, cached update status for the app-wide banner and background
+   *  polling. Uses the scheduler's last cached poll; falls back to a live check
+   *  when nothing has been cached yet (e.g. auto-poll just turned on). */
+  updateStatus: publicProcedure.query(async ({ ctx }) => {
+    await assertInstanceOwner(ctx.db, ctx.userId)
+    const cached = getCachedUpdateStatus()
+    if (cached) return { ...cached.status, polledAt: cached.polledAt }
+    return { ...(await checkForUpdates()), polledAt: Date.now() }
+  }),
+
+  /** The owner's update preferences + how this instance is deployed. `updaterOnline`
+   *  reports whether a host updater is present (always false until Phase 2b). */
+  updateSettings: publicProcedure.query(async ({ ctx }) => {
+    await assertInstanceOwner(ctx.db, ctx.userId)
+    const s = await getInstanceSettings(ctx.db)
+    return {
+      autoPoll: s.autoPoll,
+      preUpdateBackup: s.preUpdateBackup,
+      autoUpdate: s.autoUpdate,
+      autoUpdateTime: s.autoUpdateTime,
+      deployMode: deployMode(),
+      updaterOnline: false,
+    }
+  }),
+
+  /** Persist the update preferences (owner-only, audited). */
+  setUpdateSettings: publicProcedure
+    .input(
+      z.object({
+        autoPoll: z.boolean().optional(),
+        preUpdateBackup: z.boolean().optional(),
+        autoUpdate: z.boolean().optional(),
+        autoUpdateTime: z
+          .string()
+          .regex(/^\d{2}:\d{2}$/, 'Expected HH:MM')
+          .nullable()
+          .optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertInstanceOwner(ctx.db, ctx.userId)
+      await setUpdateSettings(ctx.db, input)
+      recordSecurityEvent(ctx, {
+        entityType: 'instance',
+        entityId: 'updates',
+        action: 'update_settings_changed',
+        details: input,
+      })
+      return { ok: true as const }
+    }),
 })

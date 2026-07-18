@@ -25,17 +25,28 @@ export interface UpdateStatus {
 
 const normalise = (v: string): string => v.replace(/^v/, "").trim();
 
-/** The exact host-side update commands for the running deployment. PGlite and
- *  Postgres use different compose files; pick the one that matches. */
-const updateCommands = (): string => {
-    const composeFile = isServerPgUrl(process.env.DATABASE_URL)
-        ? "docker-compose.postgres.yml"
-        : "docker-compose.yml";
-    const up =
-        composeFile === "docker-compose.yml"
-            ? "docker compose up -d --build"
-            : `docker compose -f ${composeFile} up -d --build`;
-    return `git pull\n${up}`;
+export type DeployMode = "image" | "source";
+
+/** How this instance is deployed. The managed image deploy sets HEARTH_DEPLOY=image
+ *  (compose uses `image: ghcr.io/…:latest`); anything else is a from-source build. */
+export const deployMode = (): DeployMode =>
+    process.env.HEARTH_DEPLOY === "image" ? "image" : "source";
+
+/** The exact host-side update commands for the running deployment. An image
+ *  deploy pulls the new image; a source deploy rebuilds. PGlite and Postgres use
+ *  different compose files; pick the one that matches. */
+export const updateCommands = (): string => {
+    const isPg = isServerPgUrl(process.env.DATABASE_URL);
+    if (deployMode() === "image") {
+        // The managed image deploy uses the ghcr compose variants (neither is the
+        // default docker-compose.yml, so both need an explicit -f).
+        const flag = isPg
+            ? " -f docker-compose.postgres.ghcr.yml"
+            : " -f docker-compose.ghcr.yml";
+        return `docker compose${flag} pull\ndocker compose${flag} up -d`;
+    }
+    const flag = isPg ? " -f docker-compose.postgres.yml" : "";
+    return `git pull\ndocker compose${flag} up -d --build`;
 };
 
 interface GithubRelease {

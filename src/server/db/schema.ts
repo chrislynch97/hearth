@@ -184,6 +184,20 @@ export const instanceSettings = pgTable('instance_settings', {
   // request, so a lookup that can't find the owner fails CLOSED (stays locked)
   // instead of open. Kept in sync whenever the owner's password is set/cleared.
   authRequired: integer('auth_required').notNull().default(0),
+  // Self-host update preferences (issue #81). 0/1 booleans per the table's
+  // convention. autoPoll: check GitHub for new releases in the background so the
+  // app can surface an "update available" banner (on by default — an instance
+  // checking its own project's releases). preUpdateBackup: run a backup before
+  // applying an update (on by default). autoUpdate: apply updates automatically;
+  // only effective on the managed image deploy (needs the host updater).
+  autoPoll: integer('auto_poll').notNull().default(1),
+  preUpdateBackup: integer('pre_update_backup').notNull().default(1),
+  autoUpdate: integer('auto_update').notNull().default(0),
+  // Local "HH:MM" for the daily auto-update window; null ⇒ apply as soon as an
+  // update is detected. updateLastAppliedDate is a local "YYYY-MM-DD" once-per-day
+  // guard so a scheduled auto-update fires at most once per calendar day.
+  autoUpdateTime: text('auto_update_time'),
+  updateLastAppliedDate: text('update_last_applied_date'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
 })
