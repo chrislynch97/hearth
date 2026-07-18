@@ -422,6 +422,11 @@ function MembersSection() {
     setEditingId(null)
   }
 
+  function cancelRename() {
+    setEditingId(null)
+    setEditName('')
+  }
+
   return (
     <Card withBorder padding="md" radius="md">
       <Title order={4} mb="sm">
@@ -437,12 +442,18 @@ function MembersSection() {
                   size="xs"
                   value={editName}
                   onChange={(e) => setEditName(e.currentTarget.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && void handleRename(m.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void handleRename(m.id)
+                    else if (e.key === 'Escape') cancelRename()
+                  }}
                   autoFocus
                   style={{ flex: 1 }}
                 />
                 <Button size="xs" onClick={() => void handleRename(m.id)}>
                   Save
+                </Button>
+                <Button size="xs" variant="default" onClick={cancelRename}>
+                  Cancel
                 </Button>
               </Group>
             ) : (
