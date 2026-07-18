@@ -1,0 +1,18 @@
+/* iOS Safari auto-zooms the page whenever a focused input/select/textarea has an
+   effective font-size below 16px, forcing the user to pinch back out after every
+   edit (#83). Mantine's default control size renders at 14px, so bump form
+   controls to 16px on phone-sized viewports. Desktop keeps Mantine's compact
+   14px. We override --input-fz (which Mantine's inputs consume for font-size)
+   and also set font-size directly for any non-Mantine native control. */
+@media (max-width: 48em) {
+    .mantine-Input-input,
+    .mantine-InputBase-input {
+        --input-fz: 1rem;
+    }
+
+    input,
+    select,
+    textarea {
+        font-size: 16px;
+    }
+}

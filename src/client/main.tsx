@@ -18,6 +18,8 @@ import '@mantine/core/styles.css'
 import '@mantine/charts/styles.css'
 import '@mantine/dates/styles.css'
 import '@mantine/notifications/styles.css'
+// Imported after Mantine's styles so our overrides win the cascade (#83).
+import './mobile.css'
 import { App } from './App'
 import { AppProviders } from './providers'
 
