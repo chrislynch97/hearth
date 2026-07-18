@@ -10,6 +10,7 @@ import { ShortcutsHelp } from "@/layout/ShortcutsHelp";
 import { UserMenu } from "@/layout/UserMenu";
 import { NavSection } from "@/layout/NavSection";
 import { HearthLink } from "@/layout/HearthLink";
+import { UpdateBanner } from "@/layout/UpdateBanner";
 
 export function AppLayout() {
     const location = useLocation();
@@ -155,6 +156,7 @@ export function AppLayout() {
             </AppShell.Navbar>
 
             <AppShell.Main>
+                <UpdateBanner />
                 <Outlet />
             </AppShell.Main>
 

@@ -27,6 +27,7 @@ import {
   Title,
   useMantineColorScheme,
 } from '@mantine/core'
+import { TimeInput } from '@mantine/dates'
 import { trpc } from '../trpc'
 import type { Household } from '../../server/db/schema'
 import { useFormatDate } from '../useMoney'
@@ -1116,23 +1117,32 @@ function MfaSection() {
 // ---------------------------------------------------------------------------
 
 /** Shows the running version and, on demand, whether a newer GitHub release
- *  exists. Applying the update stays a copy-pasteable host command: the app
- *  can't rebuild its own container without the Docker socket. */
+ *  exists, plus the owner's update preferences (background polling, backup-first,
+ *  and — on the managed deploy — automatic installs). Applying the update stays a
+ *  copy-pasteable host command until the managed updater is present (Phase 2b). */
 const UpdatesSection = () => {
+    const utils = trpc.useUtils();
     const versionQuery = trpc.data.version.useQuery();
+    const settingsQuery = trpc.data.updateSettings.useQuery();
     // On demand only — a settings load shouldn't fire a GitHub request every time.
     const check = trpc.data.checkForUpdates.useQuery(undefined, { enabled: false, gcTime: 0 });
     const backupNow = trpc.data.backupNow.useMutation();
+    const saveSettings = trpc.data.setUpdateSettings.useMutation({
+        onSuccess: () => utils.data.updateSettings.invalidate(),
+    });
     const [backupMsg, setBackupMsg] = useState("");
 
     const current = versionQuery.data?.version;
     const status = check.data;
+    const settings = settingsQuery.data;
 
     const handleBackup = async () => {
         setBackupMsg("");
         const result = await backupNow.mutateAsync();
         setBackupMsg(`Backup written to ${result.file}.`);
     };
+
+    const save = (patch: Parameters<typeof saveSettings.mutate>[0]) => saveSettings.mutate(patch);
 
     return (
         <Card withBorder padding="md" radius="md">
@@ -1222,6 +1232,51 @@ const UpdatesSection = () => {
                         </Group>
                     </div>
                 </Stack>
+            )}
+
+            {settings && (
+                <>
+                    <Divider my="md" />
+                    <Stack gap="sm">
+                        <Switch
+                            label="Check for updates automatically"
+                            description="Checks GitHub about once an hour and shows a banner when a new version is available."
+                            checked={settings.autoPoll}
+                            onChange={(e) => save({ autoPoll: e.currentTarget.checked })}
+                        />
+                        <Switch
+                            label="Back up before updating"
+                            description="Writes a backup first whenever an update is installed."
+                            checked={settings.preUpdateBackup}
+                            onChange={(e) => save({ preUpdateBackup: e.currentTarget.checked })}
+                        />
+                        <div>
+                            <Switch
+                                label="Install updates automatically"
+                                description={
+                                    settings.updaterOnline
+                                        ? "Installs new versions for you without running any commands."
+                                        : "Requires the managed Docker deploy with the host updater — coming in a later update."
+                                }
+                                checked={settings.autoUpdate}
+                                disabled={!settings.updaterOnline}
+                                onChange={(e) => save({ autoUpdate: e.currentTarget.checked })}
+                            />
+                            {settings.updaterOnline && settings.autoUpdate && (
+                                <TimeInput
+                                    label="Install at"
+                                    description="Leave blank to install as soon as an update is found."
+                                    value={settings.autoUpdateTime ?? ""}
+                                    onChange={(e) =>
+                                        save({ autoUpdateTime: e.currentTarget.value || null })
+                                    }
+                                    mt="xs"
+                                    maw={150}
+                                />
+                            )}
+                        </div>
+                    </Stack>
+                </>
             )}
         </Card>
     );
