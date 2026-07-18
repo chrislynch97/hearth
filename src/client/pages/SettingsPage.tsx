@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   ActionIcon,
   Alert,
+  Anchor,
   Button,
   Card,
   Checkbox,
@@ -1110,6 +1111,122 @@ function MfaSection() {
 // About
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Updates (issue #81) — instance-owner only
+// ---------------------------------------------------------------------------
+
+/** Shows the running version and, on demand, whether a newer GitHub release
+ *  exists. Applying the update stays a copy-pasteable host command: the app
+ *  can't rebuild its own container without the Docker socket. */
+const UpdatesSection = () => {
+    const versionQuery = trpc.data.version.useQuery();
+    // On demand only — a settings load shouldn't fire a GitHub request every time.
+    const check = trpc.data.checkForUpdates.useQuery(undefined, { enabled: false, gcTime: 0 });
+    const backupNow = trpc.data.backupNow.useMutation();
+    const [backupMsg, setBackupMsg] = useState("");
+
+    const current = versionQuery.data?.version;
+    const status = check.data;
+
+    const handleBackup = async () => {
+        setBackupMsg("");
+        const result = await backupNow.mutateAsync();
+        setBackupMsg(`Backup written to ${result.file}.`);
+    };
+
+    return (
+        <Card withBorder padding="md" radius="md">
+            <Title order={4} mb="sm">
+                Updates
+            </Title>
+            <Group justify="space-between" wrap="nowrap" mb="sm">
+                <Text size="sm" c="dimmed">
+                    Current version: <Code>{current ?? "…"}</Code>
+                </Text>
+                <Button
+                    size="xs"
+                    variant="default"
+                    loading={check.isFetching}
+                    onClick={() => void check.refetch()}
+                >
+                    Check for updates
+                </Button>
+            </Group>
+
+            {status && !status.checked && (
+                <Alert color="yellow" variant="light">
+                    Couldn't reach GitHub to check for updates. Try again when you're online.
+                </Alert>
+            )}
+
+            {status && status.checked && !status.updateAvailable && (
+                <Alert color="green" variant="light">
+                    {status.latest === null
+                        ? "No published releases to compare against yet."
+                        : status.current === "unknown"
+                          ? `Latest release is ${status.latest}. This build doesn't report its own version, so an update can't be confirmed.`
+                          : "You're up to date."}
+                </Alert>
+            )}
+
+            {status && status.updateAvailable && (
+                <Stack gap="md">
+                    <Alert color="blue" variant="light">
+                        Update available: <b>{status.latest}</b>
+                        {status.releaseUrl && (
+                            <>
+                                {" — "}
+                                <Anchor href={status.releaseUrl} target="_blank" rel="noreferrer">
+                                    release notes
+                                </Anchor>
+                            </>
+                        )}
+                    </Alert>
+
+                    <div>
+                        <Text size="sm" fw={500} mb={4}>
+                            1. Back up first
+                        </Text>
+                        <Group gap="sm">
+                            <Button
+                                size="xs"
+                                variant="default"
+                                loading={backupNow.isPending}
+                                onClick={() => void handleBackup()}
+                            >
+                                Back up now
+                            </Button>
+                            {backupMsg && (
+                                <Text size="sm" c="dimmed">
+                                    {backupMsg}
+                                </Text>
+                            )}
+                        </Group>
+                    </div>
+
+                    <div>
+                        <Text size="sm" fw={500} mb={4}>
+                            2. Then run on the host
+                        </Text>
+                        <Group align="flex-start" gap="xs" wrap="nowrap">
+                            <Code block style={{ flex: 1 }}>
+                                {status.commands}
+                            </Code>
+                            <CopyButton value={status.commands}>
+                                {({ copied, copy }) => (
+                                    <Button size="xs" variant="default" onClick={copy}>
+                                        {copied ? "Copied" : "Copy"}
+                                    </Button>
+                                )}
+                            </CopyButton>
+                        </Group>
+                    </div>
+                </Stack>
+            )}
+        </Card>
+    );
+};
+
 function AboutSection() {
   const statsQuery = trpc.data.stats.useQuery()
   const stats = statsQuery.data
@@ -1876,6 +1993,7 @@ export function SystemSettingsPage() {
     <Stack gap="lg">
       <RegistrationSection />
       <DataSection />
+      <UpdatesSection />
       <AboutSection />
     </Stack>
   )

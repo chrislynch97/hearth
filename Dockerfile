@@ -19,6 +19,12 @@ COPY package*.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY . .
+# The running version, baked into dist/version.json (see scripts/gen-version.mjs).
+# .git is dockerignored, so there's no git here to describe from — the release
+# CI passes --build-arg HEARTH_VERSION=<tag>; a plain local build falls back to
+# "unknown", which the in-app update check reports honestly.
+ARG HEARTH_VERSION=""
+ENV HEARTH_VERSION=$HEARTH_VERSION
 # Vite bundles the client into dist/client; esbuild bundles the server (and the
 # demo entrypoint) into self-contained dist/*.js with node_modules kept external.
 RUN npm run build
