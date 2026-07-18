@@ -17,6 +17,7 @@ import {
 import { BarChart } from '@mantine/charts'
 import { Link } from 'react-router-dom'
 import { trpc } from '../trpc'
+import { GettingStarted } from '@/components/GettingStarted'
 import { formatMoney } from '../../shared/money'
 import { periodForDate, shiftPeriod, periodConfig } from '../../shared/period'
 import { useMoney, useFormatDate } from '../useMoney'
@@ -547,6 +548,8 @@ export function HomePage() {
           + Quick add
         </Button>
       </Group>
+
+      <GettingStarted />
 
       {summary && (
         <Group justify="space-between" align="center">

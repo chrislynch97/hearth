@@ -106,6 +106,9 @@ export const user = pgTable('user', {
   // The last TOTP time-step accepted at login. Steps <= this are rejected so a
   // captured code can't be replayed within its ±1-step validity window.
   mfaLastStep: integer('mfa_last_step'),
+  // When the user dismissed the first-run getting-started checklist (#62). Once
+  // set, the checklist stays gone for that account across browsers and devices.
+  onboardingDismissedAt: timestamp('onboarding_dismissed_at', { withTimezone: true, mode: 'date' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
 })
