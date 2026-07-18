@@ -4,7 +4,7 @@ import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
 import { appRouter } from '../trpc/router'
 import { getOwnerUser, hashToken, newSessionId } from '../auth/session'
-import { invitation, membership } from '../db/schema'
+import { invitation, member, membership } from '../db/schema'
 import { newId } from '../../shared/ids'
 import type { DB } from '../db/client'
 
@@ -47,6 +47,23 @@ async function seedInvite(db: DB, over: Partial<typeof invitation.$inferInsert> 
     ...over,
   })
   return { id, token }
+}
+
+/** Insert a person member so invite-linking can target one. Unlinked by default. */
+async function seedMember(db: DB, over: Partial<typeof member.$inferInsert> = {}) {
+  const now = new Date()
+  const id = newId()
+  await db.insert(member).values({
+    id,
+    householdId: 'household',
+    kind: 'person',
+    displayName: 'Alex',
+    sortOrder: 1,
+    createdAt: now,
+    updatedAt: now,
+    ...over,
+  })
+  return id
 }
 
 describe('invitations.create', () => {
@@ -237,5 +254,90 @@ describe('invitations.accept', () => {
         password: 'a-strong-password',
       }),
     ).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' })
+  })
+})
+
+describe('invitations — member linking (#82)', () => {
+  it('ties a valid unlinked person member to the invite and surfaces it in list', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+    const memberId = await seedMember(db, { displayName: 'Partner' })
+
+    const admin = caller(db, { role: 'owner', userId: owner!.id })
+    await admin.c.invitations.create({ role: 'member', memberId })
+
+    const [row] = await db.select().from(invitation).where(eq(invitation.memberId, memberId))
+    expect(row?.memberId).toBe(memberId)
+
+    const listed = await admin.c.invitations.list()
+    expect(listed[0]).toMatchObject({ memberId, memberName: 'Partner' })
+  })
+
+  it('rejects a member that is missing, joint, archived, or already linked', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+    const admin = caller(db, { role: 'owner', userId: owner!.id })
+
+    await expect(admin.c.invitations.create({ role: 'member', memberId: 'nope' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+
+    const [joint] = await db.select().from(member).where(eq(member.kind, 'joint'))
+    await expect(admin.c.invitations.create({ role: 'member', memberId: joint!.id })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+
+    const archived = await seedMember(db, { archivedAt: new Date() })
+    await expect(admin.c.invitations.create({ role: 'member', memberId: archived })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+
+    const linked = await seedMember(db, { userId: owner!.id })
+    await expect(admin.c.invitations.create({ role: 'member', memberId: linked })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+  })
+
+  it('auto-links the tied member to the new account on acceptance', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const memberId = await seedMember(db)
+    const { token } = await seedInvite(db, { memberId })
+
+    await caller(db, { clientKey: 'link' }).c.invitations.accept({
+      token,
+      username: 'alex',
+      displayName: 'Alex',
+      password: 'a-strong-password',
+    })
+
+    const [m] = await db.select().from(member).where(eq(member.id, memberId))
+    expect(m?.userId).not.toBeNull()
+    // The linked user is a real member of the household.
+    const [grant] = await db.select().from(membership).where(eq(membership.userId, m!.userId!))
+    expect(grant).toBeTruthy()
+  })
+
+  it('falls back to no-link when the tied member was removed before acceptance', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const memberId = await seedMember(db)
+    const { id, token } = await seedInvite(db, { memberId })
+
+    // Member deleted between creation and acceptance: FK nulls invitation.memberId.
+    await db.delete(member).where(eq(member.id, memberId))
+    const [row] = await db.select().from(invitation).where(eq(invitation.id, id))
+    expect(row?.memberId).toBeNull()
+
+    // Acceptance still succeeds; nothing to link.
+    const res = await caller(db, { clientKey: 'gone' }).c.invitations.accept({
+      token,
+      username: 'alex',
+      displayName: 'Alex',
+      password: 'a-strong-password',
+    })
+    expect(res).toEqual({ ok: true })
   })
 })
