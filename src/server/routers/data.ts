@@ -12,6 +12,8 @@ import { ensureSeed } from '../db/seed'
 import { rescaleMinor } from '../../shared/money'
 import { applySnapshot, buildSnapshot, EXPORT_VERSION } from '../db/snapshot'
 import { runBackup } from '../backup/runner'
+import { appVersion } from '../version'
+import { checkForUpdates } from '../updates'
 
 // NOTE: export / import / reset / stats and the on-disk backup are instance-wide
 // (they operate over every table, ALL households) — the self-host backup
@@ -140,5 +142,18 @@ export const dataRouter = router({
       counts[name] = row?.n ?? 0
     }
     return { counts, databaseLabel: describeDatabase() }
+  }),
+
+  /** The version string the running instance reports (issue #81). */
+  version: publicProcedure.query(async ({ ctx }) => {
+    await assertInstanceOwner(ctx.db, ctx.userId)
+    return { version: appVersion() }
+  }),
+
+  /** Compare the running version against the latest GitHub release and return
+   *  the guided-update details. Degrades gracefully when GitHub is unreachable. */
+  checkForUpdates: publicProcedure.query(async ({ ctx }) => {
+    await assertInstanceOwner(ctx.db, ctx.userId)
+    return checkForUpdates()
   }),
 })
