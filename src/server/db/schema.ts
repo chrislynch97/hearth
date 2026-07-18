@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core'
+import { pgTable, text, integer, timestamp, uniqueIndex, index, type AnyPgColumn } from 'drizzle-orm/pg-core'
 
 // ---------------------------------------------------------------------------
 // Postgres port — see issue #25.
@@ -198,6 +198,10 @@ export const invitation = pgTable('invitation', {
   householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   role: text('role').notNull().default('member'), // 'admin' | 'member' | 'viewer'
   email: text('email'), // optional, informational (who it was sent to)
+  // Optionally ties the invite to an existing (unlinked) budgeting member so the
+  // invitee's account is auto-linked to it on acceptance. ON DELETE SET NULL so a
+  // member removed between creation and acceptance just falls back to no-link.
+  memberId: text('member_id').references((): AnyPgColumn => member.id, { onDelete: 'set null' }),
   invitedByUserId: text('invited_by_user_id').references(() => user.id),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),

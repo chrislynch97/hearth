@@ -4,7 +4,7 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { assertRole, scopeWhere } from '../trpc/tenant'
 import { recordSecurityEvent } from '../trpc/audit'
-import { household, invitation } from '../db/schema'
+import { household, invitation, member } from '../db/schema'
 import { isUniqueViolation } from '../db/errors'
 import { hashPassword } from '../auth/password'
 import { createSession, createUserWithMembership, getUserByUsername, hashToken, newSessionId, normalizeUsername } from '../auth/session'
@@ -30,21 +30,45 @@ export const invitationsRouter = router({
     assertRole(ctx.role, 'admin')
     const now = new Date()
     const rows = await ctx.db
-      .select()
+      .select({
+        id: invitation.id,
+        role: invitation.role,
+        email: invitation.email,
+        memberId: invitation.memberId,
+        memberName: member.displayName,
+        createdAt: invitation.createdAt,
+        expiresAt: invitation.expiresAt,
+      })
       .from(invitation)
+      .leftJoin(member, eq(member.id, invitation.memberId))
       .where(scopeWhere(ctx.householdId, invitation.householdId, isNull(invitation.acceptedAt)))
       .orderBy(desc(invitation.createdAt))
-    return rows
-      .filter((r) => r.expiresAt > now)
-      .map((r) => ({ id: r.id, role: r.role, email: r.email, createdAt: r.createdAt, expiresAt: r.expiresAt }))
+    // memberName is null when no member is tied, or when a tied member was since
+    // removed (the FK nulls member_id, so memberId reads null too).
+    return rows.filter((r) => r.expiresAt > now)
   }),
 
   /** Create an invite. Admins can invite member/viewer; owners can also invite
    *  admins. Returns the token — the client builds the shareable link from it. */
   create: publicProcedure
-    .input(z.object({ role: inviteRole, email: z.string().email().nullable().optional() }))
+    .input(z.object({ role: inviteRole, email: z.string().email().nullable().optional(), memberId: z.string().nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       assertRole(ctx.role, input.role === 'admin' ? 'owner' : 'admin')
+      // A tied member must be an unlinked person in this household. Reject a bad
+      // selection outright rather than minting an invite that can't link.
+      if (input.memberId) {
+        const [target] = await ctx.db
+          .select()
+          .from(member)
+          .where(scopeWhere(ctx.householdId, member.householdId, eq(member.id, input.memberId)))
+        if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' })
+        if (target.kind !== 'person' || target.archivedAt !== null) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'That member cannot be linked to an invite.' })
+        }
+        if (target.userId !== null) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'That member is already linked to an account.' })
+        }
+      }
       const now = new Date()
       const expiresAt = new Date(now.getTime() + INVITE_TTL_MS)
       const token = newSessionId()
@@ -55,6 +79,7 @@ export const invitationsRouter = router({
         householdId: ctx.householdId,
         role: input.role,
         email: input.email ?? null,
+        memberId: input.memberId ?? null,
         invitedByUserId: ctx.userId ?? null,
         createdAt: now,
         expiresAt,
@@ -65,7 +90,7 @@ export const invitationsRouter = router({
         entityType: 'invitation',
         entityId: id,
         action: 'invite_created',
-        details: { role: input.role, email: input.email ?? null },
+        details: { role: input.role, email: input.email ?? null, memberId: input.memberId ?? null },
       })
       return { token, role: input.role, expiresAt }
     }),
@@ -139,7 +164,7 @@ export const invitationsRouter = router({
 
       const now = new Date()
       const passwordHash = await hashPassword(input.password)
-      let result: { userId: string; householdId: string; role: string } | null
+      let result: { userId: string; householdId: string; role: string; linkedMemberId: string | null } | null
       try {
         result = await ctx.db.transaction(async (tx) => {
           // Claim the invite atomically: mark it accepted only if it's still
@@ -163,7 +188,20 @@ export const invitationsRouter = router({
             role: claimed.role,
             invitedAt: claimed.createdAt,
           })
-          return { userId, householdId: claimed.householdId, role: claimed.role }
+          // Auto-link the tied member, if any. The isNull guard means a member
+          // linked to someone else in the meantime is left alone (no row matches),
+          // and a deleted member already nulled member_id — both fall back to
+          // no-link rather than failing the acceptance.
+          let linkedMemberId: string | null = null
+          if (claimed.memberId) {
+            const [linked] = await tx
+              .update(member)
+              .set({ userId, updatedAt: now })
+              .where(and(eq(member.id, claimed.memberId), eq(member.householdId, claimed.householdId), isNull(member.userId)))
+              .returning({ id: member.id })
+            linkedMemberId = linked?.id ?? null
+          }
+          return { userId, householdId: claimed.householdId, role: claimed.role, linkedMemberId }
         })
       } catch (err) {
         if (isUniqueViolation(err)) {
@@ -185,7 +223,7 @@ export const invitationsRouter = router({
         entityType: 'membership',
         entityId: result.userId,
         action: 'invite_accepted',
-        details: { member: input.displayName.trim(), role: result.role },
+        details: { member: input.displayName.trim(), role: result.role, linkedMemberId: result.linkedMemberId },
         householdId: result.householdId,
         actorUserId: result.userId,
       })

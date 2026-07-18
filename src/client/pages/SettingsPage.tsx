@@ -1613,10 +1613,12 @@ function HouseholdAccessSection() {
   const memberships = me.data?.memberships ?? []
 
   const invites = trpc.invitations.list.useQuery(undefined, { enabled: isAdmin })
+  const membersQuery = trpc.members.list.useQuery(undefined, { enabled: isAdmin })
   const createInvite = trpc.invitations.create.useMutation()
   const revoke = trpc.invitations.revoke.useMutation()
 
   const [inviteRole, setInviteRole] = useState('member')
+  const [inviteMemberId, setInviteMemberId] = useState<string | null>(null)
   const [link, setLink] = useState('')
   const [error, setError] = useState('')
 
@@ -1633,8 +1635,12 @@ function HouseholdAccessSection() {
   async function handleCreateInvite() {
     setError('')
     try {
-      const res = await createInvite.mutateAsync({ role: inviteRole as 'admin' | 'member' | 'viewer' })
+      const res = await createInvite.mutateAsync({
+        role: inviteRole as 'admin' | 'member' | 'viewer',
+        memberId: inviteMemberId,
+      })
       setLink(`${window.location.origin}/invite/${res.token}`)
+      setInviteMemberId(null)
       await utils.invitations.list.invalidate()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create the invitation.')
@@ -1646,6 +1652,13 @@ function HouseholdAccessSection() {
     { value: 'member', label: 'Member (can edit)' },
     ...(isOwner ? [{ value: 'admin', label: 'Admin (can manage & invite)' }] : []),
   ]
+
+  // Offer only unlinked, active people — and not anyone already tied to a
+  // pending invite, so two open invites can't target the same member.
+  const tiedMemberIds = new Set((invites.data ?? []).map((inv) => inv.memberId).filter(Boolean))
+  const memberOptions = (membersQuery.data ?? [])
+    .filter((m) => m.kind === 'person' && m.archivedAt === null && m.userId === null && !tiedMemberIds.has(m.id))
+    .map((m) => ({ value: m.id, label: m.displayName }))
 
   return (
     <Card withBorder padding="md" radius="md">
@@ -1683,6 +1696,18 @@ function HouseholdAccessSection() {
                 allowDeselect={false}
                 w={220}
               />
+              {memberOptions.length > 0 && (
+                <Select
+                  label="Link to member"
+                  description="Optional — auto-links their account on acceptance."
+                  placeholder="No one"
+                  data={memberOptions}
+                  value={inviteMemberId}
+                  onChange={setInviteMemberId}
+                  clearable
+                  w={220}
+                />
+              )}
               <Button onClick={() => void handleCreateInvite()} loading={createInvite.isPending}>
                 Create invite link
               </Button>
@@ -1721,7 +1746,9 @@ function HouseholdAccessSection() {
                       <Text size="sm">
                         {inv.email ?? 'Invite link'}{' '}
                         <Text span size="xs" c="dimmed">
-                          · {inv.role} · expires {fmt(msToLocalIso(inv.expiresAt.getTime()))}
+                          · {inv.role}
+                          {inv.memberName ? ` · links to ${inv.memberName}` : ''} · expires{' '}
+                          {fmt(msToLocalIso(inv.expiresAt.getTime()))}
                         </Text>
                       </Text>
                       <Button
