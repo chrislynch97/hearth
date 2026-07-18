@@ -78,6 +78,13 @@
       "when": 1784370048096,
       "tag": "0010_bill_price_history",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1784386324871,
+      "tag": "0011_onboarding_dismissed",
+      "breakpoints": true
     }
   ]
 }
