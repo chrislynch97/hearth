@@ -4,11 +4,14 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../trpc/trpc'
 import { scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
-import { recordAudit } from '../trpc/audit'
-import { expense, category, pot } from '../db/schema'
+import { recordAudit, type AuditCtx } from '../trpc/audit'
+import { expense, billPrice, category, pot } from '../db/schema'
 import type { Expense } from '../db/schema'
 import { newId } from '../../shared/ids'
+import { todayIso } from '../../shared/dates'
 import type { DB } from '../db/client'
+
+const priceSourceEnum = z.enum(['manual', 'spend_prompt'])
 
 const recurrenceEnum = z.enum(['monthly', 'quarterly', 'yearly'])
 const fundingEnum = z.enum(['pot_manual', 'pot_auto', 'main'])
@@ -73,6 +76,59 @@ async function loadExpense(db: DB, householdId: string, id: string): Promise<Exp
   return row
 }
 
+/** Record a bill's price change as effective-dated history (issue #68). Seeds a
+ *  starting row at the old price the first time a bill gets history, so a change
+ *  never looks like it came from nowhere. Call only when the amount changed. */
+async function recordBillPriceChange(
+  ctx: AuditCtx,
+  before: Expense,
+  newAmount: number,
+  source: 'manual' | 'spend_prompt',
+  effectiveDate: string,
+): Promise<void> {
+  const now = new Date()
+  const existing = await ctx.db
+    .select({ id: billPrice.id })
+    .from(billPrice)
+    .where(scopeWhere(ctx.householdId, billPrice.householdId, eq(billPrice.expenseId, before.id)))
+    .limit(1)
+
+  const rows: (typeof billPrice.$inferInsert)[] = []
+  if (existing.length === 0 && before.amount != null) {
+    // Anchor the seed to the bill's creation, but never after the change itself
+    // (a backdated spend can predate the bill's row) so it always reads first.
+    const created = before.createdAt.toISOString().slice(0, 10)
+    rows.push({
+      id: newId(),
+      householdId: ctx.householdId,
+      expenseId: before.id,
+      effectiveDate: created < effectiveDate ? created : effectiveDate,
+      amount: before.amount,
+      note: 'Starting price',
+      source: 'manual',
+      createdAt: now,
+      updatedAt: now,
+    })
+  }
+  rows.push({
+    id: newId(),
+    householdId: ctx.householdId,
+    expenseId: before.id,
+    effectiveDate,
+    amount: newAmount,
+    note: null,
+    source,
+    // 1ms after any seed so a same-day seed still reads before its change.
+    createdAt: new Date(now.getTime() + 1),
+    updatedAt: now,
+  })
+
+  const inserted = await ctx.db.insert(billPrice).values(rows).returning()
+  for (const row of inserted) {
+    recordAudit(ctx, { entityType: 'bill_price', entityId: row.id, action: 'create', after: row })
+  }
+}
+
 export const expensesRouter = router({
   list: publicProcedure.query(async ({ ctx }) => {
     return ctx.db
@@ -124,10 +180,16 @@ export const expensesRouter = router({
         active: z.boolean().optional(),
         dueAnchor: z.string().optional(),
         dueReminderDays: z.number().int().optional(),
+        // When the amount changes, record it as price history (issue #68).
+        // `priceSource` marks how strong the evidence is; `priceEffectiveDate`
+        // is when the new price took effect (the spend's date, or today).
+        priceSource: priceSourceEnum.optional(),
+        priceEffectiveDate: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, expectedUpdatedAt, active, funding, potId, categoryId, ...rest } = input
+      const { id, expectedUpdatedAt, active, funding, potId, categoryId, priceSource, priceEffectiveDate, ...rest } =
+        input
       const now = new Date()
       const target = await loadExpense(ctx.db, ctx.householdId, id)
 
@@ -164,6 +226,10 @@ export const expensesRouter = router({
       }
       const after = await loadExpense(ctx.db, ctx.householdId, id)
       recordAudit(ctx, { entityType: 'expense', entityId: id, action: 'update', before: target, after })
+
+      if (rest.amount !== undefined && rest.amount !== target.amount) {
+        await recordBillPriceChange(ctx, target, rest.amount, priceSource ?? 'manual', priceEffectiveDate ?? todayIso())
+      }
       return after
     }),
 

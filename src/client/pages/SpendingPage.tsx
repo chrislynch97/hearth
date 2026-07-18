@@ -24,6 +24,7 @@ import { DatePickerInput } from '@mantine/dates'
 import { trpc } from '../trpc'
 import type { Category, Member, Pot, SpendTransaction } from '../../server/db/schema'
 import { allocate, formatMoney, fromMinor, toMinor } from '../../shared/money'
+import { annualise, type Recurrence } from '../../shared/recurrence'
 import { todayIso } from '../../shared/dates'
 import { useMoney, useFormatDate, useFirstDayOfWeek, type MoneyFormat } from '../useMoney'
 import { groupedPotOptions, orderMembers } from '../potOptions'
@@ -172,6 +173,8 @@ function AddSpendForm({
     from: number
     to: number
     amount: number
+    recurrence: Recurrence
+    effectiveDate: string
   }>(null)
 
   const outgoings = outgoingsQuery.data ?? []
@@ -275,6 +278,9 @@ function AddSpendForm({
         from: selectedOutgoing.totalAmount,
         to: minor,
         amount: minor,
+        recurrence: selectedOutgoing.recurrence,
+        // The change took effect on the day of the spend that revealed it.
+        effectiveDate: date ?? todayIso(),
       }
     }
     setPendingUpdate(nextUpdate)
@@ -299,6 +305,8 @@ function AddSpendForm({
     await updateExpense.mutateAsync({
       id: pendingUpdate.expenseId,
       amount: pendingUpdate.amount,
+      priceSource: 'spend_prompt',
+      priceEffectiveDate: pendingUpdate.effectiveDate,
     })
     await Promise.all([
       utils.plan.recentlyDue.invalidate(),
@@ -412,6 +420,17 @@ function AddSpendForm({
                 {formatMoney(pendingUpdate.from, money)}. Update it to{' '}
                 {formatMoney(pendingUpdate.to, money)} going forward?
               </Text>
+              {(() => {
+                const yearly = annualise(pendingUpdate.to - pendingUpdate.from, pendingUpdate.recurrence)
+                if (yearly === 0) return null
+                const sign = yearly > 0 ? '+' : '−'
+                return (
+                  <Text size="sm" fw={600} c={yearly > 0 ? 'red' : 'teal'}>
+                    {sign}
+                    {formatMoney(Math.abs(yearly), money)}/year
+                  </Text>
+                )
+              })()}
               <Group gap="xs">
                 <Button
                   size="xs"

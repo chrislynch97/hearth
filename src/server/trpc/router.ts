@@ -5,6 +5,7 @@ import { membersRouter } from '../routers/members'
 import { categoriesRouter } from '../routers/categories'
 import { potsRouter } from '../routers/pots'
 import { expensesRouter } from '../routers/expenses'
+import { billPricesRouter } from '../routers/billPrices'
 import { setAsideRouter } from '../routers/setAside'
 import { planRouter } from '../routers/plan'
 import { spendsRouter } from '../routers/spends'
@@ -34,6 +35,7 @@ export const appRouter = router({
   categories: categoriesRouter,
   pots: potsRouter,
   expenses: expensesRouter,
+  billPrices: billPricesRouter,
   setAside: setAsideRouter,
   plan: planRouter,
   spends: spendsRouter,

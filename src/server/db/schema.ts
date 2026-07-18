@@ -313,8 +313,30 @@ export const expenseShare = pgTable('expense_share', {
   householdIdx: index('expense_share_household_id_idx').on(t.householdId),
 }))
 
+// Bill price history (issue #68). Each change to a bill's amount is one
+// effective-dated row — the `raise` table for outgoings. `expense.amount` stays
+// the current price; this records how it got there so projections and the
+// standing-order review can see the trend. `source` distinguishes a change
+// confirmed against a real payment ('spend_prompt') from a speculative edit
+// ('manual') — the former is stronger evidence.
+export const billPrice = pgTable('bill_price', {
+  id: text('id').primaryKey(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
+  expenseId: text('expense_id').notNull().references(() => expense.id, { onDelete: 'cascade' }),
+  effectiveDate: text('effective_date').notNull(), // YYYY-MM-DD
+  amount: integer('amount').notNull(),             // minor units, per-recurrence
+  note: text('note'),
+  source: text('source').notNull(),               // 'manual' | 'spend_prompt'
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  householdIdx: index('bill_price_household_id_idx').on(t.householdId),
+  expenseIdx: index('bill_price_expense_id_idx').on(t.expenseId),
+}))
+
 export type Expense = typeof expense.$inferSelect
 export type ExpenseShare = typeof expenseShare.$inferSelect
+export type BillPrice = typeof billPrice.$inferSelect
 
 // A "set aside" — a recurring contribution that *fills* a pot (money in), as
 // opposed to a bill that drains one (money out). Always one owner into one pot;
