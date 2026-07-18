@@ -24,6 +24,7 @@ describe('MONEY_COLUMNS (derived from schema)', () => {
         'reconciliationBatch.totalAmount',
         'setAside.amount',
         'spendTransaction.amount',
+        'standingOrderAck.amount',
       ].sort(),
     )
   })

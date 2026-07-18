@@ -337,9 +337,32 @@ export const billPrice = pgTable('bill_price', {
   expenseIdx: index('bill_price_expense_id_idx').on(t.expenseId),
 }))
 
+// Standing-order acknowledgement (issue #69). A pot's monthly funding requirement
+// is DERIVED from the `pot_manual` bills that drain it — there is no stored
+// standing order. When a bill's price changes that requirement moves, and the
+// standing order set up at the real bank silently goes stale. We persist only what
+// was last acknowledged: the monthly requirement the household confirmed it had set
+// up. Comparing it against the current derived requirement surfaces "your standing
+// order needs updating". One row per pot; `amount` is monthly minor units, and
+// `updatedAt` doubles as "last acknowledged" (the boundary for attributing which
+// bill changes happened since). Scoped to `pot_manual` — `pot_auto`/`main` bills
+// have no standing order to update.
+export const standingOrderAck = pgTable('standing_order_ack', {
+  id: text('id').primaryKey(),
+  householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
+  potId: text('pot_id').notNull().references(() => pot.id, { onDelete: 'cascade' }),
+  amount: integer('amount').notNull(),             // monthly minor units — the acknowledged pot_manual requirement
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  uniqPot: uniqueIndex('standing_order_ack_pot').on(t.householdId, t.potId),
+  householdIdx: index('standing_order_ack_household_id_idx').on(t.householdId),
+}))
+
 export type Expense = typeof expense.$inferSelect
 export type ExpenseShare = typeof expenseShare.$inferSelect
 export type BillPrice = typeof billPrice.$inferSelect
+export type StandingOrderAck = typeof standingOrderAck.$inferSelect
 
 // A "set aside" — a recurring contribution that *fills* a pot (money in), as
 // opposed to a bill that drains one (money out). Always one owner into one pot;

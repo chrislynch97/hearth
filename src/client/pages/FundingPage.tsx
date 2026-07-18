@@ -4,6 +4,7 @@ import { trpc } from '../trpc'
 import { formatMoney } from '../../shared/money'
 import { periodConfig, periodUnitLabel, periodAdverb } from '../../shared/period'
 import { useMoney, type MoneyFormat } from '../useMoney'
+import { StandingOrderAlerts } from './StandingOrderAlerts'
 import type { PotFunding } from '../../server/plan/funding'
 
 /** The per-person standing orders as plaintext, ready to paste into a bank.
@@ -101,6 +102,8 @@ export function FundingPage() {
 
       {!isLoading && plan && hasAnything && (
         <>
+          <StandingOrderAlerts />
+
           <Text size="sm" c="dimmed">
             This is what to set up as standing orders in Monzo (or your bank) {periodAdverb(frequency)}.
           </Text>

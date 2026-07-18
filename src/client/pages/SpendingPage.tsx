@@ -175,6 +175,10 @@ function AddSpendForm({
     amount: number
     recurrence: Recurrence
     effectiveDate: string
+    // Carried so the confirmation can name the pot whose standing order this
+    // change makes stale (issue #69).
+    funding: 'pot_manual' | 'pot_auto' | 'main'
+    potId: string | null
   }>(null)
 
   const outgoings = outgoingsQuery.data ?? []
@@ -281,6 +285,8 @@ function AddSpendForm({
         recurrence: selectedOutgoing.recurrence,
         // The change took effect on the day of the spend that revealed it.
         effectiveDate: date ?? todayIso(),
+        funding: selectedOutgoing.funding,
+        potId: selectedOutgoing.potId,
       }
     }
     setPendingUpdate(nextUpdate)
@@ -313,9 +319,22 @@ function AddSpendForm({
       utils.plan.upcoming.invalidate(),
       utils.plan.funding.invalidate(),
       utils.expenses.list.invalidate(),
+      utils.standingOrders.alerts.invalidate(),
     ])
+
+    // Surface the standing-order impact here — the moment to act on it (issue
+    // #69). Only pot_manual bills have a standing order to update.
+    let standingOrderLine = ''
+    if (pendingUpdate.funding === 'pot_manual' && pendingUpdate.potId) {
+      const alerts = await utils.standingOrders.alerts.fetch()
+      const alert = alerts.find((a) => a.potId === pendingUpdate.potId)
+      if (alert) {
+        standingOrderLine = ` ${alert.potName} standing order: ${formatMoney(alert.wasMonthly, money)}/mo → ${formatMoney(alert.nowMonthly, money)}/mo.`
+      }
+    }
+
     setPendingUpdate(null)
-    setSuccessMessage(`Updated ${pendingUpdate.name} going forward.`)
+    setSuccessMessage(`Updated ${pendingUpdate.name} going forward.${standingOrderLine}`)
   }
 
   return (

@@ -5,10 +5,11 @@ import { router, publicProcedure } from '../trpc/trpc'
 import { scopeWhere } from '../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
 import { recordAudit, type AuditCtx } from '../trpc/audit'
-import { expense, billPrice, category, pot } from '../db/schema'
+import { expense, billPrice, category, pot, standingOrderAck } from '../db/schema'
 import type { Expense } from '../db/schema'
 import { newId } from '../../shared/ids'
 import { todayIso } from '../../shared/dates'
+import { normaliseToMonthly, roundMinor, type Recurrence } from '../../shared/recurrence'
 import type { DB } from '../db/client'
 
 const priceSourceEnum = z.enum(['manual', 'spend_prompt'])
@@ -129,6 +130,47 @@ async function recordBillPriceChange(
   }
 }
 
+/** The pot's current monthly `pot_manual` requirement — the standing order it must
+ *  cover (issue #69). Read straight from the DB so the caller gets the live figure
+ *  before or after applying an edit. */
+async function potManualMonthlyFromDb(ctx: AuditCtx, potId: string): Promise<number> {
+  const rows = await ctx.db
+    .select({ amount: expense.amount, recurrence: expense.recurrence })
+    .from(expense)
+    .where(
+      scopeWhere(
+        ctx.householdId,
+        expense.householdId,
+        isNull(expense.archivedAt),
+        eq(expense.active, 1),
+        eq(expense.funding, 'pot_manual'),
+        eq(expense.potId, potId),
+      ),
+    )
+  const sum = rows.reduce((acc, r) => acc + normaliseToMonthly(r.amount ?? 0, r.recurrence as Recurrence), 0)
+  return roundMinor(sum)
+}
+
+/** Capture a standing-order baseline the first time a pot's `pot_manual` bill price
+ *  changes (issue #69), so the alert has a "was" to compare the new requirement
+ *  against. Mirrors the price-history seed: record the pre-change requirement once,
+ *  then leave it — later changes in the same sitting compare against this baseline
+ *  (one alert per pot, not one per bill). No-op if the pot already has an ack. Pass
+ *  the requirement computed *before* the edit was applied. */
+async function seedStandingOrderBaseline(ctx: AuditCtx, potId: string, priorMonthly: number, at: Date): Promise<void> {
+  const [existing] = await ctx.db
+    .select({ id: standingOrderAck.id })
+    .from(standingOrderAck)
+    .where(scopeWhere(ctx.householdId, standingOrderAck.householdId, eq(standingOrderAck.potId, potId)))
+  if (existing) return
+
+  const [row] = await ctx.db
+    .insert(standingOrderAck)
+    .values({ id: newId(), householdId: ctx.householdId, potId, amount: priorMonthly, createdAt: at, updatedAt: at })
+    .returning()
+  if (row) recordAudit(ctx, { entityType: 'standing_order_ack', entityId: row.id, action: 'create', after: row })
+}
+
 export const expensesRouter = router({
   list: publicProcedure.query(async ({ ctx }) => {
     return ctx.db
@@ -203,6 +245,17 @@ export const expensesRouter = router({
         await validateBill(ctx.db, ctx.householdId, { funding: effectiveFunding, potId: effectivePot, categoryId: effectiveCat })
       }
 
+      // Capture the pot's pre-change standing-order requirement (issue #69) while
+      // the DB still holds the old price, so a first bill change gives the alert a
+      // "was" to compare against. Only when the bill stays on the same pot_manual
+      // pot — a move/funding change is a different (rarer) shape we don't seed for.
+      const newAmount = rest.amount
+      const priceChanging = newAmount !== undefined && newAmount !== target.amount
+      const staysOnPot =
+        target.funding === 'pot_manual' && target.potId != null && effectiveFunding === 'pot_manual' && effectivePot === target.potId
+      const seedPotId = priceChanging && staysOnPot ? target.potId : null
+      const priorMonthly = seedPotId ? await potManualMonthlyFromDb(ctx, seedPotId) : 0
+
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (active !== undefined) setFields['active'] = active ? 1 : 0
       if (fundingTouched) {
@@ -227,8 +280,11 @@ export const expensesRouter = router({
       const after = await loadExpense(ctx.db, ctx.householdId, id)
       recordAudit(ctx, { entityType: 'expense', entityId: id, action: 'update', before: target, after })
 
-      if (rest.amount !== undefined && rest.amount !== target.amount) {
-        await recordBillPriceChange(ctx, target, rest.amount, priceSource ?? 'manual', priceEffectiveDate ?? todayIso())
+      if (priceChanging && newAmount !== undefined) {
+        await recordBillPriceChange(ctx, target, newAmount, priceSource ?? 'manual', priceEffectiveDate ?? todayIso())
+      }
+      if (seedPotId) {
+        await seedStandingOrderBaseline(ctx, seedPotId, priorMonthly, now)
       }
       return after
     }),
