@@ -1,0 +1,32 @@
+# Hearth from the prebuilt GHCR image (the "managed" deploy), rather than
+# building from source like docker-compose.yml. Updating is then a pull instead of
+# a rebuild, which is what makes in-app one-click / automatic updates possible.
+#
+#   docker compose -f docker-compose.ghcr.yml up -d      # → http://localhost:8787
+#   docker compose -f docker-compose.ghcr.yml pull       # fetch a newer image
+#   docker compose -f docker-compose.ghcr.yml up -d       # apply it
+#
+# To enable in-app one-click / scheduled updates, also install the host updater
+# (scripts/hearth-updater.sh + deploy/hearth-updater.{service,timer}) so it can
+# run the pull + recreate when the app asks. The app itself never gets Docker
+# access — it only writes a request file into ./data/updates.
+services:
+  hearth:
+    image: ghcr.io/chrislynch97/hearth:latest
+    ports:
+      - "8787:8787"
+    volumes:
+      # Also the exchange point for the host updater's control files (./data/updates).
+      - ./data:/data
+    environment:
+      - PORT=8787
+      - DATABASE_URL=pglite:/data/pgdata
+      - CLIENT_DIR=/app/dist/client
+      # Tells the in-app update UI this is the image deploy: it shows pull-based
+      # commands and (with the host updater) the one-click / auto-update options.
+      - HEARTH_DEPLOY=image
+      - HEARTH_ALLOW_OPEN=${HEARTH_ALLOW_OPEN:-0}
+      - HEARTH_PUBLIC=${HEARTH_PUBLIC:-0}
+    # Proper PID 1 (tini) so SIGTERM reaches node for a clean shutdown.
+    init: true
+    restart: unless-stopped
