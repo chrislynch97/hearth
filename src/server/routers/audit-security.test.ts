@@ -176,7 +176,7 @@ describe('invitation audit events (issue #49)', () => {
 
     const [ev] = await eventsWithAction(db, 'invite_created')
     expect(ev).toMatchObject({ entityType: 'invitation', actorUserId: owner })
-    expect(ev!.changes.details).toEqual({ role: 'member', email: 'ben@example.com' })
+    expect(ev!.changes.details).toEqual({ role: 'member', email: 'ben@example.com', memberId: null })
     expect(JSON.stringify(ev!.changes)).not.toContain(res.token)
   })
 
@@ -220,7 +220,7 @@ describe('invitation audit events (issue #49)', () => {
       actorUserId: newUser.id,
       householdId: 'household',
     })
-    expect(ev!.changes.details).toEqual({ member: 'New Bie', role: 'member' })
+    expect(ev!.changes.details).toEqual({ member: 'New Bie', role: 'member', linkedMemberId: null })
   })
 })
 
