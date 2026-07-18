@@ -39,6 +39,7 @@ export type SecurityAction =
   | 'sessions_revoked'
   | 'registration_changed'
   | 'update_settings_changed'
+  | 'update_applied'
   | 'role_changed'
   | 'access_removed'
   | 'invite_created'

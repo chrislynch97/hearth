@@ -1,0 +1,60 @@
+# Hearth from the prebuilt GHCR image AND a real Postgres server — the managed
+# equivalent of docker-compose.postgres.yml (which builds from source). Updating
+# the app is a pull instead of a rebuild, enabling in-app one-click / automatic
+# updates.
+#
+# Set POSTGRES_PASSWORD in a .env file next to this one:
+#
+#   POSTGRES_PASSWORD=<random>
+#   # optional, defaults below:
+#   HEARTH_PORT=9787
+#
+#   docker compose -f docker-compose.postgres.ghcr.yml up -d      # → http://localhost:9787
+#   docker compose -f docker-compose.postgres.ghcr.yml pull       # fetch a newer image
+#   docker compose -f docker-compose.postgres.ghcr.yml up -d       # apply it
+#
+# For in-app one-click / scheduled updates, also install the host updater (see
+# scripts/hearth-updater.sh). The app never gets Docker access — it only writes a
+# request file into ./data/updates.
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      - POSTGRES_USER=hearth
+      - POSTGRES_DB=hearth
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - hearth-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hearth -d hearth"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    init: true
+    restart: unless-stopped
+
+  hearth:
+    image: ghcr.io/chrislynch97/hearth:latest
+    ports:
+      - "${HEARTH_PORT:-9787}:8787"
+    volumes:
+      # Backups + the host updater's control files (./data/updates). The database
+      # itself lives in the `db` service's volume.
+      - ./data:/data
+    environment:
+      - PORT=8787
+      - DATABASE_URL=postgres://hearth:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/hearth
+      - CLIENT_DIR=/app/dist/client
+      - HEARTH_BACKUP_LOCAL_DIR=/data/backups
+      # Tells the in-app update UI this is the image deploy.
+      - HEARTH_DEPLOY=image
+      - HEARTH_ALLOW_OPEN=${HEARTH_ALLOW_OPEN:-0}
+    depends_on:
+      db:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+
+volumes:
+  hearth-pgdata:

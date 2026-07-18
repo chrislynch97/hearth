@@ -1,0 +1,12 @@
+# Runs hearth-updater.service every ~30s: refreshes the heartbeat and applies any
+# pending in-app update request. See hearth-updater.service for install steps.
+[Unit]
+Description=Run the Hearth updater periodically
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

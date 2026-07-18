@@ -1127,10 +1127,12 @@ const UpdatesSection = () => {
     // On demand only — a settings load shouldn't fire a GitHub request every time.
     const check = trpc.data.checkForUpdates.useQuery(undefined, { enabled: false, gcTime: 0 });
     const backupNow = trpc.data.backupNow.useMutation();
+    const applyUpdate = trpc.data.applyUpdate.useMutation();
     const saveSettings = trpc.data.setUpdateSettings.useMutation({
         onSuccess: () => utils.data.updateSettings.invalidate(),
     });
     const [backupMsg, setBackupMsg] = useState("");
+    const [applying, setApplying] = useState(false);
 
     const current = versionQuery.data?.version;
     const status = check.data;
@@ -1140,6 +1142,14 @@ const UpdatesSection = () => {
         setBackupMsg("");
         const result = await backupNow.mutateAsync();
         setBackupMsg(`Backup written to ${result.file}.`);
+    };
+
+    const handleApply = async () => {
+        await applyUpdate.mutateAsync();
+        // The host updater is about to pull + recreate this container, so the
+        // request may not even return — from here the app just goes away and
+        // comes back on the new version.
+        setApplying(true);
     };
 
     const save = (patch: Parameters<typeof saveSettings.mutate>[0]) => saveSettings.mutate(patch);
@@ -1162,6 +1172,13 @@ const UpdatesSection = () => {
                     Check for updates
                 </Button>
             </Group>
+
+            {settings?.updateResult && !settings.updateResult.ok && (
+                <Alert color="red" variant="light" mb="sm">
+                    The last update attempt failed:{" "}
+                    {settings.updateResult.error ?? "unknown error"}.
+                </Alert>
+            )}
 
             {status && !status.checked && (
                 <Alert color="yellow" variant="light">
@@ -1193,44 +1210,72 @@ const UpdatesSection = () => {
                         )}
                     </Alert>
 
-                    <div>
-                        <Text size="sm" fw={500} mb={4}>
-                            1. Back up first
-                        </Text>
-                        <Group gap="sm">
-                            <Button
-                                size="xs"
-                                variant="default"
-                                loading={backupNow.isPending}
-                                onClick={() => void handleBackup()}
-                            >
-                                Back up now
-                            </Button>
-                            {backupMsg && (
+                    {settings?.updaterOnline ? (
+                        <div>
+                            <Group gap="sm">
+                                <Button
+                                    size="xs"
+                                    loading={applyUpdate.isPending}
+                                    disabled={applying || settings.updatePending}
+                                    onClick={() => void handleApply()}
+                                >
+                                    Update now
+                                </Button>
                                 <Text size="sm" c="dimmed">
-                                    {backupMsg}
+                                    {settings.preUpdateBackup
+                                        ? "Backs up first, then installs and restarts."
+                                        : "Installs the update and restarts."}
                                 </Text>
+                            </Group>
+                            {(applying || settings.updatePending) && (
+                                <Alert color="blue" variant="light" mt="sm">
+                                    Update in progress — the app will restart shortly and come
+                                    back on the new version.
+                                </Alert>
                             )}
-                        </Group>
-                    </div>
-
-                    <div>
-                        <Text size="sm" fw={500} mb={4}>
-                            2. Then run on the host
-                        </Text>
-                        <Group align="flex-start" gap="xs" wrap="nowrap">
-                            <Code block style={{ flex: 1 }}>
-                                {status.commands}
-                            </Code>
-                            <CopyButton value={status.commands}>
-                                {({ copied, copy }) => (
-                                    <Button size="xs" variant="default" onClick={copy}>
-                                        {copied ? "Copied" : "Copy"}
+                        </div>
+                    ) : (
+                        <>
+                            <div>
+                                <Text size="sm" fw={500} mb={4}>
+                                    1. Back up first
+                                </Text>
+                                <Group gap="sm">
+                                    <Button
+                                        size="xs"
+                                        variant="default"
+                                        loading={backupNow.isPending}
+                                        onClick={() => void handleBackup()}
+                                    >
+                                        Back up now
                                     </Button>
-                                )}
-                            </CopyButton>
-                        </Group>
-                    </div>
+                                    {backupMsg && (
+                                        <Text size="sm" c="dimmed">
+                                            {backupMsg}
+                                        </Text>
+                                    )}
+                                </Group>
+                            </div>
+
+                            <div>
+                                <Text size="sm" fw={500} mb={4}>
+                                    2. Then run on the host
+                                </Text>
+                                <Group align="flex-start" gap="xs" wrap="nowrap">
+                                    <Code block style={{ flex: 1 }}>
+                                        {status.commands}
+                                    </Code>
+                                    <CopyButton value={status.commands}>
+                                        {({ copied, copy }) => (
+                                            <Button size="xs" variant="default" onClick={copy}>
+                                                {copied ? "Copied" : "Copy"}
+                                            </Button>
+                                        )}
+                                    </CopyButton>
+                                </Group>
+                            </div>
+                        </>
+                    )}
                 </Stack>
             )}
 

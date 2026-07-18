@@ -1,0 +1,21 @@
+# Hearth host updater — applies in-app update requests (issue #81).
+# Install: copy this + hearth-updater.timer to /etc/systemd/system/, edit the
+# paths below, then:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now hearth-updater.timer
+#
+# Runs as a non-root user in the `docker` group. This unit is the ONLY thing with
+# Docker access — the Hearth container never gets the socket.
+[Unit]
+Description=Hearth managed updater (applies in-app update requests)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=hearth
+Group=docker
+# Edit these to match your install:
+Environment=HEARTH_PROJECT_DIR=/opt/hearth
+Environment=HEARTH_COMPOSE_FILE=docker-compose.ghcr.yml
+ExecStart=/opt/hearth/scripts/hearth-updater.sh

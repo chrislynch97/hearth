@@ -16,6 +16,7 @@ import { appVersion } from '../version'
 import { checkForUpdates, deployMode } from '../updates'
 import { getInstanceSettings, setUpdateSettings } from '../db/instanceSettings'
 import { getCachedUpdateStatus } from '../updateScheduler'
+import { isUpdaterOnline, isUpdatePending, readUpdateResult, requestUpdate } from '../updater'
 import { recordSecurityEvent } from '../trpc/audit'
 
 // NOTE: export / import / reset / stats and the on-disk backup are instance-wide
@@ -172,7 +173,8 @@ export const dataRouter = router({
   }),
 
   /** The owner's update preferences + how this instance is deployed. `updaterOnline`
-   *  reports whether a host updater is present (always false until Phase 2b). */
+   *  is true when a host updater is present (fresh heartbeat) — it gates the
+   *  one-click "Update now" button and the auto-update option. */
   updateSettings: publicProcedure.query(async ({ ctx }) => {
     await assertInstanceOwner(ctx.db, ctx.userId)
     const s = await getInstanceSettings(ctx.db)
@@ -182,7 +184,9 @@ export const dataRouter = router({
       autoUpdate: s.autoUpdate,
       autoUpdateTime: s.autoUpdateTime,
       deployMode: deployMode(),
-      updaterOnline: false,
+      updaterOnline: isUpdaterOnline(),
+      updatePending: isUpdatePending(),
+      updateResult: readUpdateResult(),
     }
   }),
 
@@ -211,4 +215,30 @@ export const dataRouter = router({
       })
       return { ok: true as const }
     }),
+
+  /** One-click apply: back up first (if enabled), then ask the host updater to
+   *  pull + recreate. Owner-only; requires a host updater to be online. The app
+   *  never touches Docker — it only writes the request file. */
+  applyUpdate: publicProcedure.mutation(async ({ ctx }) => {
+    await assertInstanceOwner(ctx.db, ctx.userId)
+    if (!isUpdaterOnline()) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'No host updater is running — apply the update from the host instead.',
+      })
+    }
+    const settings = await getInstanceSettings(ctx.db)
+    if (settings.preUpdateBackup) {
+      await runBackup(ctx.db, [ctx.householdId])
+    }
+    const latest = getCachedUpdateStatus()?.status.latest ?? null
+    recordSecurityEvent(ctx, {
+      entityType: 'instance',
+      entityId: 'updates',
+      action: 'update_applied',
+      details: { toVersion: latest, via: 'manual', backupFirst: settings.preUpdateBackup },
+    })
+    requestUpdate(latest)
+    return { ok: true as const }
+  }),
 })

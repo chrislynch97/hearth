@@ -135,6 +135,8 @@ Update later: `git pull && npm install && npm run build && sudo systemctl restar
 | `HEARTH_BACKUP_DIR` | unset | `directory` mode: the path to copy encrypted backups into. Point it at a **different physical volume** (a second disk, or an NFS/CIFS/rsync mount) — a path on the same volume as the data gives no protection. |
 | `HEARTH_BACKUP_WEBHOOK_URL` | unset | `webhook` mode: the endpoint the encrypted backup is `POST`ed to (`application/octet-stream` body; the filename is sent in an `X-Hearth-Backup` header). Use a presigned object-store URL or your own collector. |
 | `HEARTH_BACKUP_WEBHOOK_AUTH` | unset | `webhook` mode (optional): a value sent verbatim as the `Authorization` header, e.g. `Bearer <token>`. |
+| `HEARTH_DEPLOY` | unset | Set to `image` by the GHCR compose files. Marks this as the prebuilt-image deploy so the in-app update UI shows `pull`-based commands and (with the host updater) one-click / automatic updates. Any other value means build-from-source. See [Updating](#updating--three-ways). |
+| `HEARTH_UPDATE_DIR` | `<data>/updates` | Directory the app and host updater exchange update control files in (request / result / heartbeat). Defaults next to the data dir; override only if you relocate that exchange. |
 
 Hearth auto-detects HTTPS from `x-forwarded-proto: https` (or a direct HTTPS
 connection) and marks the session cookie `Secure` accordingly; `HEARTH_SECURE_COOKIES=1`
@@ -233,6 +235,61 @@ HEARTH_BACKUP_PASSPHRASE=<passphrase> npm run backup:decrypt -- backup.json.enc
 | Restart on crash | `restart: unless-stopped` (compose) | `Restart=always` (systemd) |
 | Start after reboot | `restart: unless-stopped` | `systemctl enable` |
 | Update Hearth | `git pull && docker compose up -d --build` | `git pull && npm install && npm run build && systemctl restart hearth` |
+
+Hearth also checks GitHub for new releases and shows an **update banner** and a
+**System settings → Updates** card (instance owner only). How you *apply* an
+update depends on how you deploy:
+
+### Updating — three ways
+
+**1. Build from source (the default).** With `docker-compose.yml` /
+`docker-compose.postgres.yml` you build the image locally, so updating is the
+`git pull && docker compose up -d --build` above. The in-app card shows you the
+exact commands for your setup. Nothing else to install.
+
+**2. Managed image (prebuilt).** Switch to the GHCR image variant so updating is a
+*pull* instead of a rebuild:
+
+```bash
+docker compose -f docker-compose.ghcr.yml up -d          # PGlite
+# or: docker compose -f docker-compose.postgres.ghcr.yml up -d
+```
+
+These set `HEARTH_DEPLOY=image`. To update, `… pull` then `… up -d` — or enable
+one-click / automatic updates with the host updater below. Images are published to
+`ghcr.io/chrislynch97/hearth` on every release; `:latest` tracks the newest.
+
+**3. One-click & automatic (managed image + host updater).** A tiny host script
+does the pull + recreate when the app asks — so **Update now** and scheduled
+auto-updates work from inside the app. **The Hearth container never gets Docker
+access**; it only writes a request file into `./data/updates`, and the host
+updater (running on the host, in the `docker` group) acts on it.
+
+```bash
+# From your Hearth install dir (holds the compose file + ./data):
+sudo cp scripts/hearth-updater.sh /opt/hearth/scripts/    # or wherever you cloned
+sudo cp deploy/hearth-updater.service deploy/hearth-updater.timer /etc/systemd/system/
+sudoedit /etc/systemd/system/hearth-updater.service       # set HEARTH_PROJECT_DIR + compose file + User
+sudo systemctl daemon-reload
+sudo systemctl enable --now hearth-updater.timer
+```
+
+The timer runs every ~30s: it refreshes a heartbeat (so the app knows managed
+updates are active and shows the **Update now** button / enables **Install updates
+automatically**) and applies any pending request. Not on systemd? A cron line does
+the same:
+
+```cron
+* * * * * cd /opt/hearth && HEARTH_COMPOSE_FILE=docker-compose.ghcr.yml scripts/hearth-updater.sh >> /var/log/hearth-updater.log 2>&1
+```
+
+**Backups first.** *Back up before updating* is on by default (Settings →
+Updates), so every applied update writes a verified backup first. *Install updates
+automatically* lets you pick a daily time (or apply as soon as one is found).
+
+> **GHCR image visibility.** Packages are **private** by default. To pull without
+> authenticating, make the package public once: GitHub → your profile → Packages →
+> `hearth` → Package settings → Change visibility → Public.
 
 ---
 

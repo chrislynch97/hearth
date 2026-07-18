@@ -1,0 +1,5 @@
+# The host updater + its systemd units run on Linux — force LF so a CRLF checkout
+# on Windows doesn't ship a script the shell / systemd can't parse.
+scripts/hearth-updater.sh text eol=lf
+deploy/hearth-updater.service text eol=lf
+deploy/hearth-updater.timer text eol=lf
