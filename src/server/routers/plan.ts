@@ -154,6 +154,7 @@ export const planRouter = router({
             name: o.name,
             date: o.date,
             daysUntil: daysBetweenIso(today, o.date),
+            recurrence: (bill?.recurrence ?? 'monthly') as 'monthly' | 'quarterly' | 'yearly',
             totalAmount: o.amount,
             funding,
             potId: bill?.potId ?? null,

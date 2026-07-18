@@ -1,11 +1,26 @@
 import { describe, it, expect } from 'vitest'
 import {
+  annualise,
   normaliseToMonthly,
   normaliseToPeriod,
   monthlyToPeriod,
   roundMinor,
   fundingPerMonth,
 } from './recurrence'
+
+describe('annualise', () => {
+  it('multiplies by occurrences per year', () => {
+    expect(annualise(1000, 'monthly')).toBe(12000)
+    expect(annualise(1000, 'quarterly')).toBe(4000)
+    expect(annualise(1000, 'yearly')).toBe(1000)
+  })
+  it('carries the sign of the amount (a drop is negative)', () => {
+    expect(annualise(-200, 'monthly')).toBe(-2400)
+  })
+  it('treats one_off as zero', () => {
+    expect(annualise(5000, 'one_off')).toBe(0)
+  })
+})
 
 describe('normaliseToMonthly', () => {
   it('passes monthly through unchanged', () => {

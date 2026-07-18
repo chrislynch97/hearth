@@ -43,6 +43,12 @@ export function normaliseToPeriod(
   return (amountMinor * RECURRENCE_PER_YEAR[recurrence]) / PERIODS_PER_YEAR[frequency]
 }
 
+/** The annual total of a recurring amount (minor units). A `one_off` annualises
+ *  to zero. Used to turn a per-recurrence price change into its yearly impact. */
+export function annualise(amountMinor: number, recurrence: Recurrence): number {
+  return amountMinor * RECURRENCE_PER_YEAR[recurrence]
+}
+
 /** Returns the monthly-equivalent of an amount (minor units), unrounded for precise summation.
  *  Note: weekly/fortnightly use 52/26 weeks ÷ 12 — a conventional approximation, not calendar-exact.
  */
