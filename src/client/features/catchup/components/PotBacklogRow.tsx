@@ -1,7 +1,3 @@
-// ---------------------------------------------------------------------------
-// Per-pot row — groups its payers
-// ---------------------------------------------------------------------------
-
 import type { BacklogPot } from "@/features/catchup/model";
 import type { Member } from "../../../../server/db/schema";
 import type { MoneyFormat } from "@/useMoney";

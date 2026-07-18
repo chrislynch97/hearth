@@ -16,10 +16,6 @@ import { useMoney } from "@/useMoney";
 import { HistorySection } from "@/features/catchup/components/HistorySection";
 import { PotBacklogRow } from "@/features/catchup/components/PotBacklogRow";
 
-// ---------------------------------------------------------------------------
-// CatchupPage
-// ---------------------------------------------------------------------------
-
 export const CatchupPage = () => {
     const membersQuery = trpc.members.list.useQuery();
     const backlogQuery = trpc.reconcile.backlog.useQuery();

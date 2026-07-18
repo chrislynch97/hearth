@@ -1,7 +1,3 @@
-// ---------------------------------------------------------------------------
-// Per-payer sub-row — one "who paid" slice within a pot, expandable to its spends
-// ---------------------------------------------------------------------------
-
 import type { BacklogPayer } from "../model";
 import type { Member } from "../../../../server/db/schema";
 import { type MoneyFormat, useFormatDate } from "@/useMoney";
