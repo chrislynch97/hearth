@@ -286,19 +286,21 @@ systemd? A cron line does the same:
 ```
 
 *Windows / Docker Desktop — Task Scheduler.* There's no systemd, so register the
-PowerShell updater (`scripts/hearth-updater.ps1`) as a scheduled task instead.
-From an **elevated PowerShell** in your Hearth install dir:
+PowerShell updater (`scripts/hearth-updater.ps1`) as a scheduled task instead. In
+your Hearth install dir, either **double-click `deploy\register-hearth-updater.cmd`**,
+or from a normal PowerShell (no admin needed):
 
 ```powershell
-# Uses docker-compose.ghcr.yml by default; pass -ComposeFile for the Postgres variant.
 .\deploy\register-hearth-updater.ps1
-# .\deploy\register-hearth-updater.ps1 -ComposeFile docker-compose.postgres.ghcr.yml
 ```
 
-The task runs every minute (Task Scheduler's minimum, well within the app's
-3-minute heartbeat window). Run it as a user in the **docker-users** group who's
-signed in to Docker Desktop, so `docker compose` can reach the engine. Remove it
-with `Unregister-ScheduledTask -TaskName Hearth-Updater -Confirm:$false`.
+That's it — the compose file is auto-detected from the running project (pass
+`-ComposeFile docker-compose.postgres.ghcr.yml` to override). The task runs every
+minute — hidden, via `wscript`, so no console window flashes — which is Task
+Scheduler's minimum and well within the app's 3-minute heartbeat window. Run it as
+a user in the **docker-users** group who's signed in to Docker Desktop, so
+`docker compose` can reach the engine. Remove it with
+`Unregister-ScheduledTask -TaskName Hearth-Updater -Confirm:$false`.
 
 Both runners refresh the heartbeat so the app shows the **Update now** button and
 enables **Install updates automatically**, then apply any pending request — the

@@ -7,9 +7,11 @@
 # minimum repetition interval is 1 minute, so we use that rather than the ~30s
 # of the systemd timer.
 #
-# Run from an elevated PowerShell in your Hearth install dir (holds the compose
-# file + .\data), e.g.:
+# Run from a normal PowerShell in your Hearth install dir (holds the compose file
+# + .\data) -- no admin needed. Simplest form (compose file auto-detected from the
+# running project):
 #   .\deploy\register-hearth-updater.ps1
+# Or double-click deploy\register-hearth-updater.cmd. Override detection with:
 #   .\deploy\register-hearth-updater.ps1 -ComposeFile docker-compose.postgres.ghcr.yml
 #
 # Unregister with:
@@ -17,7 +19,7 @@
 
 param(
   [string]$ProjectDir = (Get-Location).Path,
-  [string]$ComposeFile = 'docker-compose.ghcr.yml',
+  [string]$ComposeFile = '',
   [string]$TaskName = 'Hearth-Updater'
 )
 
@@ -27,6 +29,27 @@ $script = Join-Path $ProjectDir 'scripts\hearth-updater.ps1'
 if (-not (Test-Path $script)) { throw "updater script not found at $script -- run this from your Hearth install dir" }
 $launcher = Join-Path $ProjectDir 'scripts\hearth-updater-hidden.vbs'
 if (-not (Test-Path $launcher)) { throw "hidden launcher not found at $launcher -- run this from your Hearth install dir" }
+
+# Auto-detect the compose file from the running Hearth project so the common case
+# needs no -ComposeFile. `docker compose ls` reports each project's config files;
+# pick the ghcr variant that's actually running. Fall back to the PGlite default.
+$knownCompose = @('docker-compose.ghcr.yml', 'docker-compose.postgres.ghcr.yml')
+if (-not $ComposeFile) {
+  try {
+    foreach ($proj in (docker compose ls --format json 2>$null | ConvertFrom-Json)) {
+      foreach ($cf in ($proj.ConfigFiles -split ',')) {
+        $base = Split-Path $cf.Trim() -Leaf
+        if ($knownCompose -contains $base) { $ComposeFile = $base; break }
+      }
+      if ($ComposeFile) { break }
+    }
+  } catch {}
+  if ($ComposeFile) { Write-Output "Detected compose file: $ComposeFile" }
+  else {
+    $ComposeFile = 'docker-compose.ghcr.yml'
+    Write-Output "No running Hearth project found; defaulting to $ComposeFile (pass -ComposeFile to override)."
+  }
+}
 
 # Launch via wscript, not powershell.exe directly: a direct powershell action
 # flashes a console window every tick. wscript has no console and starts the
