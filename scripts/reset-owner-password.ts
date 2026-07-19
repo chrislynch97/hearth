@@ -1,7 +1,11 @@
 // Break-glass owner password reset (#51) — the recovery path for a locked-out
 // instance owner, who by design has no one above them to reset their password.
 //
-//   npm run reset-owner-password
+//   npm run reset-owner-password                     (from a source checkout)
+//   docker exec -it <container> node dist/reset-owner-password.js   (Docker)
+//
+// The Docker form works because `build:reset-password` bundles this file into
+// dist/ — the runtime image has no npm, no tsx and no scripts/ dir (#135).
 //
 // Prompts for a new password, clears the owner's MFA enrolment, and revokes their
 // sessions. Requires shell access to the box, which already equals full access to
@@ -39,7 +43,8 @@ if (!isServerPgUrl(url)) {
 
 if (!process.stdin.isTTY) {
   console.error(
-    'This needs a terminal to prompt for the new password (try `docker exec -it <container> npm run reset-owner-password`).',
+    'This needs a terminal to prompt for the new password ' +
+      '(in Docker, run `docker exec -it <container> node dist/reset-owner-password.js`).',
   )
   process.exit(1)
 }
