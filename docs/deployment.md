@@ -459,7 +459,9 @@ where you'd add HTTPS with a local certificate. Optional.
   is likewise capped (10 / hour per client) so an open instance can't be spammed
   into mass-creating households. Behind a proxy, set `HEARTH_TRUST_PROXY` to the hop
   count (a single proxy = `1`) so the per-IP limit keys on the real client IP, not
-  the proxy — and make the proxy overwrite `X-Forwarded-For`.
+  the proxy — and make the proxy overwrite `X-Forwarded-For`. Limiter state lives in
+  the database, so it survives a restart and is shared by every instance running
+  against that database — running two replicas doesn't double the attempt budget.
 - **The database is not encrypted at rest.** Password hashes, TOTP secrets and
   recovery-code hashes live in the same database as your data, so two-factor
   protects the *login path*, not someone who already has the files. Keep the data

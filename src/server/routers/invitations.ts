@@ -18,7 +18,7 @@ const inviteRole = z.enum(['admin', 'member', 'viewer'])
 
 // Throttle invite acceptance so the username-taken response can't be used as an
 // unbounded enumeration oracle: 10 attempts per hour per client, then a block.
-const acceptLimiter = new RateLimiter({
+const acceptLimiter = new RateLimiter('invite-accept', {
   windowMs: 60 * 60 * 1000,
   maxAttempts: 10,
   blockMs: 60 * 60 * 1000,
@@ -140,25 +140,25 @@ export const invitationsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const key = ctx.clientKey ?? 'unknown'
       const nowCheck = Date.now()
-      if (!acceptLimiter.check(key, nowCheck).allowed) {
+      if (!(await acceptLimiter.check(ctx.db, key, nowCheck)).allowed) {
         throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many attempts. Try again later.' })
       }
 
       const tokenHash = hashToken(input.token)
       const [preview] = await ctx.db.select().from(invitation).where(eq(invitation.tokenHash, tokenHash))
       if (!preview || preview.acceptedAt !== null || preview.expiresAt.getTime() < Date.now()) {
-        acceptLimiter.fail(key, nowCheck)
+        await acceptLimiter.fail(ctx.db, key, nowCheck)
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'This invitation is invalid or has expired.' })
       }
       const weak = validatePassword(input.password)
       if (weak) {
-        acceptLimiter.fail(key, nowCheck)
+        await acceptLimiter.fail(ctx.db, key, nowCheck)
         throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
       }
       // Friendly best-effort check; the unique index on user.username is the real
       // guard against a concurrent same-username race (handled below).
       if (await getUserByUsername(ctx.db, input.username.trim())) {
-        acceptLimiter.fail(key, nowCheck)
+        await acceptLimiter.fail(ctx.db, key, nowCheck)
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'That username is taken.' })
       }
 
@@ -205,17 +205,17 @@ export const invitationsRouter = router({
         })
       } catch (err) {
         if (isUniqueViolation(err)) {
-          acceptLimiter.fail(key, nowCheck)
+          await acceptLimiter.fail(ctx.db, key, nowCheck)
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'That username is taken.' })
         }
         throw err
       }
       if (!result) {
-        acceptLimiter.fail(key, nowCheck)
+        await acceptLimiter.fail(ctx.db, key, nowCheck)
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'This invitation is invalid or has expired.' })
       }
 
-      acceptLimiter.reset(key)
+      await acceptLimiter.reset(ctx.db, key)
       // The new member is both actor and subject; the request context has no
       // identity yet (the session is created below), so record with explicit
       // household + actor so the entry lands in the joined household's trail.

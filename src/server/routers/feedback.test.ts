@@ -3,7 +3,6 @@ import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
 import { getOwnerUser } from '../auth/session'
 import { appRouter } from '../trpc/router'
-import { feedbackLimiter } from '../feedback'
 
 const { HEARTH_FEEDBACK_TOKEN, HEARTH_FEEDBACK_REPO } = process.env
 
@@ -45,8 +44,7 @@ describe('feedback router', () => {
 
   it('submit files an issue and returns its details', async () => {
     process.env.HEARTH_FEEDBACK_TOKEN = 'ghp_secret'
-    const { caller, ownerId } = await ownerCaller()
-    feedbackLimiter.reset(ownerId)
+    const { caller } = await ownerCaller()
     vi.stubGlobal(
       'fetch',
       vi.fn(
@@ -66,8 +64,7 @@ describe('feedback router', () => {
 
   it('throttles after the per-user limit', async () => {
     process.env.HEARTH_FEEDBACK_TOKEN = 'ghp_secret'
-    const { caller, ownerId } = await ownerCaller()
-    feedbackLimiter.reset(ownerId)
+    const { caller } = await ownerCaller()
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(JSON.stringify({ html_url: 'u', number: 1 }), { status: 201 })),

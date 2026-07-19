@@ -48,10 +48,9 @@ export interface SubmitFeedbackResult {
   number: number
 }
 
-// Process-local throttle so a bored viewer can't spam the tracker: a signed-in
-// user gets a handful of reports per window, then waits. Keyed by user id (see
-// router). Fine for a single instance; a reverse proxy can add more.
-export const feedbackLimiter = new RateLimiter({
+// Throttle so a bored viewer can't spam the tracker: a signed-in user gets a
+// handful of reports per window, then waits. Keyed by user id (see router).
+export const feedbackLimiter = new RateLimiter('feedback', {
   windowMs: 10 * 60_000,
   maxAttempts: 6,
   blockMs: 10 * 60_000,
