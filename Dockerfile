@@ -38,8 +38,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Only production dependencies — no tsx/vite/esbuild/typescript in the image.
+# npm itself is removed once the install is done: nothing at runtime shells out
+# to it (CMD and HEALTHCHECK both invoke node directly), and npm bundles its own
+# dependency tree, which is a standing source of CVEs in an image that never
+# runs it.
 COPY package*.json ./
-RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Compiled JS + the Drizzle migrations the server applies on boot (resolved from
 # CWD as ./drizzle). No TypeScript sources ship in the runtime image.
