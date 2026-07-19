@@ -34,13 +34,14 @@ $action = New-ScheduledTaskAction `
   -Argument "-NonInteractive -NoProfile -ExecutionPolicy Bypass -Command `"$command`"" `
   -WorkingDirectory $ProjectDir
 
-# Fire at logon, then repeat every minute forever. AtStartup instead of AtLogOn
-# would need SYSTEM/service credentials that can reach the Docker Desktop engine;
-# a logged-on user in the docker-users group is the simplest working setup.
-$trigger = New-ScheduledTaskTrigger -AtLogOn
-$trigger.Repetition = (New-ScheduledTaskTrigger -Once -At (Get-Date) `
-  -RepetitionInterval (New-TimeSpan -Minutes 1) `
-  -RepetitionDuration ([TimeSpan]::MaxValue)).Repetition
+# One-time start (now), repeating every minute indefinitely. Omitting the
+# repetition duration is what makes it indefinite -- do NOT set it to
+# [TimeSpan]::MaxValue, which serializes to an out-of-range P99999999D duration
+# that Register-ScheduledTask rejects. StartWhenAvailable re-arms it after the
+# host is off/asleep. The task runs as the registering (logged-on) user, which is
+# what lets `docker compose` reach the Docker Desktop engine.
+$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) `
+  -RepetitionInterval (New-TimeSpan -Minutes 1)
 
 $settings = New-ScheduledTaskSettingsSet `
   -AllowStartIfOnBatteries `
@@ -48,13 +49,15 @@ $settings = New-ScheduledTaskSettingsSet `
   -StartWhenAvailable `
   -MultipleInstances IgnoreNew
 
+# Let a registration failure surface as an error -- don't fall through to the
+# success message below.
 Register-ScheduledTask `
   -TaskName $TaskName `
   -Action $action `
   -Trigger $trigger `
   -Settings $settings `
   -Description "Hearth managed updater -- applies in-app update requests (compose: $ComposeFile)" `
-  -Force | Out-Null
+  -Force -ErrorAction Stop | Out-Null
 
 Write-Output "Registered scheduled task '$TaskName' (every 1 min)."
 Write-Output "  Project dir : $ProjectDir"
