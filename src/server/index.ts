@@ -22,6 +22,8 @@ import { allProceduresIn, allowedOrigins, isAllowedOrigin, openGuardConfig, trpc
 import { isPublicDeploy, startupSafetyProblems } from './auth/startup'
 import { getInstanceSettings } from './db/instanceSettings'
 import { parseTrustProxy } from './auth/trustProxy'
+import { checkHealth, healthBody } from './ops/health'
+import { startAuthAlertScheduler } from './ops/authAlerts'
 
 // On an OPEN (password-less) instance the owner fallback resolves every
 // anonymous request as the owner — safe on a trusted LAN, catastrophic if the
@@ -112,6 +114,7 @@ async function main() {
   startAuditPruneScheduler(db)
   startSessionPurgeScheduler(db)
   startUpdateScheduler(db)
+  startAuthAlertScheduler(db)
 
   // 64 MB body limit so restoring a large JSON export isn't rejected (default 1 MB).
   // `trustProxy` is opt-in (HEARTH_TRUST_PROXY): only set it when a reverse proxy /
@@ -166,6 +169,18 @@ async function main() {
   // touching the DB or serving the SPA. Suitable as a Docker/orchestrator health
   // check target.
   app.get('/health', async () => ({ status: 'ok' }))
+
+  // Readiness probe for an external uptime monitor (#57). Unlike /health it
+  // actually asks whether we can still do the job: the DB answers, and the data
+  // disk has room — the two ways a small unattended box dies quietly. 503 when
+  // degraded, so a monitor alerts without parsing the body. The body is
+  // boolean-only because this endpoint is unauthenticated; the numbers and the
+  // error text go to the log instead.
+  app.get('/healthz', async (_req, reply) => {
+    const detail = await checkHealth(db)
+    if (detail.status !== 'ok') app.log.error({ health: detail }, 'readiness check degraded')
+    return reply.code(detail.status === 'ok' ? 200 : 503).send(healthBody(detail))
+  })
 
   // Cap request-body size per /trpc route ahead of the auth gate and any body
   // parsing. `data.import` keeps the full 64 MB headroom (set at Fastify

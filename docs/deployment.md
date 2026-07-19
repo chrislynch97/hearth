@@ -135,6 +135,10 @@ Update later: `git pull && npm install && npm run build && sudo systemctl restar
 | `HEARTH_BACKUP_DIR` | unset | `directory` mode: the path to copy encrypted backups into. Point it at a **different physical volume** (a second disk, or an NFS/CIFS/rsync mount) — a path on the same volume as the data gives no protection. |
 | `HEARTH_BACKUP_WEBHOOK_URL` | unset | `webhook` mode: the endpoint the encrypted backup is `POST`ed to (`application/octet-stream` body; the filename is sent in an `X-Hearth-Backup` header). Use a presigned object-store URL or your own collector. |
 | `HEARTH_BACKUP_WEBHOOK_AUTH` | unset | `webhook` mode (optional): a value sent verbatim as the `Authorization` header, e.g. `Bearer <token>`. |
+| `HEARTH_DISK_MIN_FREE_MB` | `512` | Free space on the data volume below which `/healthz` reports **degraded** (HTTP 503). See [Monitoring & alerting](#monitoring--alerting). A non-integer value is ignored and the default kept. |
+| `HEARTH_BACKUP_HEARTBEAT_URL` | unset | A ping URL (e.g. a [Healthchecks.io](https://healthchecks.io) check) that Hearth `POST`s after each successful automatic backup, and to `<url>/fail` when one fails. Gives you dead-man's-switch alerting: you hear about backups that stopped running, not just ones that ran and failed. |
+| `HEARTH_ALERT_WEBHOOK` | unset | Endpoint that receives operational alerts as JSON (`{ event, message, detail, at }`) — backup failures, off-site upload failures, and failed-login bursts. Point it at whatever you already get notified through. |
+| `HEARTH_AUTH_ALERT_THRESHOLD` | `10` | Failed sign-ins in an hour that raise an `auth_failures` alert. `0` turns the check off. |
 | `HEARTH_DEPLOY` | unset | Set to `image` by the GHCR compose files. Marks this as the prebuilt-image deploy so the in-app update UI shows `pull`-based commands and (with the host updater) one-click / automatic updates. Any other value means build-from-source. See [Updating](#updating--three-ways). |
 | `HEARTH_UPDATE_DIR` | `<data>/updates` | Directory the app and host updater exchange update control files in (request / result / heartbeat). Defaults next to the data dir; override only if you relocate that exchange. |
 | `HEARTH_FEEDBACK_TOKEN` | unset | A GitHub token with **issues: write** on the target repo. Setting it turns on the in-app **Send feedback** entry (in the account menu), which files a bug/idea as a GitHub issue. Left unset, the feature is hidden. Use a **fine-grained** token scoped to just the one repo, and remember reports land in a **public** repo — the form warns submitters. |
@@ -227,6 +231,69 @@ normal Hearth JSON snapshot, then import it from **Settings → Data → Import*
 ```bash
 HEARTH_BACKUP_PASSPHRASE=<passphrase> npm run backup:decrypt -- backup.json.enc
 ```
+
+---
+
+## Monitoring & alerting
+
+On an unattended instance nothing tells you something broke — you find out when
+you next open the app, which for a backup failure can be months too late. Hearth
+ships the small pieces that fix that; all of them are opt-in except the health
+endpoints.
+
+Deliberately *not* included: metrics stacks (Prometheus/Grafana) and tracing.
+Overkill for a single household box.
+
+### Health endpoints
+
+| Endpoint | Checks | Use for |
+|---|---|---|
+| `/health` | Nothing — 200 as soon as the process is listening. | Container/orchestrator liveness. |
+| `/healthz` | Database answers a query, and the data volume has at least `HEARTH_DISK_MIN_FREE_MB` free. 200 when healthy, **503** when degraded. | An external uptime monitor. |
+
+A full disk is the likeliest silent failure on a small VPS — the database
+directory and the local backups both grow on local disk — so `/healthz` watches
+it. Both endpoints are unauthenticated, so the `/healthz` body is booleans only
+(`{"status":"degraded","checks":{"db":{"ok":true},"disk":{"ok":false}}}`); the
+free-space figures and error text go to the container log instead.
+
+### Uptime checks
+
+Point a free external monitor ([UptimeRobot](https://uptimerobot.com),
+[Healthchecks.io](https://healthchecks.io), Better Stack, …) at
+`https://<your-host>/healthz` every 5 minutes and have it alert on a non-200. It
+must be **external** — a monitor running on the same box goes down with it.
+
+If your instance isn't reachable from the internet, invert it: run the check
+locally on a cron and have it ping a Healthchecks.io check on success, so
+silence raises the alarm.
+
+### Backup failure alerting
+
+Set `HEARTH_BACKUP_HEARTBEAT_URL` to a Healthchecks.io (or equivalent) ping URL.
+Hearth pings it after each successful automatic backup, and pings `<url>/fail`
+when one fails. Set the check's period to match your backup frequency (daily
+backups → a 1-day period with a few hours' grace); the service then alerts both
+when a backup fails *and* when one silently stops happening.
+
+Set `HEARTH_ALERT_WEBHOOK` as well (or instead) to receive the same failures as
+a JSON `POST` you can route wherever you already get notified.
+
+### Failed-login alerting
+
+Every failed sign-in is already recorded in the audit trail, but nobody reads a
+table on an unattended box. Hearth sweeps the last hour and raises an
+`auth_failures` alert (log line, plus `HEARTH_ALERT_WEBHOOK` if set) once
+failures cross `HEARTH_AUTH_ALERT_THRESHOLD` (default 10). Set it to `0` to turn
+the check off — worth doing on a LAN-only instance, where a fat-fingered
+password is the only thing it will ever catch.
+
+### Log rotation
+
+Container logs are capped in the shipped compose files (`json-file`, 10 MB × 3
+per service) so they can't fill the disk. If you run Hearth some other way, cap
+them yourself — `docker run --log-opt max-size=10m --log-opt max-file=3`, or
+under systemd set `SystemMaxUse=` in `journald.conf`.
 
 ---
 

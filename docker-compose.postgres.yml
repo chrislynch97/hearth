@@ -41,6 +41,12 @@ services:
       start_period: 10s
     init: true
     restart: unless-stopped
+    # Cap container logs so they can't fill the disk on an unattended box (#57).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   hearth:
     build: .
@@ -74,6 +80,12 @@ services:
     # Proper PID 1 (tini) so SIGTERM reaches node for a clean shutdown.
     init: true
     restart: unless-stopped
+    # Cap container logs so they can't fill the disk on an unattended box (#57).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   hearth-pgdata:
