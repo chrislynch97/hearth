@@ -37,7 +37,7 @@ jobs:
 
       # Republish only the moving `:latest` pointer. Immutable x.y.z tags are
       # left untouched so a pinned deploy stays reproducible.
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           push: true

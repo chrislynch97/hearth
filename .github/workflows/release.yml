@@ -39,7 +39,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           # Single-arch (amd64) for now — QEMU-emulating an arm64 npm build is
