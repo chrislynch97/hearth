@@ -137,6 +137,8 @@ Update later: `git pull && npm install && npm run build && sudo systemctl restar
 | `HEARTH_BACKUP_WEBHOOK_AUTH` | unset | `webhook` mode (optional): a value sent verbatim as the `Authorization` header, e.g. `Bearer <token>`. |
 | `HEARTH_DEPLOY` | unset | Set to `image` by the GHCR compose files. Marks this as the prebuilt-image deploy so the in-app update UI shows `pull`-based commands and (with the host updater) one-click / automatic updates. Any other value means build-from-source. See [Updating](#updating--three-ways). |
 | `HEARTH_UPDATE_DIR` | `<data>/updates` | Directory the app and host updater exchange update control files in (request / result / heartbeat). Defaults next to the data dir; override only if you relocate that exchange. |
+| `HEARTH_FEEDBACK_TOKEN` | unset | A GitHub token with **issues: write** on the target repo. Setting it turns on the in-app **Send feedback** entry (in the account menu), which files a bug/idea as a GitHub issue. Left unset, the feature is hidden. Use a **fine-grained** token scoped to just the one repo, and remember reports land in a **public** repo — the form warns submitters. |
+| `HEARTH_FEEDBACK_REPO` | `chrislynch97/hearth` | `owner/repo` that in-app feedback is filed against. Defaults to upstream (send reports to the project); point it at your own fork if you'd rather keep them. Only used when `HEARTH_FEEDBACK_TOKEN` is set. |
 
 Hearth auto-detects HTTPS from `x-forwarded-proto: https` (or a direct HTTPS
 connection) and marks the session cookie `Secure` accordingly; `HEARTH_SECURE_COOKIES=1`

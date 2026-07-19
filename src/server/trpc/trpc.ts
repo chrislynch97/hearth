@@ -74,6 +74,9 @@ export const WRITE_ROLE_EXEMPT = new Set([
   // Per-user UI state, not household data: hiding your own getting-started
   // checklist (#62) is self-service, so a viewer can dismiss it too.
   'onboarding.dismiss',
+  // Filing a bug/feedback issue (#86) is not a household-data write and carries
+  // its own per-user throttle, so any signed-in user (viewers included) may send.
+  'feedback.submit',
   'sessions.revoke',
   'sessions.revokeOthers',
   // Pre-membership joins: authenticated by an invite token / open-registration
