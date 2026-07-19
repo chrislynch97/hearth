@@ -1,7 +1,10 @@
 # syntax=docker/dockerfile:1
 
 # ---- Build stage: full toolchain (dev deps) to compile client + server ----
-FROM node:24-slim AS build
+# Base image pinned by digest for reproducible builds; Dependabot bumps the
+# digest (and node:24-slim tag) when a patched image is published. Keep both
+# stages on the same digest.
+FROM node:24-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS build
 WORKDIR /app
 
 # Reproducible install from the committed lockfile. `npm ci` is strict, so keep
@@ -30,13 +33,18 @@ ENV HEARTH_VERSION=$HEARTH_VERSION
 RUN npm run build
 
 # ---- Runtime stage: prod deps only, compiled JS, non-root ----
-FROM node:24-slim AS runtime
+FROM node:24-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
 # Only production dependencies — no tsx/vite/esbuild/typescript in the image.
+# npm itself is removed once the install is done: nothing at runtime shells out
+# to it (CMD and HEALTHCHECK both invoke node directly), and npm bundles its own
+# dependency tree, which is a standing source of CVEs in an image that never
+# runs it.
 COPY package*.json ./
-RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Compiled JS + the Drizzle migrations the server applies on boot (resolved from
 # CWD as ./drizzle). No TypeScript sources ship in the runtime image.
