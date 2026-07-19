@@ -25,13 +25,17 @@ $ErrorActionPreference = 'Stop'
 
 $script = Join-Path $ProjectDir 'scripts\hearth-updater.ps1'
 if (-not (Test-Path $script)) { throw "updater script not found at $script -- run this from your Hearth install dir" }
+$launcher = Join-Path $ProjectDir 'scripts\hearth-updater-hidden.vbs'
+if (-not (Test-Path $launcher)) { throw "hidden launcher not found at $launcher -- run this from your Hearth install dir" }
 
-# Pass config to the updater via inline env vars so the task is self-contained --
-# no machine-wide environment pollution.
-$command = "& { `$env:HEARTH_PROJECT_DIR='$ProjectDir'; `$env:HEARTH_COMPOSE_FILE='$ComposeFile'; & '$script' }"
+# Launch via wscript, not powershell.exe directly: a direct powershell action
+# flashes a console window every tick. wscript has no console and starts the
+# updater hidden (see hearth-updater-hidden.vbs), still in the logged-on user's
+# session so Docker Desktop stays reachable. The launcher takes the project dir +
+# compose file as args and sets them as env vars for the updater.
 $action = New-ScheduledTaskAction `
-  -Execute 'powershell.exe' `
-  -Argument "-NonInteractive -NoProfile -ExecutionPolicy Bypass -Command `"$command`"" `
+  -Execute 'wscript.exe' `
+  -Argument "`"$launcher`" `"$ProjectDir`" `"$ComposeFile`"" `
   -WorkingDirectory $ProjectDir
 
 # One-time start (now), repeating every minute indefinitely. Omitting the
