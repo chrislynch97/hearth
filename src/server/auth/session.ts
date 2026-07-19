@@ -6,6 +6,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { and, asc, eq, isNotNull, lt, ne, or } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import type { DB, DBOrTx } from '../db/client'
+import { SchedulerLock, withLeaderLock } from '../db/leader'
 import { membership, session, user } from '../db/schema'
 import type { Session, User } from '../db/schema'
 import { getInstanceSettings, setAuthRequired, setInstanceOwnerId } from '../db/instanceSettings'
@@ -215,11 +216,12 @@ export async function deleteExpiredSessions(db: DB, now: Date = new Date()): Pro
 
 /** Start the periodic purge of expired sessions. Mirrors the backup scheduler:
  *  an unref'd interval that never keeps the process alive on its own, running an
- *  immediate first sweep so a fresh boot doesn't wait an hour to clear a backlog. */
+ *  immediate first sweep so a fresh boot doesn't wait an hour to clear a backlog.
+ *  Leader-guarded (#113) so only one replica sweeps per tick. */
 export function startSessionPurgeScheduler(db: DB): void {
   const tick = async () => {
     try {
-      await deleteExpiredSessions(db)
+      await withLeaderLock(db, SchedulerLock.sessionPurge, () => deleteExpiredSessions(db))
     } catch (err) {
       console.error('Expired-session purge failed:', err)
     }

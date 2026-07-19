@@ -15,6 +15,7 @@ import { drizzle } from 'drizzle-orm/pglite'
 import { PGlite } from '@electric-sql/pglite'
 import { migrate } from 'drizzle-orm/pglite/migrator'
 import type { DB } from '../db/client'
+import { SchedulerLock, withLeaderLock } from '../db/leader'
 import { household } from '../db/schema'
 import * as schema from '../db/schema'
 import { ALL_TABLES } from '../db/tables'
@@ -234,30 +235,35 @@ function errorText(err: unknown): string {
 
 /** Start the periodic auto-backup check. Every household sets its own
  *  `backupFrequency`; the tick backs up (one whole-db snapshot) whenever any
- *  household is due and stamps each due household. 'off' means never. */
+ *  household is due and stamps each due household. 'off' means never.
+ *  Leader-guarded (#113): only one replica backs up a given due window. */
 export function startBackupScheduler(db: DB): void {
   const tick = async () => {
     try {
-      const now = Date.now()
-      const households = await db.select().from(household)
-      const dueIds = households
-        .filter((hh) =>
-          shouldBackup(hh.backupFrequency as BackupFrequency, hh.backupLastAt?.getTime() ?? null, now),
-        )
-        .map((hh) => hh.id)
-      if (dueIds.length > 0) {
-        const result = await runBackup(db, dueIds)
-        // Ping only when a backup actually ran, so the heartbeat's expected period
-        // matches the household's backup frequency rather than this hourly tick.
-        await pingHeartbeat('success', `backup written to ${result.file}`)
-        if (result.offsite && !result.offsite.ok) {
-          await sendAlert({
-            event: 'offsite_backup_failed',
-            message: 'Off-site backup upload failed (the local backup succeeded)',
-            detail: { target: result.offsite.kind, error: result.offsite.error },
-          })
+      await withLeaderLock(db, SchedulerLock.backup, async () => {
+        const now = Date.now()
+        const households = await db.select().from(household)
+        const dueIds = households
+          .filter((hh) =>
+            shouldBackup(hh.backupFrequency as BackupFrequency, hh.backupLastAt?.getTime() ?? null, now),
+          )
+          .map((hh) => hh.id)
+        if (dueIds.length > 0) {
+          const result = await runBackup(db, dueIds)
+          // Ping only when a backup actually ran, so the heartbeat's expected period
+          // matches the household's backup frequency rather than this hourly tick.
+          // Inside the leader guard for the same reason: a replica that skipped the
+          // tick must not report a backup it didn't take.
+          await pingHeartbeat('success', `backup written to ${result.file}`)
+          if (result.offsite && !result.offsite.ok) {
+            await sendAlert({
+              event: 'offsite_backup_failed',
+              message: 'Off-site backup upload failed (the local backup succeeded)',
+              detail: { target: result.offsite.kind, error: result.offsite.error },
+            })
+          }
         }
-      }
+      })
     } catch (err) {
       console.error('Automatic backup failed:', err)
       // A log line is not enough on an unattended box (#57): fail the heartbeat so

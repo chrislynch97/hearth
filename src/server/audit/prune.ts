@@ -1,5 +1,6 @@
 import { inArray, lt } from 'drizzle-orm'
 import type { DB } from '../db/client'
+import { SchedulerLock, withLeaderLock } from '../db/leader'
 import { auditLog, household } from '../db/schema'
 import { scopeWhere } from '../trpc/tenant'
 import { auditArchiveDir, writeAuditArchive } from './archive'
@@ -83,19 +84,22 @@ export async function pruneAuditLog(
  *  `auditRetentionDays`; each tick prunes every household with a window
  *  configured (>0) down to that window. Best-effort like the backup scheduler —
  *  a failure is logged, never fatal — and idempotent, so a missed tick just
- *  prunes a little more the next hour. */
+ *  prunes a little more the next hour. Leader-guarded (#113) so replicas don't
+ *  prune the same rows concurrently. */
 export function startAuditPruneScheduler(db: DB): void {
   const tick = async () => {
     try {
-      const now = Date.now()
-      const households = await db.select().from(household)
-      for (const hh of households) {
-        const cutoff = retentionCutoff(hh.auditRetentionDays, now)
-        if (cutoff) {
-          const archiveDir = hh.auditPruneArchive ? auditArchiveDir() : undefined
-          await pruneAuditLog(db, hh.id, cutoff, { archiveDir })
+      await withLeaderLock(db, SchedulerLock.auditPrune, async () => {
+        const now = Date.now()
+        const households = await db.select().from(household)
+        for (const hh of households) {
+          const cutoff = retentionCutoff(hh.auditRetentionDays, now)
+          if (cutoff) {
+            const archiveDir = hh.auditPruneArchive ? auditArchiveDir() : undefined
+            await pruneAuditLog(db, hh.id, cutoff, { archiveDir })
+          }
         }
-      }
+      })
     } catch (err) {
       console.error('Automatic audit prune failed:', err)
     }
