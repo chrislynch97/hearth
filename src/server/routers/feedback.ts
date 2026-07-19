@@ -31,13 +31,13 @@ export const feedbackRouter = router({
       if (!ctx.userId) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
 
       const now = Date.now()
-      if (!feedbackLimiter.check(ctx.userId, now).allowed) {
+      if (!(await feedbackLimiter.check(ctx.db, ctx.userId, now)).allowed) {
         throw new TRPCError({
           code: 'TOO_MANY_REQUESTS',
           message: 'You’ve sent a few reports just now — try again in a little while.',
         })
       }
-      feedbackLimiter.fail(ctx.userId, now)
+      await feedbackLimiter.fail(ctx.db, ctx.userId, now)
 
       const u = await getUser(ctx.db, ctx.userId)
       try {

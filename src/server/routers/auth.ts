@@ -42,7 +42,7 @@ import type { Context } from '../trpc/context'
 import type { DB } from '../db/client'
 
 // Throttle password attempts: 10 per 15 minutes per client, then a 15-minute block.
-const loginLimiter = new RateLimiter({
+const loginLimiter = new RateLimiter('login-ip', {
   windowMs: 15 * 60 * 1000,
   maxAttempts: 10,
   blockMs: 15 * 60 * 1000,
@@ -53,7 +53,7 @@ const loginLimiter = new RateLimiter({
 // stay under the per-IP cap). The cap is deliberately higher than the per-IP cap
 // so a single client — already limited to 10 — can never trip it, which stops an
 // attacker from locking a known victim out of their own account (griefing).
-const loginAccountLimiter = new RateLimiter({
+const loginAccountLimiter = new RateLimiter('login-account', {
   windowMs: 15 * 60 * 1000,
   maxAttempts: 50,
   blockMs: 15 * 60 * 1000,
@@ -61,7 +61,7 @@ const loginAccountLimiter = new RateLimiter({
 
 // Throttle self-registration so an open instance can't be spammed into creating
 // unbounded accounts + households: 10 per hour per client, then a 1-hour block.
-const registerLimiter = new RateLimiter({
+const registerLimiter = new RateLimiter('register', {
   windowMs: 60 * 60 * 1000,
   maxAttempts: 10,
   blockMs: 60 * 60 * 1000,
@@ -142,8 +142,8 @@ export const authRouter = router({
       const key = ctx.clientKey ?? 'unknown'
       const acctKey = normalizeUsername(input.username)
       const now = Date.now()
-      const ipLimit = loginLimiter.check(key, now)
-      const acctLimit = loginAccountLimiter.check(acctKey, now)
+      const ipLimit = await loginLimiter.check(ctx.db, key, now)
+      const acctLimit = await loginAccountLimiter.check(ctx.db, acctKey, now)
       if (!ipLimit.allowed || !acctLimit.allowed) {
         const retryAfterMs = Math.max(ipLimit.retryAfterMs, acctLimit.retryAfterMs)
         throw new TRPCError({
@@ -153,9 +153,9 @@ export const authRouter = router({
       }
 
       // Record a failed attempt against both the per-IP and per-account limiters.
-      const recordFail = () => {
-        loginLimiter.fail(key, now)
-        loginAccountLimiter.fail(acctKey, now)
+      const recordFail = async () => {
+        await loginLimiter.fail(ctx.db, key, now)
+        await loginAccountLimiter.fail(ctx.db, acctKey, now)
       }
 
       const u = await getUserByUsername(ctx.db, input.username.trim())
@@ -167,7 +167,7 @@ export const authRouter = router({
           ? await verifyPassword(input.password, u.passwordHash)
           : await verifyPasswordDummy(input.password)
       if (!u || !ok) {
-        recordFail()
+        await recordFail()
         await recordLoginFailure(ctx.db, u ?? null, acctKey, 'bad_password')
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect username or password' })
       }
@@ -175,14 +175,14 @@ export const authRouter = router({
       if (u.mfaEnabledAt && u.mfaSecret) {
         if (!input.code) return { ok: false as const, mfaRequired: true as const }
         if (!(await verifyMfaCode(ctx.db, u, input.code))) {
-          recordFail()
+          await recordFail()
           await recordLoginFailure(ctx.db, u, acctKey, 'bad_mfa')
           throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect authentication code' })
         }
       }
 
-      loginLimiter.reset(key)
-      loginAccountLimiter.reset(acctKey)
+      await loginLimiter.reset(ctx.db, key)
+      await loginAccountLimiter.reset(ctx.db, acctKey)
       const householdId = await defaultHouseholdFor(ctx.db, u.id)
       // Record the successful sign-in against the household the session lands in.
       // The request context has no identity yet (the session is created next), so
@@ -252,13 +252,13 @@ export const authRouter = router({
 
       const key = ctx.clientKey ?? 'unknown'
       const now = Date.now()
-      if (!registerLimiter.check(key, now).allowed) {
+      if (!(await registerLimiter.check(ctx.db, key, now)).allowed) {
         throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many sign-ups from here. Try again later.' })
       }
 
       const weak = validatePassword(input.password)
       if (weak) {
-        registerLimiter.fail(key, now)
+        await registerLimiter.fail(ctx.db, key, now)
         throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
       }
       // Count the "taken" path against the limiter too, otherwise it's an
@@ -266,7 +266,7 @@ export const authRouter = router({
       // This is a friendly best-effort check; the unique index on user.username is
       // the real guard against a concurrent same-username race (handled below).
       if (await getUserByUsername(ctx.db, input.username.trim())) {
-        registerLimiter.fail(key, now)
+        await registerLimiter.fail(ctx.db, key, now)
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'That username is taken.' })
       }
 
@@ -293,13 +293,13 @@ export const authRouter = router({
         }))
       } catch (err) {
         if (isUniqueViolation(err)) {
-          registerLimiter.fail(key, now)
+          await registerLimiter.fail(ctx.db, key, now)
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'That username is taken.' })
         }
         throw err
       }
 
-      registerLimiter.fail(key, now) // count this sign-up toward the per-client cap
+      await registerLimiter.fail(ctx.db, key, now) // count this sign-up toward the per-client cap
       ctx.setSessionCookie?.(await createSession(ctx.db, userId, householdId, ctx.sessionOrigin))
       return { ok: true as const }
     }),

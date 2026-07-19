@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, uniqueIndex, index, type AnyPgColumn } from 'drizzle-orm/pg-core'
+import { pgTable, text, integer, timestamp, uniqueIndex, index, primaryKey, type AnyPgColumn } from 'drizzle-orm/pg-core'
 
 // ---------------------------------------------------------------------------
 // Postgres port — see issue #25.
@@ -162,6 +162,26 @@ export const session = pgTable('session', {
 }))
 
 export type Session = typeof session.$inferSelect
+
+// Sliding-window rate-limit / lockout state (issue #112). Shared across replicas
+// so N instances grant one attempt budget between them, and a restart doesn't
+// hand an attacker a clean slate. Ephemeral, instance-level bookkeeping — no
+// household scope, and deliberately excluded from ALL_TABLES.
+export const rateLimit = pgTable('rate_limit', {
+  // Which limiter the row belongs to (login, register, …). Namespaces the key:
+  // two limiters throttling the same IP must not share a counter.
+  limiter: text('limiter').notNull(),
+  // What is being throttled — a client IP, username, or user id, per limiter.
+  key: text('key').notNull(),
+  count: integer('count').notNull(),
+  windowStart: timestamp('window_start', { withTimezone: true, mode: 'date' }).notNull(),
+  // Null until the key trips the cap; the block lifts once this passes.
+  blockedUntil: timestamp('blocked_until', { withTimezone: true, mode: 'date' }),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.limiter, t.key] }),
+  // Supports the periodic sweep of expired rows.
+  sweepIdx: index('rate_limit_sweep_idx').on(t.limiter, t.windowStart),
+}))
 
 // Instance-wide settings (a single row, id = 'instance'), distinct from the
 // per-household settings on `household`. Governs deployment-level behaviour like
