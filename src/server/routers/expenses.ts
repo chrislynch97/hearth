@@ -30,6 +30,7 @@ const billInput = z.object({
   note: z.string().optional(),
   dueAnchor: z.string().optional(),
   dueReminderDays: z.number().int().optional(),
+  includeInEmergencyFund: z.boolean().optional(),
 })
 
 /** Validate the funding shape and that potId/categoryId refer to real rows in this household. */
@@ -196,6 +197,7 @@ export const expensesRouter = router({
       potId: ff.potId,
       categoryId: ff.categoryId,
       note: input.note ?? null,
+      includeInEmergencyFund: input.includeInEmergencyFund === false ? 0 : 1,
       dueAnchor: input.dueAnchor ?? null,
       dueReminderDays: input.dueReminderDays ?? null,
       createdAt: now,
@@ -220,6 +222,7 @@ export const expensesRouter = router({
         categoryId: z.string().nullable().optional(),
         note: z.string().optional(),
         active: z.boolean().optional(),
+        includeInEmergencyFund: z.boolean().optional(),
         dueAnchor: z.string().optional(),
         dueReminderDays: z.number().int().optional(),
         // When the amount changes, record it as price history (issue #68).
@@ -230,7 +233,7 @@ export const expensesRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, expectedUpdatedAt, active, funding, potId, categoryId, priceSource, priceEffectiveDate, ...rest } =
+      const { id, expectedUpdatedAt, active, includeInEmergencyFund, funding, potId, categoryId, priceSource, priceEffectiveDate, ...rest } =
         input
       const now = new Date()
       const target = await loadExpense(ctx.db, ctx.householdId, id)
@@ -258,6 +261,7 @@ export const expensesRouter = router({
 
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (active !== undefined) setFields['active'] = active ? 1 : 0
+      if (includeInEmergencyFund !== undefined) setFields['includeInEmergencyFund'] = includeInEmergencyFund ? 1 : 0
       if (fundingTouched) {
         const ff = fundingFields({ funding: effectiveFunding, potId: effectivePot, categoryId: effectiveCat })
         setFields['funding'] = ff.funding

@@ -225,8 +225,9 @@ export function FundingPage() {
                 <div>
                   <Title order={4}>Emergency fund</Title>
                   <Text size="xs" c="dimmed">
-                    A cushion of {plan.emergencyFund.months} month{plan.emergencyFund.months === 1 ? '' : 's'} of essential bills to
-                    hold in easy-access savings. Set the months in Settings.
+                    A cushion of {plan.emergencyFund.months} month{plan.emergencyFund.months === 1 ? '' : 's'} of essential outgoings to
+                    hold in easy-access savings. Covers bills and set-asides; exclude any from its own settings. Set the months in
+                    Settings.
                   </Text>
                 </div>
                 <Stack gap={2}>
@@ -237,7 +238,7 @@ export function FundingPage() {
                         <Text size="sm">{o.displayName}</Text>
                         <Group gap={12}>
                           <Text size="xs" c="dimmed">
-                            {formatMoney(o.monthlyBills, money)}/mo bills
+                            {formatMoney(o.monthlyCommitments, money)}/mo
                           </Text>
                           <Text size="sm">{formatMoney(o.target, money)}</Text>
                         </Group>
