@@ -22,7 +22,36 @@ jobs:
       # Dockerfile's reasoning.
       - run: npm install --no-audit --no-fund
 
+      # Fail the build on known-vulnerable *production* deps (high severity+).
+      # Dev-only tooling is excluded — it never ships in the runtime image.
+      - run: npm audit --omit=dev --audit-level=high
+
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  # Build the runtime image and scan it for known OS + library vulnerabilities
+  # before merge. Doesn't push — the image is built locally and handed to Trivy.
+  # ignore-unfixed avoids failing on vulns with no available patch; only fixable
+  # High/Critical issues break the build.
+  image-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: hearth:ci
+
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: hearth:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

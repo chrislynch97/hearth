@@ -1,0 +1,38 @@
+# Automated dependency-update PRs. Dependabot only proposes PRs — nothing merges
+# or ships without review. Weekly cadence, small updates grouped into one PR each
+# to keep the noise down. See issue #56.
+version: 2
+updates:
+  # npm packages (root package.json). Group the routine minor/patch bumps into a
+  # single weekly PR; let majors come through on their own so they get a proper
+  # look.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # The Docker base image (node:24-slim, pinned by digest in the Dockerfile).
+  # Dependabot bumps the pinned digest when a newer base image is published,
+  # which is how OS-level patches reach us.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # The actions used in our workflows (checkout, setup-node, docker/*, etc.) —
+  # keep them patched too.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        update-types:
+          - minor
+          - patch
