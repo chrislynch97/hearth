@@ -1,7 +1,7 @@
 import { AppShell, Burger, Group } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useEffect, useState } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { hearthTokens } from "@/theme";
 import "./nav.css";
 import { GO_TO, NAV_SECTIONS } from "./nav-config";
@@ -47,7 +47,7 @@ export function AppLayout() {
                 const to = GO_TO[e.key.toLowerCase()];
                 if (to) {
                     e.preventDefault();
-                    navigate(to);
+                    navigate({ to });
                 }
                 return;
             }

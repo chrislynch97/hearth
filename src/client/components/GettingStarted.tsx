@@ -8,15 +8,16 @@ import {
     Text,
     Title,
 } from "@mantine/core";
-import { Link } from "react-router-dom";
+import { Link } from "@tanstack/react-router";
 import { trpc } from "@/trpc";
 import { hearthTokens } from "@/theme";
+import type { AppRoutePath } from "@/layout/nav-config";
 
 interface Step {
     key: "pots" | "payslips" | "setAsides";
     label: string;
     description: string;
-    to: string;
+    to: AppRoutePath;
     cta: string;
 }
 

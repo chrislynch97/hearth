@@ -1,8 +1,8 @@
 /** Quick "go to…" palette opened with `/` (spec §7). Type to filter destinations,
  *  Enter jumps to the top match. */
-import {useNavigate} from "react-router-dom";
+import {useNavigate} from "@tanstack/react-router";
 import {useState} from "react";
-import {NAV_SECTIONS} from "@/layout/nav-config";
+import {NAV_SECTIONS, type AppRoutePath} from "@/layout/nav-config";
 import {Button, Modal, Stack, TextInput, Text} from "@mantine/core";
 
 export interface NavPaletteProps {
@@ -20,10 +20,10 @@ export const NavPalette = ({ opened, onClose }: NavPaletteProps) => {
         ? items.filter((i) => i.label.toLowerCase().includes(query.toLowerCase()))
         : items
 
-    function go(to: string) {
+    function go(to: AppRoutePath) {
         setQuery('')
         onClose()
-        navigate(to)
+        navigate({ to })
     }
 
     return (

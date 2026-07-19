@@ -9,7 +9,7 @@ import {
     Text,
     Title,
 } from "@mantine/core";
-import { Link } from "react-router-dom";
+import { Link } from "@tanstack/react-router";
 import { trpc } from "@/trpc";
 import { formatMoney } from "@shared/money";
 import { useMoney } from "@/useMoney";

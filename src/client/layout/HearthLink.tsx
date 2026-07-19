@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "@tanstack/react-router";
 import { Group, Text } from "@mantine/core";
 import { HearthMark } from "@/components/HearthMark";
 import { hearthTokens } from "@/theme";

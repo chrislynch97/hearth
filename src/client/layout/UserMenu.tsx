@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@tanstack/react-router";
 import { trpc } from "@/trpc";
 import { Group, Menu, Text, UnstyledButton } from "@mantine/core";
 import { hearthTokens } from "@/theme";
@@ -109,7 +109,7 @@ export const UserMenu = () => {
                         <Menu.Divider />
                     </>
                 )}
-                <Menu.Item onClick={() => navigate("/settings/account")}>
+                <Menu.Item onClick={() => navigate({ to: "/settings/account" })}>
                     Account &amp; settings
                 </Menu.Item>
                 {canLogOut && (
