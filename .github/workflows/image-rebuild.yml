@@ -48,7 +48,7 @@ jobs:
       # Scan the freshly published image for known OS + library vulnerabilities.
       # ignore-unfixed keeps us from failing on vulns with no available patch;
       # only fixable High/Critical issues break the build.
-      - uses: aquasecurity/trivy-action@0.28.0
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/${{ github.repository }}:latest
           severity: HIGH,CRITICAL
