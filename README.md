@@ -157,13 +157,18 @@ device once they're back in.
 in-app reset for them. Recover from the box itself:
 
 ```bash
+# Source checkout
 npm run reset-owner-password    # prompts for a new password, clears the owner's
                                 # 2FA, and signs out their sessions
+
+# Docker — from the compose directory
+docker compose exec hearth node dist/reset-owner-password.js
 ```
 
 Run it in the instance's directory (or with `DATABASE_URL` set the same way the
 server has it) — it prints which database it resolved and asks you to confirm
-before writing. It needs shell access to the host, which already means access to
+before writing. In the container that's already true: it inherits the same
+`DATABASE_URL` as the server. It needs shell access to the host, which already means access to
 the database, so this hands an attacker nothing new; it just means a lost password
 or a lost phone doesn't need a SQL prompt to fix. The reset is recorded in the
 audit log as a console event.
