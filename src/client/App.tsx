@@ -1,34 +1,12 @@
 import { Center, Loader } from '@mantine/core'
-import { Route, Routes } from 'react-router-dom'
+import { RouterProvider } from '@tanstack/react-router'
 import { trpc } from '@/trpc'
 import { ConnectionError } from './ErrorState'
 import { LoginGate } from './LoginGate'
 import { FirstRunGate } from './FirstRunGate'
 import { AcceptInvite } from './AcceptInvite'
 import { SetupWizard } from './setup/SetupWizard'
-import { AppLayout } from './layout/AppLayout'
-import { HomePage } from './pages/HomePage'
-import { PotsPage } from './pages/PotsPage'
-import { CategoriesPage } from './pages/CategoriesPage'
-import { OutgoingsPage } from './pages/OutgoingsPage'
-import { BillReviewPage } from './pages/BillReviewPage'
-import { FundingPage } from './pages/FundingPage'
-import { SpendingPage } from './pages/SpendingPage'
-import { CatchupPage } from './pages/CatchupPage'
-import { IncomePage } from './pages/IncomePage'
-import { PayslipsPage } from './pages/PayslipsPage'
-import { RaisesPage } from './pages/RaisesPage'
-import { ReportsPage } from './pages/ReportsPage'
-import {
-  AccountSettingsPage,
-  HouseholdSettingsPage,
-  SettingsIndexRedirect,
-  SettingsLayout,
-  SystemSettingsPage,
-} from './pages/SettingsPage'
-import { UpcomingPage } from './pages/UpcomingPage'
-import { AccountsPage } from './pages/AccountsPage'
-import { ImportPage } from './pages/ImportPage'
+import { router } from './router'
 
 export function App() {
   const authStatus = trpc.auth.status.useQuery()
@@ -91,31 +69,5 @@ function AuthedApp() {
     )
   }
 
-  return (
-    <Routes>
-      <Route element={<AppLayout />}>
-        <Route index element={<HomePage />} />
-        <Route path="pots" element={<PotsPage />} />
-        <Route path="categories" element={<CategoriesPage />} />
-        <Route path="outgoings" element={<OutgoingsPage />} />
-        <Route path="review" element={<BillReviewPage />} />
-        <Route path="funding" element={<FundingPage />} />
-        <Route path="upcoming" element={<UpcomingPage />} />
-        <Route path="spending" element={<SpendingPage />} />
-        <Route path="catchup" element={<CatchupPage />} />
-        <Route path="import" element={<ImportPage />} />
-        <Route path="income" element={<IncomePage />} />
-        <Route path="payslips" element={<PayslipsPage />} />
-        <Route path="raises" element={<RaisesPage />} />
-        <Route path="accounts" element={<AccountsPage />} />
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="settings" element={<SettingsLayout />}>
-          <Route index element={<SettingsIndexRedirect />} />
-          <Route path="account" element={<AccountSettingsPage />} />
-          <Route path="household" element={<HouseholdSettingsPage />} />
-          <Route path="system" element={<SystemSettingsPage />} />
-        </Route>
-      </Route>
-    </Routes>
-  )
+  return <RouterProvider router={router} />
 }

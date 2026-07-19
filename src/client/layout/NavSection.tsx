@@ -1,6 +1,6 @@
 import { Badge, NavLink, Text } from "@mantine/core";
 import { hearthTokens } from "@/theme";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "@tanstack/react-router";
 import { NavIcon } from "@/layout/NavIcon";
 import type { NavSectionConfig } from "@/layout/nav-config";
 import { trpc } from "@/trpc";
@@ -11,6 +11,7 @@ export interface NavSectionProps {
 }
 
 export const NavSection = ({ section, index }: NavSectionProps) => {
+    const { pathname } = useLocation();
     const backlogQuery = trpc.reconcile.backlog.useQuery();
 
     const backlogCount = backlogQuery.data?.perPot?.length ?? 0;
@@ -39,8 +40,8 @@ export const NavSection = ({ section, index }: NavSectionProps) => {
                 // Exact match, or a sub-route of it (e.g. a /foo/bar page keeps
                 // the /foo item active). The `+ '/'` stops '/' matching all.
                 const isActive =
-                    location.pathname === item.to ||
-                    location.pathname.startsWith(item.to + "/");
+                    pathname === item.to ||
+                    pathname.startsWith(item.to + "/");
                 return (
                     <NavLink
                         key={item.to}
