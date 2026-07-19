@@ -4,6 +4,7 @@ import { HomePage } from './pages/HomePage'
 import { PotsPage } from './pages/PotsPage'
 import { CategoriesPage } from './pages/CategoriesPage'
 import { OutgoingsPage } from './pages/OutgoingsPage'
+import { BillReviewPage } from './pages/BillReviewPage'
 import { FundingPage } from './pages/FundingPage'
 import { UpcomingPage } from './pages/UpcomingPage'
 import { SpendingPage } from './pages/SpendingPage'
@@ -29,6 +30,7 @@ const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', com
 const potsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/pots', component: PotsPage })
 const categoriesRoute = createRoute({ getParentRoute: () => rootRoute, path: '/categories', component: CategoriesPage })
 const outgoingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/outgoings', component: OutgoingsPage })
+const reviewRoute = createRoute({ getParentRoute: () => rootRoute, path: '/review', component: BillReviewPage })
 const fundingRoute = createRoute({ getParentRoute: () => rootRoute, path: '/funding', component: FundingPage })
 const upcomingRoute = createRoute({ getParentRoute: () => rootRoute, path: '/upcoming', component: UpcomingPage })
 const spendingRoute = createRoute({ getParentRoute: () => rootRoute, path: '/spending', component: SpendingPage })
@@ -75,6 +77,7 @@ const routeTree = rootRoute.addChildren([
   potsRoute,
   categoriesRoute,
   outgoingsRoute,
+  reviewRoute,
   fundingRoute,
   upcomingRoute,
   spendingRoute,

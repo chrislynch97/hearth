@@ -8,6 +8,7 @@ import { expensesRouter } from '../routers/expenses'
 import { billPricesRouter } from '../routers/billPrices'
 import { setAsideRouter } from '../routers/setAside'
 import { standingOrdersRouter } from '../routers/standingOrders'
+import { billReviewRouter } from '../routers/billReview'
 import { planRouter } from '../routers/plan'
 import { spendsRouter } from '../routers/spends'
 import { reconcileRouter } from '../routers/reconcile'
@@ -40,6 +41,7 @@ export const appRouter = router({
   billPrices: billPricesRouter,
   setAside: setAsideRouter,
   standingOrders: standingOrdersRouter,
+  billReview: billReviewRouter,
   plan: planRouter,
   spends: spendsRouter,
   reconcile: reconcileRouter,
