@@ -15,7 +15,7 @@ import {
   Title,
 } from '@mantine/core'
 import { BarChart } from '@mantine/charts'
-import { Link } from 'react-router-dom'
+import { Link } from '@tanstack/react-router'
 import { trpc } from '../trpc'
 import { GettingStarted } from '@/components/GettingStarted'
 import { formatMoney } from '../../shared/money'

@@ -1,6 +1,6 @@
 import { Alert, Anchor, Button, Group } from "@mantine/core";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "@tanstack/react-router";
 import { trpc } from "@/trpc";
 
 // Per-version dismissal: once dismissed, the banner stays hidden until a newer

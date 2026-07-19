@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import {
   ActionIcon,
   Alert,
@@ -2101,6 +2101,8 @@ export function SystemSettingsPage() {
 
 /** Shared chrome for the settings sub-pages: a title + a tab bar that only shows
  *  the tabs the current user may use, with the active page's content below. */
+type SettingsTab = 'account' | 'household' | 'system'
+
 export function SettingsLayout() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -2113,7 +2115,7 @@ export function SettingsLayout() {
   return (
     <Stack gap="lg" maw={760} mx="auto">
       <Title order={2}>Settings</Title>
-      <Tabs value={active} onChange={(v) => v && navigate(`/settings/${v}`)}>
+      <Tabs value={active} onChange={(v) => v && navigate({ to: `/settings/${v as SettingsTab}` })}>
         <Tabs.List>
           <Tabs.Tab value="account">Account</Tabs.Tab>
           <Tabs.Tab value="household">Household</Tabs.Tab>
@@ -2123,9 +2125,4 @@ export function SettingsLayout() {
       <Outlet />
     </Stack>
   )
-}
-
-/** `/settings` → the first sub-route the user can see (always Account). */
-export function SettingsIndexRedirect() {
-  return <Navigate to="/settings/account" replace />
 }

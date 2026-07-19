@@ -4,15 +4,15 @@ import { Notifications } from '@mantine/notifications'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { httpBatchLink, httpLink, splitLink } from '@trpc/client'
 import superjson from 'superjson'
-import { BrowserRouter } from 'react-router-dom'
 import { trpc } from './trpc'
 import { theme } from './theme'
 import { ErrorBoundary } from './ErrorState'
 import { createQueryClient } from './queryClient'
 
 /** All app-wide context providers in one place: tRPC + React Query data layer,
- *  Mantine theming + notifications, the error boundary, and the router. Kept out
- *  of `main.tsx` so the entry point is just CSS imports and the render call. */
+ *  Mantine theming + notifications, and the error boundary. Kept out of `main.tsx`
+ *  so the entry point is just CSS imports and the render call. The router itself
+ *  mounts inside `App` once the auth gates pass, so it lives below these. */
 export function AppProviders({ children }: { children: ReactNode }) {
   // Lazy `useState` init so each client is created exactly once for the app's
   // lifetime (TanStack Query's recommended pattern), never rebuilt on re-render.
@@ -41,9 +41,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <MantineProvider theme={theme} defaultColorScheme="auto">
           <Notifications />
-          <ErrorBoundary>
-            <BrowserRouter>{children}</BrowserRouter>
-          </ErrorBoundary>
+          <ErrorBoundary>{children}</ErrorBoundary>
         </MantineProvider>
       </QueryClientProvider>
     </trpc.Provider>

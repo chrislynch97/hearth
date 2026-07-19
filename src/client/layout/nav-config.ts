@@ -14,13 +14,33 @@ export type IconName =
     | "networth"
     | "reports";
 
+// The app's route paths, kept in step with the route tree in `router.tsx`. Typed
+// as a literal union (rather than derived from the router) so nav config and the
+// `g`-shortcut map stay assignable to TanStack's typed `to`, without a circular
+// dependency back through the router that these components help build.
+export type AppRoutePath =
+    | "/"
+    | "/categories"
+    | "/pots"
+    | "/outgoings"
+    | "/funding"
+    | "/upcoming"
+    | "/spending"
+    | "/catchup"
+    | "/import"
+    | "/income"
+    | "/payslips"
+    | "/raises"
+    | "/accounts"
+    | "/reports";
+
 export interface NavSectionConfig {
     title: string | null;
     items: NavItem[];
 }
 
 interface NavItem {
-    to: string;
+    to: AppRoutePath;
     label: string;
     icon: IconName;
 }
@@ -63,7 +83,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     },
 ];
 
-export const GO_TO: Record<string, string> = {
+export const GO_TO: Record<string, AppRoutePath> = {
     d: "/",
     p: "/pots",
     o: "/outgoings",
