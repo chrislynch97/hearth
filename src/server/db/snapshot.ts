@@ -1,6 +1,7 @@
-import { getTableColumns } from 'drizzle-orm'
-import type { PgTable } from 'drizzle-orm/pg-core'
+import { eq, getTableColumns, inArray } from 'drizzle-orm'
+import type { PgColumn, PgTable } from 'drizzle-orm/pg-core'
 import type { DB } from './client'
+import { membership } from './schema'
 import { ALL_TABLES } from './tables'
 
 export const EXPORT_VERSION = 1
@@ -62,6 +63,61 @@ export async function buildSnapshot(db: DB): Promise<Snapshot> {
   const tables: Record<string, Array<Record<string, unknown>>> = {}
   for (const [name, table] of ALL_TABLES) {
     const rows = (await db.select().from(table as PgTable)) as Array<Record<string, unknown>>
+    tables[name] = rows.map((r) => toExportRow(table, r))
+  }
+  return { version: EXPORT_VERSION, exportedAt: Date.now(), tables }
+}
+
+/** User columns that must never leave the instance in a per-household export:
+ *  credential + second-factor secrets. Redacted to null so the export stays a
+ *  faithful portability artifact of the household's people without carrying the
+ *  secrets that authenticate them. */
+const REDACTED_USER_KEYS = ['passwordHash', 'mfaSecret', 'mfaRecoveryCodes', 'mfaLastStep'] as const
+
+function redactUser(row: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...row }
+  for (const key of REDACTED_USER_KEYS) out[key] = null
+  return out
+}
+
+/** One household's slice of the database, in the same JSON shape as buildSnapshot
+ *  but every table filtered to `householdId` — the tenant-facing portability
+ *  contract (issue #110). A household owner can take their own data out without
+ *  the instance-wide export that reads every tenant. `household` is the one
+ *  matching row; `user` is limited to this household's members and stripped of
+ *  credentials; every other table is scoped by its `household_id`. Excludes the
+ *  same operational tables buildSnapshot does — session / instance_settings /
+ *  audit_log are not in ALL_TABLES. */
+export async function buildHouseholdSnapshot(db: DB, householdId: string): Promise<Snapshot> {
+  const memberships = await db
+    .select({ userId: membership.userId })
+    .from(membership)
+    .where(eq(membership.householdId, householdId))
+  const userIds = [...new Set(memberships.map((m) => m.userId))]
+
+  const tables: Record<string, Array<Record<string, unknown>>> = {}
+  for (const [name, table] of ALL_TABLES) {
+    const cols = getTableColumns(table)
+    let rows: Array<Record<string, unknown>>
+    if (name === 'household') {
+      rows = (await db
+        .select()
+        .from(table as PgTable)
+        .where(eq(cols['id'] as PgColumn, householdId))) as Array<Record<string, unknown>>
+    } else if (name === 'user') {
+      rows =
+        userIds.length === 0
+          ? []
+          : ((await db
+              .select()
+              .from(table as PgTable)
+              .where(inArray(cols['id'] as PgColumn, userIds))) as Array<Record<string, unknown>>).map(redactUser)
+    } else {
+      rows = (await db
+        .select()
+        .from(table as PgTable)
+        .where(eq(cols['householdId'] as PgColumn, householdId))) as Array<Record<string, unknown>>
+    }
     tables[name] = rows.map((r) => toExportRow(table, r))
   }
   return { version: EXPORT_VERSION, exportedAt: Date.now(), tables }

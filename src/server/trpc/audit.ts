@@ -45,6 +45,7 @@ export type SecurityAction =
   | 'invite_created'
   | 'invite_revoked'
   | 'invite_accepted'
+  | 'household_erased'
 
 type Row = Record<string, unknown>
 

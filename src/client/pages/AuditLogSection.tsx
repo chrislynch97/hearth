@@ -65,6 +65,7 @@ const ACTION_META: Record<string, { color: string; label: string }> = {
     invite_created: { color: "moss", label: "Invite created" },
     invite_revoked: { color: "gray", label: "Invite revoked" },
     invite_accepted: { color: "teal", label: "Invite accepted" },
+    household_erased: { color: "red", label: "Household erased" },
 };
 
 /** camelCase entity type → a human "Income source" label. */
