@@ -1116,6 +1116,10 @@ function MfaSection() {
 // Updates (issue #81) — instance-owner only
 // ---------------------------------------------------------------------------
 
+/** Where the Updating docs live — linked when the host updater isn't installed. */
+const DOCS_UPDATING_URL =
+    "https://github.com/chrislynch97/hearth/blob/main/docs/deployment.md#updating--three-ways";
+
 /** Shows the running version and, on demand, whether a newer GitHub release
  *  exists, plus the owner's update preferences (background polling, backup-first,
  *  and — on the managed deploy — automatic installs). Applying the update stays a
@@ -1172,6 +1176,17 @@ const UpdatesSection = () => {
                     Check for updates
                 </Button>
             </Group>
+
+            {settings?.deployMode === "image" && !settings.updaterOnline && (
+                <Alert color="yellow" variant="light" mb="sm">
+                    One-click and automatic updates need the host updater, which isn't
+                    running on this host.{" "}
+                    <Anchor href={DOCS_UPDATING_URL} target="_blank" rel="noreferrer">
+                        Set it up
+                    </Anchor>{" "}
+                    to turn them on.
+                </Alert>
+            )}
 
             {settings?.updateResult && !settings.updateResult.ok && (
                 <Alert color="red" variant="light" mb="sm">
@@ -1301,7 +1316,9 @@ const UpdatesSection = () => {
                                 description={
                                     settings.updaterOnline
                                         ? "Installs new versions for you without running any commands."
-                                        : "Requires the managed Docker deploy with the host updater — coming in a later update."
+                                        : settings.deployMode === "image"
+                                          ? "Needs the host updater running — see the setup guide above."
+                                          : "Only available on the managed Docker image deploy."
                                 }
                                 checked={settings.autoUpdate}
                                 disabled={!settings.updaterOnline}
