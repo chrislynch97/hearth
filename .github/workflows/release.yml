@@ -31,7 +31,7 @@ jobs:
       # stripped for the image tag; HEARTH_VERSION below keeps it, matching the
       # release tag_name the checker compares against).
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
