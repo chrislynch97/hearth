@@ -47,6 +47,11 @@ services:
       - DATABASE_URL=postgres://hearth:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/hearth
       - CLIENT_DIR=/app/dist/client
       - HEARTH_BACKUP_LOCAL_DIR=/data/backups
+      # Where the app and host updater exchange control files. Must be under the
+      # mounted /data so the updater sees it -- with a postgres DATABASE_URL the
+      # app can't derive it from the DB path (unlike the PGlite variant), so it
+      # would otherwise default to /app/data/updates, which isn't mounted.
+      - HEARTH_UPDATE_DIR=/data/updates
       # Tells the in-app update UI this is the image deploy.
       - HEARTH_DEPLOY=image
       - HEARTH_ALLOW_OPEN=${HEARTH_ALLOW_OPEN:-0}
