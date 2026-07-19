@@ -254,6 +254,48 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     ...ts,
   }))
 
+  // -- bill price history (#68) --------------------------------------------
+  // Gives the subscription-review page (#70) something to rank. Several bills
+  // creep upward over ~2 years (Streaming, Council Tax, Home Insurance…), a
+  // couple stay flat (Rent/Mobiles — reassuringly unchanged), and one (Energy)
+  // spiked then eased back. Each trail ends at the bill's current amount so the
+  // recorded history and the live figure agree.
+  const expenseIdByName: Record<string, string> = {}
+  for (const e of expenses) expenseIdByName[e['name'] as string] = e['id'] as string
+
+  const monthsAgoFirst = (m: number): string => {
+    const a = shiftMonth(thisMonth, -m)
+    return ymd(a.year, a.month, 1)
+  }
+  interface PriceTrail { bill: string; points: Array<[number, number]> } // [monthsAgo, major £]
+  const priceTrails: PriceTrail[] = [
+    { bill: 'Streaming Bundle', points: [[30, 10], [22, 12], [14, 15], [5, 18]] },
+    { bill: 'Broadband', points: [[20, 26], [8, 30], [2, 32]] },
+    { bill: 'Council Tax', points: [[26, 168], [14, 175], [2, 182]] },
+    { bill: 'Energy', points: [[18, 96], [12, 130], [9, 165], [3, 138]] },
+    { bill: 'Home Insurance', points: [[26, 210], [14, 240], [2, 276]] },
+    { bill: 'Water', points: [[16, 120], [4, 138]] },
+    { bill: 'Ava Gym', points: [[20, 28], [6, 32]] },
+    { bill: 'Rail Season Ticket', points: [[13, 140], [1, 155]] },
+    { bill: 'Spotify', points: [[18, 10], [6, 12]] },
+  ]
+  const billPrices: Array<Record<string, unknown>> = []
+  for (const trail of priceTrails) {
+    const expId = expenseIdByName[trail.bill]
+    if (!expId) continue
+    trail.points.forEach(([monthsAgo, major], i) => {
+      billPrices.push({
+        id: id(),
+        expenseId: expId,
+        effectiveDate: monthsAgoFirst(monthsAgo),
+        amount: gbp(major),
+        note: i === 0 ? 'Starting price' : null,
+        source: i === trail.points.length - 1 ? 'spend_prompt' : 'manual',
+        ...ts,
+      })
+    })
+  }
+
   // Set-asides = money in, filling a pot. One owner → one pot. Never on Spending/Catch-up.
   interface SetAsideDef { name: string; owner: string; pot: string; amount: number; group?: string }
   const setAsideDefs: SetAsideDef[] = [
@@ -525,12 +567,12 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     const date = ymd(a.year, a.month, day)
     spends.push({
       id: id(), date, description: 'Big shop (split)', amount: gbp(60), ownerId: joint, potId: potId['groceries']!, categoryId: null,
-      reconciled: 0, reconciledAt: null, reconciliationBatchId: null, source: 'manual', importRef: null, importBatchId: null, raw: null,
+      expenseId: null, reconciled: 0, reconciledAt: null, reconciliationBatchId: null, source: 'manual', importRef: null, importBatchId: null, raw: null,
       splitGroupId, note: null, ...ts,
     })
     spends.push({
       id: id(), date, description: 'Big shop (split)', amount: gbp(35), ownerId: joint, potId: potId['ava_spend']!, categoryId: null,
-      reconciled: 0, reconciledAt: null, reconciliationBatchId: null, source: 'manual', importRef: null, importBatchId: null, raw: null,
+      expenseId: null, reconciled: 0, reconciledAt: null, reconciliationBatchId: null, source: 'manual', importRef: null, importBatchId: null, raw: null,
       splitGroupId, note: 'Homeware', ...ts,
     })
   }
@@ -552,6 +594,7 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
       ownerId: s.owner,
       potId: s.pot ? potId[s.pot]! : null,
       categoryId: s.category,
+      expenseId: null,
       reconciled: willReconcile ? 1 : 0,
       reconciledAt: willReconcile ? now : null,
       reconciliationBatchId: null, // filled in when batches are built
@@ -590,6 +633,41 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     for (const r of rows) r['reconciliationBatchId'] = bid
   }
 
+  // A run of real Broadband payments (#67) that sits ahead of the recorded bill
+  // amount (£32) — the last few land at £34. The review prefers these actuals
+  // over the stated price, showing the divergence the issue calls out. Marked
+  // reconciled (historical), so they never clutter the live catch-up backlog.
+  {
+    const expId = expenseIdByName['Broadband']
+    const broadbandPot = potId['broadband']
+    if (expId && broadbandPot) {
+      for (let m = 14; m >= 0; m--) {
+        const a = shiftMonth(thisMonth, -m)
+        const major = m >= 11 ? 28 : m >= 5 ? 30 : 34
+        spends.push({
+          id: id(),
+          date: ymd(a.year, a.month, Math.min(20, daysInMonth(a.year, a.month))),
+          description: 'Broadband',
+          amount: gbp(major),
+          ownerId: joint,
+          potId: broadbandPot,
+          categoryId: null,
+          expenseId: expId,
+          reconciled: 1,
+          reconciledAt: now,
+          reconciliationBatchId: null,
+          source: 'manual',
+          importRef: null,
+          importBatchId: null,
+          raw: null,
+          splitGroupId: null,
+          note: null,
+          ...ts,
+        })
+      }
+    }
+  }
+
   // -- import batch --------------------------------------------------------
   const importBatches = importedCount > 0
     ? [{
@@ -611,6 +689,7 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     category: categories,
     pot: pots,
     expense: expenses,
+    billPrice: billPrices,
     setAside: setAsides,
     reconciliationBatch: reconciliationBatches,
     importBatch: importBatches,

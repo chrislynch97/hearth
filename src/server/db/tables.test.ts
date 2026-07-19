@@ -13,6 +13,7 @@ describe('MONEY_COLUMNS (derived from schema)', () => {
     expect(pairs).toEqual(
       [
         'accountBalance.value',
+        'billPrice.amount',
         'expense.amount',
         'expenseShare.amount',
         'incomeSource.amount',

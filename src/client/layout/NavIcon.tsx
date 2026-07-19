@@ -13,6 +13,9 @@ const NAV_ICONS: Record<IconName, ReactElement> = {
     bills: (
         <path d="M6 2h9l3 3v17l-2.2-1.3L13.6 22 11 20.7 8.4 22 6 20.7zM9 8h6M9 12h6" />
     ),
+    review: (
+        <path d="M10.5 3a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15zM16 16l5 5M7 12l2-2.2 2 1.6L13.8 8" />
+    ),
     funding: (
         <path d="M5 6c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3zM5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3" />
     ),

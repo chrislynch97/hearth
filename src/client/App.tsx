@@ -11,6 +11,7 @@ import { HomePage } from './pages/HomePage'
 import { PotsPage } from './pages/PotsPage'
 import { CategoriesPage } from './pages/CategoriesPage'
 import { OutgoingsPage } from './pages/OutgoingsPage'
+import { BillReviewPage } from './pages/BillReviewPage'
 import { FundingPage } from './pages/FundingPage'
 import { SpendingPage } from './pages/SpendingPage'
 import { CatchupPage } from './pages/CatchupPage'
@@ -97,6 +98,7 @@ function AuthedApp() {
         <Route path="pots" element={<PotsPage />} />
         <Route path="categories" element={<CategoriesPage />} />
         <Route path="outgoings" element={<OutgoingsPage />} />
+        <Route path="review" element={<BillReviewPage />} />
         <Route path="funding" element={<FundingPage />} />
         <Route path="upcoming" element={<UpcomingPage />} />
         <Route path="spending" element={<SpendingPage />} />

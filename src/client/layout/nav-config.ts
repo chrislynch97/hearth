@@ -3,6 +3,7 @@ export type IconName =
     | "categories"
     | "pots"
     | "bills"
+    | "review"
     | "funding"
     | "upcoming"
     | "spending"
@@ -33,6 +34,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
             { to: "/categories", label: "Categories", icon: "categories" },
             { to: "/pots", label: "Pots", icon: "pots" },
             { to: "/outgoings", label: "Bills", icon: "bills" },
+            { to: "/review", label: "Bill review", icon: "review" },
             { to: "/funding", label: "Funding", icon: "funding" },
             { to: "/upcoming", label: "Upcoming", icon: "upcoming" },
         ],
@@ -67,6 +69,7 @@ export const GO_TO: Record<string, string> = {
     d: "/",
     p: "/pots",
     o: "/outgoings",
+    b: "/review",
     f: "/funding",
     u: "/upcoming",
     s: "/spending",
