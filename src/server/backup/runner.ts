@@ -22,6 +22,7 @@ import { applySnapshot, buildSnapshot, type Snapshot } from '../db/snapshot'
 import { shouldBackup, type BackupFrequency } from './schedule'
 import { resolveOffsiteConfig, uploadOffsite } from './offsite'
 import { encryptSnapshot, decryptSnapshot } from './encrypt'
+import { pingHeartbeat, sendAlert } from '../ops/alerts'
 import type { PgTable } from 'drizzle-orm/pg-core'
 
 const DEFAULT_KEEP_BACKUPS = 14
@@ -245,10 +246,29 @@ export function startBackupScheduler(db: DB): void {
         )
         .map((hh) => hh.id)
       if (dueIds.length > 0) {
-        await runBackup(db, dueIds)
+        const result = await runBackup(db, dueIds)
+        // Ping only when a backup actually ran, so the heartbeat's expected period
+        // matches the household's backup frequency rather than this hourly tick.
+        await pingHeartbeat('success', `backup written to ${result.file}`)
+        if (result.offsite && !result.offsite.ok) {
+          await sendAlert({
+            event: 'offsite_backup_failed',
+            message: 'Off-site backup upload failed (the local backup succeeded)',
+            detail: { target: result.offsite.kind, error: result.offsite.error },
+          })
+        }
       }
     } catch (err) {
       console.error('Automatic backup failed:', err)
+      // A log line is not enough on an unattended box (#57): fail the heartbeat so
+      // the dead-man's switch fires now instead of after the grace period, and
+      // raise the alert for a human.
+      await pingHeartbeat('fail', errorText(err))
+      await sendAlert({
+        event: 'backup_failed',
+        message: 'Automatic backup failed',
+        detail: { error: errorText(err) },
+      })
     }
   }
   void tick()
