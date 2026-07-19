@@ -1,10 +1,39 @@
 import { describe, it, expect } from 'vitest'
+import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../db/testdb'
+import type { DB } from '../db/client'
 import { ensureSeed } from '../db/seed'
 import { getOwnerUser } from '../auth/session'
 import { appRouter } from '../trpc/router'
-import { household, membership, user } from '../db/schema'
+import { auditLog, household, member, membership, pot, user } from '../db/schema'
 import { newId } from '../../shared/ids'
+
+/** A second household with its own owner user (carrying credentials, to prove the
+ *  export redacts them) plus an accepted owner membership. Returns the owner id. */
+async function makeSecondHousehold(db: DB): Promise<string> {
+  const now = new Date()
+  const ownerId = newId()
+  await db.insert(user).values({
+    id: ownerId,
+    username: 'h2owner',
+    displayName: 'H2 Owner',
+    passwordHash: 'secret-hash',
+    mfaSecret: 'topsecret',
+    createdAt: now,
+    updatedAt: now,
+  })
+  await db.insert(household).values({ id: 'h2', createdAt: now, updatedAt: now })
+  await db.insert(membership).values({
+    id: newId(),
+    userId: ownerId,
+    householdId: 'h2',
+    role: 'owner',
+    acceptedAt: now,
+    createdAt: now,
+    updatedAt: now,
+  })
+  return ownerId
+}
 
 describe('data router', () => {
   it('export → import round-trips the whole database', async () => {
@@ -142,6 +171,80 @@ describe('data router', () => {
     await expect(
       outsider.data.import({ version: 1, tables: { household: [{ id: 'x' }] } }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+  })
+
+  it('exportHousehold returns only the caller household, with credentials redacted (issue #110)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    // The primary household has its own data that must not leak into h2's export.
+    const owner = await getOwnerUser(db)
+    const primary = appRouter.createCaller({ db, householdId: 'household', role: 'owner', userId: owner!.id })
+    await primary.members.addPerson({ displayName: 'Primary Person' })
+
+    const h2owner = await makeSecondHousehold(db)
+    const h2 = appRouter.createCaller({ db, householdId: 'h2', role: 'owner', userId: h2owner })
+    const bob = await h2.members.addPerson({ displayName: 'Bob' })
+    const p = await h2.pots.create({ name: 'H2 Rent', ownerId: bob.id })
+    await h2.spends.add({ description: 'H2 Tesco', amount: 999, ownerId: bob.id, potId: p.id })
+
+    const snap = await h2.data.exportHousehold()
+
+    // Scoped to h2: its one household row, its pot and spend, its member — never
+    // the primary household's rows.
+    expect(snap.tables['household']).toHaveLength(1)
+    expect((snap.tables['household']?.[0] as { id: string }).id).toBe('h2')
+    expect(snap.tables['pot']).toHaveLength(1)
+    expect((snap.tables['pot']?.[0] as { name: string }).name).toBe('H2 Rent')
+    expect(snap.tables['spendTransaction']).toHaveLength(1)
+    const members = snap.tables['member'] as Array<{ displayName: string }>
+    expect(members.some((m) => m.displayName === 'Bob')).toBe(true)
+    expect(members.some((m) => m.displayName === 'Primary Person')).toBe(false)
+
+    // The exported user is h2's owner, stripped of credentials.
+    const users = snap.tables['user'] as Array<{ id: string; passwordHash: unknown; mfaSecret: unknown }>
+    expect(users).toHaveLength(1)
+    expect(users[0]?.id).toBe(h2owner)
+    expect(users[0]?.passwordHash).toBeNull()
+    expect(users[0]?.mfaSecret).toBeNull()
+  })
+
+  it('exportHousehold and eraseHousehold require the household owner role', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const h2owner = await makeSecondHousehold(db)
+    const admin = appRouter.createCaller({ db, householdId: 'h2', role: 'admin', userId: h2owner })
+    await expect(admin.data.exportHousehold()).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    await expect(admin.data.eraseHousehold()).rejects.toMatchObject({ code: 'FORBIDDEN' })
+  })
+
+  it('eraseHousehold deletes the household and cascades, but refuses the primary (issue #110)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+
+    const h2owner = await makeSecondHousehold(db)
+    const h2 = appRouter.createCaller({ db, householdId: 'h2', role: 'owner', userId: h2owner })
+    const bob = await h2.members.addPerson({ displayName: 'Bob' })
+    await h2.pots.create({ name: 'H2 Rent', ownerId: bob.id })
+
+    // The primary household can't be erased through the tenant endpoint.
+    const primary = appRouter.createCaller({ db, householdId: 'household', role: 'owner', userId: owner!.id })
+    await expect(primary.data.eraseHousehold()).rejects.toMatchObject({ code: 'FORBIDDEN' })
+
+    await expect(h2.data.eraseHousehold()).resolves.toEqual({ ok: true })
+
+    // h2 and everything under it is gone; the primary survives.
+    expect((await db.select().from(household)).map((h) => h.id)).toEqual(['household'])
+    expect(await db.select().from(pot).where(eq(pot.householdId, 'h2'))).toHaveLength(0)
+    expect(await db.select().from(member).where(eq(member.householdId, 'h2'))).toHaveLength(0)
+    expect(await db.select().from(membership).where(eq(membership.householdId, 'h2'))).toHaveLength(0)
+
+    // The erasure is recorded on the primary household's trail, so it survives the
+    // cascade that wiped h2's own audit log.
+    const events = await db.select().from(auditLog).where(eq(auditLog.action, 'household_erased'))
+    expect(events).toHaveLength(1)
+    expect(events[0]?.householdId).toBe('household')
+    expect(events[0]?.entityId).toBe('h2')
   })
 
   it('stats reports per-table counts', async () => {

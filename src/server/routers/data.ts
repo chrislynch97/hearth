@@ -10,7 +10,8 @@ import { describeDatabase } from '../db/client'
 import { ALL_TABLES, MONEY_COLUMNS } from '../db/tables'
 import { ensureSeed } from '../db/seed'
 import { rescaleMinor } from '../../shared/money'
-import { applySnapshot, buildSnapshot, EXPORT_VERSION } from '../db/snapshot'
+import { applySnapshot, buildHouseholdSnapshot, buildSnapshot, EXPORT_VERSION } from '../db/snapshot'
+import { DEFAULT_HOUSEHOLD_ID } from '../trpc/tenant'
 import { runBackup } from '../backup/runner'
 import { appVersion } from '../version'
 import { checkForUpdates, deployMode } from '../updates'
@@ -74,6 +75,41 @@ export const dataRouter = router({
       }
     })
     await ensureSeed(ctx.db)
+    return { ok: true as const }
+  }),
+
+  /** GDPR portability (issue #110): this household's own data as JSON, in the
+   *  same shape as the instance-wide `export` but scoped to the caller's active
+   *  household. Authorised by household ownership, not instance ownership — the
+   *  tenant-facing counterpart to `export` for when hosting makes tenants mutually
+   *  untrusted. Credentials are stripped from the exported user rows. */
+  exportHousehold: publicProcedure.query(async ({ ctx }) => {
+    assertRole(ctx.role, 'owner')
+    return buildHouseholdSnapshot(ctx.db, ctx.householdId)
+  }),
+
+  /** GDPR erasure (issue #110): permanently delete the caller's active household
+   *  and everything under it. The FK cascades from `household` remove every child
+   *  row, its memberships, invitations, audit trail and sessions. Household-owner
+   *  only. The primary/instance household is refused — wiping it is the
+   *  instance-wide `reset`, not tenant self-service. */
+  eraseHousehold: publicProcedure.mutation(async ({ ctx }) => {
+    assertRole(ctx.role, 'owner')
+    if (ctx.householdId === DEFAULT_HOUSEHOLD_ID) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'The primary household can’t be erased here — use Reset all data instead.',
+      })
+    }
+    // Record against the primary household: erasing this one cascades away its own
+    // audit trail, so an entry on it would vanish with the rest of its data.
+    recordSecurityEvent(ctx, {
+      entityType: 'household',
+      entityId: ctx.householdId,
+      action: 'household_erased',
+      householdId: DEFAULT_HOUSEHOLD_ID,
+    })
+    await ctx.db.delete(household).where(eq(household.id, ctx.householdId))
     return { ok: true as const }
   }),
 
