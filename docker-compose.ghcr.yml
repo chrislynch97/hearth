@@ -7,9 +7,10 @@
 #   docker compose -f docker-compose.ghcr.yml up -d       # apply it
 #
 # To enable in-app one-click / scheduled updates, also install the host updater
-# (scripts/hearth-updater.sh + deploy/hearth-updater.{service,timer}) so it can
-# run the pull + recreate when the app asks. The app itself never gets Docker
-# access — it only writes a request file into ./data/updates.
+# so it can run the pull + recreate when the app asks (Linux: systemd/cron with
+# scripts/hearth-updater.sh; Windows: Task Scheduler with scripts/hearth-updater.ps1
+# — see docs/deployment.md → Updating). The app itself never gets Docker access —
+# it only writes a request file into ./data/updates.
 services:
   hearth:
     image: ghcr.io/chrislynch97/hearth:latest

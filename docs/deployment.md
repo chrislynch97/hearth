@@ -263,7 +263,11 @@ one-click / automatic updates with the host updater below. Images are published 
 does the pull + recreate when the app asks — so **Update now** and scheduled
 auto-updates work from inside the app. **The Hearth container never gets Docker
 access**; it only writes a request file into `./data/updates`, and the host
-updater (running on the host, in the `docker` group) acts on it.
+updater (running on the host) acts on it. The runner is refreshing a heartbeat
+that the app treats as "managed updates active"; each tick it also applies any
+pending request. Pick the runner for your host OS.
+
+*Linux — systemd (or cron).*
 
 ```bash
 # From your Hearth install dir (holds the compose file + ./data):
@@ -274,14 +278,31 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now hearth-updater.timer
 ```
 
-The timer runs every ~30s: it refreshes a heartbeat (so the app knows managed
-updates are active and shows the **Update now** button / enables **Install updates
-automatically**) and applies any pending request. Not on systemd? A cron line does
-the same:
+The timer runs every ~30s. The runner user must be in the `docker` group. Not on
+systemd? A cron line does the same:
 
 ```cron
 * * * * * cd /opt/hearth && HEARTH_COMPOSE_FILE=docker-compose.ghcr.yml scripts/hearth-updater.sh >> /var/log/hearth-updater.log 2>&1
 ```
+
+*Windows / Docker Desktop — Task Scheduler.* There's no systemd, so register the
+PowerShell updater (`scripts/hearth-updater.ps1`) as a scheduled task instead.
+From an **elevated PowerShell** in your Hearth install dir:
+
+```powershell
+# Uses docker-compose.ghcr.yml by default; pass -ComposeFile for the Postgres variant.
+.\deploy\register-hearth-updater.ps1
+# .\deploy\register-hearth-updater.ps1 -ComposeFile docker-compose.postgres.ghcr.yml
+```
+
+The task runs every minute (Task Scheduler's minimum, well within the app's
+3-minute heartbeat window). Run it as a user in the **docker-users** group who's
+signed in to Docker Desktop, so `docker compose` can reach the engine. Remove it
+with `Unregister-ScheduledTask -TaskName Hearth-Updater -Confirm:$false`.
+
+Both runners refresh the heartbeat so the app shows the **Update now** button and
+enables **Install updates automatically**, then apply any pending request — the
+flag-file contract in `./data/updates` is identical across OSes.
 
 **Backups first.** *Back up before updating* is on by default (Settings →
 Updates), so every applied update writes a verified backup first. *Install updates
