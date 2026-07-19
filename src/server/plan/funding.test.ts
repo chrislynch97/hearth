@@ -326,12 +326,56 @@ describe('computeFundingPlan', () => {
     expect(ef.months).toBe(6)
     const alice = ef.perOwner.find((o) => o.memberId === 'alice')!
     const joint = ef.perOwner.find((o) => o.memberId === 'joint')!
-    expect(alice.monthlyBills).toBe(30000)
+    expect(alice.monthlyCommitments).toBe(30000)
     expect(alice.target).toBe(180000) // 30000 × 6
-    expect(joint.monthlyBills).toBe(21000) // 20000 pot + 1000 main
+    expect(joint.monthlyCommitments).toBe(21000) // 20000 pot + 1000 main
     expect(joint.target).toBe(126000)
-    expect(ef.totalMonthlyBills).toBe(51000)
+    expect(ef.totalMonthlyCommitments).toBe(51000)
     expect(ef.total).toBe(306000)
+  })
+
+  it('emergency fund includes set-asides, summed with bills on the same pot owner', () => {
+    const members = [
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 0 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
+    ]
+    const pots = [
+      { id: 'alice-pot', name: 'Alice', ownerId: 'alice' },
+      { id: 'joint-pot', name: 'Joint', ownerId: 'joint' },
+    ]
+    // Alice: a 30000/mo bill + a 10000/mo set-aside on her pot → summed (separate commitments).
+    const bills = [
+      { recurrence: 'monthly' as const, active: true, funding: 'pot_manual' as const, potId: 'alice-pot', categoryId: null, amount: 30000 },
+    ]
+    const setAsides = [
+      { recurrence: 'monthly' as const, active: true, potId: 'alice-pot', amount: 10000 },
+      // A yearly joint set-aside: 24000/yr = 2000/mo, attributed to the joint owner.
+      { recurrence: 'yearly' as const, active: true, potId: 'joint-pot', amount: 24000 },
+    ]
+
+    const plan = computeFundingPlan({ pots, bills, setAsides, members, jointContributionBasis: 'equal', emergencyFundMonths: 3 })
+    const ef = plan.emergencyFund
+    expect(ef.perOwner.find((o) => o.memberId === 'alice')!.monthlyCommitments).toBe(40000) // 30000 bill + 10000 set-aside
+    expect(ef.perOwner.find((o) => o.memberId === 'joint')!.monthlyCommitments).toBe(2000)
+    expect(ef.totalMonthlyCommitments).toBe(42000)
+    expect(ef.total).toBe(126000) // 42000 × 3
+  })
+
+  it('emergency fund excludes bills and set-asides flagged out', () => {
+    const members = [{ id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 }]
+    const pots = [{ id: 'joint-pot', name: 'Joint', ownerId: 'joint' }]
+    const bills = [
+      { recurrence: 'monthly' as const, active: true, funding: 'pot_manual' as const, potId: 'joint-pot', categoryId: null, amount: 10000, includeInEmergencyFund: true },
+      { recurrence: 'monthly' as const, active: true, funding: 'pot_manual' as const, potId: 'joint-pot', categoryId: null, amount: 5000, includeInEmergencyFund: false },
+    ]
+    const setAsides = [
+      { recurrence: 'monthly' as const, active: true, potId: 'joint-pot', amount: 3000, includeInEmergencyFund: false },
+    ]
+
+    const plan = computeFundingPlan({ pots, bills, setAsides, members, jointContributionBasis: 'equal', emergencyFundMonths: 3 })
+    // Only the 10000 included bill counts; the excluded bill and set-aside drop out.
+    expect(plan.emergencyFund.totalMonthlyCommitments).toBe(10000)
+    expect(plan.emergencyFund.total).toBe(30000)
   })
 
   it('emergency fund defaults to 3 months when unset', () => {
@@ -363,7 +407,7 @@ describe('computeFundingPlan', () => {
     expect(alice.periodIncome).toBe(Math.round((260000 * 12) / 13)) // 240000
     expect(alice.remainder).toBe(alice.periodIncome - alice.setAside)
     // Emergency fund stays monthly regardless of budget period.
-    expect(plan.emergencyFund.perOwner.find((o) => o.memberId === 'alice')!.monthlyBills).toBe(12000)
+    expect(plan.emergencyFund.perOwner.find((o) => o.memberId === 'alice')!.monthlyCommitments).toBe(12000)
   })
 
   it('no persons yields empty perPerson split', () => {

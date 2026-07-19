@@ -16,6 +16,9 @@ export interface FundingBillInput {
   potId: string | null
   categoryId: string | null
   amount: number
+  /** Whether this bill counts toward the emergency-fund target (issue #118).
+   *  Undefined counts as included, matching the column's default. */
+  includeInEmergencyFund?: boolean
 }
 
 /** A set-aside (money in) — a recurring contribution that fills a single pot. */
@@ -24,6 +27,9 @@ export interface FundingSetAsideInput {
   active: boolean
   potId: string
   amount: number
+  /** Whether this set-aside counts toward the emergency-fund target (issue #118).
+   *  Undefined counts as included, matching the column's default. */
+  includeInEmergencyFund?: boolean
 }
 
 export interface FundingPotInput {
@@ -76,12 +82,14 @@ export interface JointPool {
   surplus: number
 }
 
-/** Emergency-fund target = monthly essential bills × months, per account and total. */
+/** Emergency-fund target = monthly commitments × months, per account and total.
+ *  "Commitments" = bills (money out) plus set-asides (money in) that are flagged
+ *  to count, each attributed to whoever owns the pot it touches (issue #118). */
 export interface EmergencyFund {
   months: number
-  totalMonthlyBills: number
+  totalMonthlyCommitments: number
   total: number
-  perOwner: Array<{ memberId: string; displayName: string; kind: 'person' | 'joint'; monthlyBills: number; target: number }>
+  perOwner: Array<{ memberId: string; displayName: string; kind: 'person' | 'joint'; monthlyCommitments: number; target: number }>
 }
 
 export interface FundingPlan {
@@ -223,31 +231,42 @@ export function computeFundingPlan(input: {
     }
   })
 
-  // Emergency fund: monthly *bills* (money out) attributed to whoever owns the
-  // pot they drain — main-account bills to the joint member — times the months.
+  // Emergency fund: monthly commitments attributed to whoever owns the pot each
+  // one touches, times the months. Bills (money out) drain a pot — main-account
+  // bills go to the joint member — and set-asides (money in) fill a pot. Both are
+  // recurring monthly demands you'd need cover for, so both count; each item can
+  // be excluded via its includeInEmergencyFund flag (issue #118). Bills and
+  // set-asides are summed even on the same pot — they're separate commitments.
   const potOwnerById = new Map(pots.map((p) => [p.id, p.ownerId]))
-  const billsMonthlyByOwner = new Map<string, number>()
+  const commitmentsMonthlyByOwner = new Map<string, number>()
+  const addCommitment = (ownerId: string | undefined, monthly: number) => {
+    if (ownerId) commitmentsMonthlyByOwner.set(ownerId, (commitmentsMonthlyByOwner.get(ownerId) ?? 0) + monthly)
+  }
   for (const b of activeBills) {
-    const monthly = normaliseToMonthly(b.amount, b.recurrence)
+    if (b.includeInEmergencyFund === false) continue
     const ownerId = b.funding === 'main' ? jointMember?.id : b.potId ? potOwnerById.get(b.potId) : undefined
-    if (ownerId) billsMonthlyByOwner.set(ownerId, (billsMonthlyByOwner.get(ownerId) ?? 0) + monthly)
+    addCommitment(ownerId, normaliseToMonthly(b.amount, b.recurrence))
+  }
+  for (const s of activeSetAsides) {
+    if (s.includeInEmergencyFund === false) continue
+    addCommitment(potOwnerById.get(s.potId), normaliseToMonthly(s.amount, s.recurrence))
   }
   const emergencyOwners = [...persons, ...(jointMember ? [jointMember] : [])]
   const emergencyPerOwner = emergencyOwners.map((m) => {
-    const monthlyBills = roundMinor(billsMonthlyByOwner.get(m.id) ?? 0)
+    const monthlyCommitments = roundMinor(commitmentsMonthlyByOwner.get(m.id) ?? 0)
     return {
       memberId: m.id,
       displayName: m.displayName,
       kind: m.kind,
-      monthlyBills,
-      target: roundMinor(monthlyBills * emergencyFundMonths),
+      monthlyCommitments,
+      target: roundMinor(monthlyCommitments * emergencyFundMonths),
     }
   })
-  const totalMonthlyBills = emergencyPerOwner.reduce((acc, o) => acc + o.monthlyBills, 0)
+  const totalMonthlyCommitments = emergencyPerOwner.reduce((acc, o) => acc + o.monthlyCommitments, 0)
   const emergencyFund: EmergencyFund = {
     months: emergencyFundMonths,
-    totalMonthlyBills,
-    total: roundMinor(totalMonthlyBills * emergencyFundMonths),
+    totalMonthlyCommitments,
+    total: roundMinor(totalMonthlyCommitments * emergencyFundMonths),
     perOwner: emergencyPerOwner,
   }
 

@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   Center,
+  Checkbox,
   Divider,
   Group,
   Loader,
@@ -89,6 +90,7 @@ function BillFormModal({ opened, onClose, members, pots, categories, money, expe
   const [categoryId, setCategoryId] = useState<string | null>(expense?.categoryId ?? null)
   const [note, setNote] = useState(expense?.note ?? '')
   const [dueAnchor, setDueAnchor] = useState(expense?.dueAnchor ?? '')
+  const [includeInEmergencyFund, setIncludeInEmergencyFund] = useState(expense?.includeInEmergencyFund !== 0)
   const [error, setError] = useState('')
 
   const isEditing = expense !== null
@@ -116,6 +118,7 @@ function BillFormModal({ opened, onClose, members, pots, categories, money, expe
       categoryId: isMain ? categoryId : null,
       note: note.trim() || undefined,
       dueAnchor: dueAnchor || undefined,
+      includeInEmergencyFund,
     }
 
     if (isEditing) await update.mutateAsync({ id: expense.id, expectedUpdatedAt: expense.updatedAt, ...payload })
@@ -186,6 +189,13 @@ function BillFormModal({ opened, onClose, members, pots, categories, money, expe
           />
           <TextInput label="Note (optional)" value={note} onChange={(e) => setNote(e.currentTarget.value)} />
         </Group>
+
+        <Checkbox
+          label="Include in emergency fund"
+          description="Count this bill toward the emergency-fund target on the Funding page."
+          checked={includeInEmergencyFund}
+          onChange={(e) => setIncludeInEmergencyFund(e.currentTarget.checked)}
+        />
 
         {(error || create.error || update.error) && (
           <Alert color="red" title="Error">

@@ -60,12 +60,14 @@ export const planRouter = router({
         potId: e.potId,
         categoryId: e.categoryId,
         amount: e.amount ?? 0,
+        includeInEmergencyFund: e.includeInEmergencyFund === 1,
       })),
       setAsides: setAsides.map((s) => ({
         recurrence: s.recurrence as Recurrence,
         active: s.active === 1,
         potId: s.potId,
         amount: s.amount,
+        includeInEmergencyFund: s.includeInEmergencyFund === 1,
       })),
       members: members.map((m) => ({
         id: m.id,

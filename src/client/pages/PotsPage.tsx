@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   Center,
+  Checkbox,
   Divider,
   Group,
   Loader,
@@ -51,14 +52,18 @@ interface ContribLine {
   label: string
   amountMajor: string
   recurrence: ContribRecurrence
+  includeInEmergencyFund: boolean
 }
 
+const blankLine = (): ContribLine => ({ label: '', amountMajor: '', recurrence: 'monthly', includeInEmergencyFund: true })
+
 function linesFromSetAsides(setAsides: SetAside[], pot: Pot, decimalPlaces: number): ContribLine[] {
-  if (setAsides.length === 0) return [{ label: '', amountMajor: '', recurrence: 'monthly' }]
+  if (setAsides.length === 0) return [blankLine()]
   return setAsides.map((s) => ({
     label: s.name === pot.name ? '' : s.name,
     amountMajor: String(fromMinor(s.amount, decimalPlaces)),
     recurrence: s.recurrence as ContribRecurrence,
+    includeInEmergencyFund: s.includeInEmergencyFund !== 0,
   }))
 }
 
@@ -232,7 +237,7 @@ function PotFormModal({
   const [categoryId, setCategoryId] = useState<string | null>(pot?.categoryId ?? null)
   const [note, setNote] = useState(pot?.note ?? '')
   const [lines, setLines] = useState<ContribLine[]>(() =>
-    pot ? linesFromSetAsides(setAsides, pot, money.decimalPlaces) : [{ label: '', amountMajor: '', recurrence: 'monthly' }],
+    pot ? linesFromSetAsides(setAsides, pot, money.decimalPlaces) : [blankLine()],
   )
   const [error, setError] = useState('')
 
@@ -244,7 +249,7 @@ function PotFormModal({
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
   }
   function addLine() {
-    setLines((prev) => [...prev, { label: '', amountMajor: '', recurrence: 'monthly' }])
+    setLines((prev) => [...prev, blankLine()])
   }
   function removeLine(i: number) {
     setLines((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i)))
@@ -260,6 +265,7 @@ function PotFormModal({
       label: l.label.trim() || null,
       amount: l.amountMajor === '' ? 0 : toMinor(Number(l.amountMajor), money.decimalPlaces),
       recurrence: l.recurrence,
+      includeInEmergencyFund: l.includeInEmergencyFund,
     }))
 
     try {
@@ -331,37 +337,45 @@ function PotFormModal({
           </Text>
           <Stack gap="xs">
             {lines.map((line, i) => (
-              <Group key={i} gap="xs" align="flex-end" wrap="nowrap">
-                {lines.length > 1 && (
-                  <TextInput
-                    placeholder="Part (e.g. Running)"
-                    value={line.label}
-                    onChange={(e) => updateLine(i, { label: e.currentTarget.value })}
-                    style={{ flex: 1 }}
+              <Stack key={i} gap={4}>
+                <Group gap="xs" align="flex-end" wrap="nowrap">
+                  {lines.length > 1 && (
+                    <TextInput
+                      placeholder="Part (e.g. Running)"
+                      value={line.label}
+                      onChange={(e) => updateLine(i, { label: e.currentTarget.value })}
+                      style={{ flex: 1 }}
+                    />
+                  )}
+                  <NumberInput
+                    placeholder="0.00"
+                    prefix={money.symbol}
+                    decimalScale={money.decimalPlaces}
+                    fixedDecimalScale
+                    min={0}
+                    value={line.amountMajor}
+                    onChange={(v) => updateLine(i, { amountMajor: v === '' ? '' : String(v) })}
+                    w={lines.length > 1 ? 130 : undefined}
+                    style={lines.length > 1 ? undefined : { flex: 1 }}
                   />
-                )}
-                <NumberInput
-                  placeholder="0.00"
-                  prefix={money.symbol}
-                  decimalScale={money.decimalPlaces}
-                  fixedDecimalScale
-                  min={0}
-                  value={line.amountMajor}
-                  onChange={(v) => updateLine(i, { amountMajor: v === '' ? '' : String(v) })}
-                  w={lines.length > 1 ? 130 : undefined}
-                  style={lines.length > 1 ? undefined : { flex: 1 }}
+                  {line.recurrence !== 'monthly' && (
+                    <Text size="xs" c="dimmed">
+                      /{line.recurrence}
+                    </Text>
+                  )}
+                  {lines.length > 1 && (
+                    <ActionIcon variant="subtle" color="red" size="lg" aria-label="Remove part" onClick={() => removeLine(i)}>
+                      ×
+                    </ActionIcon>
+                  )}
+                </Group>
+                <Checkbox
+                  size="xs"
+                  label="Include in emergency fund"
+                  checked={line.includeInEmergencyFund}
+                  onChange={(e) => updateLine(i, { includeInEmergencyFund: e.currentTarget.checked })}
                 />
-                {line.recurrence !== 'monthly' && (
-                  <Text size="xs" c="dimmed">
-                    /{line.recurrence}
-                  </Text>
-                )}
-                {lines.length > 1 && (
-                  <ActionIcon variant="subtle" color="red" size="lg" aria-label="Remove part" onClick={() => removeLine(i)}>
-                    ×
-                  </ActionIcon>
-                )}
-              </Group>
+              </Stack>
             ))}
             <Group>
               <Button size="xs" variant="subtle" onClick={addLine}>

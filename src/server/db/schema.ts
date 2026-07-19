@@ -304,6 +304,9 @@ export const expense = pgTable('expense', {
   categoryId: text('category_id').references(() => category.id), // required when funding = 'main'
   note: text('note'),
   active: integer('active').notNull().default(1),
+  // 0/1: counts toward the emergency-fund target (issue #118). Default 1 — every
+  // bill is included unless explicitly removed from the calculation.
+  includeInEmergencyFund: integer('include_in_emergency_fund').notNull().default(1),
   dueAnchor: text('due_anchor'),            // YYYY-MM-DD of one known occurrence
   dueReminderDays: integer('due_reminder_days'),
   archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'date' }),
@@ -393,6 +396,9 @@ export const setAside = pgTable('set_aside', {
   recurrence: text('recurrence').notNull(), // 'monthly' | 'quarterly' | 'yearly'
   note: text('note'),
   active: integer('active').notNull().default(1),
+  // 0/1: counts toward the emergency-fund target (issue #118). Default 1 — every
+  // set-aside is included unless explicitly removed from the calculation.
+  includeInEmergencyFund: integer('include_in_emergency_fund').notNull().default(1),
   sortOrder: integer('sort_order').notNull().default(0),
   archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'date' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),

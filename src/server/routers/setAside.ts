@@ -19,6 +19,7 @@ export const contributionLineInput = z.object({
   label: z.string().nullable().optional(),
   amount: z.number().int().min(0),
   recurrence: recurrenceEnum.optional(),
+  includeInEmergencyFund: z.boolean().optional(),
 })
 export type ContributionLine = z.infer<typeof contributionLineInput>
 
@@ -48,6 +49,7 @@ export async function insertContributionLines(
       recurrence: line.recurrence ?? 'monthly',
       note: null,
       active: 1,
+      includeInEmergencyFund: line.includeInEmergencyFund === false ? 0 : 1,
       sortOrder: i,
       archivedAt: null,
       createdAt: now,
@@ -64,6 +66,7 @@ const baseInput = z.object({
   amount: z.number().int().min(0),
   recurrence: recurrenceEnum,
   note: z.string().nullable().optional(),
+  includeInEmergencyFund: z.boolean().optional(),
 })
 
 async function validateOwnerAndPot(db: DB, householdId: string, ownerId: string, potId: string): Promise<void> {
@@ -102,6 +105,7 @@ export const setAsideRouter = router({
       recurrence: input.recurrence,
       note: input.note ?? null,
       active: 1,
+      includeInEmergencyFund: input.includeInEmergencyFund === false ? 0 : 1,
       sortOrder: 0,
       archivedAt: null,
       createdAt: now,
@@ -125,10 +129,11 @@ export const setAsideRouter = router({
         recurrence: recurrenceEnum.optional(),
         note: z.string().nullable().optional(),
         active: z.boolean().optional(),
+        includeInEmergencyFund: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, expectedUpdatedAt, active, ...rest } = input
+      const { id, expectedUpdatedAt, active, includeInEmergencyFund, ...rest } = input
       const now = new Date()
       const target = await load(ctx.db, ctx.householdId, id)
 
@@ -138,6 +143,7 @@ export const setAsideRouter = router({
 
       const setFields: Record<string, unknown> = { ...rest, updatedAt: now }
       if (active !== undefined) setFields['active'] = active ? 1 : 0
+      if (includeInEmergencyFund !== undefined) setFields['includeInEmergencyFund'] = includeInEmergencyFund ? 1 : 0
 
       const [written] = await ctx.db
         .update(setAside)

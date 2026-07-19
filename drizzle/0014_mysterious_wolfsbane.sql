@@ -1,0 +1,2 @@
+ALTER TABLE "expense" ADD COLUMN "include_in_emergency_fund" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
+ALTER TABLE "set_aside" ADD COLUMN "include_in_emergency_fund" integer DEFAULT 1 NOT NULL;
