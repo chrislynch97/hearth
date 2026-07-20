@@ -5,7 +5,19 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default tseslint.config(
-  { ignores: ['dist', 'drizzle', 'node_modules', 'data', 'playwright-report', 'test-results'] },
+  // `.claude` holds git worktrees, each with its own tsconfig — linting them
+  // makes typescript-eslint see multiple candidate tsconfigRootDirs and bail.
+  {
+    ignores: [
+      'dist',
+      'drizzle',
+      'node_modules',
+      'data',
+      'playwright-report',
+      'test-results',
+      '.claude',
+    ],
+  },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
