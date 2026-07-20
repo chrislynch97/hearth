@@ -12,6 +12,7 @@ import {
     Title,
 } from "@mantine/core";
 import { formatMoney } from "@shared/money";
+import { batchSummary } from "../model";
 
 export interface HistorySectionProps {
     money: MoneyFormat;
@@ -55,14 +56,8 @@ export const HistorySection = ({ money }: HistorySectionProps) => {
                         const potName = b.potId
                             ? (potById.get(b.potId)?.name ?? "Unknown pot")
                             : "Mixed";
-                        const isReversed = b.reversedAt !== null;
-                        const isWriteOff = b.transactionCount === 0;
-                        // A part-move records what actually left the account alongside what was
-                        // required; the gap is the residual it created or cleared.
-                        const partial =
-                            !isWriteOff &&
-                            b.movedAmount !== null &&
-                            b.movedAmount !== b.totalAmount;
+                        const { isReversed, isWriteOff, isPartial } =
+                            batchSummary(b);
                         return (
                             <Group
                                 key={b.id}
@@ -116,7 +111,7 @@ export const HistorySection = ({ money }: HistorySectionProps) => {
                                                     : undefined
                                             }
                                         >
-                                            {partial
+                                            {isPartial
                                                 ? `moved ${formatMoney(Math.abs(b.movedAmount!), money)} of ${formatMoney(Math.abs(b.totalAmount), money)}`
                                                 : formatMoney(
                                                       Math.abs(b.totalAmount),

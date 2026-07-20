@@ -1,9 +1,10 @@
 import type { BacklogPayer } from "../model";
+import { isOvershoot, parseMoved, settlement } from "../model";
 import type { Member } from "../../../../server/db/schema";
 import { type MoneyFormat, useFormatDate } from "@/useMoney";
 import { trpc } from "@/trpc";
 import { useState } from "react";
-import { formatMoney, fromMinor, toMinor } from "@shared/money";
+import { formatMoney, fromMinor } from "@shared/money";
 import {
     ActionIcon,
     Alert,
@@ -29,18 +30,16 @@ export const PayerRow = ({ potId, payer, members, money }: PayerRowProps) => {
 
     const [open, setOpen] = useState(false);
 
-    // What still needs moving = spends + any residual carried from earlier part-moves.
-    const required = payer.total + payer.residual;
-    const direction = required < 0 ? -1 : 1;
-    const hasSpends = payer.count > 0;
+    const { required, direction, isPullBack, hasSpends } = settlement(payer);
     // The field holds the magnitude actually moved; sign comes from `direction`.
     const [moved, setMoved] = useState<number | string>(
         fromMinor(Math.abs(required), money.decimalPlaces)
     );
 
+    const movedMinor = parseMoved(moved, money.decimalPlaces);
+
     const payerMember = members.find((m) => m.id === payer.ownerId);
     const isJoint = payerMember?.kind === "joint";
-    const isPullBack = required < 0;
 
     const invalidate = () =>
         Promise.all([
@@ -50,12 +49,10 @@ export const PayerRow = ({ potId, payer, members, money }: PayerRowProps) => {
         ]);
 
     const handleMove = async () => {
-        const magnitude =
-            moved === "" ? 0 : toMinor(Number(moved), money.decimalPlaces);
         await markMoved.mutateAsync({
             potId,
             ownerId: payer.ownerId,
-            movedAmount: direction * magnitude,
+            movedAmount: direction * movedMinor,
         });
         await invalidate();
     };
@@ -69,9 +66,7 @@ export const PayerRow = ({ potId, payer, members, money }: PayerRowProps) => {
     const arrow = isJoint
         ? "stays with Joint"
         : `→ ${payerMember?.displayName ?? "someone"}`;
-    const movedMinor =
-        moved === "" ? 0 : toMinor(Number(moved), money.decimalPlaces);
-    const overshoot = hasSpends && movedMinor > Math.abs(required);
+    const overshoot = isOvershoot(movedMinor, required);
     const error = markMoved.error ?? clearResidual.error;
 
     // Residual-only row: no fresh spends, just a shortfall/credit carried over. There
