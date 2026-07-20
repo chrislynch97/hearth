@@ -6,7 +6,10 @@ import { router, publicProcedure } from '../trpc/trpc'
 import { assertInstanceOwner, reconcileInstanceOwner } from '../auth/session'
 import { assertRole } from '../trpc/tenant'
 import { household } from '../db/schema'
-import { describeDatabase } from '../db/client'
+// From target, not client: importing client opens (or creates) the real
+// database as a module side effect — every test importing appRouter would
+// boot a file-backed PGlite on ./data/pgdata.
+import { describeDatabase } from '../db/target'
 import { ALL_TABLES, MONEY_COLUMNS } from '../db/tables'
 import { ensureSeed } from '../db/seed'
 import { rescaleMinor } from '../../shared/money'
