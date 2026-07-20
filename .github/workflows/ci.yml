@@ -31,6 +31,35 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  # End-to-end smoke suite (#142): the built client against a real demo server.
+  # Its own job so a browser failure is legible on its own, and so the unit
+  # suite still reports even when the browser install is having a bad day.
+  # Runs against demo mode only — `npm run demo` pins the database itself.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm install --no-audit --no-fund
+
+      # Chromium only — this is a canary, not cross-browser coverage.
+      - run: npx playwright install --with-deps chromium
+
+      # Builds the client, then boots the demo server and drives it.
+      - run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   # Build the runtime image and scan it for known OS + library vulnerabilities
   # before merge. Doesn't push — the image is built locally and handed to Trivy.
   # ignore-unfixed avoids failing on vulns with no available patch; only fixable
