@@ -11,12 +11,8 @@ import {
     Title,
 } from "@mantine/core";
 import { formatMoney } from "@shared/money";
-import {
-    ageLabel,
-    daysSince,
-    STALE_DAYS,
-    SUBTYPES,
-} from "@/features/accounts/util";
+import { daysSince, STALE_DAYS, SUBTYPES } from "@/features/accounts/util";
+import { ageLabel } from "@/relativeDate";
 
 const subtypeLabel = (kind: string, value: string | null): string | null => {
     if (!value) return null;

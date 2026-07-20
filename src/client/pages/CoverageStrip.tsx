@@ -12,15 +12,9 @@ import {
 import { trpc } from "@/trpc";
 import { orderMembers } from "@/potOptions";
 import { useFormatDate } from "@/useMoney";
+import { ageLabel } from "@/relativeDate";
 import { diffDays, todayIso } from "@shared/dates";
 import type { Member } from "../../server/db/schema";
-
-/** How long ago a date was, relative to today, for the coverage strip. */
-const agoLabel = (daysAgo: number): string => {
-    if (daysAgo <= 0) return "today";
-    if (daysAgo === 1) return "yesterday";
-    return `${daysAgo} days ago`;
-};
 
 export interface CoverageStripProps {
     members: Member[];
@@ -90,7 +84,7 @@ export const CoverageStrip = ({
                                                     }}
                                                 >
                                                     covered to {fmt(last)} ·{" "}
-                                                    {agoLabel(
+                                                    {ageLabel(
                                                         diffDays(last, today)
                                                     )}
                                                 </Text>

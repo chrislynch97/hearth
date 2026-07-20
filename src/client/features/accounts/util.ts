@@ -7,14 +7,6 @@ export const daysSince = (dateStr: string): number => {
 // A balance older than this is flagged as stale — net worth may be out of date.
 export const STALE_DAYS = 90;
 
-export const ageLabel = (days: number): string => {
-    if (days <= 0) return "today";
-    if (days === 1) return "yesterday";
-    if (days < 31) return `${days}d ago`;
-    if (days < 365) return `${Math.floor(days / 30)}mo ago`;
-    return `${Math.floor(days / 365)}y ago`;
-};
-
 // Subtype options offered per kind. Purely descriptive — net worth uses `kind`.
 export const SUBTYPES: Record<
     "asset" | "liability",
