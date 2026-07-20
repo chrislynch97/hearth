@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm'
+import { PGlite } from '@electric-sql/pglite'
 import type { DB } from './client'
 
 /**
@@ -17,8 +18,12 @@ import type { DB } from './client'
  * this is mutual exclusion, not atomicity: a tick that fails part-way is still
  * safe (all three are idempotent and re-run next tick).
  *
- * Single-instance self-host is unaffected — the sole replica always wins, and
- * embedded PGlite supports advisory locks like any other Postgres.
+ * Embedded PGlite is exempt entirely (issue #149). It has a single connection,
+ * so an open transaction blocks every other query on the instance — including
+ * `work`'s, which is waiting on the very transaction that's waiting for it, a
+ * permanent deadlock that wedged the database at boot. Election is meaningless
+ * there anyway: PGlite runs in-process and locks its data directory, so the
+ * sole replica is always the leader.
  */
 
 /** Namespace for every Hearth advisory lock, so a key can't collide with an
@@ -35,12 +40,25 @@ export const SchedulerLock = {
 
 export type SchedulerLock = (typeof SchedulerLock)[keyof typeof SchedulerLock]
 
+/** True when `db` is embedded PGlite, which serves every query from one
+ *  connection — so nothing may run against `db` while a transaction is open on
+ *  it. Read off the driver handle rather than `DATABASE_URL` so tests and the
+ *  demo take the same branch production does for the engine they're on. */
+function isSingleConnection(db: DB): boolean {
+  return (db as unknown as { $client?: unknown }).$client instanceof PGlite
+}
+
 /** Run `work` only if this instance wins `lock` for the duration, returning
  *  whether it did. A `false` return means another replica is running that
  *  scheduler right now and this tick was skipped — the normal, uninteresting
  *  outcome on every non-leader. Errors from `work` propagate to the caller
  *  (each scheduler already logs and swallows its own). */
 export async function withLeaderLock(db: DB, lock: SchedulerLock, work: () => Promise<void>): Promise<boolean> {
+  if (isSingleConnection(db)) {
+    await work()
+    return true
+  }
+
   return db.transaction(async (tx) => {
     const result = await tx.execute<{ locked: boolean }>(
       sql`select pg_try_advisory_xact_lock(${LOCK_NAMESPACE}, ${lock}) as locked`,
