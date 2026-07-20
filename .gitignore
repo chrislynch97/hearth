@@ -12,3 +12,7 @@ data
 
 # Playwright MCP scratch output
 .playwright-mcp/
+
+# Playwright E2E output
+playwright-report/
+test-results/

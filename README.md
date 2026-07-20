@@ -29,6 +29,7 @@ npm run dev:client   # UI on :5173 (proxies /trpc to the API)
 ```
 
 - `npm test` — run the test suite
+- `npm run test:e2e` — run the browser smoke suite (see below)
 - `npm run typecheck` — type-check the whole project
 
 ## Demo mode
@@ -70,6 +71,26 @@ The generator lives in [`src/server/db/demo.ts`](src/server/db/demo.ts); tweak i
 change what the demo shows. The seed script refuses to write to a database that looks
 like your real one — the `pgdata` folder, a legacy `app.db`, or any `postgres://` URL
 (pass `--force` to override).
+
+### Browser smoke tests
+
+Demo mode doubles as the fixture for the end-to-end suite (`e2e/`, Playwright):
+
+```bash
+npm run test:e2e      # build the client, boot the demo server, drive it in Chromium
+npm run test:e2e:ui   # the same, in Playwright's watch UI
+```
+
+It's a canary, not a second test pyramid — a handful of specs covering the things
+unit tests can't see: the app boots past the auth gates, the nav routes, adding a
+spend reaches the database and comes back in the register, the funding plan and
+settings render. It runs on its own port (8788), so a `npm run demo` you already
+have open on 8787 keeps working, and it re-seeds on every run.
+
+The suite can only ever reach the demo database: `npm run demo` pins `DATABASE_URL`
+to `./data/demo` itself, so nothing in the Playwright config can point it at real
+data. A failed run leaves a report in `playwright-report/`
+(`npx playwright show-report`).
 
 ## Deploy
 
