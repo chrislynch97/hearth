@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
     Alert,
     Badge,
@@ -249,21 +249,16 @@ export const AuditLogSection = () => {
     const entries = entriesQuery.data ?? [];
     const hasMore = entries.length >= limit && limit < MAX_ENTRIES;
 
-    // Retention window, seeded from the household once it loads (null keeps the
-    // NumberInput from flashing 0 over a real value).
+    // Both controls show the household's value until edited, then the edit. Null
+    // while the household loads, so neither flashes a default over a real value.
     const update = trpc.household.update.useMutation();
-    const [retention, setRetention] = useState<number | string | null>(null);
-    // Archive-before-prune toggle (issue #43); null until the household loads so
-    // the Switch doesn't flash off over a real "on" value.
-    const [archive, setArchive] = useState<boolean | null>(null);
+    const [retentionEdit, setRetention] = useState<number | string | null>(null);
+    // Archive-before-prune toggle (issue #43).
+    const [archiveEdit, setArchive] = useState<boolean | null>(null);
     const [savedRetention, setSavedRetention] = useState(false);
 
-    useEffect(() => {
-        if (hh) {
-            setRetention((prev) => prev ?? hh.auditRetentionDays);
-            setArchive((prev) => prev ?? hh.auditPruneArchive === 1);
-        }
-    }, [hh]);
+    const retention = retentionEdit ?? hh?.auditRetentionDays ?? null;
+    const archive = archiveEdit ?? (hh ? hh.auditPruneArchive === 1 : null);
 
     const prune = trpc.audit.prune.useMutation();
     const [confirmPrune, setConfirmPrune] = useState(false);

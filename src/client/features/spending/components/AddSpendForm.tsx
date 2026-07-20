@@ -2,7 +2,7 @@ import { type MoneyFormat, useFirstDayOfWeek } from "@/useMoney";
 import type { Member, Pot } from "../../../../server/db/schema";
 import { trpc } from "@/trpc";
 import { orderMembers } from "@/potOptions";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { todayIso } from "@shared/dates";
 import { formatMoney, fromMinor, toMinor } from "@shared/money";
 import {
@@ -52,7 +52,7 @@ export const AddSpendForm = ({ members, pots, money }: AddSpendFormProps) => {
     const [ownerId, setOwnerId] = useState<string | null>(
         orderedMembers[0]?.id ?? null
     );
-    const [potId, setPotId] = useState<string | null>(null);
+    const [chosenPotId, setChosenPotId] = useState<string | null>(null);
     const [potManuallyChosen, setPotManuallyChosen] = useState(false);
     // "Already came out / no transfer needed" — auto-pot deduction or main account.
     const [settledAtSource, setSettledAtSource] = useState(false);
@@ -85,12 +85,13 @@ export const AddSpendForm = ({ members, pots, money }: AddSpendFormProps) => {
         { enabled: description.trim().length > 0 && !!ownerId }
     );
 
-    useEffect(() => {
-        if (potManuallyChosen) return;
-        const suggested = suggestQuery.data?.potId;
-        const valid = suggested != null && pots.some((p) => p.id === suggested);
-        setPotId(valid ? suggested : null);
-    }, [suggestQuery.data, potManuallyChosen, pots]);
+    // Until the funding is chosen explicitly, the pot follows the description-based
+    // suggestion — ignoring one that names a pot this form can't offer.
+    const suggested = suggestQuery.data?.potId ?? null;
+    const validSuggestion = pots.some((p) => p.id === suggested)
+        ? suggested
+        : null;
+    const potId = potManuallyChosen ? chosenPotId : validSuggestion;
 
     const potById = new Map(pots.map((p) => [p.id, p]));
 
@@ -99,7 +100,7 @@ export const AddSpendForm = ({ members, pots, money }: AddSpendFormProps) => {
         setKind("spend");
         setDescription("");
         setDate(keepDate);
-        setPotId(null);
+        setChosenPotId(null);
         setPotManuallyChosen(false);
         setSettledAtSource(false);
         setCategoryId(null);
@@ -125,7 +126,7 @@ export const AddSpendForm = ({ members, pots, money }: AddSpendFormProps) => {
         setDescription(o.name);
         setDate(o.date);
         setKind("spend");
-        setPotId(o.potId);
+        setChosenPotId(o.potId);
         setCategoryId(o.categoryId);
         setSettledAtSource(o.settledAtSource);
         setAmountMajor(String(fromMinor(o.totalAmount, money.decimalPlaces)));
@@ -323,7 +324,7 @@ export const AddSpendForm = ({ members, pots, money }: AddSpendFormProps) => {
                 <SpendFundingFields
                     value={{ potId, categoryId, settledAtSource }}
                     onChange={(f) => {
-                        setPotId(f.potId);
+                        setChosenPotId(f.potId);
                         setCategoryId(f.categoryId);
                         setSettledAtSource(f.settledAtSource);
                         // Any explicit funding choice stops the description-based pot suggestion.

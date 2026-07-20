@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Alert,
   Badge,
@@ -49,28 +49,24 @@ export function ImportPage() {
   const potData = pots.map((p) => ({ value: p.id, label: p.name }))
   const profiles = profilesQuery.data ?? []
 
-  const [ownerId, setOwnerId] = useState<string | null>(null)
-  const [source, setSource] = useState<string | null>(null)
+  const [chosenOwnerId, setOwnerId] = useState<string | null>(null)
+  const [chosenSource, setSource] = useState<string | null>(null)
   const [csvText, setCsvText] = useState('')
   const [filename, setFilename] = useState('')
   const [decisions, setDecisions] = useState<Record<number, Decision>>({})
   const [result, setResult] = useState<{ imported: number; skipped: number } | null>(null)
 
-  useEffect(() => {
-    if (members.length > 0 && !ownerId) setOwnerId(members[0]!.id)
-  }, [members, ownerId])
-
-  useEffect(() => {
-    const list = profilesQuery.data ?? []
-    if (list.length > 0 && !source) setSource(list[0]!.id)
-  }, [profilesQuery.data, source])
+  // Both pickers sit on the first option until the user chooses another.
+  const ownerId = chosenOwnerId ?? members[0]?.id ?? null
+  const source = chosenSource ?? profiles[0]?.id ?? null
 
   const activeProfile = profiles.find((p) => p.id === source)
 
   const data = preview.data
   // Seed per-row decisions when a preview arrives: import new + foreign by default.
-  useEffect(() => {
-    if (!data) return
+  const [seededFrom, setSeededFrom] = useState(data)
+  if (data && data !== seededFrom) {
+    setSeededFrom(data)
     const seed: Record<number, Decision> = {}
     for (const r of data.rows) {
       seed[r.index] = {
@@ -79,7 +75,7 @@ export function ImportPage() {
       }
     }
     setDecisions(seed)
-  }, [data])
+  }
 
   async function handleFile(file: File | null) {
     if (!file) return

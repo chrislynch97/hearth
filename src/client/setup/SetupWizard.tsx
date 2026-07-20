@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Alert,
   Badge,
@@ -118,21 +118,23 @@ function YouStep({ onNext, onBack }: YouStepProps) {
   const linkUser = trpc.members.linkUser.useMutation()
   const updateMember = trpc.members.update.useMutation()
 
-  const [form, setForm] = useState<{ displayName: string; username: string } | null>(null)
+  const [edits, setForm] = useState<{ displayName: string; username: string } | null>(null)
   // A username the account holder typed is theirs to keep; until then it tracks
   // the name field, the way most sign-up forms suggest one.
-  const [usernameEdited, setUsernameEdited] = useState(false)
+  const [usernameEdited, setUsernameEdited] = useState<boolean | null>(null)
   const [currentPassword, setCurrentPassword] = useState('')
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    if (!me || form) return
-    setForm({
-      displayName: chosenOrBlank(me.displayName, SEEDED_OWNER_DISPLAY_NAME),
-      username: chosenOrBlank(me.username, SEEDED_OWNER_USERNAME),
-    })
-    setUsernameEdited(me.username !== SEEDED_OWNER_USERNAME)
-  }, [me, form])
+  const form =
+    edits ??
+    (me
+      ? {
+          displayName: chosenOrBlank(me.displayName, SEEDED_OWNER_DISPLAY_NAME),
+          username: chosenOrBlank(me.username, SEEDED_OWNER_USERNAME),
+        }
+      : null)
+  // An account already carrying a real username counts as edited from the start.
+  const isUsernameEdited = usernameEdited ?? (me ? me.username !== SEEDED_OWNER_USERNAME : false)
 
   if (!form || !me) {
     return (
@@ -146,9 +148,10 @@ function YouStep({ onNext, onBack }: YouStepProps) {
   const username = form.username.trim()
 
   const setName = (value: string) =>
-    setForm((f) =>
-      f ? { displayName: value, username: usernameEdited ? f.username : suggestUsername(value) } : f
-    )
+    setForm({
+      displayName: value,
+      username: isUsernameEdited ? form.username : suggestUsername(value),
+    })
 
   // Renaming a username is identity-bearing, so the server wants the password when
   // one is set (#50) — which it is if FirstRunGate ran before the wizard. Mirror
@@ -206,7 +209,7 @@ function YouStep({ onNext, onBack }: YouStepProps) {
         onChange={(e) => {
           const { value } = e.currentTarget
           setUsernameEdited(true)
-          setForm((f) => (f ? { ...f, username: value } : f))
+          setForm({ ...form, username: value })
         }}
         placeholder="username"
       />

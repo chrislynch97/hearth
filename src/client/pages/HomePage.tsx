@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useEffectEvent, useState } from 'react'
 import {
   Anchor,
   Badge,
@@ -500,14 +500,13 @@ export function HomePage() {
     setPeriodStart(shiftPeriod(base, delta, periodCfg).start)
   }
 
-  // `[` / `]` (handled globally in AppLayout) shift the period. Use a ref so the
-  // listener always calls the latest shift without re-subscribing each render.
-  const shiftRef = useRef(shift)
-  shiftRef.current = shift
+  // `[` / `]` (handled globally in AppLayout) shift the period. An effect event
+  // always sees the latest `shift` without re-subscribing each render.
+  const onPeriod = useEffectEvent((e: Event) => shift((e as CustomEvent<number>).detail))
   useEffect(() => {
-    const onPeriod = (e: Event) => shiftRef.current((e as CustomEvent<number>).detail)
-    window.addEventListener('hearth:period', onPeriod)
-    return () => window.removeEventListener('hearth:period', onPeriod)
+    const listener = (e: Event) => onPeriod(e)
+    window.addEventListener('hearth:period', listener)
+    return () => window.removeEventListener('hearth:period', listener)
   }, [])
 
   if (ctx.isLoading || summaryQuery.isLoading) {
