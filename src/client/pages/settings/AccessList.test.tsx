@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
     rows: [] as unknown[],
 }));
 
-vi.mock("../trpc", () => {
+vi.mock("@/trpc", () => {
     const mutation = (mutateAsync: unknown) => ({
         useMutation: () => ({ mutateAsync, isPending: false, error: null }),
     });
@@ -37,7 +37,7 @@ vi.mock("../trpc", () => {
 });
 
 // Imported after the mock is registered.
-import { AccessList } from "./SettingsPage";
+import { AccessList } from "./AccessList";
 
 const member = (over: Record<string, unknown> = {}) => ({
     userId: "u-ben",
