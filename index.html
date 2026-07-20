@@ -2,11 +2,27 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/brand/logo/hearth-favicon.svg" />
+    <!-- public/ is the only directory Vite copies into dist/client, so the icons
+         live there; scripts/gen-icons.mjs regenerates them from brand/logo/. -->
+    <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hearth</title>
     <!-- Fonts are bundled via @fontsource and imported in src/client/main.tsx —
          deliberately no Google Fonts <link> here (#54). -->
+
+    <!-- Installable to the home screen (#144). The status bar follows the app's
+         own light/dark surface; the manifest's single theme_color can't. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbfaf4" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#22261f" />
+
+    <!-- iOS ignores the manifest: it needs its own icon and metas to open
+         chrome-less rather than as a Safari bookmark. -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Hearth" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   </head>
   <body>
     <div id="root"></div>
