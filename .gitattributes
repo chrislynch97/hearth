@@ -3,3 +3,7 @@
 scripts/hearth-updater.sh text eol=lf
 deploy/hearth-updater.service text eol=lf
 deploy/hearth-updater.timer text eol=lf
+
+# The router plugin rewrites this with LF on every build. Without eol=lf a
+# Windows checkout is CRLF, so each build leaves it "modified" with an empty diff.
+src/client/routeTree.gen.ts text eol=lf
