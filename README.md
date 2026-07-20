@@ -19,6 +19,9 @@ Postgres server you point it at (for a hosted / multi-instance deployment).
   (TOTP), and **automatic backups**. Supports **multiple households** (a switcher
   in the account menu), mapping an account to a budgeting member, and optional
   self-service **sign-up**.
+- **Installable on phones** — "Add to Home Screen" gives Hearth its own icon and
+  opens it full-screen, without the browser chrome. It still needs the server, so
+  there's no offline mode.
 
 ## Quick start (development)
 

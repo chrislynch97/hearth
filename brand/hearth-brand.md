@@ -30,6 +30,10 @@ two walls with a single apricot dot. Files in `brand/logo/`:
 | `hearth-mark-mono.svg` | Single-ink mark for stamps, engraving, disabled states |
 | `hearth-favicon.svg` | App icon / favicon — linen mark on a rounded moss tile |
 
+The app's served icons (`public/icons/`) are **generated** from the favicon tile
+by `node scripts/gen-icons.mjs` — edit the mark here, then re-run it and commit
+the output. Don't hand-edit anything in `public/icons/`.
+
 **Lockup:** mark + "Hearth" in Spectral Medium, left-aligned, gap ≈ 0.4× cap height.
 **Clearspace:** keep clear space equal to the height of the roof on all sides.
 **Min size:** 20px mark in UI; 16px favicon tile.
