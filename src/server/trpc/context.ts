@@ -1,7 +1,6 @@
 import type { CreateFastifyContextOptions } from '@trpc/server/adapters/fastify'
 import { and, eq, isNotNull } from 'drizzle-orm'
 import type { DB } from '../db/client'
-import { db } from '../db/client'
 import { membership } from '../db/schema'
 import type { Session } from '../db/schema'
 import { parseSessionCookie, serializeSessionCookie } from '../auth/cookies'
@@ -131,6 +130,12 @@ export async function resolveIdentity(
 }
 
 export async function createContext(opts?: CreateFastifyContextOptions): Promise<Context> {
+  // Imported here, not at module scope: db/client opens (or creates) the real
+  // database as a load-time side effect, and this module is reachable from
+  // tests that only want `resolveIdentity` — a static import had them booting a
+  // PGlite on ./data/pgdata. Dynamic import is cached, so this costs nothing
+  // per request.
+  const { db } = await import('../db/client')
   const req = opts?.req
   const res = opts?.res
   const secure = isHttps(req)
