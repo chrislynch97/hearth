@@ -1,9 +1,23 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import path from "node:path";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    // Generates src/client/routeTree.gen.ts from src/client/routes/ and splits
+    // each route's component into its own chunk (#141). Must precede the react
+    // plugin so the generated tree exists before JSX is transformed.
+    tanstackRouter({
+      target: 'react',
+      routesDirectory: 'src/client/routes',
+      generatedRouteTree: 'src/client/routeTree.gen.ts',
+      autoCodeSplitting: true,
+      quoteStyle: 'double',
+      semicolons: true,
+    }),
+    react(),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src/client'),
