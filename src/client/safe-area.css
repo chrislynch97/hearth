@@ -1,0 +1,39 @@
+/* With viewport-fit=cover the installed iOS app draws under the notch/Dynamic
+   Island and the home indicator (#166), so the shell has to inset itself. Every
+   env(safe-area-inset-*) is 0 where there is no cutout, making these no-ops on
+   desktop and in the browser tab. Mantine's own AppShell rules are plain-class
+   specificity, so this file must load after @mantine/core/styles.css. */
+
+/* Grow the mobile header by the top inset rather than padding its content into
+   a fixed 52px, or the burger row gets squashed under the notch. */
+.mantine-AppShell-header {
+    height: calc(var(--app-shell-header-height) + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+}
+
+/* The navbar starts below the header on mobile and at the top of the viewport on
+   desktop; --app-shell-header-offset is 0 in the latter case, so one rule covers
+   both. Left inset matters in landscape, where the cutout is beside the navbar. */
+.mantine-AppShell-navbar {
+    top: calc(var(--app-shell-header-offset, 0rem) + env(safe-area-inset-top));
+    height: calc(
+        100dvh - var(--app-shell-header-offset, 0rem) -
+            var(--app-shell-footer-offset, 0rem) - env(safe-area-inset-top)
+    );
+    padding-inline-start: env(safe-area-inset-left);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Re-state Mantine's own padding sums with the insets folded in: the top inset
+   compensates for the taller header, the bottom one keeps the last row of a list
+   or a submit button clear of the home indicator. */
+.mantine-AppShell-main {
+    padding-top: calc(
+        var(--app-shell-header-offset, 0rem) + var(--app-shell-padding) +
+            env(safe-area-inset-top)
+    );
+    padding-bottom: calc(
+        var(--app-shell-footer-offset, 0rem) + var(--app-shell-padding) +
+            env(safe-area-inset-bottom)
+    );
+}

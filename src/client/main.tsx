@@ -20,6 +20,7 @@ import '@mantine/dates/styles.css'
 import '@mantine/notifications/styles.css'
 // Imported after Mantine's styles so our overrides win the cascade (#83).
 import './mobile.css'
+import './safe-area.css'
 import { App } from './App'
 import { AppProviders } from './providers'
 

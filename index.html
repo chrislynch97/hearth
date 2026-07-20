@@ -5,7 +5,13 @@
     <!-- public/ is the only directory Vite copies into dist/client, so the icons
          live there; scripts/gen-icons.mjs regenerates them from brand/logo/. -->
     <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover lets the installed iOS app draw into the notch and
+         home-indicator strips instead of being letterboxed; src/client/safe-area.css
+         insets the shell so nothing lands under system UI (#166). -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <title>Hearth</title>
     <!-- Fonts are bundled via @fontsource and imported in src/client/main.tsx —
          deliberately no Google Fonts <link> here (#54). -->
