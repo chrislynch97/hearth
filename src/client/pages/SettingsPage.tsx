@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Navigate, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import {
   ActionIcon,
@@ -112,17 +112,15 @@ function GeneralSection() {
   const rescale = trpc.data.rescaleCurrency.useMutation()
   const hh = ctx.data?.household
 
-  // One form object seeded from the household once it loads. `null` until then,
-  // so fields never flash blank defaults over real data.
-  const [form, setForm] = useState<GeneralForm | null>(null)
+  // One form object: the household's values until edited, then the edits. `null`
+  // until the household loads, so fields never flash blank defaults over real data.
+  const [edits, setForm] = useState<GeneralForm | null>(null)
   const [saved, setSaved] = useState(false)
 
-  useEffect(() => {
-    if (hh) setForm((prev) => prev ?? generalFormFrom(hh))
-  }, [hh])
+  const form = edits ?? (hh ? generalFormFrom(hh) : null)
 
   const set = <K extends keyof GeneralForm>(key: K, value: GeneralForm[K]) =>
-    setForm((f) => (f ? { ...f, [key]: value } : f))
+    setForm(form ? { ...form, [key]: value } : form)
 
   const selectedFormat = NUMBER_FORMATS.find((f) => f.value === form?.numberFormat) ?? NUMBER_FORMATS[0]
 
@@ -1421,7 +1419,7 @@ const SessionsSection = () => {
             // Ending the session you're on is a logout: the cookie is already
             // gone, so send the app back through the front door.
             if (res.endedCurrent) {
-                window.location.href = "/";
+                window.location.assign("/");
                 return;
             }
             await refresh();
@@ -1552,19 +1550,17 @@ function AccountSection() {
   const status = trpc.auth.status.useQuery()
   const update = trpc.users.updateProfile.useMutation()
 
-  // One seeded form object (see GeneralSection) — no per-field copy line.
-  const [form, setForm] = useState<AccountForm | null>(null)
+  // One derived form object (see GeneralSection) — no per-field copy line.
+  const [edits, setForm] = useState<AccountForm | null>(null)
   const [currentPassword, setCurrentPassword] = useState('')
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    const d = me.data
-    if (d) setForm((prev) => prev ?? { username: d.username, displayName: d.displayName, email: d.email ?? '' })
-  }, [me.data])
+  const d = me.data
+  const form = edits ?? (d ? { username: d.username, displayName: d.displayName, email: d.email ?? '' } : null)
 
   const set = <K extends keyof AccountForm>(key: K, value: AccountForm[K]) =>
-    setForm((f) => (f ? { ...f, [key]: value } : f))
+    setForm(form ? { ...form, [key]: value } : form)
 
   if (!form) return null
 

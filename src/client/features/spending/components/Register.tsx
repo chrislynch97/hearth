@@ -1,6 +1,6 @@
 import type { Member, Pot } from "../../../../server/db/schema";
 import type { MoneyFormat } from "@/useMoney";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { trpc } from "@/trpc";
 import {
     Button,
@@ -57,7 +57,11 @@ export const Register = ({
     // first page whenever the filters change.
     const PAGE_SIZE = 100;
     const [pages, setPages] = useState(1);
-    useEffect(() => setPages(1), [input]);
+    const [pagedInput, setPagedInput] = useState(input);
+    if (pagedInput !== input) {
+        setPagedInput(input);
+        setPages(1);
+    }
     const limit = pages * PAGE_SIZE;
 
     const spendsQuery = trpc.spends.list.useQuery({

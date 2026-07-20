@@ -25,12 +25,6 @@ export default tseslint.config(
       // Pragmatic: `any` shows up at a few untyped boundaries (imported CSV rows,
       // JSON blobs). Warn rather than block so it stays visible without failing CI.
       '@typescript-eslint/no-explicit-any': 'warn',
-      // react-hooks 7 added these three as errors; they flag 11 pre-existing
-      // spots (see #162). Warn until those are fixed — restructuring effect
-      // logic is its own change, not a dependency bump.
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/refs': 'warn',
-      'react-hooks/immutability': 'warn',
     },
   },
 )
