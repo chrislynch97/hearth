@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import {
   Anchor,
   Badge,
@@ -14,14 +14,13 @@ import {
   Text,
   Title,
 } from '@mantine/core'
-import { BarChart } from '@mantine/charts'
 import { Link } from '@tanstack/react-router'
 import { trpc } from '../trpc'
 import { GettingStarted } from '@/components/GettingStarted'
 import { formatMoney } from '../../shared/money'
 import { periodForDate, shiftPeriod, periodConfig } from '../../shared/period'
 import { useMoney, useFormatDate } from '../useMoney'
-import { hearthTokens, chartXAxisProps } from '../theme'
+import { hearthTokens } from '../theme'
 import type { MoneyFormat } from '../useMoney'
 
 function getGreeting(): string {
@@ -354,29 +353,11 @@ function AllocationCard({
 // E — Income trend
 // ---------------------------------------------------------------------------
 
-function TrendCard({ trend, money }: { trend: Array<{ month: string; net: number }>; money: MoneyFormat }) {
-  const hasData = trend.some((m) => m.net > 0)
-  if (!hasData) return null
-  // Show just the month (MM); 12 consecutive months are each distinct.
-  const data = trend.map((m) => ({ month: m.month.slice(5), net: m.net }))
-  return (
-    <Card withBorder padding="md" radius="md">
-      <Title order={4} mb="sm">
-        Net income · last 12 months
-      </Title>
-      <BarChart
-        h={150}
-        data={data}
-        dataKey="month"
-        withYAxis={false}
-        series={[{ name: 'net', label: 'Net income', color: hearthTokens.brand.moss }]}
-        valueFormatter={(v) => formatMoney(v, money)}
-        xAxisProps={chartXAxisProps}
-        gridAxis="none"
-      />
-    </Card>
-  )
-}
+// Lazy so recharts (the app's heaviest dependency) isn't in the home chunk;
+// the chart card pops in once its chunk arrives.
+const IncomeTrendChart = lazy(() =>
+  import('./IncomeTrendChart').then((m) => ({ default: m.IncomeTrendChart })),
+)
 
 // ---------------------------------------------------------------------------
 // G — Upcoming payments
@@ -586,7 +567,9 @@ export function HomePage() {
           {accountsSummary.data && <NetWorthTile data={accountsSummary.data} money={money} />}
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
             <AllocationCard allocation={summary.allocation} householdIncome={summary.householdPeriodIncome} money={money} />
-            <TrendCard trend={summary.incomeTrend} money={money} />
+            <Suspense fallback={null}>
+              <IncomeTrendChart trend={summary.incomeTrend} money={money} />
+            </Suspense>
           </SimpleGrid>
           <UpcomingCard upcoming={summary.upcoming} money={money} />
           <RecentActivityCard recent={summary.recentActivity} money={money} />
