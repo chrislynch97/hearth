@@ -1,7 +1,7 @@
-import { afterEach, describe, it, expect } from 'vitest'
-import { deployMode, updateCommands } from './updates'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { checkForUpdates, deployMode, updateCommands } from './updates'
 
-const { DATABASE_URL, HEARTH_DEPLOY } = process.env
+const { DATABASE_URL, HEARTH_DEPLOY, HEARTH_UPDATE_TOKEN, HEARTH_FEEDBACK_TOKEN } = process.env
 
 afterEach(() => {
   // Restore the env these read, so tests don't leak into each other.
@@ -9,6 +9,66 @@ afterEach(() => {
   else process.env.DATABASE_URL = DATABASE_URL
   if (HEARTH_DEPLOY === undefined) delete process.env.HEARTH_DEPLOY
   else process.env.HEARTH_DEPLOY = HEARTH_DEPLOY
+  if (HEARTH_UPDATE_TOKEN === undefined) delete process.env.HEARTH_UPDATE_TOKEN
+  else process.env.HEARTH_UPDATE_TOKEN = HEARTH_UPDATE_TOKEN
+  if (HEARTH_FEEDBACK_TOKEN === undefined) delete process.env.HEARTH_FEEDBACK_TOKEN
+  else process.env.HEARTH_FEEDBACK_TOKEN = HEARTH_FEEDBACK_TOKEN
+  vi.restoreAllMocks()
+})
+
+// The Authorization header fetch was called with, or undefined.
+const authHeaderFrom = (mock: ReturnType<typeof vi.spyOn>): string | undefined => {
+  const init = mock.mock.calls[0]?.[1] as RequestInit | undefined
+  return (init?.headers as Record<string, string> | undefined)?.Authorization
+}
+
+const stubFetch = (release: unknown, status = 200) =>
+  vi.spyOn(global, 'fetch').mockResolvedValue({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => release,
+  } as Response)
+
+describe('checkForUpdates auth', () => {
+  it('sends no Authorization header when no token is configured', async () => {
+    delete process.env.HEARTH_UPDATE_TOKEN
+    delete process.env.HEARTH_FEEDBACK_TOKEN
+    const fetchMock = stubFetch({ tag_name: 'v9.9.9' })
+    await checkForUpdates()
+    expect(authHeaderFrom(fetchMock)).toBeUndefined()
+  })
+
+  it('sends the update token as a bearer when set', async () => {
+    process.env.HEARTH_UPDATE_TOKEN = 'ghp_update'
+    const fetchMock = stubFetch({ tag_name: 'v9.9.9' })
+    await checkForUpdates()
+    expect(authHeaderFrom(fetchMock)).toBe('Bearer ghp_update')
+  })
+
+  it('falls back to the feedback token when the update token is unset', async () => {
+    delete process.env.HEARTH_UPDATE_TOKEN
+    process.env.HEARTH_FEEDBACK_TOKEN = 'ghp_feedback'
+    const fetchMock = stubFetch({ tag_name: 'v9.9.9' })
+    await checkForUpdates()
+    expect(authHeaderFrom(fetchMock)).toBe('Bearer ghp_feedback')
+  })
+
+  it('prefers the update token over the feedback token', async () => {
+    process.env.HEARTH_UPDATE_TOKEN = 'ghp_update'
+    process.env.HEARTH_FEEDBACK_TOKEN = 'ghp_feedback'
+    const fetchMock = stubFetch({ tag_name: 'v9.9.9' })
+    await checkForUpdates()
+    expect(authHeaderFrom(fetchMock)).toBe('Bearer ghp_update')
+  })
+
+  it('reports a newer release once authenticated', async () => {
+    process.env.HEARTH_UPDATE_TOKEN = 'ghp_update'
+    stubFetch({ tag_name: 'v999.0.0', html_url: 'https://example/r' })
+    const status = await checkForUpdates()
+    expect(status.checked).toBe(true)
+    expect(status.latest).toBe('v999.0.0')
+    expect(status.updateAvailable).toBe(true)
+  })
 })
 
 describe('deployMode', () => {
