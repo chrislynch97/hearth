@@ -9,6 +9,15 @@ import { appVersion } from "./version";
 const REPO = "chrislynch97/hearth";
 const LATEST_RELEASE_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
 
+// A read-only token so the check works against a *private* repo — GitHub 404s
+// an unauthenticated request to a private repo's releases, indistinguishable
+// from "no releases yet". Falls back to the feedback token: both hit the same
+// repo and a read-capable PAT covers both. Public repos need neither.
+const updateToken = (): string =>
+    process.env.HEARTH_UPDATE_TOKEN?.trim() ||
+    process.env.HEARTH_FEEDBACK_TOKEN?.trim() ||
+    "";
+
 export interface UpdateStatus {
     current: string;
     /** Latest release tag, or null when GitHub is unreachable / has no releases. */
@@ -60,12 +69,15 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
     const current = appVersion();
     const commands = updateCommands();
 
+    const token = updateToken();
+
     let release: GithubRelease | null = null;
     try {
         const res = await fetch(LATEST_RELEASE_URL, {
             headers: {
                 Accept: "application/vnd.github+json",
                 "User-Agent": "hearth-update-check",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             signal: AbortSignal.timeout(5000),
         });
