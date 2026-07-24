@@ -20,7 +20,7 @@
     "test:e2e": "npm run build:client && playwright test",
     "test:e2e:ui": "npm run build:client && playwright test --ui",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "db:generate": "drizzle-kit generate",
     "db:migrate-from-sqlite": "tsx scripts/migrate-from-sqlite.ts",

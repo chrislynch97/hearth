@@ -22,7 +22,7 @@ import { SpendFundingFields } from "@/features/spending/components/SpendFundingF
 import { annualise, type Recurrence } from "@shared/recurrence";
 import { DatePickerInput } from "@mantine/dates";
 
-export const dueLabel = (daysUntil: number): string => {
+const dueLabel = (daysUntil: number): string => {
     if (daysUntil === 0) return "due today";
     if (daysUntil > 0) return `due in ${daysUntil}d`;
     return `due ${-daysUntil}d ago`;

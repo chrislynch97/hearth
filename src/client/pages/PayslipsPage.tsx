@@ -497,7 +497,8 @@ export function PayslipsPage() {
   const payslipsQuery = trpc.payslips.list.useQuery({ ownerId: activeOwner ?? '' }, { enabled: !!activeOwner })
 
   const components = componentsQuery.data ?? []
-  const payslips = payslipsQuery.data ?? [] // newest-first from the server
+  // newest-first from the server
+  const payslips = useMemo(() => payslipsQuery.data ?? [], [payslipsQuery.data])
 
   const [showComponents, setShowComponents] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
