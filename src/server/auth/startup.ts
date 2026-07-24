@@ -35,13 +35,24 @@ export interface StartupSafetyInput {
   locked: boolean
   /** Whether anyone who can reach the instance can create an account. */
   allowOpenRegistration: boolean
+  /** HEARTH_PUBLIC=1 (`isPublicDeploy`). Most problems below are states that are
+   *  legitimate on a LAN, so the caller decides fatal-vs-warn from this; the
+   *  trust-proxy check is the exception and only fires when it's true. */
+  isPublic: boolean
+  /** HEARTH_TRUST_PROXY, RAW — deliberately not run through `parseTrustProxy`.
+   *  Unset and an explicit '0' both parse to `false`, and the check below turns
+   *  on telling those apart: one is a setting nobody thought about, the other is
+   *  the operator declaring there's no proxy in front. */
+  trustProxy: string | undefined
 }
 
 /** Unsafe-configuration problems found at boot, as operator-facing messages.
  *
  *  Empty means nothing looked wrong. On a public deploy (`isPublicDeploy`) the
  *  caller refuses to boot on any of these; elsewhere it warns and carries on,
- *  because each state is legitimate on a trusted LAN.
+ *  because those states are legitimate on a trusted LAN. The trust-proxy check
+ *  is the exception — it only fires on a declared-public deploy, so it is always
+ *  fatal and never reaches a LAN instance at all.
  *
  *  Deliberately NOT a problem: an unlocked instance on its own. A fresh public
  *  install has no owner password until someone visits the UI and sets one, so
@@ -75,6 +86,26 @@ export function startupSafetyProblems(input: StartupSafetyInput): string[] {
       'Open registration is enabled but no owner password is set — anyone who can reach this ' +
         'instance can create an account, and until a password is set every anonymous request is ' +
         'treated as the owner. Set an owner password, or turn registration off.',
+    )
+  }
+
+  // A public instance is always behind a TLS-terminating proxy or tunnel — the
+  // app speaks plain HTTP — so an unset HEARTH_TRUST_PROXY leaves `req.ip` as
+  // that proxy on every request. Three defences fail at once, all invisibly: the
+  // per-IP login limiter throttles the whole internet as one client (ten bad
+  // guesses from anyone locks everyone out), the session cookie loses `Secure`
+  // because `x-forwarded-proto` is only honoured from a trusted proxy, and every
+  // session and audit row records the same address. Public-only: a LAN instance
+  // is usually directly exposed, and warning there would be noise that trains
+  // people to skip past the two checks above.
+  if (input.isPublic && !input.bindIsLoopback && (input.trustProxy ?? '').trim() === '') {
+    problems.push(
+      `HEARTH_PUBLIC=1 is set while bound to ${input.host}, but HEARTH_TRUST_PROXY is unset. ` +
+        'A public instance sits behind a proxy, so every request will look like it came from ' +
+        'that proxy: login rate limiting throttles all clients as one, the session cookie is ' +
+        'not marked Secure, and sessions and audit entries all record the proxy address. Set it ' +
+        'to the number of proxy hops in front (a single reverse proxy or tunnel = 1), or set ' +
+        'HEARTH_TRUST_PROXY=0 to declare that nothing is proxying this instance.',
     )
   }
 

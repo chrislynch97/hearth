@@ -125,8 +125,8 @@ Update later: `git pull && npm install && npm run build && sudo systemctl restar
 | `DATABASE_URL` | `pglite:./data/pgdata` | Database. Unset (or `pglite:<dir>`) uses the embedded PGlite database in that folder. Set to `postgres://user:pass@host:5432/db` (or `postgresql://…`) to use an external Postgres server — needed to decouple data from local disk or run more than one instance. |
 | `CLIENT_DIR` | `../client` (source) | Directory of the built UI. Set to `./dist/client` for a non-Docker production run. The Docker image sets this for you. |
 | `HEARTH_SECURE_COOKIES` | unset | Set to `1` to force `Secure` session cookies when behind a reverse proxy that terminates TLS but doesn't forward `x-forwarded-proto: https`. |
-| `HEARTH_TRUST_PROXY` | unset | Set to the **number of proxy hops** in front of Hearth (a single reverse proxy / tunnel = `1`) so Fastify reads the real client IP from `X-Forwarded-For` and the login rate limiter throttles per-client. Leave unset when directly exposed. Do **not** set it to `true`/all — trusting the whole chain lets a client spoof `X-Forwarded-For` and dodge the limiter. Your proxy must **overwrite** (not append to) `X-Forwarded-For`. Also accepts a comma-separated list of trusted proxy IPs/CIDRs. |
-| `HEARTH_PUBLIC` | unset | Set to `1` on an **internet-facing** instance. Hearth checks its own configuration at startup and, with this set, **refuses to start** rather than come up in a state that would expose your data — `HEARTH_ALLOW_OPEN=1` on a non-loopback bind, or open registration with no owner password. Left unset (a home LAN, where both are legitimate) those same states only log a warning. `NODE_ENV` can't stand in for this: the Docker image sets it to `production` for every deployment, LAN ones included. |
+| `HEARTH_TRUST_PROXY` | unset | Set to the **number of proxy hops** in front of Hearth (a single reverse proxy / tunnel = `1`) so Fastify reads the real client IP from `X-Forwarded-For` and the login rate limiter throttles per-client. Set it to `0` to declare that nothing is proxying Hearth. Do **not** set it to `true`/all — trusting the whole chain lets a client spoof `X-Forwarded-For` and dodge the limiter. Your proxy must **overwrite** (not append to) `X-Forwarded-For`. Also accepts a comma-separated list of trusted proxy IPs/CIDRs. **Required when `HEARTH_PUBLIC=1`** — see the next row. |
+| `HEARTH_PUBLIC` | unset | Set to `1` on an **internet-facing** instance. Hearth checks its own configuration at startup and, with this set, **refuses to start** rather than come up misconfigured: `HEARTH_ALLOW_OPEN=1` on a non-loopback bind, open registration with no owner password, or `HEARTH_TRUST_PROXY` left unset. Left unset (a home LAN) the first two only log a warning and the third isn't checked at all. `NODE_ENV` can't stand in for this: the Docker image sets it to `production` for every deployment, LAN ones included. |
 | `HEARTH_ALLOW_OPEN` | unset | Set to `1` to allow running **open** (no owner password) while bound to a non-loopback address — a trusted home LAN. Without it, an open instance on `0.0.0.0` serves only the login/first-run endpoints and refuses budgeting data, so an accidental public deploy can't hand anonymous callers owner access. Never set it on a public host; set an owner password instead. |
 | `HEARTH_BACKUP_KEEP` | `14` | How many local snapshots to keep; older ones are pruned after each successful backup. Minimum `1` (a `0` is clamped up rather than pruning the backup just written); a non-integer value is ignored with a warning and the default kept. |
 | `HEARTH_BACKUP_LOCAL_DIR` | unset | Absolute path for the **local** snapshots, overriding the default `<data>/backups`. Use it to land backups on a different volume from the database without setting up the off-site machinery. Not to be confused with `HEARTH_BACKUP_DIR` below, which is the *off-site* `directory` target. |
@@ -152,6 +152,15 @@ with a single proxy or tunnel, also set `HEARTH_TRUST_PROXY=1` (the hop count) s
 rate limiter sees the real client IP rather than the proxy's. Configure that proxy to
 **overwrite** `X-Forwarded-For` with the connecting client's address — if it appends
 instead, a client-supplied header value survives and can be used to spoof the IP.
+
+Forgetting `HEARTH_TRUST_PROXY` behind a proxy is silent and costs you three things
+at once: every request looks like it came from the proxy, so the per-IP login limiter
+throttles the entire internet as one client (ten bad guesses from anyone locks
+everyone out for 15 minutes), the session cookie never gets `Secure` because
+`x-forwarded-proto` is only believed from a trusted proxy, and every session and audit
+entry records the proxy's address instead of the real one. Nothing about the running
+instance looks wrong. `HEARTH_PUBLIC=1` therefore makes an unset value a startup
+error; if you genuinely have no proxy, set `HEARTH_TRUST_PROXY=0` to say so.
 
 ---
 
@@ -423,9 +432,11 @@ where you'd add HTTPS with a local certificate. Optional.
   the internet. A config mistake is the likeliest way a self-host gets exposed, so
   Hearth checks its own configuration on every boot and, with this set, **refuses to
   start** instead of coming up in a state that would serve your finances to strangers
-  (a stray `HEARTH_ALLOW_OPEN=1`, or open registration with no owner password). It
-  costs nothing when the config is right, and turns a silent exposure into an obvious
-  failure. Without it those states only warn — which is what a home LAN wants.
+  (a stray `HEARTH_ALLOW_OPEN=1`, or open registration with no owner password) or one
+  where it can't defend itself properly (`HEARTH_TRUST_PROXY` unset behind a proxy —
+  see [Configuration](#configuration-reference)). It costs nothing when the config is
+  right, and turns a silent exposure into an obvious failure. Without it the first two
+  only warn and the third isn't checked — which is what a home LAN wants.
 - **Invite others with roles** (**Settings → Households & access**). An admin creates
   a single-use invite link (expires in 7 days); the recipient opens it, picks a
   username + password, and joins. Roles: **owner** (full control), **admin** (manage
