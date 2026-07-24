@@ -11,6 +11,12 @@ services:
       # `postgres://…` URL instead to use an external Postgres server.
       - DATABASE_URL=pglite:/data/pgdata
       - CLIENT_DIR=/app/dist/client
+      # Optional GitHub tokens (read-only PAT), passed through from .env so the
+      # update check works on a private repo (#170) and in-app feedback (#86) can
+      # file issues. Empty default = feature off. See docs/deployment.md.
+      - HEARTH_UPDATE_TOKEN=${HEARTH_UPDATE_TOKEN:-}
+      - HEARTH_FEEDBACK_TOKEN=${HEARTH_FEEDBACK_TOKEN:-}
+      - HEARTH_FEEDBACK_REPO=${HEARTH_FEEDBACK_REPO:-}
       # Password-less on a trusted home LAN: launch with the env var set, e.g.
       #   HEARTH_ALLOW_OPEN=1 docker compose up -d      (PowerShell: $env:HEARTH_ALLOW_OPEN=1; docker compose up -d)
       # Left unset it defaults to 0 (safe): an open instance on a network address

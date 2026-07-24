@@ -23,6 +23,12 @@ services:
       - PORT=8787
       - DATABASE_URL=pglite:/data/pgdata
       - CLIENT_DIR=/app/dist/client
+      # Optional GitHub tokens (read-only PAT), passed through from .env so the
+      # update check works on a private repo (#170) and in-app feedback (#86) can
+      # file issues. Empty default = feature off. See docs/deployment.md.
+      - HEARTH_UPDATE_TOKEN=${HEARTH_UPDATE_TOKEN:-}
+      - HEARTH_FEEDBACK_TOKEN=${HEARTH_FEEDBACK_TOKEN:-}
+      - HEARTH_FEEDBACK_REPO=${HEARTH_FEEDBACK_REPO:-}
       # Tells the in-app update UI this is the image deploy: it shows pull-based
       # commands and (with the host updater) the one-click / auto-update options.
       - HEARTH_DEPLOY=image
