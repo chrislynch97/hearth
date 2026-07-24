@@ -35,7 +35,10 @@ export const AccountsPage = () => {
     const ownerName = (id: string) =>
         owners.find((o) => o.value === id)?.label ?? "—";
 
-    const accounts = accountsQuery.data ?? [];
+    const accounts = useMemo(
+        () => accountsQuery.data ?? [],
+        [accountsQuery.data]
+    );
     const assets = useMemo(
         () => accounts.filter((a) => a.kind === "asset"),
         [accounts]

@@ -23,7 +23,7 @@ export function AppLayout() {
 
     useEffect(() => {
         closeMobile();
-    }, [location.pathname]);
+    }, [location.pathname, closeMobile]);
 
     // Global keyboard shortcuts
     useEffect(() => {
