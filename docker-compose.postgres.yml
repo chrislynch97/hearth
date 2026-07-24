@@ -62,6 +62,12 @@ services:
       # `db` is the service name above, resolved on the compose network.
       - DATABASE_URL=postgres://hearth:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/hearth
       - CLIENT_DIR=/app/dist/client
+      # Optional GitHub tokens (read-only PAT), passed through from .env so the
+      # update check works on a private repo (#170) and in-app feedback (#86) can
+      # file issues. Empty default = feature off. See docs/deployment.md.
+      - HEARTH_UPDATE_TOKEN=${HEARTH_UPDATE_TOKEN:-}
+      - HEARTH_FEEDBACK_TOKEN=${HEARTH_FEEDBACK_TOKEN:-}
+      - HEARTH_FEEDBACK_REPO=${HEARTH_FEEDBACK_REPO:-}
       # On a postgres:// URL the backup runner defaults to ./data/backups relative
       # to the container's /app — i.e. inside the container, gone on every rebuild.
       # Point it at the mounted volume so snapshots survive on the host.
