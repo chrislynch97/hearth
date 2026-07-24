@@ -279,6 +279,8 @@ async function assertStartupSafety(): Promise<void> {
     allowOpen: ALLOW_OPEN,
     locked: await isInstanceLocked(db),
     allowOpenRegistration,
+    isPublic: IS_PUBLIC,
+    trustProxy: process.env.HEARTH_TRUST_PROXY,
   })
   if (problems.length === 0) return
 
