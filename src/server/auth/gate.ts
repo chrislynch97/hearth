@@ -100,13 +100,24 @@ export function isAllowedOrigin(opts: {
   return from !== null && from === opts.host
 }
 
-/** The tRPC procedure path(s) a `/trpc/...` URL targets. tRPC batches
- *  comma-separate them in the path segment and percent-encode the dots, so we
- *  strip the prefix + query string, split on commas and decode each — mirroring
- *  the Fastify adapter's own parsing. */
-export function trpcProcedures(url: string): string[] {
-  const path = url.slice('/trpc/'.length).split('?')[0] ?? ''
-  return path.split(',').map((p) => decodeURIComponent(p))
+/** The tRPC procedure path(s) a matched request targets, from the adapter's
+ *  `:path` route parameter (`fastify.all(`${prefix}/:path`)`) — NOT from the raw
+ *  URL. Fastify has already percent-decoded the parameter once; tRPC then
+ *  decodes it again and only then splits on the batching comma, so we do exactly
+ *  that in exactly that order. Deriving it from `req.url` instead let the gate
+ *  and the adapter resolve different procedures, and missed the request entirely
+ *  when the `/trpc` prefix itself was percent-encoded (#179).
+ *
+ *  Malformed percent-encoding yields no procedures, which `allProceduresIn`
+ *  treats as "not allowed" — the gate fails closed rather than throwing. */
+export function trpcProcedures(pathParam: string): string[] {
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(pathParam)
+  } catch {
+    return []
+  }
+  return decoded.split(',')
 }
 
 /** True only when EVERY procedure in the (possibly batched) request is allowed.
