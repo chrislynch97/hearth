@@ -1,17 +1,29 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Center, Group, PasswordInput, Stack, Text, TextInput } from '@mantine/core'
 import { trpc } from './trpc'
 import { hearthTokens } from './theme'
 import { MIN_PASSWORD_LENGTH, validatePassword } from '../shared/password-policy'
 
-/** Shown at /invite/:token — lets an invitee create their account and join. */
+/** Shown at /invite#<token> — lets an invitee create their account and join. */
 export function AcceptInvite({ token }: { token: string }) {
-  const info = trpc.invitations.info.useQuery({ token })
+  // `invitations.info` is a read declared as a mutation so the token goes in the
+  // POST body rather than a logged URL (#176) — hence a manual fire on mount
+  // instead of useQuery. `mutate` is referentially stable, so this runs once.
+  const info = trpc.invitations.info.useMutation()
   const accept = trpc.invitations.accept.useMutation()
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+
+  const loadInfo = info.mutate
+  useEffect(() => {
+    loadInfo({ token })
+  }, [loadInfo, token])
+
+  // Idle counts as loading: the mutation hasn't fired yet on the first render,
+  // and a "not valid" alert there would be wrong.
+  const checking = info.isIdle || info.isPending
 
   async function submit() {
     setError('')
@@ -41,7 +53,7 @@ export function AcceptInvite({ token }: { token: string }) {
             </Text>
           </Group>
 
-          {info.isLoading ? (
+          {checking ? (
             <Text size="sm" c="dimmed" ta="center">
               Checking your invitation…
             </Text>

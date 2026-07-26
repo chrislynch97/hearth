@@ -118,8 +118,10 @@ export const invitationsRouter = router({
       return { ok: true as const }
     }),
 
-  /** Public: describe an invite for the accept screen (or null if invalid). */
-  info: publicProcedure.input(z.object({ token: z.string().max(MAX_TOKEN_LENGTH) })).query(async ({ ctx, input }) => {
+  /** Public: describe an invite for the accept screen (or null if invalid).
+   *  A read, but declared as a mutation so the token travels in the POST body: a
+   *  query would put it in the URL, and straight into the request log (#176). */
+  info: publicProcedure.input(z.object({ token: z.string().max(MAX_TOKEN_LENGTH) })).mutation(async ({ ctx, input }) => {
     const [inv] = await ctx.db.select().from(invitation).where(eq(invitation.tokenHash, hashToken(input.token)))
     if (!inv || inv.acceptedAt !== null || inv.expiresAt.getTime() < Date.now()) return null
     const [hh] = await ctx.db.select().from(household).where(eq(household.id, inv.householdId))

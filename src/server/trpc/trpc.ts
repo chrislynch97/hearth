@@ -84,6 +84,9 @@ export const WRITE_ROLE_EXEMPT = new Set([
   // Each self-gates (token validity / registration-open + throttle).
   'auth.register',
   'invitations.accept',
+  // A read, and a mutation only so the invite token stays out of a logged URL
+  // (#176) — it writes nothing, so no write role applies.
+  'invitations.info',
   // Instance-wide actions: gated by assertInstanceOwner in the resolver, so they
   // depend on being the instance owner rather than on the active household role.
   'auth.setRegistrationOpen',

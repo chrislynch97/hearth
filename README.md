@@ -168,7 +168,9 @@ From a locked (password-set) instance you can then
 invite others with a single-use link and a **role** (owner / admin / member /
 viewer) under **Settings → Households & access**, and layer on **two-factor
 authentication** (TOTP — Google Authenticator, 1Password, Aegis…) with one-time
-recovery codes.
+recovery codes. An invite link is a credential until it's used or expires (7
+days), so share it privately — the token sits in the URL's `#fragment` so it stays
+out of server and proxy logs, but not out of whatever channel you send it over.
 
 **Roles** — *owner* (full control, incl. billing/reset), *admin* (manage data,
 members and invites), *member* (edit budgeting data), *viewer* (read-only).

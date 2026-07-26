@@ -16,6 +16,7 @@ import { registerTrpcScope } from './httpGate'
 import { isPublicDeploy, startupSafetyProblems } from './auth/startup'
 import { getInstanceSettings } from './db/instanceSettings'
 import { parseTrustProxy } from './auth/trustProxy'
+import { redactUrl } from './logRedact'
 import { checkHealth, healthBody } from './ops/health'
 import { startAuthAlertScheduler } from './ops/authAlerts'
 
@@ -100,7 +101,21 @@ async function main() {
   // chain would let a client prepend a fake IP and dodge the limiter. Defaults off
   // (directly exposed). See parseTrustProxy for the accepted forms.
   app = Fastify({
-    logger: true,
+    // Fastify's default request serializer writes `req.url` verbatim, which
+    // would put a live invite token into the log for 7 days. Mirror the default
+    // shape with the URL run through redactUrl (#176). Its `accept-version`
+    // field is omitted — Hearth has no versioned routes for it to describe.
+    logger: {
+      serializers: {
+        req: (req) => ({
+          method: req.method,
+          url: redactUrl(req.url),
+          host: req.host,
+          remoteAddress: req.ip,
+          remotePort: req.socket?.remotePort,
+        }),
+      },
+    },
     bodyLimit: 64 * 1024 * 1024,
     // tRPC's httpBatchLink packs every procedure name of a batched request into
     // the URL path (`/trpc/a.list,b.list,c.list?batch=1`). Fastify's default

@@ -305,6 +305,15 @@ per service) so they can't fill the disk. If you run Hearth some other way, cap
 them yourself — `docker run --log-opt max-size=10m --log-opt max-file=3`, or
 under systemd set `SystemMaxUse=` in `journald.conf`.
 
+**What's in the log.** Hearth logs one line per request with the method, URL,
+status and client IP — no request bodies, no cookies, no session tokens. Invite
+tokens are stripped from URLs before they're written, and invite links carry the
+token in the URL's `#fragment` (which browsers never send to a server) so it
+never arrives in the first place. Nothing else in the log is a credential, but it
+is a record of who used the instance and when: if you ship logs off the box (a
+provider's log console, journald forwarding, an aggregator), that record ends up
+somewhere with a wider audience and a longer retention than the database.
+
 ---
 
 ## Auto-restart & updates
@@ -442,7 +451,13 @@ where you'd add HTTPS with a local certificate. Optional.
   username + password, and joins. Roles: **owner** (full control), **admin** (manage
   settings & invite), **member** (edit budgeting data), **viewer** (read-only). Only
   the owner can remove the password / reopen the instance, and only while they're the
-  sole account.
+  sole account. For those 7 days the link **is** the credential — anyone holding it
+  can create an account in your household — so send it over something private rather
+  than a shared channel or a ticket. The token rides in the URL's `#fragment`, which
+  browsers never send to the server, keeping it out of Hearth's request log and your
+  reverse proxy's access log alike. If you shared a link in the older
+  `/invite/<token>` form, your proxy's access log may still hold it: revoke that
+  invite from the same screen and issue a fresh one.
 - **Manage who has access** from the same screen: change a member's role, revoke
   access, or reset a locked-out member's password (there's no email-based reset on a
   self-host). Guardrails apply — you can't change or remove yourself, an admin can
