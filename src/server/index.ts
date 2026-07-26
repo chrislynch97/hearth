@@ -122,7 +122,12 @@ async function main() {
     // `maxParamLength` of 100 silently 404s any batch whose joined names exceed
     // that — which happens on data-heavy pages (Pots batches ~9 queries), taking
     // the whole batch (and every query in it) down. Give the router real headroom.
-    maxParamLength: 5000,
+    //
+    // Nested under `routerOptions`, not passed flat: the top-level spelling is
+    // deprecated in Fastify 5 (FSTDEP022) and goes away in 6. Failure on that
+    // bump would be silent — not a crash but every batched query 404ing at once —
+    // so it's worth moving while the warning is still there to act on.
+    routerOptions: { maxParamLength: 5000 },
     trustProxy: parseTrustProxy(process.env.HEARTH_TRUST_PROXY),
   })
 

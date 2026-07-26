@@ -45,7 +45,10 @@ async function buildApp(opts: {
   mkdirSync(clientDir)
   writeFileSync(join(clientDir, 'index.html'), '<html>SPA</html>')
 
-  const app = Fastify({ maxParamLength: 5000, bodyLimit: 64 * 1024 * 1024 })
+  // Mirrors index.ts, `routerOptions` spelling included — a harness that
+  // configured the router differently from production could not catch a
+  // regression in how production configures it.
+  const app = Fastify({ routerOptions: { maxParamLength: 5000 }, bodyLimit: 64 * 1024 * 1024 })
   await registerTrpcScope(app, {
     db,
     bindIsLoopback: opts.bindIsLoopback ?? true,
@@ -133,6 +136,25 @@ describe('the /trpc gate is bound to the route, not to a req.url prefix', () => 
     const app = await buildApp({ locked: true })
     const res = await app.inject({ method: 'GET', url: '//trpc/pots.list' })
     expect(res.body).toContain('SPA')
+    await app.close()
+  })
+})
+
+// Fastify's default maxParamLength is 100. tRPC batches every procedure name
+// into the one `:path` parameter, so a data-heavy page blows past that and the
+// router 404s the whole batch — every query in it fails at once, with the app
+// otherwise looking fine. Nothing else in the suite would notice: the raised
+// limit only shows up on a URL long enough to need it.
+describe('a batched tRPC path longer than the router default still routes', () => {
+  it('matches the route rather than 404ing on param length', async () => {
+    const app = await buildApp({ locked: true })
+    const batch = Array.from({ length: 12 }, (_, i) => `pots.list${i}`).join(',')
+    expect(batch.length).toBeGreaterThan(100) // else this asserts nothing
+
+    const res = await app.inject({ method: 'GET', url: `/trpc/${batch}?batch=1` })
+    // 401 means the router matched and the gate answered. 404 is the failure
+    // this test exists for: the param was rejected before any of that.
+    expect(res.statusCode).toBe(401)
     await app.close()
   })
 })
