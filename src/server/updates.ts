@@ -18,6 +18,17 @@ const updateToken = (): string =>
     process.env.HEARTH_FEEDBACK_TOKEN?.trim() ||
     "";
 
+// Skip the release check entirely (HEARTH_UPDATE_CHECK=off) and report the same
+// "couldn't check" state as an unreachable GitHub. Two callers want this: an
+// operator who'd rather the app made no outbound requests at all, and the e2e
+// suite — a test whose result depends on this repo's release history, or on
+// GitHub being up, isn't deterministic. That bit us: while the repo was private
+// the check 404'd, so the update banner never rendered and a spec could get away
+// with matching `role="alert"` unqualified. Going public made the check succeed
+// and the banner appear, and the spec broke.
+const updateCheckDisabled = (): boolean =>
+    process.env.HEARTH_UPDATE_CHECK?.trim().toLowerCase() === "off";
+
 export interface UpdateStatus {
     current: string;
     /** Latest release tag, or null when GitHub is unreachable / has no releases. */
@@ -85,22 +96,27 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
 
     const token = updateToken();
 
+    // Left null when the check is switched off, so we fall through to the same
+    // `checked: false` result an unreachable GitHub produces — no new state for
+    // the client to learn, and the banner stays hidden.
     let release: GithubRelease | null = null;
-    try {
-        const res = await fetch(LATEST_RELEASE_URL, {
-            headers: {
-                Accept: "application/vnd.github+json",
-                "User-Agent": "hearth-update-check",
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            signal: AbortSignal.timeout(5000),
-        });
-        // 404 == the repo has no published releases yet; treat as "nothing to
-        // compare against" rather than an error.
-        if (res.ok) release = (await res.json()) as GithubRelease;
-        else if (res.status === 404) release = {};
-    } catch {
-        // Offline or GitHub unreachable — degrade gracefully (checked: false).
+    if (!updateCheckDisabled()) {
+        try {
+            const res = await fetch(LATEST_RELEASE_URL, {
+                headers: {
+                    Accept: "application/vnd.github+json",
+                    "User-Agent": "hearth-update-check",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                signal: AbortSignal.timeout(5000),
+            });
+            // 404 == the repo has no published releases yet; treat as "nothing
+            // to compare against" rather than an error.
+            if (res.ok) release = (await res.json()) as GithubRelease;
+            else if (res.status === 404) release = {};
+        } catch {
+            // Offline or GitHub unreachable — degrade gracefully (checked: false).
+        }
     }
 
     if (!release) {

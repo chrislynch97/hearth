@@ -7,6 +7,7 @@ const {
   HEARTH_COMPOSE_FILE,
   HEARTH_UPDATE_TOKEN,
   HEARTH_FEEDBACK_TOKEN,
+  HEARTH_UPDATE_CHECK,
 } = process.env
 
 afterEach(() => {
@@ -21,6 +22,8 @@ afterEach(() => {
   else process.env.HEARTH_UPDATE_TOKEN = HEARTH_UPDATE_TOKEN
   if (HEARTH_FEEDBACK_TOKEN === undefined) delete process.env.HEARTH_FEEDBACK_TOKEN
   else process.env.HEARTH_FEEDBACK_TOKEN = HEARTH_FEEDBACK_TOKEN
+  if (HEARTH_UPDATE_CHECK === undefined) delete process.env.HEARTH_UPDATE_CHECK
+  else process.env.HEARTH_UPDATE_CHECK = HEARTH_UPDATE_CHECK
   vi.restoreAllMocks()
 })
 
@@ -36,6 +39,48 @@ const stubFetch = (release: unknown, status = 200) =>
     status,
     json: async () => release,
   } as Response)
+
+describe('checkForUpdates opt-out', () => {
+  it('makes no request at all when HEARTH_UPDATE_CHECK=off', async () => {
+    process.env.HEARTH_UPDATE_CHECK = 'off'
+    const fetchMock = stubFetch({ tag_name: 'v9.9.9' })
+    const status = await checkForUpdates()
+    expect(fetchMock).not.toHaveBeenCalled()
+    // Same shape as an unreachable GitHub, so no client code has to learn a new
+    // state — and `updateAvailable: false` keeps the banner hidden.
+    expect(status.checked).toBe(false)
+    expect(status.latest).toBeNull()
+    expect(status.updateAvailable).toBe(false)
+  })
+
+  it('still reports the running version while switched off', async () => {
+    process.env.HEARTH_UPDATE_CHECK = 'off'
+    stubFetch({ tag_name: 'v9.9.9' })
+    expect((await checkForUpdates()).current).toBeTruthy()
+  })
+
+  // Only the exact opt-out value counts, so a stray or misspelled value can't
+  // silently switch the check off and hide a real update.
+  it('checks normally for any other value', async () => {
+    for (const value of ['', 'on', '0', 'false', 'OFFF']) {
+      process.env.HEARTH_UPDATE_CHECK = value
+      const fetchMock = stubFetch({ tag_name: 'v9.9.9' })
+      await checkForUpdates()
+      expect(fetchMock, value).toHaveBeenCalled()
+      vi.restoreAllMocks()
+    }
+  })
+
+  it('accepts the opt-out case-insensitively and with surrounding space', async () => {
+    for (const value of ['OFF', ' off ']) {
+      process.env.HEARTH_UPDATE_CHECK = value
+      const fetchMock = stubFetch({ tag_name: 'v9.9.9' })
+      await checkForUpdates()
+      expect(fetchMock, value).not.toHaveBeenCalled()
+      vi.restoreAllMocks()
+    }
+  })
+})
 
 describe('checkForUpdates auth', () => {
   it('sends no Authorization header when no token is configured', async () => {

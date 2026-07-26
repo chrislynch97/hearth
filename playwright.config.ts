@@ -48,6 +48,11 @@ export default defineConfig({
       // demo instance has no owner password.
       HOST: '127.0.0.1',
       CLIENT_DIR: clientDir,
+      // No live release check: it calls api.github.com, so leaving it on makes
+      // the suite's result depend on this repo's release history and on GitHub
+      // being reachable. It also renders the update banner, which is a second
+      // `role="alert"` on every page.
+      HEARTH_UPDATE_CHECK: 'off',
     },
     // Never reuse: a server left over from a previous run has a mutated database.
     reuseExistingServer: false,

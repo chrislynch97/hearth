@@ -10,7 +10,10 @@ test('adding a spend puts it in the register', async ({ page }) => {
   await page.getByLabel('Description').fill(description)
   await page.getByRole('button', { name: 'Add spend' }).click()
 
-  await expect(page.getByRole('alert')).toContainText('Logged £12.34')
+  // Named, not a bare `role=alert`: the banner and any other Mantine Alert on
+  // the page share that role, and an unqualified match is a strict-mode failure
+  // the moment a second one appears.
+  await expect(page.getByRole('alert', { name: 'Logged' })).toContainText('Logged £12.34')
   // `exact` — the row's action buttons are labelled with the description too.
   await expect(page.getByRole('cell', { name: description, exact: true })).toBeVisible()
 })
