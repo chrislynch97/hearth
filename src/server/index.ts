@@ -1,47 +1,23 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 import fastifyStatic from '@fastify/static'
 import fastifyHelmet from '@fastify/helmet'
-import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify'
-import type { FastifyTRPCPluginOptions } from '@trpc/server/adapters/fastify'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { existsSync } from 'node:fs'
-import { appRouter } from './trpc/router'
-import type { AppRouter } from './trpc/router'
-import { createContext, rememberValidatedSession } from './trpc/context'
 import { runMigrations } from './db/migrate'
 import { ensureSeed } from './db/seed'
 import { db, closeDb } from './db/client'
 import { startBackupScheduler } from './backup/runner'
 import { startAuditPruneScheduler } from './audit/prune'
 import { startUpdateScheduler } from './updateScheduler'
-import { parseSessionCookie } from './auth/cookies'
-import { getValidSession, isInstanceLocked, startSessionPurgeScheduler } from './auth/session'
-import { PUBLIC_PROCEDURES } from './trpc/trpc'
-import { allProceduresIn, allowedOrigins, isAllowedOrigin, openGuardConfig, trpcProcedures } from './auth/gate'
+import { isInstanceLocked, startSessionPurgeScheduler } from './auth/session'
+import { allowedOrigins, openGuardConfig } from './auth/gate'
+import { registerTrpcScope } from './httpGate'
 import { isPublicDeploy, startupSafetyProblems } from './auth/startup'
 import { getInstanceSettings } from './db/instanceSettings'
 import { parseTrustProxy } from './auth/trustProxy'
 import { checkHealth, healthBody } from './ops/health'
 import { startAuthAlertScheduler } from './ops/authAlerts'
-
-// On an OPEN (password-less) instance the owner fallback resolves every
-// anonymous request as the owner — safe on a trusted LAN, catastrophic if the
-// instance is reachable from the internet. When we're bound to a non-loopback
-// address with no password, refuse everything except the endpoints needed to
-// lock the instance down, unless the operator has explicitly opted in with
-// HEARTH_ALLOW_OPEN=1. `auth.setPassword` is allowed so a first-run owner can set
-// a password (which locks the instance) from an otherwise-blocked UI.
-const OPEN_ON_PUBLIC_ALLOWED = new Set([...PUBLIC_PROCEDURES, 'auth.setPassword'])
-
-// The 64 MB bodyLimit below exists solely so `data.import` can restore a large
-// JSON export. Every other /trpc route — including the unauthenticated auth
-// endpoints — only ever carries a few KB, so we cap their bodies well below
-// 64 MB. Without this a pre-auth caller could POST a multi-megabyte body (e.g. a
-// giant "password", whose scrypt cost scales with length) at a public endpoint
-// and make the server do proportional work. #45
-const IMPORT_PROCEDURES = new Set(['data.import'])
-const PUBLIC_BODY_LIMIT = 1 * 1024 * 1024 // 1 MB — Fastify's own default
 
 const PORT = Number(process.env.PORT ?? 8787)
 const HOST = process.env.HOST ?? '0.0.0.0'
@@ -182,76 +158,15 @@ async function main() {
     return reply.code(detail.status === 'ok' ? 200 : 503).send(healthBody(detail))
   })
 
-  // Cap request-body size per /trpc route ahead of the auth gate and any body
-  // parsing. `data.import` keeps the full 64 MB headroom (set at Fastify
-  // construction); every other route — the public auth endpoints included — is
-  // held to PUBLIC_BODY_LIMIT so an unauthenticated caller can't ship a huge body
-  // to a pre-auth endpoint. A body sent without a Content-Length (chunked) still
-  // falls back to the global 64 MB hard limit enforced during parsing. #45
-  app.addHook('onRequest', async (req, reply) => {
-    if (!req.url.startsWith('/trpc/')) return
-    if (allProceduresIn(trpcProcedures(req.url), IMPORT_PROCEDURES)) return
-    const declaredLength = Number(req.headers['content-length'])
-    if (Number.isFinite(declaredLength) && declaredLength > PUBLIC_BODY_LIMIT) {
-      return reply.code(413).send({ error: 'Request body too large' })
-    }
+  // The /trpc routes plus the body cap, cross-origin write guard and auth gate
+  // in front of them, as one encapsulated scope so the gates are bound to the
+  // route rather than to a `req.url` prefix test. See httpGate.ts (#179).
+  await registerTrpcScope(app, {
+    db,
+    bindIsLoopback: BIND_IS_LOOPBACK,
+    allowOpen: ALLOW_OPEN,
+    allowedOrigins: ALLOWED_ORIGINS,
   })
-
-  // Cross-origin write guard (#50). tRPC sends every mutation as a POST, so
-  // holding POSTs to a same-origin (or explicitly allow-listed) Origin blocks a
-  // cross-site request forgery independently of the session cookie's SameSite=Lax
-  // — which is the only thing standing between a malicious page and a
-  // state-changing call today, and which we can't verify the browser honours.
-  // GETs are left alone: tRPC queries are reads, and a cross-site GET can't read
-  // the response anyway (no CORS headers are served).
-  app.addHook('onRequest', async (req, reply) => {
-    if (!req.url.startsWith('/trpc/') || req.method !== 'POST') return
-    const origin = req.headers.origin
-    if (isAllowedOrigin({ origin, host: req.headers.host, allowed: ALLOWED_ORIGINS })) return
-    req.log.warn({ origin, host: req.headers.host }, 'rejected cross-origin write')
-    return reply.code(403).send({ error: 'Cross-origin request rejected' })
-  })
-
-  // Coarse outer auth gate. Authorization is also enforced in-band by the tRPC
-  // `enforceAuthenticated` middleware (trpc/trpc.ts); this is a cheap first line
-  // that rejects unauthenticated requests before they reach a resolver. Both
-  // layers key on the same PUBLIC_PROCEDURES set, so they can't drift.
-  app.addHook('onRequest', async (req, reply) => {
-    if (!req.url.startsWith('/trpc/')) return
-    const procedures = trpcProcedures(req.url)
-
-    if (!(await isInstanceLocked(db))) {
-      // Open instance. Fine on loopback, or when the operator has opted in.
-      // Otherwise it's reachable from the network with no password, so anyone
-      // could act as the owner — allow only the endpoints needed to lock it.
-      if (BIND_IS_LOOPBACK || ALLOW_OPEN) return
-      if (allProceduresIn(procedures, OPEN_ON_PUBLIC_ALLOWED)) return
-      return reply.code(403).send({
-        error:
-          'This instance has no owner password and is exposed on a non-loopback address. ' +
-          'Set an owner password, or set HEARTH_ALLOW_OPEN=1 to permit open access.',
-      })
-    }
-
-    // Locked instance: block every tRPC call except the public auth endpoints
-    // unless the request carries a valid session — for ANY user, not just the
-    // owner, so invited members and self-registered owners of other households
-    // can use the app.
-    if (allProceduresIn(procedures, PUBLIC_PROCEDURES)) return
-
-    const token = parseSessionCookie(req.headers.cookie)
-    const session = await getValidSession(db, token)
-    // Hand the validated session to createContext so it doesn't re-query it.
-    rememberValidatedSession(req, session)
-    if (session) return
-
-    return reply.code(401).send({ error: 'Authentication required' })
-  })
-
-  await app.register(fastifyTRPCPlugin, {
-    prefix: '/trpc',
-    trpcOptions: { router: appRouter, createContext },
-  } satisfies FastifyTRPCPluginOptions<AppRouter>)
 
   const clientDir =
     process.env.CLIENT_DIR ?? join(dirname(fileURLToPath(import.meta.url)), '../client')

@@ -70,18 +70,38 @@ describe('allowedOrigins', () => {
   })
 })
 
+// The argument is the adapter's `:path` route parameter, which Fastify has
+// already percent-decoded once — NOT the raw URL.
 describe('trpcProcedures', () => {
-  it('extracts a single procedure and strips the query string', () => {
-    expect(trpcProcedures('/trpc/pots.list?batch=1&input=%7B%7D')).toEqual(['pots.list'])
+  it('extracts a single procedure', () => {
+    expect(trpcProcedures('pots.list')).toEqual(['pots.list'])
   })
 
-  it('splits and decodes a batched request', () => {
-    expect(trpcProcedures('/trpc/auth.status,auth.login?batch=1')).toEqual(['auth.status', 'auth.login'])
+  it('splits a batched request', () => {
+    expect(trpcProcedures('auth.status,auth.login')).toEqual(['auth.status', 'auth.login'])
   })
 
   it('decodes percent-encoded procedure paths', () => {
     // A caller could percent-encode the dots to dodge a naive string match.
-    expect(trpcProcedures('/trpc/data%2Eexport')).toEqual(['data.export'])
+    expect(trpcProcedures('data%2Eexport')).toEqual(['data.export'])
+  })
+
+  it('decodes before splitting, as @trpc/server does', () => {
+    // tRPC runs decodeURIComponent over the whole path and only then splits on
+    // the batching comma. Splitting first would see one procedure named
+    // "auth.login,pots.list" where the router runs two. #179
+    expect(trpcProcedures('auth.login%2Cpots.list')).toEqual(['auth.login', 'pots.list'])
+  })
+
+  it('resolves a double-encoded name the same way the adapter will', () => {
+    // Fastify decoded `%2570ots.list` to `%70ots.list`; tRPC decodes again and
+    // dispatches `pots.list`, so the gate has to see `pots.list` too.
+    expect(trpcProcedures('%70ots.list')).toEqual(['pots.list'])
+  })
+
+  it('yields nothing for malformed encoding, so the gate fails closed', () => {
+    expect(trpcProcedures('%ZZ')).toEqual([])
+    expect(allProceduresIn(trpcProcedures('%ZZ'), new Set(['auth.login']))).toBe(false)
   })
 })
 
