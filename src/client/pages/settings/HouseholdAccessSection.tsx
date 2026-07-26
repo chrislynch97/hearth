@@ -13,6 +13,7 @@ import {
     Title,
 } from "@mantine/core";
 import { trpc } from "@/trpc";
+import { inviteLink } from "@/inviteLink";
 import { useFormatDate } from "@/useMoney";
 import { AccessList } from "./AccessList";
 import { msToLocalIso } from "./util";
@@ -59,7 +60,7 @@ export const HouseholdAccessSection = () => {
                 role: inviteRole as "admin" | "member" | "viewer",
                 memberId: inviteMemberId,
             });
-            setLink(`${window.location.origin}/invite/${res.token}`);
+            setLink(inviteLink(window.location.origin, res.token));
             setInviteMemberId(null);
             await utils.invitations.list.invalidate();
         } catch (e) {

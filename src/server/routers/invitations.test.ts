@@ -115,6 +115,18 @@ describe('invitations.info', () => {
   })
 })
 
+// httpBatchLink sends a query's input in the URL, and Fastify logs the URL — so a
+// token-bearing query writes a live 7-day credential to a plaintext log (#176).
+// Both token procedures are mutations so the token stays in the POST body. Pin
+// the shape here: reverting `info` to `.query()` would reintroduce the leak while
+// every behavioural test above still passed.
+describe('procedures that take an invite token', () => {
+  it.each(['invitations.info', 'invitations.accept'])('%s is a mutation', (path) => {
+    const proc = appRouter._def.procedures[path as keyof typeof appRouter._def.procedures]
+    expect((proc as unknown as { _def: { type: string } })._def.type).toBe('mutation')
+  })
+})
+
 describe('invitations.list / revoke', () => {
   it('lists only pending, unexpired invites and lets an admin revoke', async () => {
     const db = await makeTestDb()
