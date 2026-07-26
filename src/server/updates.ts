@@ -41,20 +41,34 @@ export type DeployMode = "image" | "source";
 export const deployMode = (): DeployMode =>
     process.env.HEARTH_DEPLOY === "image" ? "image" : "source";
 
+/** The compose file the shown commands should name, when the deploy declares one
+ *  via HEARTH_COMPOSE_FILE (same variable the host updater reads). Deploys that
+ *  aren't one of the four shipped files — the Caddy-fronted public one, or an
+ *  operator's own — would otherwise be told to run a file they don't have. */
+const declaredComposeFile = (): string | null => {
+    const file = process.env.HEARTH_COMPOSE_FILE?.trim();
+    return file ? file : null;
+};
+
 /** The exact host-side update commands for the running deployment. An image
  *  deploy pulls the new image; a source deploy rebuilds. PGlite and Postgres use
  *  different compose files; pick the one that matches. */
 export const updateCommands = (): string => {
     const isPg = isServerPgUrl(process.env.DATABASE_URL);
+    const declared = declaredComposeFile();
     if (deployMode() === "image") {
         // The managed image deploy uses the ghcr compose variants (neither is the
         // default docker-compose.yml, so both need an explicit -f).
-        const flag = isPg
-            ? " -f docker-compose.postgres.ghcr.yml"
-            : " -f docker-compose.ghcr.yml";
+        const file =
+            declared ??
+            (isPg
+                ? "docker-compose.postgres.ghcr.yml"
+                : "docker-compose.ghcr.yml");
+        const flag = ` -f ${file}`;
         return `docker compose${flag} pull\ndocker compose${flag} up -d`;
     }
-    const flag = isPg ? " -f docker-compose.postgres.yml" : "";
+    const file = declared ?? (isPg ? "docker-compose.postgres.yml" : null);
+    const flag = file ? ` -f ${file}` : "";
     return `git pull\ndocker compose${flag} up -d --build`;
 };
 

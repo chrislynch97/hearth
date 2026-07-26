@@ -113,6 +113,13 @@ See **[docs/deployment.md](docs/deployment.md)** for the full guide.
   Leave it unset for anything reachable from the internet, and set an owner
   password instead.
 - **Node directly** (no Docker) — see the deployment guide.
+- **A public VPS under your own domain**:
+  ```bash
+  docker compose -f docker-compose.public.yml up -d   # → https://your-domain, TLS via Caddy
+  ```
+  Follow [Option C](docs/deployment.md#option-c--public-vps-under-your-own-domain)
+  — the compose file brings its own TLS proxy and public-safe defaults, and the
+  walkthrough covers the rest (owner password, MFA, off-site backups, monitoring).
 
 Your entire state lives in one folder (`./data`, bind-mounted to `/data` in the
 container). Back it up by copying it, or via **Settings → Data → Export** in the app.
@@ -133,6 +140,7 @@ All configuration is via environment variables:
 | `HEARTH_PUBLIC` | unset | Set to `1` on an **internet-facing** instance. Turns the startup safety checks fatal: the server **refuses to start** if the config would expose your data (`HEARTH_ALLOW_OPEN=1` on a non-loopback bind, or open registration with no owner password) or would leave it defending itself badly (`HEARTH_TRUST_PROXY` unset, so the rate limiter throttles every client as one and the session cookie isn't `Secure`), instead of merely warning. Recommended for any public deploy — a config mistake then stops the server rather than exposing a household's finances. Leave unset on a home LAN, where those states are legitimate. |
 | `HEARTH_ALLOWED_ORIGINS` | unset | Extra origins allowed to make state-changing requests, comma-separated (`https://hearth.example.com`). Writes must come from the same origin the app is served on; you only need this if a proxy in front rewrites the `Host` header so it no longer matches the address the browser actually used. Requests without an `Origin` header (curl, scripts, health checks) are unaffected. |
 | `HEARTH_DEPLOY` | unset | Set to `image` by the GHCR compose files (`docker-compose.ghcr.yml`). Tells the in-app update UI this is the prebuilt-image deploy, so it shows `pull`-based update commands and — with the host updater — enables one-click / automatic updates. Any other value (or unset) means a build-from-source deploy. See [Updating](docs/deployment.md#updating--three-ways). |
+| `HEARTH_COMPOSE_FILE` | inferred | Compose file the in-app update card names in its copy-paste commands. Unset, it's inferred from `HEARTH_DEPLOY` + `DATABASE_URL`; set it if you run a compose file other than the four shipped ones (`docker-compose.public.yml` sets it to itself). The host updater reads the same variable. |
 | `HEARTH_UPDATE_DIR` | `<data>/updates` | Where the app and the host updater exchange update control files (request / result / heartbeat). Defaults next to your data dir; only set it if you relocate that exchange. |
 | `HEARTH_UPDATE_TOKEN` | unset | GitHub token the update check uses to read the latest release. Only needed when your repo is **private** — GitHub 404s an unauthenticated request to a private repo's releases, so the check silently finds nothing. Needs **read only** (`contents: read` / classic `repo`), never write. Falls back to `HEARTH_FEEDBACK_TOKEN` if that's set against the same repo. Public repos need neither. |
 | `HEARTH_FEEDBACK_TOKEN` | unset | GitHub token with **issues: write** on the target repo. Setting it turns on the in-app **Send feedback** entry (account menu), which files a bug/idea straight to GitHub; left unset the feature is hidden. Use a **fine-grained** token scoped to the one repo — reports land in a **public** repo, which the form makes clear to submitters. |

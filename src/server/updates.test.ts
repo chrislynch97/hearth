@@ -1,7 +1,13 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import { checkForUpdates, deployMode, updateCommands } from './updates'
 
-const { DATABASE_URL, HEARTH_DEPLOY, HEARTH_UPDATE_TOKEN, HEARTH_FEEDBACK_TOKEN } = process.env
+const {
+  DATABASE_URL,
+  HEARTH_DEPLOY,
+  HEARTH_COMPOSE_FILE,
+  HEARTH_UPDATE_TOKEN,
+  HEARTH_FEEDBACK_TOKEN,
+} = process.env
 
 afterEach(() => {
   // Restore the env these read, so tests don't leak into each other.
@@ -9,6 +15,8 @@ afterEach(() => {
   else process.env.DATABASE_URL = DATABASE_URL
   if (HEARTH_DEPLOY === undefined) delete process.env.HEARTH_DEPLOY
   else process.env.HEARTH_DEPLOY = HEARTH_DEPLOY
+  if (HEARTH_COMPOSE_FILE === undefined) delete process.env.HEARTH_COMPOSE_FILE
+  else process.env.HEARTH_COMPOSE_FILE = HEARTH_COMPOSE_FILE
   if (HEARTH_UPDATE_TOKEN === undefined) delete process.env.HEARTH_UPDATE_TOKEN
   else process.env.HEARTH_UPDATE_TOKEN = HEARTH_UPDATE_TOKEN
   if (HEARTH_FEEDBACK_TOKEN === undefined) delete process.env.HEARTH_FEEDBACK_TOKEN
@@ -108,6 +116,33 @@ describe('updateCommands', () => {
     process.env.DATABASE_URL = 'postgres://u:p@db:5432/hearth'
     expect(updateCommands()).toBe(
       'docker compose -f docker-compose.postgres.ghcr.yml pull\ndocker compose -f docker-compose.postgres.ghcr.yml up -d',
+    )
+  })
+
+  it('HEARTH_COMPOSE_FILE names the file instead of the inferred default', () => {
+    process.env.HEARTH_DEPLOY = 'image'
+    delete process.env.DATABASE_URL
+    process.env.HEARTH_COMPOSE_FILE = 'docker-compose.public.yml'
+    expect(updateCommands()).toBe(
+      'docker compose -f docker-compose.public.yml pull\ndocker compose -f docker-compose.public.yml up -d',
+    )
+  })
+
+  it('HEARTH_COMPOSE_FILE applies to a source deploy too', () => {
+    delete process.env.HEARTH_DEPLOY
+    delete process.env.DATABASE_URL
+    process.env.HEARTH_COMPOSE_FILE = 'docker-compose.mine.yml'
+    expect(updateCommands()).toBe(
+      'git pull\ndocker compose -f docker-compose.mine.yml up -d --build',
+    )
+  })
+
+  it('an empty HEARTH_COMPOSE_FILE falls back to the inferred file', () => {
+    process.env.HEARTH_DEPLOY = 'image'
+    delete process.env.DATABASE_URL
+    process.env.HEARTH_COMPOSE_FILE = '  '
+    expect(updateCommands()).toBe(
+      'docker compose -f docker-compose.ghcr.yml pull\ndocker compose -f docker-compose.ghcr.yml up -d',
     )
   })
 })

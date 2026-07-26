@@ -16,6 +16,7 @@ those, use an external Postgres via `DATABASE_URL`.
 - [Choosing how to host](#choosing-how-to-host)
 - [Option A — Docker (recommended)](#option-a--docker-recommended)
 - [Option B — Node directly (no Docker)](#option-b--node-directly-no-docker)
+- [Option C — public VPS under your own domain](#option-c--public-vps-under-your-own-domain)
 - [Raspberry Pi notes](#raspberry-pi-notes)
 - [Configuration reference](#configuration-reference)
 - [Data & backups](#data--backups)
@@ -33,8 +34,10 @@ those, use an external Postgres via `DATABASE_URL`.
 | Any always-on PC, VM, NAS, or mini-PC with Docker | [Option A — Docker](#option-a--docker-recommended) |
 | A machine without Docker (bare Node) | [Option B — Node directly](#option-b--node-directly-no-docker) |
 | A Raspberry Pi (64-bit OS) | [Option A — Docker](#option-a--docker-recommended) |
+| A cloud VPS on the public internet, under your own domain | [Option C — public VPS](#option-c--public-vps-under-your-own-domain) |
 
-Both options work anywhere Hearth has a persistent disk.
+All three work anywhere Hearth has a persistent disk. A and B assume a network you
+trust; C is A plus a TLS proxy and the configuration a public address needs.
 
 ---
 
@@ -106,6 +109,207 @@ Update later: `git pull && npm install && npm run build && sudo systemctl restar
 
 ---
 
+## Option C — public VPS under your own domain
+
+Hearth on a rented Linux box, reachable at `https://hearth.example.com` from
+anywhere, invite-only. This is the shape to use when a VPN back to your house
+isn't practical — a household member who won't run a VPN client, or no always-on
+machine at home to run Hearth on in the first place.
+
+It's Option A plus two things: a reverse proxy terminating TLS in front of the
+app, and the configuration that makes a public address safe. Both are in
+[docker-compose.public.yml](../docker-compose.public.yml), which runs the
+prebuilt image behind [Caddy](https://caddyserver.com) (automatic Let's Encrypt
+certificates, renewed for you) and sets `HEARTH_PUBLIC=1` + `HEARTH_TRUST_PROXY=1`
+itself — so the documented path is the safe one without you having to remember
+the flags.
+
+Work through the steps in order. Several of them (owner password, MFA, closed
+registration) are things you want true **before** the address is handed out, not
+after.
+
+### 1. Prepare the host
+
+- **Pick the region deliberately** — this is a household's finances. UK/EU if
+  that's where you are.
+- **Encrypt the disk** (LUKS, or the provider's own encryption-at-rest). Hearth's
+  database is not encrypted at rest, so this is the layer that protects a
+  decommissioned or seized volume.
+- **SSH: keys only.** Set `PasswordAuthentication no`, log in as a non-root user
+  with sudo.
+- **Firewall: 80, 443, SSH, nothing else.** Note that Docker's published ports
+  bypass `ufw`/`firewalld` — the compose file therefore publishes the app on
+  `127.0.0.1` only, so the firewall isn't the only thing standing between the
+  internet and port 8787.
+- **Turn on unattended security updates** (`unattended-upgrades` on Debian/Ubuntu).
+  Nobody is watching this box day to day.
+- **Install Docker**: `curl -fsSL https://get.docker.com | sh`.
+
+### 2. Point the domain at it
+
+Add an `A` (and `AAAA` if you have IPv6) record for the hostname you'll use,
+pointing at the VPS. Do this **before** the first start: Caddy proves control of
+the name over port 80 to get the certificate, and that can't work until DNS
+resolves and the port is reachable.
+
+Putting Cloudflare's proxy in front is optional, and complicates the one thing
+this setup has to get right. Use **Full (strict)** TLS mode so Cloudflare still
+validates Caddy's certificate, and take the client address from Cloudflare's own
+header instead of the connecting one (which is now a Cloudflare edge, not your
+visitor) — in [deploy/Caddyfile](../deploy/Caddyfile):
+
+```
+header_up X-Forwarded-For {http.request.header.Cf-Connecting-Ip}
+```
+
+`HEARTH_TRUST_PROXY` stays `1`. Restrict the host firewall to
+[Cloudflare's IP ranges](https://www.cloudflare.com/ips/) as well: a header is
+only trustworthy if nobody can reach the origin without going through the thing
+that sets it.
+
+### 3. Start it
+
+```bash
+git clone https://github.com/chrislynch97/hearth.git && cd hearth
+printf 'HEARTH_DOMAIN=hearth.example.com\nACME_EMAIL=you@example.com\n' > .env
+docker compose -f docker-compose.public.yml up -d
+```
+
+(The image comes from GHCR. If you're running your own fork, make the package
+public once — see the [GHCR image visibility](#updating--three-ways) note — or
+the pull fails on an unauthenticated host.)
+
+Watch the first boot — a certificate failure or a refused start both show up here:
+
+```bash
+docker compose -f docker-compose.public.yml logs -f
+```
+
+Then open `https://hearth.example.com`. What you should see in the logs:
+
+- Caddy obtaining a certificate for your domain (`certificate obtained successfully`).
+- Hearth logging `listening on 0.0.0.0:8787` — **not** `REFUSING TO START`. That
+  message is `HEARTH_PUBLIC=1` doing its job; it names exactly which setting is
+  wrong (see [Configuration](#configuration-reference)).
+
+The proxy is configured to **overwrite** `X-Forwarded-For` with the connecting
+address ([deploy/Caddyfile](../deploy/Caddyfile)). Keep that if you edit it —
+appending instead lets a client prepend a fake IP and dodge the login limiter.
+
+### 4. Set an owner password, then enable MFA
+
+A fresh install has an owner account with **no password**. Until you set one the
+instance serves nothing but the first-run and login endpoints, so it isn't
+handing out data — but it is a race you don't want to run for long.
+
+1. **Settings → Security → set a password** on the owner account. Login is now on
+   for everybody.
+2. **Settings → Two-factor authentication → enable.** Do this before the address
+   is shared, not after. **Save the recovery codes somewhere off the box** —
+   they're the way back in if you lose the authenticator, and there's no
+   email-based reset on a self-host.
+3. Check the lock actually took **in a private window**. The browser you set the
+   password in holds a valid session cookie, so it stays signed in — which looks
+   exactly like the password not having worked.
+
+### 5. Confirm it's invite-only
+
+- **Settings → Households & access** → "Allow anyone to register" is **off**
+  (it's off by default). With it on, anyone who finds the URL can create an
+  account and a household of their own.
+- Invite the people who should be here from that same screen — a single-use link
+  that expires in 7 days.
+- Verify `HEARTH_ALLOW_OPEN` isn't set **on the running container**, not just in
+  the file:
+
+  ```bash
+  docker compose -f docker-compose.public.yml exec hearth env | grep -E 'HEARTH_(PUBLIC|TRUST_PROXY|ALLOW_OPEN)'
+  ```
+
+  Expect `HEARTH_PUBLIC=1` and `HEARTH_TRUST_PROXY=1`, and no `HEARTH_ALLOW_OPEN`
+  line at all. (With `HEARTH_PUBLIC=1` a stray `HEARTH_ALLOW_OPEN=1` would have
+  refused to start — this confirms it rather than trusting that it would.)
+
+### 6. Get the backups off the box
+
+The VPS disk is not yours and the provider's snapshots aren't a restore you've
+tested. Turn on [off-site backups](#off-site-backups-optional) — add to `.env`:
+
+```bash
+HEARTH_BACKUP_OFFSITE=webhook
+HEARTH_BACKUP_WEBHOOK_URL=https://…            # presigned object-store URL, or your own collector
+HEARTH_BACKUP_PASSPHRASE=<a long random passphrase>
+```
+
+then `docker compose -f docker-compose.public.yml up -d` to apply. Enable the
+schedule in **Settings → Data**, hit **Back up now**, and confirm a copy actually
+landed at the target.
+
+**Keep the passphrase off the box** — in your password manager, not in the `.env`
+you'd lose along with the server.
+
+**Then do a restore drill.** A backup that has never been restored isn't a
+backup. Take a real backup, decrypt it (`npm run backup:decrypt`, from a source
+checkout with `npm install` run — your laptop, not the VPS), and import it into a
+throwaway instance — the [demo mode](../README.md#demo-mode) database is a safe
+target — then look at the data. Repeat the drill after any change to how backups
+are stored.
+
+### 7. Watch it from outside
+
+- Point an external uptime monitor at `https://hearth.example.com/healthz` every
+  5 minutes, alerting on non-200. See [Uptime checks](#uptime-checks) — it must
+  run somewhere other than this box.
+- Set `HEARTH_BACKUP_HEARTBEAT_URL` so a backup that silently stops running
+  raises an alarm, and `HEARTH_ALERT_WEBHOOK` for backup and failed-login alerts.
+  See [Monitoring & alerting](#monitoring--alerting).
+- Scan the deployed host once it's up: [SSL Labs](https://www.ssllabs.com/ssltest/)
+  for the TLS config, [securityheaders.com](https://securityheaders.com) for the
+  headers Hearth sends.
+- Sign in once with a deliberately wrong password and check the audit trail
+  (**Settings → Security**) recorded *your* address rather than the proxy's —
+  that's `HEARTH_TRUST_PROXY` proven end-to-end rather than assumed.
+
+### Moving an existing instance here
+
+Migrating from a LAN box is an export and an import, not a file copy — the JSON
+snapshot is portable across hosts and across database engines (PGlite ↔ Postgres),
+which a copied `pgdata` folder is not.
+
+1. On the old host: **Settings → Data → Export**, and keep the file somewhere safe
+   — it contains password hashes and MFA secrets.
+2. Stand up the new instance through the steps above.
+3. On the new host: **Settings → Data → Import**, then check the totals against
+   the old instance before you retire it.
+4. Keep the old box running (unreachable, but intact) until you've used the new
+   one for a few days.
+
+Accounts, households and MFA enrolments come across in the export, so everyone
+signs in with the credentials they already had.
+
+### Updating
+
+`docker-compose.public.yml` runs the prebuilt image, so updating is a pull:
+
+```bash
+docker compose -f docker-compose.public.yml pull
+docker compose -f docker-compose.public.yml up -d
+```
+
+For **Update now** and scheduled auto-updates from inside the app, install the
+host updater as in [Updating — three ways](#updating--three-ways), pointing it at
+this compose file:
+
+```bash
+HEARTH_COMPOSE_FILE=docker-compose.public.yml
+```
+
+Set that in the systemd unit (or cron line) on the host. The compose file already
+passes the same value to the app, so the commands the in-app update card shows
+name this file rather than the default one.
+
+---
+
 ## Raspberry Pi notes
 
 - **Use a 64-bit OS.** Check with `uname -m` → it should say `aarch64`. (The
@@ -140,6 +344,7 @@ Update later: `git pull && npm install && npm run build && sudo systemctl restar
 | `HEARTH_ALERT_WEBHOOK` | unset | Endpoint that receives operational alerts as JSON (`{ event, message, detail, at }`) — backup failures, off-site upload failures, and failed-login bursts. Point it at whatever you already get notified through. |
 | `HEARTH_AUTH_ALERT_THRESHOLD` | `10` | Failed sign-ins in an hour that raise an `auth_failures` alert. `0` turns the check off. |
 | `HEARTH_DEPLOY` | unset | Set to `image` by the GHCR compose files. Marks this as the prebuilt-image deploy so the in-app update UI shows `pull`-based commands and (with the host updater) one-click / automatic updates. Any other value means build-from-source. See [Updating](#updating--three-ways). |
+| `HEARTH_COMPOSE_FILE` | inferred | The compose file the in-app update card names in its copy-paste commands. Left unset, Hearth infers it from `HEARTH_DEPLOY` and `DATABASE_URL` (one of the four shipped files). Set it when you run a different one — `docker-compose.public.yml` sets it to itself. The host updater reads the same variable on the host side. |
 | `HEARTH_UPDATE_DIR` | `<data>/updates` | Directory the app and host updater exchange update control files in (request / result / heartbeat). Defaults next to the data dir; override only if you relocate that exchange. |
 | `HEARTH_UPDATE_TOKEN` | unset | GitHub token the update check uses to read the latest release. Only needed when your repo is **private**: GitHub 404s an unauthenticated request to a private repo's releases, so the in-app check silently reports no update. Needs **read only** (`contents: read` / classic `repo`), never write. Falls back to `HEARTH_FEEDBACK_TOKEN` when that's set against the same repo. Public repos need neither. |
 | `HEARTH_FEEDBACK_TOKEN` | unset | A GitHub token with **issues: write** on the target repo. Setting it turns on the in-app **Send feedback** entry (in the account menu), which files a bug/idea as a GitHub issue. Left unset, the feature is hidden. Use a **fine-grained** token scoped to just the one repo, and remember reports land in a **public** repo — the form warns submitters. |
@@ -411,12 +616,17 @@ to the host's IP, e.g. `hearth.lan → 192.168.1.x`. On UniFi (e.g. a Dream Rout
 proxy (e.g. Nginx Proxy Manager) on port 80/443 forwarding to Hearth. This is also
 where you'd add HTTPS with a local certificate. Optional.
 
-**Remote access (outside your home).** Two good options:
+**Remote access (outside your home).** Three options, least exposed first:
 
 - **VPN back into your LAN** — e.g. WireGuard or Tailscale. Then `hearth.lan:8787`
-  just works remotely. Private and simple; ideal for a finance app.
-- **Cloudflare Tunnel** — gives a public HTTPS URL with no port-forwarding, if you
-  specifically want public access.
+  just works remotely. Private and simple; ideal for a finance app, and the right
+  answer whenever everyone who needs access will run a VPN client.
+- **Cloudflare Tunnel** — a public HTTPS URL with no port-forwarding, keeping the
+  app on a machine at home. Set `HEARTH_PUBLIC=1` and `HEARTH_TRUST_PROXY=1`: the
+  instance is internet-facing even though the box isn't.
+- **A public URL on a VPS you rent** — no home machine and no VPN client needed.
+  Follow [Option C](#option-c--public-vps-under-your-own-domain), which covers the
+  TLS proxy and the configuration a public address needs.
 
 ---
 
@@ -478,8 +688,11 @@ where you'd add HTTPS with a local certificate. Optional.
   recovery-code hashes live in the same database as your data, so two-factor
   protects the *login path*, not someone who already has the files. Keep the data
   directory (and your backups) on trusted storage.
-- **Financial data on a device you own** is the intended posture — prefer a VPN over
-  a public URL for remote access.
+- **Financial data on a device you own** is the intended posture, and a VPN back to
+  it beats a public URL where it's practical. Where it isn't, put the instance on a
+  public address deliberately rather than by accident:
+  [Option C](#option-c--public-vps-under-your-own-domain) is the walkthrough, and
+  every bullet above is part of it.
 
 ---
 

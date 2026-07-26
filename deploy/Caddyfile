@@ -1,0 +1,26 @@
+# TLS front for the public VPS deploy (docker-compose.public.yml). Caddy obtains
+# and renews a Let's Encrypt certificate for $HEARTH_DOMAIN automatically, and
+# redirects http:// to https:// on its own.
+#
+# Both variables come from the compose file's environment (set them in .env).
+
+{
+	# Where Let's Encrypt sends expiry / problem notices.
+	email {$ACME_EMAIL}
+}
+
+{$HEARTH_DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy hearth:8787 {
+		# Overwrite rather than append. Caddy's default is to append the peer to
+		# any inbound X-Forwarded-For, so a client-supplied value would survive
+		# and let it forge the IP that Hearth's login rate limiter keys on.
+		# Behind Cloudflare the peer is an edge node, not the visitor — use
+		# {http.request.header.Cf-Connecting-Ip} there (docs/deployment.md → Option C).
+		header_up X-Forwarded-For {remote_host}
+	}
+}
+
+# Security headers (HSTS, CSP, frame-ancestors) come from the app itself via
+# helmet — don't add them here too, or browsers see them twice.
