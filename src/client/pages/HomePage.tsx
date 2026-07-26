@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useEffectEvent, useState } from 'react'
 import {
   Anchor,
   Badge,
-  Box,
   Button,
   Card,
   Center,
@@ -17,6 +16,8 @@ import {
 import { Link } from '@tanstack/react-router'
 import { trpc } from '../trpc'
 import { GettingStarted } from '@/components/GettingStarted'
+import { AllocationCard } from '@/features/home/components/AllocationCard'
+import { NetWorthTile } from '@/features/home/components/NetWorthTile'
 import { formatMoney } from '../../shared/money'
 import { periodForDate, shiftPeriod, periodConfig } from '../../shared/period'
 import { useMoney, useFormatDate } from '../useMoney'
@@ -28,11 +29,6 @@ function getGreeting(): string {
   if (hour < 12) return 'Good morning'
   if (hour < 18) return 'Good afternoon'
   return 'Good evening'
-}
-
-function pct(part: number, whole: number): string {
-  if (whole <= 0) return '—'
-  return `${Math.round((part / whole) * 100)}%`
 }
 
 // ---------------------------------------------------------------------------
@@ -222,130 +218,6 @@ function SnapshotSection({
         </Group>
       )}
     </Stack>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Net worth tile — current standing (period-independent), links to /accounts
-// ---------------------------------------------------------------------------
-
-function NetWorthTile({
-  data,
-  money,
-}: {
-  data: {
-    assets: number
-    liabilities: number
-    netWorth: number
-    timeline: Array<{ date: string; netWorth: number }>
-  }
-  money: MoneyFormat
-}) {
-  const hasData = data.assets !== 0 || data.liabilities !== 0 || data.timeline.length > 0
-  if (!hasData) return null
-  const negative = data.netWorth < 0
-  const spark = data.timeline.slice(-12)
-  const maxAbs = Math.max(1, ...spark.map((p) => Math.abs(p.netWorth)))
-  return (
-    <Card
-      component={Link}
-      to="/accounts"
-      padding="lg"
-      radius="lg"
-      style={{
-        textDecoration: 'none',
-        color: 'inherit',
-        backgroundColor: 'light-dark(var(--mantine-color-moss-0), var(--mantine-color-dark-6))',
-        border: `1px solid ${hearthTokens.brand.moss}33`,
-      }}
-    >
-      <Group justify="space-between" align="flex-end" wrap="nowrap">
-        <div>
-          <Text size="xs" fw={700} tt="uppercase" c="dimmed" ff="monospace" lts="0.05em" mb={4}>
-            Net worth
-          </Text>
-          <Text
-            fw={700}
-            fz={28}
-            c={negative ? 'red' : undefined}
-            style={{ fontFamily: 'var(--mantine-font-family-headings)', lineHeight: 1.1 }}
-          >
-            {formatMoney(data.netWorth, money)}
-          </Text>
-          <Group gap="md" mt={4}>
-            <Text size="xs" c="dimmed">
-              Assets {formatMoney(data.assets, money)}
-            </Text>
-            <Text size="xs" c="dimmed">
-              Liabilities {formatMoney(data.liabilities, money)}
-            </Text>
-          </Group>
-        </div>
-        {spark.length >= 2 && (
-          <Group gap={3} align="flex-end" h={44} wrap="nowrap" style={{ flexShrink: 0 }}>
-            {spark.map((p) => (
-              <Box
-                key={p.date}
-                title={`${p.date}: ${formatMoney(p.netWorth, money)}`}
-                style={{
-                  width: 6,
-                  height: `${Math.max(2, (Math.abs(p.netWorth) / maxAbs) * 40)}px`,
-                  borderRadius: 2,
-                  backgroundColor: p.netWorth < 0 ? hearthTokens.brand.apricot : hearthTokens.brand.moss,
-                }}
-              />
-            ))}
-          </Group>
-        )}
-      </Group>
-    </Card>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// D — Allocation by category
-// ---------------------------------------------------------------------------
-
-function AllocationCard({
-  allocation,
-  householdIncome,
-  money,
-}: {
-  allocation: { perCategory: Array<{ categoryId: string | null; name: string; funding: number }>; total: number }
-  householdIncome: number
-  money: MoneyFormat
-}) {
-  if (allocation.perCategory.length === 0) return null
-  const max = allocation.perCategory[0]?.funding ?? 1
-  return (
-    <Card withBorder padding="md" radius="md">
-      <Title order={4} mb="sm">
-        Allocation by category
-      </Title>
-      <Stack gap="xs">
-        {allocation.perCategory.map((c) => (
-          <Box key={c.categoryId ?? 'uncat'}>
-            <Group justify="space-between" mb={2}>
-              <Text size="sm">{c.name}</Text>
-              <Group gap="md">
-                <Text size="sm" c="dimmed">
-                  {pct(c.funding, householdIncome)} of income
-                </Text>
-                <Text size="sm">{formatMoney(c.funding, money)}</Text>
-              </Group>
-            </Group>
-            <Box
-              style={{
-                height: 6,
-                borderRadius: 3,
-                width: `${Math.max(4, (c.funding / max) * 100)}%`,
-                backgroundColor: hearthTokens.brand.moss,
-              }}
-            />
-          </Box>
-        ))}
-      </Stack>
-    </Card>
   )
 }
 

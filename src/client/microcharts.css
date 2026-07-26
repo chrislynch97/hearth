@@ -1,0 +1,31 @@
+/**
+ * Binds microcharts' `--mc-*` tokens to the Hearth palette (#184).
+ *
+ * Deliberately unlayered: microcharts ships its defaults inside
+ * `@layer microcharts.tokens`, and unlayered rules beat layered ones whatever
+ * their specificity. That also neutralises its `prefers-color-scheme` block,
+ * which would otherwise paint charts dark while the rest of the app obeys a
+ * light scheme forced in Appearance settings. `light-dark()` follows Mantine's
+ * `color-scheme` instead, so the two always agree.
+ */
+:root {
+    /* Data ink — moss, matching every other bar and line in the app. */
+    --mc-stroke: light-dark(#47613f, #86a971);
+    --mc-accent: light-dark(#47613f, #86a971);
+
+    /* Valence. Apricot is Hearth's attention colour; we never use pure red. */
+    --mc-positive: light-dark(#3e7c4f, #7fb98c);
+    --mc-negative: light-dark(#c9744a, #e29a6c);
+
+    /* Baselines, axis ticks and value labels. */
+    --mc-neutral: light-dark(#7c8676, #82887a);
+    --mc-band: light-dark(rgba(71, 97, 63, 0.1), rgba(163, 188, 144, 0.14));
+
+    --mc-font: var(--mantine-font-family);
+    --mc-label-size: 0.72em;
+
+    /* Hover readouts on the interactive variants read as Mantine surfaces. */
+    --mc-surface: light-dark(#fbfaf4, #2c3227);
+    --mc-surface-ink: light-dark(#22261f, #c7cbc0);
+    --mc-surface-edge: light-dark(#e7e2d5, #434a3e);
+}
