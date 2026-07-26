@@ -1,0 +1,114 @@
+# Hearth on a public VPS under your own domain, with TLS terminated by Caddy
+# (automatic Let's Encrypt certificates). Walkthrough:
+# docs/deployment.md → "Option C — public VPS under your own domain".
+#
+# Nothing but Caddy is published to the internet: the app binds to loopback on
+# the host and is reached over the compose network. HEARTH_PUBLIC=1 makes the
+# startup safety checks fatal, so a config slip stops the server rather than
+# exposing a household's finances.
+#
+# Set these in a .env file next to this one:
+#
+#   HEARTH_DOMAIN=hearth.example.com
+#   ACME_EMAIL=you@example.com
+#
+#   docker compose -f docker-compose.public.yml up -d     # → https://$HEARTH_DOMAIN
+#   docker compose -f docker-compose.public.yml pull      # fetch a newer image
+#   docker compose -f docker-compose.public.yml up -d     # apply it
+#
+# Point the domain's A/AAAA record at this host *before* the first `up` — Caddy
+# needs port 80 reachable on that name to complete the ACME challenge.
+#
+# Using an external Postgres instead of the embedded PGlite? Copy the `db`
+# service (and its volume) from docker-compose.postgres.ghcr.yml, point
+# DATABASE_URL at it, and add HEARTH_UPDATE_DIR=/data/updates as that file does.
+services:
+  caddy:
+    image: caddy:2-alpine
+    # The only service on a public port. 443/udp is HTTP/3.
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Issued certificates and ACME account keys. Losing this volume means
+      # re-issuing on next start, which Let's Encrypt rate-limits — keep it.
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      - HEARTH_DOMAIN=${HEARTH_DOMAIN:?set HEARTH_DOMAIN in .env}
+      - ACME_EMAIL=${ACME_EMAIL:?set ACME_EMAIL in .env}
+    depends_on:
+      hearth:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    # Cap container logs so they can't fill the disk on an unattended box (#57).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  hearth:
+    image: ghcr.io/chrislynch97/hearth:latest
+    # Bound to loopback deliberately: the internet reaches Hearth only through
+    # Caddy. Published at all so you can `curl http://127.0.0.1:8787/healthz`
+    # over SSH when the proxy is what's broken. Docker's published ports bypass
+    # ufw/firewalld, so a 0.0.0.0 publish here would serve the app on :8787
+    # regardless of what the host firewall says.
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      # Also the exchange point for the host updater's control files (./data/updates).
+      - ./data:/data
+    environment:
+      - PORT=8787
+      - DATABASE_URL=pglite:/data/pgdata
+      - CLIENT_DIR=/app/dist/client
+      # This instance is internet-facing: the startup safety checks refuse to
+      # boot on a config that would expose data or disarm the defences, rather
+      # than warning into a log nobody reads.
+      - HEARTH_PUBLIC=1
+      # HEARTH_ALLOW_OPEN has no entry here on purpose: passing it through from
+      # .env would let a value left over from a LAN setup reach a public box.
+      # One proxy hop (Caddy). The rate limiter and the audit trail then see the
+      # real client IP; the session cookie gets `Secure` from x-forwarded-proto.
+      # Keep this in step with the Caddyfile, which overwrites X-Forwarded-For.
+      - HEARTH_TRUST_PROXY=1
+      # Tells the in-app update UI this is the image deploy (pull-based commands,
+      # and one-click / automatic updates with the host updater), and which
+      # compose file those commands should name.
+      - HEARTH_DEPLOY=image
+      - HEARTH_COMPOSE_FILE=docker-compose.public.yml
+      # Optional GitHub tokens (read-only PAT), passed through from .env so the
+      # update check works on a private repo (#170) and in-app feedback (#86) can
+      # file issues. Empty default = feature off. See docs/deployment.md.
+      - HEARTH_UPDATE_TOKEN=${HEARTH_UPDATE_TOKEN:-}
+      - HEARTH_FEEDBACK_TOKEN=${HEARTH_FEEDBACK_TOKEN:-}
+      - HEARTH_FEEDBACK_REPO=${HEARTH_FEEDBACK_REPO:-}
+      # Off-site backups: a VPS whose disk you don't own is exactly the case
+      # they're for. Set these in .env to turn them on; `directory` mode also
+      # needs its target mounted in. See docs/deployment.md → Off-site backups.
+      - HEARTH_BACKUP_OFFSITE=${HEARTH_BACKUP_OFFSITE:-off}
+      - HEARTH_BACKUP_PASSPHRASE=${HEARTH_BACKUP_PASSPHRASE:-}
+      - HEARTH_BACKUP_WEBHOOK_URL=${HEARTH_BACKUP_WEBHOOK_URL:-}
+      - HEARTH_BACKUP_WEBHOOK_AUTH=${HEARTH_BACKUP_WEBHOOK_AUTH:-}
+      # Alerting on a box you don't sit next to: a dead-man's-switch ping after
+      # each backup, and a webhook for backup / failed-login alerts.
+      - HEARTH_BACKUP_HEARTBEAT_URL=${HEARTH_BACKUP_HEARTBEAT_URL:-}
+      - HEARTH_ALERT_WEBHOOK=${HEARTH_ALERT_WEBHOOK:-}
+    # Proper PID 1 (tini) so SIGTERM reaches node for a clean shutdown.
+    init: true
+    restart: unless-stopped
+    # Cap container logs so they can't fill the disk on an unattended box (#57).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy-data:
+  caddy-config:
