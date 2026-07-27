@@ -100,6 +100,11 @@ export const user = pgTable('user', {
   email: text('email').unique(),
   displayName: text('display_name').notNull(),
   passwordHash: text('password_hash'),
+  // When the address above was proven to belong to this account by clicking a
+  // link sent to it (#111). Null = unproven, which is every address entered by
+  // an admin on an invite or typed into the profile form. Password reset only
+  // ever mails a proven address, so a typo can't hand recovery to a stranger.
+  emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true, mode: 'date' }),
   mfaSecret: text('mfa_secret'),
   mfaEnabledAt: timestamp('mfa_enabled_at', { withTimezone: true, mode: 'date' }),
   mfaRecoveryCodes: text('mfa_recovery_codes'),
@@ -182,6 +187,31 @@ export const rateLimit = pgTable('rate_limit', {
   // Supports the periodic sweep of expired rows.
   sweepIdx: index('rate_limit_sweep_idx').on(t.limiter, t.windowStart),
 }))
+
+// A single-use token emailed to an address to prove something about it (#111):
+// that the address belongs to the account (`email_verify`), or that whoever
+// reads it may set a new password (`password_reset`). Like sessions and invites,
+// only the sha256 of the 256-bit random token is stored, so a leaked database or
+// backup exposes no usable credential. Short-lived, single-use bookkeeping — no
+// household scope, and deliberately excluded from ALL_TABLES.
+export const emailToken = pgTable('email_token', {
+  id: text('id').primaryKey(),
+  tokenHash: text('token_hash').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  purpose: text('purpose').notNull(), // 'email_verify' | 'password_reset'
+  // The address the token was sent to, captured at issue time. A verification
+  // token must only confirm the address it was mailed to — otherwise changing
+  // the address after requesting one would verify the new address by proxy.
+  email: text('email').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true, mode: 'date' }),
+}, (t) => ({
+  tokenHashIdx: index('email_token_token_hash_idx').on(t.tokenHash),
+  userPurposeIdx: index('email_token_user_purpose_idx').on(t.userId, t.purpose),
+}))
+
+export type EmailToken = typeof emailToken.$inferSelect
 
 // Instance-wide settings (a single row, id = 'instance'), distinct from the
 // per-household settings on `household`. Governs deployment-level behaviour like

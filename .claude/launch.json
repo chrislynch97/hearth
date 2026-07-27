@@ -25,6 +25,17 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "demo"],
       "port": 8787
+    },
+    {
+      "name": "demo-mail",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "demo"],
+      "env": {
+        "HEARTH_MAIL_TRANSPORT": "log",
+        "HEARTH_MAIL_FROM": "Hearth <hearth@example.com>",
+        "HEARTH_PUBLIC_URL": "http://localhost:5173"
+      },
+      "port": 8787
     }
   ]
 }

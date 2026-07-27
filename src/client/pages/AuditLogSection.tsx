@@ -55,6 +55,15 @@ const ACTION_META: Record<string, { color: string; label: string }> = {
     password_changed: { color: "orange", label: "Password changed" },
     password_removed: { color: "orange", label: "Password removed" },
     password_reset: { color: "orange", label: "Password reset" },
+    password_reset_requested: {
+        color: "orange",
+        label: "Password reset requested",
+    },
+    email_verification_sent: {
+        color: "blue",
+        label: "Verification email sent",
+    },
+    email_verified: { color: "teal", label: "Email verified" },
     mfa_enroll_started: { color: "blue", label: "MFA enrolment started" },
     mfa_enabled: { color: "teal", label: "MFA enabled" },
     mfa_disabled: { color: "red", label: "MFA disabled" },
@@ -63,6 +72,7 @@ const ACTION_META: Record<string, { color: string; label: string }> = {
     role_changed: { color: "grape", label: "Role changed" },
     access_removed: { color: "red", label: "Access removed" },
     invite_created: { color: "moss", label: "Invite created" },
+    invite_emailed: { color: "moss", label: "Invite emailed" },
     invite_revoked: { color: "gray", label: "Invite revoked" },
     invite_accepted: { color: "teal", label: "Invite accepted" },
     household_erased: { color: "red", label: "Household erased" },
@@ -252,7 +262,9 @@ export const AuditLogSection = () => {
     // Both controls show the household's value until edited, then the edit. Null
     // while the household loads, so neither flashes a default over a real value.
     const update = trpc.household.update.useMutation();
-    const [retentionEdit, setRetention] = useState<number | string | null>(null);
+    const [retentionEdit, setRetention] = useState<number | string | null>(
+        null
+    );
     // Archive-before-prune toggle (issue #43).
     const [archiveEdit, setArchive] = useState<boolean | null>(null);
     const [savedRetention, setSavedRetention] = useState(false);

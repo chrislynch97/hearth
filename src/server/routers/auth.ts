@@ -35,8 +35,12 @@ import {
   verifyTotp,
 } from '../auth/totp'
 import { isOpenAccessBlocked, openGuardConfig } from '../auth/gate'
+import { mailConfig, mailEnabled } from '../mail/config'
+import { trySendMail } from '../mail/mailer'
+import { passwordResetEmail } from '../mail/templates'
+import { consumeEmailToken, issueEmailToken, RESET_TTL_MS } from '../mail/tokens'
 import { validatePassword, MAX_PASSWORD_LENGTH } from '../../shared/password-policy'
-import { MAX_CODE_LENGTH, MAX_NAME_LENGTH } from '../../shared/input-limits'
+import { MAX_CODE_LENGTH, MAX_NAME_LENGTH, MAX_TOKEN_LENGTH } from '../../shared/input-limits'
 import { RateLimiter } from '../auth/rateLimit'
 import type { Context } from '../trpc/context'
 import type { DB } from '../db/client'
@@ -64,6 +68,30 @@ const loginAccountLimiter = new RateLimiter('login-account', {
 const registerLimiter = new RateLimiter('register', {
   windowMs: 60 * 60 * 1000,
   maxAttempts: 10,
+  blockMs: 60 * 60 * 1000,
+})
+
+// Reset requests are unauthenticated and each one sends mail to someone else's
+// inbox, so they're throttled twice: per client, to stop a script working
+// through a list, and per account, so one address can't be mail-bombed from
+// rotating IPs. The account cap is the higher of the two so a single client —
+// already capped at 5 — can never lock a known victim out of their own recovery.
+const resetRequestLimiter = new RateLimiter('reset-request-ip', {
+  windowMs: 60 * 60 * 1000,
+  maxAttempts: 5,
+  blockMs: 60 * 60 * 1000,
+})
+const resetAccountLimiter = new RateLimiter('reset-request-account', {
+  windowMs: 60 * 60 * 1000,
+  maxAttempts: 10,
+  blockMs: 60 * 60 * 1000,
+})
+
+// Guessing a 256-bit token is hopeless; this just stops the endpoint being free
+// work for a script.
+const resetClaimLimiter = new RateLimiter('reset-claim', {
+  windowMs: 60 * 60 * 1000,
+  maxAttempts: 20,
   blockMs: 60 * 60 * 1000,
 })
 
@@ -123,6 +151,10 @@ export const authRouter = router({
       // and `auth.setPassword` are on the gate's allowlist, so this reaches the
       // client and the gate can act on it.
       firstRunRequired: isOpenAccessBlocked({ locked, bindIsLoopback, allowOpen }),
+      // Whether the login screen should offer "forgot your password?" — it only
+      // works on an instance that can send mail (#111). Self-host without a relay
+      // keeps the CLI reset (`npm run reset-owner-password`) as its answer.
+      passwordResetAvailable: mailEnabled(),
       mfaEnabled: (cur?.mfaEnabledAt ?? null) !== null,
       user: cur ? { id: cur.id, username: cur.username, displayName: cur.displayName } : null,
     }
@@ -301,6 +333,114 @@ export const authRouter = router({
 
       await registerLimiter.fail(ctx.db, key, now) // count this sign-up toward the per-client cap
       ctx.setSessionCookie?.(await createSession(ctx.db, userId, householdId, ctx.sessionOrigin))
+      return { ok: true as const }
+    }),
+
+  /** Public: ask for a password-reset link (#111).
+   *
+   *  Always reports success. Whether the account exists, whether it has an
+   *  address, whether that address is verified and whether the mail actually
+   *  went out are all invisible to the caller — any of them leaking turns this
+   *  into an account-enumeration oracle on an unauthenticated endpoint. The
+   *  operator sees the real outcome in the log and the audit trail. */
+  requestPasswordReset: publicProcedure
+    .input(z.object({ username: z.string().max(MAX_NAME_LENGTH) }))
+    .mutation(async ({ ctx, input }) => {
+      const config = mailConfig()
+      if (!config) return { ok: true as const }
+
+      const key = ctx.clientKey ?? 'unknown'
+      const acctKey = normalizeUsername(input.username)
+      const now = Date.now()
+      const ipLimit = await resetRequestLimiter.check(ctx.db, key, now)
+      const acctLimit = await resetAccountLimiter.check(ctx.db, acctKey, now)
+      // Even the throttle is silent: a 429 here would tell a caller which
+      // usernames are worth retrying. Drop the request and report success.
+      if (!ipLimit.allowed || !acctLimit.allowed) return { ok: true as const }
+      await resetRequestLimiter.fail(ctx.db, key, now)
+      await resetAccountLimiter.fail(ctx.db, acctKey, now)
+
+      const u = await getUserByUsername(ctx.db, input.username.trim())
+      // Only ever mail a *verified* address. An unverified one is whatever was
+      // typed into a profile form or an invite — a typo there would hand account
+      // recovery to a stranger who happens to own the address.
+      if (!u || !u.email || u.emailVerifiedAt === null) return { ok: true as const }
+
+      const token = await issueEmailToken(ctx.db, {
+        userId: u.id,
+        purpose: 'password_reset',
+        email: u.email,
+        ttlMs: RESET_TTL_MS,
+      })
+      const sent = await trySendMail(
+        passwordResetEmail({
+          to: u.email,
+          origin: config.publicUrl,
+          token,
+          displayName: u.displayName,
+          ttlMs: RESET_TTL_MS,
+        }),
+      )
+      // Record the request, never the token (issue #49). Written directly rather
+      // than staged: the actor is unauthenticated, so there's no context identity
+      // to attribute it to, and it's worth a trail entry either way.
+      await writeSecurityEvent(ctx.db, {
+        householdId: await defaultHouseholdFor(ctx.db, u.id),
+        actorUserId: null,
+        entityType: 'user',
+        entityId: u.id,
+        action: 'password_reset_requested',
+        details: { email: u.email, sent },
+      })
+      return { ok: true as const }
+    }),
+
+  /** Public: set a new password with a reset token.
+   *
+   *  Deliberately does NOT log the user in. Every session is revoked and they go
+   *  back through the login screen — which means MFA still applies, so a reset
+   *  can't be used to step around the second factor. */
+  resetPassword: publicProcedure
+    .input(
+      z.object({
+        token: z.string().max(MAX_TOKEN_LENGTH),
+        newPassword: z.string().max(MAX_PASSWORD_LENGTH),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const key = ctx.clientKey ?? 'unknown'
+      const now = Date.now()
+      if (!(await resetClaimLimiter.check(ctx.db, key, now)).allowed) {
+        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many attempts. Try again later.' })
+      }
+      const weak = validatePassword(input.newPassword)
+      // Check the password before spending the token: a rejected password must
+      // leave the link usable, or one typo means requesting a whole new email.
+      if (weak) throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
+
+      const claimed = await consumeEmailToken(ctx.db, 'password_reset', input.token)
+      if (!claimed) {
+        await resetClaimLimiter.fail(ctx.db, key, now)
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'This link is invalid, already used, or expired.' })
+      }
+
+      const passwordHash = await hashPassword(input.newPassword)
+      await ctx.db.update(user).set({ passwordHash, updatedAt: new Date() }).where(eq(user.id, claimed.userId))
+      // Revoke every session: whoever forced the reset (or the attacker who
+      // prompted it) must not keep one they already held.
+      await deleteUserSessions(ctx.db, claimed.userId)
+      // Resetting the owner's password locks the instance; persist that so the
+      // gate fails closed regardless of how the owner is later resolved.
+      await syncAuthRequired(ctx.db)
+      await writeSecurityEvent(ctx.db, {
+        householdId: await defaultHouseholdFor(ctx.db, claimed.userId),
+        actorUserId: claimed.userId,
+        entityType: 'user',
+        entityId: claimed.userId,
+        action: 'password_reset',
+        details: { via: 'email' },
+      })
+      ctx.setSessionCookie?.(null)
       return { ok: true as const }
     }),
 

@@ -5,19 +5,32 @@ import { ConnectionError } from './ErrorState'
 import { LoginGate } from './LoginGate'
 import { FirstRunGate } from './FirstRunGate'
 import { AcceptInvite } from './AcceptInvite'
-import { readInviteToken } from './inviteLink'
+import { ResetPassword } from './ResetPassword'
+import { VerifyEmail } from './VerifyEmail'
+import { readInviteToken, readResetPasswordToken, readVerifyEmailToken } from './inviteLink'
 import { SetupWizard } from './setup/SetupWizard'
 import { router } from './router'
 
 export function App() {
   const authStatus = trpc.auth.status.useQuery()
 
-  // Invite acceptance happens before any auth gate — an invitee has no account
-  // yet. `/invite#<token>` is handled here rather than via the router (which
-  // only mounts once authenticated).
+  // The emailed-link screens run before any auth gate: an invitee has no account
+  // yet, and someone who's forgotten their password (or is confirming an address
+  // from their phone) has no session. All three are handled here rather than via
+  // the router, which only mounts once authenticated.
   const inviteToken = readInviteToken(window.location)
   if (inviteToken !== null) {
     return <AcceptInvite token={inviteToken} />
+  }
+
+  const resetToken = readResetPasswordToken(window.location)
+  if (resetToken !== null) {
+    return <ResetPassword token={resetToken} />
+  }
+
+  const verifyToken = readVerifyEmailToken(window.location)
+  if (verifyToken !== null) {
+    return <VerifyEmail token={verifyToken} />
   }
 
   if (authStatus.isLoading) {

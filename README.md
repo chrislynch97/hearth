@@ -139,6 +139,13 @@ All configuration is via environment variables:
 | `HEARTH_ALLOW_OPEN` | unset | Set to `1` to allow running **open** (no owner password) while bound to a non-loopback address. Without it, an open instance on `0.0.0.0` serves only the login/first-run endpoints and refuses budgeting data — so a public deploy can't accidentally hand anonymous callers full owner access. Set an owner password instead of using this in production. |
 | `HEARTH_PUBLIC` | unset | Set to `1` on an **internet-facing** instance. Turns the startup safety checks fatal: the server **refuses to start** if the config would expose your data (`HEARTH_ALLOW_OPEN=1` on a non-loopback bind, or open registration with no owner password) or would leave it defending itself badly (`HEARTH_TRUST_PROXY` unset, so the rate limiter throttles every client as one and the session cookie isn't `Secure`), instead of merely warning. Recommended for any public deploy — a config mistake then stops the server rather than exposing a household's finances. Leave unset on a home LAN, where those states are legitimate. |
 | `HEARTH_ALLOWED_ORIGINS` | unset | Extra origins allowed to make state-changing requests, comma-separated (`https://hearth.example.com`). Writes must come from the same origin the app is served on; you only need this if a proxy in front rewrites the `Host` header so it no longer matches the address the browser actually used. Requests without an `Origin` header (curl, scripts, health checks) are unaffected. |
+| `HEARTH_MAIL_TRANSPORT` | `off` | Turns on the email-backed features: invite-by-email, address confirmation, and self-service password reset (see [Email](#email-optional)). `off` \| `smtp` (a real relay) \| `log` (print the message instead of sending — development only, and refused when `HEARTH_PUBLIC=1`, because it writes live tokens to the server log). |
+| `HEARTH_MAIL_FROM` | unset | `From:` address on every email Hearth sends, e.g. `Hearth <hearth@example.com>`. **Required** when email is on. |
+| `HEARTH_PUBLIC_URL` | unset | The URL people reach this instance on (`https://hearth.example.com`) — emailed links are built from it, so a wrong value sends every invitee and reset link to the wrong host. **Required** when email is on. |
+| `HEARTH_SMTP_HOST` | unset | Relay hostname. **Required** for `HEARTH_MAIL_TRANSPORT=smtp`. |
+| `HEARTH_SMTP_PORT` | `587`, or `465` for implicit TLS | Relay port. |
+| `HEARTH_SMTP_TLS` | `starttls` | `starttls` upgrades the connection and **refuses to send** if the relay doesn't offer it; `implicit` is TLS from the first byte (port 465); `none` is cleartext — only for a relay on localhost. |
+| `HEARTH_SMTP_USER` / `HEARTH_SMTP_PASS` | unset | Relay credentials. Omit both for an unauthenticated relay; setting a user with no password is a startup error. |
 | `HEARTH_DEPLOY` | unset | Set to `image` by the GHCR compose files (`docker-compose.ghcr.yml`). Tells the in-app update UI this is the prebuilt-image deploy, so it shows `pull`-based update commands and — with the host updater — enables one-click / automatic updates. Any other value (or unset) means a build-from-source deploy. See [Updating](docs/deployment.md#updating--three-ways). |
 | `HEARTH_COMPOSE_FILE` | inferred | Compose file the in-app update card names in its copy-paste commands. Unset, it's inferred from `HEARTH_DEPLOY` + `DATABASE_URL`; set it if you run a compose file other than the four shipped ones (`docker-compose.public.yml` sets it to itself). The host updater reads the same variable. |
 | `HEARTH_UPDATE_DIR` | `<data>/updates` | Where the app and the host updater exchange update control files (request / result / heartbeat). Defaults next to your data dir; only set it if you relocate that exchange. |
@@ -216,6 +223,42 @@ owner of the first household — the person who set the server up) can turn on
 the sign-in screen; it's **off by default**, keeping a self-host invite-only.
 Whole-instance tools (data export/import/reset, backups) are reserved for the
 instance owner. See [docs/deployment.md](docs/deployment.md#https--security).
+
+## Email (optional)
+
+**Off by default, and a self-host install doesn't need it.** Invites are
+copy-a-link, and a lost owner password is recovered from the box with
+`reset-owner-password` above. Point Hearth at a mail relay and three things
+switch on:
+
+- **Invite by email** — the invite form grows an address field and sends the link
+  there. You still get the link back to copy, so a relay that's down costs the
+  invitee an email, not their invitation.
+- **Confirm your address** — Settings → Account offers to send a confirmation
+  link. This is what makes an address trustworthy: it was entered by whoever
+  holds the account, and proven by someone who can read that inbox.
+- **Forgot your password** — the sign-in screen offers a reset link. It's only
+  ever mailed to a **confirmed** address, so a typo in a profile form can't hand
+  account recovery to a stranger, and the reset **doesn't sign you in** — you go
+  back through the login screen, so two-factor authentication still applies.
+
+```bash
+HEARTH_MAIL_TRANSPORT=smtp
+HEARTH_MAIL_FROM='Hearth <hearth@example.com>'
+HEARTH_PUBLIC_URL=https://hearth.example.com   # emailed links are built from this
+HEARTH_SMTP_HOST=smtp.example.com
+HEARTH_SMTP_USER=apikey                        # omit both for an unauthenticated relay
+HEARTH_SMTP_PASS=<the relay password>
+```
+
+Hearth refuses to send in the clear by default: `HEARTH_SMTP_TLS` is `starttls`,
+so a relay that stops offering TLS fails loudly rather than posting reset tokens
+in plaintext. Every emailed token lives in the URL **fragment**, which browsers
+never send to a server — so a live credential can't end up in an access log.
+
+To see the emails without a relay, set `HEARTH_MAIL_TRANSPORT=log` and Hearth
+prints each message to the server log instead of sending it. That prints live
+tokens, so it's development-only — `HEARTH_PUBLIC=1` refuses to start with it.
 
 ## Tech
 

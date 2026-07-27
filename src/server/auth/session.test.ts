@@ -7,6 +7,7 @@ import { getInstanceSettings, setInstanceOwnerId } from '../db/instanceSettings'
 import { DEFAULT_HOUSEHOLD_ID } from '../trpc/tenant'
 import { newId } from '../../shared/ids'
 import { hashPassword } from './password'
+import { hashToken } from './bearer'
 import {
   SESSION_ABSOLUTE_TTL_MS,
   SESSION_IDLE_TTL_MS,
@@ -17,7 +18,6 @@ import {
   deleteUserSessionById,
   getOwnerUser,
   getValidSession,
-  hashToken,
   isInstanceLocked,
   isInstanceOwner,
   listUserSessions,

@@ -19,6 +19,7 @@ import { parseTrustProxy } from './auth/trustProxy'
 import { redactUrl } from './logRedact'
 import { checkHealth, healthBody } from './ops/health'
 import { startAuthAlertScheduler } from './ops/authAlerts'
+import { resolveMailConfig } from './mail/config'
 
 const PORT = Number(process.env.PORT ?? 8787)
 const HOST = process.env.HOST ?? '0.0.0.0'
@@ -86,6 +87,7 @@ async function main() {
   // serving a household's finances to the internet. Everywhere else (home LAN,
   // dev, demo) the same states are legitimate, so we only warn.
   await assertStartupSafety()
+  reportMailConfig()
 
   startBackupScheduler(db)
   startAuditPruneScheduler(db)
@@ -236,6 +238,20 @@ async function assertStartupSafety(): Promise<void> {
   )
   await closeDb()
   process.exit(1)
+}
+
+/** Resolve the mail config once at boot and say what it found (#111). A relay
+ *  that's misconfigured otherwise looks exactly like one that's switched off:
+ *  every email-backed feature is simply absent, with no clue why. Throws, so a
+ *  bad config is fatal here rather than a silent no-op at the first invite. */
+function reportMailConfig(): void {
+  const config = resolveMailConfig()
+  if (!config) {
+    console.log('[hearth] email is off (HEARTH_MAIL_TRANSPORT unset) — invites are copy-a-link')
+    return
+  }
+  const via = config.smtp ? `smtp ${config.smtp.host}:${config.smtp.port} (${config.smtp.tls})` : 'log (not sent)'
+  console.log(`[hearth] email via ${via}, from ${config.from}, links point at ${config.publicUrl}`)
 }
 
 main().catch((err) => {

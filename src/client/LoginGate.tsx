@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Anchor, Button, Card, Center, Group, PasswordInput, Stack, Text, TextInput } from '@mantine/core'
 import { trpc } from './trpc'
 import { hearthTokens } from './theme'
+import { ForgotPassword } from './ForgotPassword'
 import { MIN_PASSWORD_LENGTH, validatePassword } from '../shared/password-policy'
 
 /** Shown when the instance is locked and this session isn't authenticated. Also
@@ -11,8 +12,9 @@ export function LoginGate() {
   const login = trpc.auth.login.useMutation()
   const register = trpc.auth.register.useMutation()
   const regOpen = trpc.auth.registrationOpen.useQuery()
+  const status = trpc.auth.status.useQuery()
 
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -22,6 +24,9 @@ export function LoginGate() {
   const [error, setError] = useState('')
 
   const canRegister = regOpen.data?.allowOpenRegistration ?? false
+  // Only offered when the instance can send mail (#111); self-host without a
+  // relay resets the owner password from the CLI instead.
+  const canReset = status.data?.passwordResetAvailable ?? false
 
   async function submit() {
     setError('')
@@ -79,15 +84,19 @@ export function LoginGate() {
               Hearth
             </Text>
           </Group>
-          <Text size="sm" c="dimmed" ta="center">
-            {mode === 'register'
-              ? 'Create your account and household.'
-              : mfaRequired
-                ? 'Enter the code from your authenticator app.'
-                : 'Sign in to your household.'}
-          </Text>
+          {mode !== 'forgot' && (
+            <Text size="sm" c="dimmed" ta="center">
+              {mode === 'register'
+                ? 'Create your account and household.'
+                : mfaRequired
+                  ? 'Enter the code from your authenticator app.'
+                  : 'Sign in to your household.'}
+            </Text>
+          )}
 
-          {mode === 'register' ? (
+          {mode === 'forgot' ? (
+            <ForgotPassword onBack={() => setMode('login')} />
+          ) : mode === 'register' ? (
             <>
               <TextInput
                 label="Your name"
@@ -160,6 +169,17 @@ export function LoginGate() {
               <Button onClick={() => void submit()} loading={login.isPending} fullWidth>
                 Unlock
               </Button>
+              {canReset && (
+                <Anchor
+                  component="button"
+                  type="button"
+                  size="xs"
+                  ta="center"
+                  onClick={() => { setMode('forgot'); setError('') }}
+                >
+                  Forgot your password?
+                </Anchor>
+              )}
               {canRegister && (
                 <Text size="xs" c="dimmed" ta="center">
                   New here?{' '}
