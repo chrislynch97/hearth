@@ -260,6 +260,13 @@ To see the emails without a relay, set `HEARTH_MAIL_TRANSPORT=log` and Hearth
 prints each message to the server log instead of sending it. That prints live
 tokens, so it's development-only — `HEARTH_PUBLIC=1` refuses to start with it.
 
+Hearth doesn't send mail itself; it hands each message to the relay you name and
+makes no other outbound connection. Any transactional provider's free tier covers
+the volume comfortably — note that some privacy-focused hosts (Tuta, Proton)
+deliberately offer no SMTP, so they can receive Hearth's mail but not send it.
+The step-by-step setup, including why to send from a subdomain, is in
+[docs/deployment.md](docs/deployment.md#email-optional).
+
 ## Tech
 
 TypeScript end-to-end. React + Vite + Mantine (client), Fastify + tRPC (server),

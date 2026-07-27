@@ -429,6 +429,54 @@ the server log instead of sending it, so you can follow the links by hand. That
 means live tokens in the log, so it's development-only — `HEARTH_PUBLIC=1`
 refuses to start with it set.
 
+### Setting it up, start to finish
+
+**1. Pick a relay.** Any transactional provider (Postmark, Resend, Mailgun,
+Brevo, Amazon SES…) — all have free tiers far above what Hearth sends, which is
+a handful of messages a *year*: invites, one confirmation per person, the
+occasional reset.
+
+Note that some privacy-focused mail hosts — **Tuta and Proton among them** —
+don't offer SMTP at all, by design, because it's incompatible with their
+end-to-end encryption. If that's where your mail lives, it can still *receive*
+everything Hearth sends; it just can't be the thing that sends it.
+
+**2. Send from a subdomain.** Use `mail.<your-domain>` (or similar) rather than
+the domain your personal mail already uses:
+
+```env
+HEARTH_MAIL_FROM=Hearth <hearth@mail.example.com>
+```
+
+Your existing mail host keeps the root domain's SPF/DKIM records untouched, the
+relay gets the subdomain, and neither can break the other. It also keeps Hearth's
+sending reputation separate from your own correspondence. Point the subdomain's
+DNS at the provider using the records they give you.
+
+**One address is enough.** `HEARTH_MAIL_FROM` is a single value applied to every
+message — there's no per-flow sender, and splitting one out would need a code
+change. It would buy nothing anyway: deliverability reputation is per *domain*,
+not per mailbox, so `invites@` and `security@` on the same subdomain are
+indistinguishable to a receiving server. Decide only whether replies should go
+anywhere: on most providers the sending address isn't a real mailbox, so either
+name it `noreply@` or set up forwarding for it.
+
+**3. Prove the flows locally first.** Before touching DNS, run with
+`HEARTH_MAIL_TRANSPORT=log` and walk an invite, a confirmation and a reset,
+following the links out of the server log. Catches template and URL problems
+without a relay in the loop.
+
+**4. Turn it on, and check the startup line.** After deploying, the log's first
+few lines should read `[hearth] email via smtp <host>:<port> (starttls), from …,
+links point at …`. If `HEARTH_PUBLIC_URL` is wrong, every link you send goes to
+the wrong host — this is where you notice.
+
+**5. Confirm the owner's address immediately.** Settings → Account → *Send
+confirmation email*. Do this while you're still set up to fix problems: until
+that address is confirmed, `requestPasswordReset` will mail you nothing, and
+you're still on the `reset-owner-password` CLI path — which on a VPS means an
+SSH session. Everything else here can wait; this shouldn't.
+
 ---
 
 ## Data & backups
@@ -564,6 +612,53 @@ table on an unattended box. Hearth sweeps the last hour and raises an
 failures cross `HEARTH_AUTH_ALERT_THRESHOLD` (default 10). Set it to `0` to turn
 the check off — worth doing on a LAN-only instance, where a fat-fingered
 password is the only thing it will ever catch.
+
+### Where to send alerts
+
+`HEARTH_BACKUP_HEARTBEAT_URL` and `HEARTH_ALERT_WEBHOOK` both take any URL,
+because Hearth deliberately implements no notification *policy* — no
+deduplication, no escalation, no quiet hours. Point them at something that
+already does all three. A setup that covers both failure classes:
+
+```env
+HEARTH_BACKUP_HEARTBEAT_URL=https://hc-ping.com/<check-uuid>
+HEARTH_ALERT_WEBHOOK=https://ntfy.sh/<long-random-topic>
+```
+
+The two are not interchangeable, and it's worth knowing why:
+
+- **The heartbeat catches silence.** It's the only thing that notices Hearth
+  stopped running at all — a dead process raises nothing, so the absence of a
+  ping *is* the signal. This needs a service that watches for it
+  ([Healthchecks.io](https://healthchecks.io) or equivalent); a push service
+  cannot do it, by construction.
+- **The webhook catches events.** Backup and off-site failures, failed-login
+  bursts. A push target like [ntfy](https://ntfy.sh) is ideal here — it reaches
+  your phone in seconds and needs no account.
+
+**Two things to know about ntfy specifically.** Posting to `ntfy.sh/<topic>`
+makes the request body the notification text, and Hearth sends JSON — so the
+notification shows the raw `{"event":…,"message":…}` rather than a tidy title.
+Readable, but not pretty. And a topic on the public instance is readable by
+anyone who guesses its name: the payloads carry error text (which can include
+file paths and database errors) and failed-login counts, which is a running
+commentary on your instance and when it's being probed. Use a long random topic
+name at minimum, ntfy's access control or a self-hosted instance ideally.
+
+**Why not email, now that Hearth can send it?** [Email](#email-optional) is for
+messages a *person* asked for and is waiting on. Machine-generated alerts stay
+on the webhook for three reasons:
+
+1. The failures you most need to hear about — disk full, database unreachable,
+   network or relay down — are exactly the ones that stop an email going out.
+   `sendAlert` is best-effort and swallows its own failures, so a lost alert is
+   silent.
+2. Alerts would share a relay credential, quota and sender reputation with
+   password reset. A burst that trips a rate limit or gets the sender flagged
+   would take account recovery down with it, and you'd find out when someone
+   couldn't get back into their account.
+3. Whatever you point the webhook at already does dedup and escalation properly,
+   and can email you itself if that's what you want.
 
 ### Log rotation
 
