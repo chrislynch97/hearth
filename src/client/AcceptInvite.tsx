@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Card, Center, Group, PasswordInput, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Button, PasswordInput, Text, TextInput } from '@mantine/core'
 import { trpc } from './trpc'
-import { hearthTokens } from './theme'
+import { AuthCard } from './AuthCard'
 import { MIN_PASSWORD_LENGTH, validatePassword } from '../shared/password-policy'
 
 /** Shown at /invite#<token> — lets an invitee create their account and join. */
@@ -39,56 +39,41 @@ export function AcceptInvite({ token }: { token: string }) {
   }
 
   return (
-    <Center h="100vh">
-      <Card withBorder padding="xl" radius="lg" w={380}>
-        <Stack gap="md">
-          <Group gap={10} justify="center">
-            <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
-              <polyline points="8,25 24,10 40,25" stroke={hearthTokens.brand.moss} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M14 25 V40 H34 V25" stroke={hearthTokens.brand.moss} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx="24" cy="32" r="3.8" fill={hearthTokens.brand.apricot} />
-            </svg>
-            <Text fw={500} fz={22} style={{ fontFamily: 'var(--mantine-font-family-headings)' }}>
-              Hearth
-            </Text>
-          </Group>
-
-          {checking ? (
-            <Text size="sm" c="dimmed" ta="center">
-              Checking your invitation…
-            </Text>
-          ) : !info.data ? (
-            <Alert color="red" title="Invitation not valid">
-              This invite link is invalid, already used, or expired. Ask whoever invited you for a fresh one.
+    <AuthCard>
+      {checking ? (
+        <Text size="sm" c="dimmed" ta="center">
+          Checking your invitation…
+        </Text>
+      ) : !info.data ? (
+        <Alert color="red" title="Invitation not valid">
+          This invite link is invalid, already used, or expired. Ask whoever invited you for a fresh one.
+        </Alert>
+      ) : (
+        <>
+          <Text size="sm" c="dimmed" ta="center">
+            You&apos;ve been invited to join <b>{info.data.householdName}</b> as {info.data.role}. Create an
+            account to continue.
+          </Text>
+          <TextInput label="Your name" value={displayName} onChange={(e) => setDisplayName(e.currentTarget.value)} autoFocus />
+          <TextInput label="Username" value={username} onChange={(e) => setUsername(e.currentTarget.value)} autoComplete="username" />
+          <PasswordInput
+            label="Password"
+            description={`At least ${MIN_PASSWORD_LENGTH} characters`}
+            value={password}
+            onChange={(e) => setPassword(e.currentTarget.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void submit()}
+            autoComplete="new-password"
+          />
+          {error && (
+            <Alert color="red" title="Error">
+              {error}
             </Alert>
-          ) : (
-            <>
-              <Text size="sm" c="dimmed" ta="center">
-                You&apos;ve been invited to join <b>{info.data.householdName}</b> as {info.data.role}. Create an
-                account to continue.
-              </Text>
-              <TextInput label="Your name" value={displayName} onChange={(e) => setDisplayName(e.currentTarget.value)} autoFocus />
-              <TextInput label="Username" value={username} onChange={(e) => setUsername(e.currentTarget.value)} autoComplete="username" />
-              <PasswordInput
-                label="Password"
-                description={`At least ${MIN_PASSWORD_LENGTH} characters`}
-                value={password}
-                onChange={(e) => setPassword(e.currentTarget.value)}
-                onKeyDown={(e) => e.key === 'Enter' && void submit()}
-                autoComplete="new-password"
-              />
-              {error && (
-                <Alert color="red" title="Error">
-                  {error}
-                </Alert>
-              )}
-              <Button onClick={() => void submit()} loading={accept.isPending} fullWidth>
-                Join {info.data.householdName}
-              </Button>
-            </>
           )}
-        </Stack>
-      </Card>
-    </Center>
+          <Button onClick={() => void submit()} loading={accept.isPending} fullWidth>
+            Join {info.data.householdName}
+          </Button>
+        </>
+      )}
+    </AuthCard>
   )
 }
