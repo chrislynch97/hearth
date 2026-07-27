@@ -25,6 +25,28 @@ reviews client code closely, so match them exactly.
 - Prefer arrow functions for handlers, callbacks, and other local functions,
   e.g. `const submit = async () => { … };` — not `function submit() { … }`.
 
+## Charts
+
+Two libraries, and the choice is about size, not taste:
+
+- **`@microcharts/react`** for anything word-sized — a bar in a table cell, a
+  sparkline beside a figure, a signed change next to a number. Zero-dependency
+  static SVG, no axes, no tooltips. Import per chart
+  (`@microcharts/react/sparkline`), never the barrel, and add its stylesheet to
+  `main.tsx` if the chart has one.
+- **`@mantine/charts`** (recharts) for a chart that carries its own axes,
+  legend and tooltips — the net-worth trend, income history, payslip history.
+  It's the app's heaviest dependency, so keep it behind a `React.lazy` boundary
+  (see `pages/IncomeTrendChart.tsx`).
+
+Don't hand-roll a bar or sparkline out of `<Box>` and percentage widths;
+microcharts covers those and describes itself to assistive tech.
+
+Colours come from `microcharts.css`, which maps the `--mc-*` tokens onto the
+Hearth palette. It's deliberately unlayered so it beats microcharts' own
+`@layer` defaults — including its `prefers-color-scheme` block, which would
+otherwise ignore a scheme the user forced in Appearance settings.
+
 ## Routing
 
 Routes are file-based (TanStack Router). `src/client/routes/` is the source of
