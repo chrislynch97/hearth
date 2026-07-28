@@ -2,50 +2,16 @@ import { z } from 'zod'
 import { desc, eq, isNull, max } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../../trpc/trpc'
-import { assertMember, scopeWhere } from '../../trpc/tenant'
+import { scopeWhere } from '../../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../../trpc/concurrency'
 import { recordAudit } from '../../trpc/audit'
-import { spendTransaction, pot, category, expense, reconciliationBatch } from '../../db/schema'
+import { spendTransaction, reconciliationBatch } from '../../db/schema'
 import { newId } from '../../../shared/ids'
 import { suggestPot } from './suggest'
-import type { DB } from '../../db/client'
+import { validateExpense, validateOwnerAndPot } from './validate'
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
-}
-
-async function validateOwnerAndPot(
-  db: DB,
-  householdId: string,
-  ownerId: string,
-  potId: string | null | undefined,
-  categoryId: string | null | undefined,
-): Promise<void> {
-  await assertMember(db, householdId, ownerId)
-  if (potId) {
-    const [p] = await db.select().from(pot).where(scopeWhere(householdId, pot.householdId, eq(pot.id, potId)))
-    if (!p) {
-      throw new TRPCError({ code: 'BAD_REQUEST', message: 'potId does not refer to an existing pot' })
-    }
-  }
-  if (categoryId) {
-    const [c] = await db.select().from(category).where(scopeWhere(householdId, category.householdId, eq(category.id, categoryId)))
-    if (!c) {
-      throw new TRPCError({ code: 'BAD_REQUEST', message: 'categoryId does not refer to an existing category' })
-    }
-  }
-}
-
-async function validateExpense(
-  db: DB,
-  householdId: string,
-  expenseId: string | null | undefined,
-): Promise<void> {
-  if (!expenseId) return
-  const [e] = await db.select().from(expense).where(scopeWhere(householdId, expense.householdId, eq(expense.id, expenseId)))
-  if (!e) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'expenseId does not refer to an existing bill' })
-  }
 }
 
 export const spendsRouter = router({
