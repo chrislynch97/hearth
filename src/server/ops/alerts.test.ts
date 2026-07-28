@@ -68,6 +68,28 @@ describe('pingHeartbeat / sendAlert', () => {
       message: 'nope',
       detail: { error: 'disk full' },
     })
+    expect(init.headers).toMatchObject({
+      'content-type': 'application/json',
+      'x-title': 'Hearth: backup_failed',
+      'x-priority': 'high',
+    })
+  })
+
+  it('sends default priority for events that are not a failure', async () => {
+    await sendAlert({ event: 'auth_failures', message: 'm' }, {
+      HEARTH_ALERT_WEBHOOK: 'https://hooks.example/x',
+    } as NodeJS.ProcessEnv)
+    expect(fetchMock.mock.calls[0]![1].headers).toMatchObject({
+      'x-title': 'Hearth: auth_failures',
+      'x-priority': 'default',
+    })
+  })
+
+  it('keeps the title header printable ASCII', async () => {
+    await sendAlert({ event: 'wéird\nevent', message: 'm' }, {
+      HEARTH_ALERT_WEBHOOK: 'https://hooks.example/x',
+    } as NodeJS.ProcessEnv)
+    expect(fetchMock.mock.calls[0]![1].headers['x-title']).toBe('Hearth: w ird event')
   })
 
   it('swallows a non-2xx webhook response', async () => {
