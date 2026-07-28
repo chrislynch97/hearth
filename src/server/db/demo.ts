@@ -713,7 +713,7 @@ export async function seedDemo(db: DB, opts: DemoOptions = {}): Promise<Record<s
   const data = buildDemoData(opts)
 
   // Delete children-first (reverse FK order), then insert parents-first, all in
-  // one atomic transaction — matches the pattern in routers/data.ts.
+  // one atomic transaction — matches the pattern in features/admin/data.router.ts.
   const counts: Record<string, number> = {}
   const INSERT_CHUNK = 200
   await db.transaction(async (tx) => {
