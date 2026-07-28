@@ -1,3 +1,8 @@
+import { eq, isNull } from 'drizzle-orm'
+import { scopeWhere } from '../../trpc/tenant'
+import { recordAudit, type AuditCtx } from '../../trpc/audit'
+import { expense, standingOrderAck } from '../../db/schema'
+import { newId } from '../../../shared/ids'
 import { normaliseToMonthly, roundMinor, type Recurrence } from '../../../shared/recurrence'
 
 /** A bill, reduced to what the standing-order requirement cares about. Only
@@ -56,6 +61,52 @@ export function potManualMonthly(bills: StandingOrderBillInput[], potId: string)
     .filter((b) => b.active && b.funding === 'pot_manual' && b.potId === potId)
     .reduce((acc, b) => acc + normaliseToMonthly(b.amount, b.recurrence), 0)
   return roundMinor(sum)
+}
+
+/** The pot's current monthly `pot_manual` requirement — the standing order it must
+ *  cover (issue #69). Read straight from the DB so the caller gets the live figure
+ *  before or after applying an edit. */
+export async function potManualMonthlyFromDb(ctx: AuditCtx, potId: string): Promise<number> {
+  const rows = await ctx.db
+    .select({ amount: expense.amount, recurrence: expense.recurrence })
+    .from(expense)
+    .where(
+      scopeWhere(
+        ctx.householdId,
+        expense.householdId,
+        isNull(expense.archivedAt),
+        eq(expense.active, 1),
+        eq(expense.funding, 'pot_manual'),
+        eq(expense.potId, potId),
+      ),
+    )
+  const sum = rows.reduce((acc, r) => acc + normaliseToMonthly(r.amount ?? 0, r.recurrence as Recurrence), 0)
+  return roundMinor(sum)
+}
+
+/** Capture a standing-order baseline the first time a pot's `pot_manual` bill price
+ *  changes (issue #69), so the alert has a "was" to compare the new requirement
+ *  against. Mirrors the price-history seed: record the pre-change requirement once,
+ *  then leave it — later changes in the same sitting compare against this baseline
+ *  (one alert per pot, not one per bill). No-op if the pot already has an ack. Pass
+ *  the requirement computed *before* the edit was applied. */
+export async function seedStandingOrderBaseline(
+  ctx: AuditCtx,
+  potId: string,
+  priorMonthly: number,
+  at: Date,
+): Promise<void> {
+  const [existing] = await ctx.db
+    .select({ id: standingOrderAck.id })
+    .from(standingOrderAck)
+    .where(scopeWhere(ctx.householdId, standingOrderAck.householdId, eq(standingOrderAck.potId, potId)))
+  if (existing) return
+
+  const [row] = await ctx.db
+    .insert(standingOrderAck)
+    .values({ id: newId(), householdId: ctx.householdId, potId, amount: priorMonthly, createdAt: at, updatedAt: at })
+    .returning()
+  if (row) recordAudit(ctx, { entityType: 'standing_order_ack', entityId: row.id, action: 'create', after: row })
 }
 
 /** The bill's amount as it stood at the acknowledgement time. `history` is this

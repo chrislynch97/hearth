@@ -4,13 +4,14 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../../trpc/trpc'
 import { scopeWhere } from '../../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../../trpc/concurrency'
-import { recordAudit, type AuditCtx } from '../../trpc/audit'
-import { expense, billPrice, category, pot, standingOrderAck } from '../../db/schema'
+import { recordAudit } from '../../trpc/audit'
+import { expense, category, pot } from '../../db/schema'
 import type { Expense } from '../../db/schema'
 import { newId } from '../../../shared/ids'
 import { todayIso } from '../../../shared/dates'
-import { normaliseToMonthly, roundMinor, type Recurrence } from '../../../shared/recurrence'
 import type { DB } from '../../db/client'
+import { recordBillPriceChange } from './billPrices'
+import { potManualMonthlyFromDb, seedStandingOrderBaseline } from './standingOrders'
 
 const priceSourceEnum = z.enum(['manual', 'spend_prompt'])
 
@@ -76,100 +77,6 @@ async function loadExpense(db: DB, householdId: string, id: string): Promise<Exp
   const [row] = await db.select().from(expense).where(scopeWhere(householdId, expense.householdId, eq(expense.id, id)))
   if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Bill not found' })
   return row
-}
-
-/** Record a bill's price change as effective-dated history (issue #68). Seeds a
- *  starting row at the old price the first time a bill gets history, so a change
- *  never looks like it came from nowhere. Call only when the amount changed. */
-async function recordBillPriceChange(
-  ctx: AuditCtx,
-  before: Expense,
-  newAmount: number,
-  source: 'manual' | 'spend_prompt',
-  effectiveDate: string,
-): Promise<void> {
-  const now = new Date()
-  const existing = await ctx.db
-    .select({ id: billPrice.id })
-    .from(billPrice)
-    .where(scopeWhere(ctx.householdId, billPrice.householdId, eq(billPrice.expenseId, before.id)))
-    .limit(1)
-
-  const rows: (typeof billPrice.$inferInsert)[] = []
-  if (existing.length === 0 && before.amount != null) {
-    // Anchor the seed to the bill's creation, but never after the change itself
-    // (a backdated spend can predate the bill's row) so it always reads first.
-    const created = before.createdAt.toISOString().slice(0, 10)
-    rows.push({
-      id: newId(),
-      householdId: ctx.householdId,
-      expenseId: before.id,
-      effectiveDate: created < effectiveDate ? created : effectiveDate,
-      amount: before.amount,
-      note: 'Starting price',
-      source: 'manual',
-      createdAt: now,
-      updatedAt: now,
-    })
-  }
-  rows.push({
-    id: newId(),
-    householdId: ctx.householdId,
-    expenseId: before.id,
-    effectiveDate,
-    amount: newAmount,
-    note: null,
-    source,
-    // 1ms after any seed so a same-day seed still reads before its change.
-    createdAt: new Date(now.getTime() + 1),
-    updatedAt: now,
-  })
-
-  const inserted = await ctx.db.insert(billPrice).values(rows).returning()
-  for (const row of inserted) {
-    recordAudit(ctx, { entityType: 'bill_price', entityId: row.id, action: 'create', after: row })
-  }
-}
-
-/** The pot's current monthly `pot_manual` requirement — the standing order it must
- *  cover (issue #69). Read straight from the DB so the caller gets the live figure
- *  before or after applying an edit. */
-async function potManualMonthlyFromDb(ctx: AuditCtx, potId: string): Promise<number> {
-  const rows = await ctx.db
-    .select({ amount: expense.amount, recurrence: expense.recurrence })
-    .from(expense)
-    .where(
-      scopeWhere(
-        ctx.householdId,
-        expense.householdId,
-        isNull(expense.archivedAt),
-        eq(expense.active, 1),
-        eq(expense.funding, 'pot_manual'),
-        eq(expense.potId, potId),
-      ),
-    )
-  const sum = rows.reduce((acc, r) => acc + normaliseToMonthly(r.amount ?? 0, r.recurrence as Recurrence), 0)
-  return roundMinor(sum)
-}
-
-/** Capture a standing-order baseline the first time a pot's `pot_manual` bill price
- *  changes (issue #69), so the alert has a "was" to compare the new requirement
- *  against. Mirrors the price-history seed: record the pre-change requirement once,
- *  then leave it — later changes in the same sitting compare against this baseline
- *  (one alert per pot, not one per bill). No-op if the pot already has an ack. Pass
- *  the requirement computed *before* the edit was applied. */
-async function seedStandingOrderBaseline(ctx: AuditCtx, potId: string, priorMonthly: number, at: Date): Promise<void> {
-  const [existing] = await ctx.db
-    .select({ id: standingOrderAck.id })
-    .from(standingOrderAck)
-    .where(scopeWhere(ctx.householdId, standingOrderAck.householdId, eq(standingOrderAck.potId, potId)))
-  if (existing) return
-
-  const [row] = await ctx.db
-    .insert(standingOrderAck)
-    .values({ id: newId(), householdId: ctx.householdId, potId, amount: priorMonthly, createdAt: at, updatedAt: at })
-    .returning()
-  if (row) recordAudit(ctx, { entityType: 'standing_order_ack', entityId: row.id, action: 'create', after: row })
 }
 
 export const expensesRouter = router({
