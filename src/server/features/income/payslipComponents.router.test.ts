@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { makeTestDb } from '../db/testdb'
-import { ensureSeed } from '../db/seed'
-import { appRouter } from '../trpc/router'
+import { makeTestDb } from '../../db/testdb'
+import { ensureSeed } from '../../db/seed'
+import { appRouter } from '../../trpc/router'
 
 describe('payslipComponents router', () => {
   it('creates components per person with incrementing sortOrder', async () => {

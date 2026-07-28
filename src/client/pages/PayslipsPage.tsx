@@ -29,7 +29,7 @@ import { useMoney, useFormatDate } from '../useMoney'
 import type { MoneyFormat } from '../useMoney'
 import { hearthTokens, chartXAxisProps } from '../theme'
 import type { Member, PayslipComponentType } from '../../server/db/schema'
-import type { PayslipWithLines } from '../../server/routers/payslips'
+import type { PayslipWithLines } from '../../server/features/income/payslips.router'
 import { normalizeComponentDraft } from './payslipDraft'
 import type { ComponentKind } from './payslipDraft'
 

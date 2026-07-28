@@ -1,8 +1,8 @@
 import { isNull } from 'drizzle-orm'
-import { router, publicProcedure } from '../trpc/trpc'
-import { scopeWhere } from '../trpc/tenant'
-import { member } from '../db/schema'
-import { computeIncomeByMember } from '../income/service'
+import { router, publicProcedure } from '../../trpc/trpc'
+import { scopeWhere } from '../../trpc/tenant'
+import { member } from '../../db/schema'
+import { computeIncomeByMember } from './service'
 
 export const incomeRouter = router({
   /** Per-member monthly income (salary + net income sources) plus the household total.

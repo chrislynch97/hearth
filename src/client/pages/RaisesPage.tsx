@@ -23,7 +23,7 @@ import { useMoney, useFormatDate, formatSignedPercent } from '../useMoney'
 import type { MoneyFormat } from '../useMoney'
 import { hearthTokens, chartXAxisProps } from '../theme'
 import type { Member } from '../../server/db/schema'
-import type { RaiseWithIncrease } from '../../server/routers/raises'
+import type { RaiseWithIncrease } from '../../server/features/income/raises.router'
 
 // ---------------------------------------------------------------------------
 // Salary-over-time chart

@@ -1,14 +1,14 @@
 import { z } from 'zod'
 import { asc, eq } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
-import { router, publicProcedure } from '../trpc/trpc'
-import { assertPerson, scopeWhere } from '../trpc/tenant'
-import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../trpc/concurrency'
-import { recordAudit } from '../trpc/audit'
-import { raise } from '../db/schema'
-import type { Raise } from '../db/schema'
-import { newId } from '../../shared/ids'
-import { percentIncrease } from '../income/raises'
+import { router, publicProcedure } from '../../trpc/trpc'
+import { assertPerson, scopeWhere } from '../../trpc/tenant'
+import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../../trpc/concurrency'
+import { recordAudit } from '../../trpc/audit'
+import { raise } from '../../db/schema'
+import type { Raise } from '../../db/schema'
+import { newId } from '../../../shared/ids'
+import { percentIncrease } from './raises'
 
 export interface RaiseWithIncrease extends Raise {
   percentIncrease: number | null

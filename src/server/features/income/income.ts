@@ -2,8 +2,8 @@
  *  budgeting consumes. Amounts are integer minor units; dates are `YYYY-MM-DD`
  *  and compare lexicographically. Inputs are normalised summaries so this layer
  *  never touches the DB. */
-import { normaliseToMonthly, roundMinor, type Recurrence } from '../../shared/recurrence'
-import { subtractMonths } from '../../shared/dates'
+import { normaliseToMonthly, roundMinor, type Recurrence } from '../../../shared/recurrence'
+import { subtractMonths } from '../../../shared/dates'
 
 export type IncomeBasis = 'regular_net' | 'latest_payslip' | 'rolling_12m'
 

@@ -1,6 +1,6 @@
 /** Pure payslip arithmetic. All amounts are integer minor units. See spec §4
  *  (PayslipLine computed fields). */
-import { roundMinor } from '../../shared/recurrence'
+import { roundMinor } from '../../../shared/recurrence'
 
 export type ComponentKind = 'earning' | 'deduction' | 'employer_info'
 

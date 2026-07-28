@@ -2,8 +2,8 @@
  *  computes per-member monthly income via the pure logic in ./income. Shared by
  *  the income router and the funding plan so `monthlyIncome` has one definition. */
 import { eq, isNull } from 'drizzle-orm'
-import type { DB } from '../db/client'
-import { scopeWhere } from '../trpc/tenant'
+import type { DB } from '../../db/client'
+import { scopeWhere } from '../../trpc/tenant'
 import {
   household,
   incomeSource,
@@ -11,9 +11,9 @@ import {
   payslip,
   payslipComponentType,
   payslipLine,
-} from '../db/schema'
-import { todayIso } from '../../shared/dates'
-import type { Recurrence } from '../../shared/recurrence'
+} from '../../db/schema'
+import { todayIso } from '../../../shared/dates'
+import type { Recurrence } from '../../../shared/recurrence'
 import { computePayslipTotals, type ComponentKind } from './payslip'
 import {
   netIncomeSourceMonthly,
