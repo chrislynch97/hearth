@@ -15,7 +15,7 @@ import {
 } from "@mantine/core";
 import { useState } from "react";
 import { formatMoney, toMinor } from "@shared/money";
-import type { AccountWithValue } from "../../../../server/routers/accounts";
+import type { AccountWithValue } from "../../../../server/features/networth/accounts.router";
 import {
     formatSignedPercent,
     type MoneyFormat,

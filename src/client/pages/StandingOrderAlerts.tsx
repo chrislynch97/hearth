@@ -2,7 +2,7 @@ import { Alert, Button, Group, Stack, Text } from "@mantine/core";
 import { trpc } from "../trpc";
 import { formatMoney } from "../../shared/money";
 import { useMoney, type MoneyFormat } from "../useMoney";
-import type { StandingOrderContributor } from "../../server/plan/standingOrders";
+import type { StandingOrderContributor } from "../../server/features/budget/standingOrders";
 
 /** A signed monthly delta as plain text, e.g. `+£2/mo` or `−£5/mo`. */
 const deltaLabel = (minor: number, money: MoneyFormat): string =>

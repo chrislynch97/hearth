@@ -1,0 +1,296 @@
+import { z } from 'zod'
+import { asc, eq, max } from 'drizzle-orm'
+import { TRPCError } from '@trpc/server'
+import { router, publicProcedure } from '../../trpc/trpc'
+import { assertMember, scopeWhere } from '../../trpc/tenant'
+import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../../trpc/concurrency'
+import { recordAudit } from '../../trpc/audit'
+import { account, accountBalance } from '../../db/schema'
+import type { Account, AccountBalance } from '../../db/schema'
+import { newId } from '../../../shared/ids'
+import { netWorthAsOf, netWorthTimeline } from './networth'
+import type { AccountKind } from './networth'
+import type { DB } from '../../db/client'
+
+const KIND = z.enum(['asset', 'liability'])
+
+async function getAccount(db: DB, householdId: string, id: string): Promise<Account> {
+  const [row] = await db.select().from(account).where(scopeWhere(householdId, account.householdId, eq(account.id, id)))
+  if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found' })
+  return row
+}
+
+export interface AccountWithValue extends Account {
+  /** Latest balance on or before today, or null if none recorded. */
+  currentValue: number | null
+  /** Date of that latest balance, or null. */
+  asOfDate: string | null
+}
+
+/** Today as YYYY-MM-DD (server-local). Net worth is a "day", not a moment. */
+function today(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+export const accountsRouter = router({
+  /** Non-archived accounts with their current (latest) balance attached. */
+  list: publicProcedure.query(async ({ ctx }) => {
+    const accounts = await ctx.db
+      .select()
+      .from(account)
+      .where(scopeWhere(ctx.householdId, account.householdId))
+      .orderBy(asc(account.sortOrder), asc(account.name))
+    const balances = await ctx.db
+      .select()
+      .from(accountBalance)
+      .where(scopeWhere(ctx.householdId, accountBalance.householdId))
+    const asOf = today()
+
+    return accounts
+      .filter((a) => a.archivedAt === null)
+      .map((a): AccountWithValue => {
+        const own = balances
+          .filter((b) => b.accountId === a.id && b.asOfDate <= asOf)
+          .sort((x, y) => y.asOfDate.localeCompare(x.asOfDate))
+        const latest = own[0]
+        return { ...a, currentValue: latest?.value ?? null, asOfDate: latest?.asOfDate ?? null }
+      })
+  }),
+
+  /** Net-worth headline + per-account current values + the trend series. */
+  summary: publicProcedure.query(async ({ ctx }) => {
+    const accounts = (
+      await ctx.db.select().from(account).where(scopeWhere(ctx.householdId, account.householdId))
+    ).filter((a) => a.archivedAt === null)
+    const balances = await ctx.db
+      .select()
+      .from(accountBalance)
+      .where(scopeWhere(ctx.householdId, accountBalance.householdId))
+    const asOf = today()
+
+    const kinded = accounts.map((a) => ({ id: a.id, kind: a.kind as AccountKind }))
+    const point = netWorthAsOf(kinded, balances, asOf)
+    const timeline = netWorthTimeline(kinded, balances)
+
+    return {
+      asOf,
+      assets: point.assets,
+      liabilities: point.liabilities,
+      netWorth: point.netWorth,
+      timeline,
+    }
+  }),
+
+  create: publicProcedure
+    .input(
+      z.object({
+        name: z.string().min(1),
+        kind: KIND,
+        subtype: z.string().nullable().optional(),
+        ownerId: z.string(),
+        institution: z.string().nullable().optional(),
+        note: z.string().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertMember(ctx.db, ctx.householdId, input.ownerId)
+      const now = new Date()
+      const [result] = await ctx.db
+        .select({ maxOrder: max(account.sortOrder) })
+        .from(account)
+        .where(scopeWhere(ctx.householdId, account.householdId))
+      const id = newId()
+      await ctx.db.insert(account).values({
+        id,
+        householdId: ctx.householdId,
+        name: input.name,
+        kind: input.kind,
+        subtype: input.subtype ?? null,
+        ownerId: input.ownerId,
+        institution: input.institution ?? null,
+        note: input.note ?? null,
+        sortOrder: (result?.maxOrder ?? 0) + 1,
+        createdAt: now,
+        updatedAt: now,
+      })
+      const created = await getAccount(ctx.db, ctx.householdId, id)
+      recordAudit(ctx, { entityType: 'account', entityId: id, action: 'create', after: created })
+      return created
+    }),
+
+  update: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        expectedUpdatedAt: expectedUpdatedAtInput,
+        name: z.string().min(1).optional(),
+        kind: KIND.optional(),
+        subtype: z.string().nullable().optional(),
+        ownerId: z.string().optional(),
+        institution: z.string().nullable().optional(),
+        note: z.string().nullable().optional(),
+        sortOrder: z.number().int().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, expectedUpdatedAt, ownerId, ...rest } = input
+      if (ownerId !== undefined) await assertMember(ctx.db, ctx.householdId, ownerId)
+      const setFields: Record<string, unknown> = { ...rest, updatedAt: new Date() }
+      if (ownerId !== undefined) setFields['ownerId'] = ownerId
+      const before = await getAccount(ctx.db, ctx.householdId, id)
+      const [written] = await ctx.db
+        .update(account)
+        .set(setFields)
+        .where(scopeWhere(ctx.householdId, account.householdId, eq(account.id, id), versionGuard(account.updatedAt, expectedUpdatedAt)))
+        .returning({ id: account.id })
+      if (!written) {
+        const [current] = await ctx.db
+          .select({ id: account.id })
+          .from(account)
+          .where(scopeWhere(ctx.householdId, account.householdId, eq(account.id, id)))
+        throwStaleWrite('Account', current != null)
+      }
+      const after = await getAccount(ctx.db, ctx.householdId, id)
+      recordAudit(ctx, { entityType: 'account', entityId: id, action: 'update', before, after })
+      return after
+    }),
+
+  archive: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const target = await getAccount(ctx.db, ctx.householdId, input.id)
+      const now = new Date()
+      await ctx.db
+        .update(account)
+        .set({ archivedAt: now, updatedAt: now })
+        .where(scopeWhere(ctx.householdId, account.householdId, eq(account.id, input.id)))
+      recordAudit(ctx, { entityType: 'account', entityId: input.id, action: 'archive', before: target })
+    }),
+
+  /** Hard-delete an account and its balances (cascade). */
+  remove: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const target = await getAccount(ctx.db, ctx.householdId, input.id)
+      await ctx.db.delete(account).where(scopeWhere(ctx.householdId, account.householdId, eq(account.id, input.id)))
+      recordAudit(ctx, { entityType: 'account', entityId: input.id, action: 'delete', before: target })
+    }),
+
+  // -- Balances ------------------------------------------------------------
+
+  /** One account's balance history, oldest-first. */
+  balances: publicProcedure
+    .input(z.object({ accountId: z.string() }))
+    .query(async ({ ctx, input }): Promise<AccountBalance[]> => {
+      return ctx.db
+        .select()
+        .from(accountBalance)
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.accountId, input.accountId)))
+        .orderBy(asc(accountBalance.asOfDate))
+    }),
+
+  /** Add (or overwrite) the balance snapshot for an account on a given date. */
+  addBalance: publicProcedure
+    .input(
+      z.object({
+        accountId: z.string(),
+        asOfDate: z.string(),
+        value: z.number().int(),
+        note: z.string().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await getAccount(ctx.db, ctx.householdId, input.accountId)
+      const now = new Date()
+
+      // One snapshot per (account, date): update in place if the date already exists.
+      const [match] = await ctx.db
+        .select()
+        .from(accountBalance)
+        .where(
+          scopeWhere(
+            ctx.householdId,
+            accountBalance.householdId,
+            eq(accountBalance.accountId, input.accountId),
+            eq(accountBalance.asOfDate, input.asOfDate),
+          ),
+        )
+      if (match) {
+        await ctx.db
+          .update(accountBalance)
+          .set({ value: input.value, note: input.note ?? null, updatedAt: now })
+          .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, match.id)))
+        const [updated] = await ctx.db
+          .select()
+          .from(accountBalance)
+          .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, match.id)))
+        recordAudit(ctx, { entityType: 'accountBalance', entityId: match.id, action: 'update', before: match, after: updated })
+        return updated!
+      }
+
+      const id = newId()
+      await ctx.db.insert(accountBalance).values({
+        id,
+        householdId: ctx.householdId,
+        accountId: input.accountId,
+        asOfDate: input.asOfDate,
+        value: input.value,
+        note: input.note ?? null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      const [inserted] = await ctx.db
+        .select()
+        .from(accountBalance)
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, id)))
+      recordAudit(ctx, { entityType: 'accountBalance', entityId: id, action: 'create', after: inserted })
+      return inserted!
+    }),
+
+  updateBalance: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        expectedUpdatedAt: expectedUpdatedAtInput,
+        asOfDate: z.string().optional(),
+        value: z.number().int().optional(),
+        note: z.string().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, expectedUpdatedAt, ...rest } = input
+      const [before] = await ctx.db
+        .select()
+        .from(accountBalance)
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, id)))
+      const [updated] = await ctx.db
+        .update(accountBalance)
+        .set({ ...rest, updatedAt: new Date() })
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, id), versionGuard(accountBalance.updatedAt, expectedUpdatedAt)))
+        .returning()
+      if (updated) {
+        recordAudit(ctx, { entityType: 'accountBalance', entityId: id, action: 'update', before, after: updated })
+        return updated
+      }
+
+      const [current] = await ctx.db
+        .select({ id: accountBalance.id })
+        .from(accountBalance)
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, id)))
+      throwStaleWrite('Balance', current != null)
+    }),
+
+  removeBalance: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const [target] = await ctx.db
+        .select()
+        .from(accountBalance)
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, input.id)))
+      if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Balance not found' })
+      await ctx.db
+        .delete(accountBalance)
+        .where(scopeWhere(ctx.householdId, accountBalance.householdId, eq(accountBalance.id, input.id)))
+      recordAudit(ctx, { entityType: 'accountBalance', entityId: input.id, action: 'delete', before: target })
+    }),
+})

@@ -16,7 +16,7 @@ import { trpc } from "@/trpc";
 import { useMoney, formatSignedPercent, type MoneyFormat } from "@/useMoney";
 import { formatMoney } from "@shared/money";
 import { sortBillReview, type BillReviewSort } from "@shared/billReview";
-import type { BillReviewRow } from "../../server/plan/billReview";
+import type { BillReviewRow } from "../../server/features/budget/billReview";
 
 const SORT_OPTIONS = [
     { value: "annual", label: "By £/yr" },

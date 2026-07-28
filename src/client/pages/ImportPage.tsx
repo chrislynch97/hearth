@@ -18,7 +18,7 @@ import {
 import { trpc } from '../trpc'
 import { formatMoney } from '../../shared/money'
 import { useMoney, useFormatDate } from '../useMoney'
-import type { PreviewRow } from '../../server/routers/imports'
+import type { PreviewRow } from '../../server/features/spending/imports.router'
 
 const STATUS_COLOR: Record<string, string> = {
   new: 'moss',
