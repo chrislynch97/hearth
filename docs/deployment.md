@@ -330,7 +330,7 @@ name this file rather than the default one.
 | `CLIENT_DIR` | `../client` (source) | Directory of the built UI. Set to `./dist/client` for a non-Docker production run. The Docker image sets this for you. |
 | `HEARTH_SECURE_COOKIES` | unset | Set to `1` to force `Secure` session cookies when behind a reverse proxy that terminates TLS but doesn't forward `x-forwarded-proto: https`. |
 | `HEARTH_TRUST_PROXY` | unset | Set to the **number of proxy hops** in front of Hearth (a single reverse proxy / tunnel = `1`) so Fastify reads the real client IP from `X-Forwarded-For` and the login rate limiter throttles per-client. Set it to `0` to declare that nothing is proxying Hearth. Do **not** set it to `true`/all — trusting the whole chain lets a client spoof `X-Forwarded-For` and dodge the limiter. Your proxy must **overwrite** (not append to) `X-Forwarded-For`. Also accepts a comma-separated list of trusted proxy IPs/CIDRs. **Required when `HEARTH_PUBLIC=1`** — see the next row. |
-| `HEARTH_PUBLIC` | unset | Set to `1` on an **internet-facing** instance. Hearth checks its own configuration at startup and, with this set, **refuses to start** rather than come up misconfigured: `HEARTH_ALLOW_OPEN=1` on a non-loopback bind, open registration with no owner password, or `HEARTH_TRUST_PROXY` left unset. Left unset (a home LAN) the first two only log a warning and the third isn't checked at all. `NODE_ENV` can't stand in for this: the Docker image sets it to `production` for every deployment, LAN ones included. |
+| `HEARTH_PUBLIC` | unset | Set to `1` on an **internet-facing** instance. Hearth checks its own configuration at startup and, with this set, **refuses to start** rather than come up misconfigured: `HEARTH_ALLOW_OPEN=1` on a non-loopback bind, open registration with no owner password, or `HEARTH_TRUST_PROXY` left unset. Left unset (a home LAN) the first two only log a warning and the third isn't checked at all. It additionally makes an email address **compulsory on every new account** — see [Account recovery](#account-recovery). `NODE_ENV` can't stand in for this: the Docker image sets it to `production` for every deployment, LAN ones included. |
 | `HEARTH_ALLOW_OPEN` | unset | Set to `1` to allow running **open** (no owner password) while bound to a non-loopback address — a trusted home LAN. Without it, an open instance on `0.0.0.0` serves only the login/first-run endpoints and refuses budgeting data, so an accidental public deploy can't hand anonymous callers owner access. Never set it on a public host; set an owner password instead. |
 | `HEARTH_BACKUP_KEEP` | `14` | How many local snapshots to keep; older ones are pruned after each successful backup. Minimum `1` (a `0` is clamped up rather than pruning the backup just written); a non-integer value is ignored with a warning and the default kept. |
 | `HEARTH_BACKUP_LOCAL_DIR` | unset | Absolute path for the **local** snapshots, overriding the default `<data>/backups`. Use it to land backups on a different volume from the database without setting up the off-site machinery. Not to be confused with `HEARTH_BACKUP_DIR` below, which is the *off-site* `directory` target. |
@@ -476,6 +476,42 @@ confirmation email*. Do this while you're still set up to fix problems: until
 that address is confirmed, `requestPasswordReset` will mail you nothing, and
 you're still on the `reset-owner-password` CLI path — which on a VPS means an
 SSH session. Everything else here can wait; this shouldn't.
+
+---
+
+## Account recovery
+
+Who can get an account back into someone's hands, when they forget the password:
+
+| Account | Route |
+|---|---|
+| Instance owner | `reset-owner-password` on the box (shell access) |
+| Member of exactly one household | A household admin, via Settings → Households & access |
+| Member of more than one household | A confirmed email address, and nothing else |
+
+That last row is why `HEARTH_PUBLIC=1` makes an address compulsory. An admin
+reset deliberately refuses a person who belongs to more than one household —
+resetting lets the resetter *learn* the password, which would hand one
+household's admin the keys to another. So for those accounts a confirmed address
+is the only route there is, and without one nobody can recover them: not an
+admin, not the person themselves, not you without opening a SQL prompt.
+
+On a public instance Hearth therefore:
+
+- **asks for an address** when someone registers or accepts an invite, and sends
+  the confirmation link with it;
+- **refuses to let it be cleared** afterwards (changing it is fine — the new one
+  goes back to unconfirmed until it's clicked);
+- **nudges** accounts that predate this with a dismissible banner, rather than
+  locking anyone out of their own finances to make the point.
+
+None of this applies on a LAN install, where username-only accounts stay
+perfectly legal and you can always reach a shell.
+
+> Turn email on **before** you invite anyone. An address that's set but not
+> confirmed is barely better than none — `requestPasswordReset` only ever mails a
+> confirmed one — so an instance collecting addresses it can't send to is
+> building the paperwork without the exit.
 
 ---
 

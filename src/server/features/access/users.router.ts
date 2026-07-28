@@ -9,6 +9,7 @@ import { isUniqueViolation } from '../../db/errors'
 import { verifyPassword } from '../../auth/password'
 import { MAX_PASSWORD_LENGTH } from '../../../shared/password-policy'
 import { MAX_EMAIL_LENGTH, MAX_NAME_LENGTH } from '../../../shared/input-limits'
+import { emailRequiredForAccounts } from '../../auth/accountEmail'
 import { acceptedMembership, getUser, getUserByUsername, getValidSession, isInstanceOwner, normalizeUsername } from '../../auth/session'
 
 export const usersRouter = router({
@@ -87,6 +88,16 @@ export const usersRouter = router({
       // password to confirm, so there is nothing to check.
       const changesUsername = input.username !== undefined && normalizeUsername(input.username) !== before.username
       const changesEmail = input.email !== undefined && (input.email || null) !== before.email
+      // Where an address is required (#199), clearing one is a downgrade back to
+      // "no recovery route" — refuse it. Replacing it is still fine, and an
+      // account that never had one is left alone rather than blocked from saving
+      // an unrelated edit.
+      if (changesEmail && !input.email && before.email !== null && emailRequiredForAccounts()) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'This instance needs an email address on your account — change it rather than removing it.',
+        })
+      }
       if ((changesUsername || changesEmail) && before.passwordHash !== null) {
         if (!(await verifyPassword(input.currentPassword ?? '', before.passwordHash))) {
           throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Current password is incorrect' })

@@ -7,9 +7,9 @@ import { user } from '../../db/schema'
 import { defaultHouseholdFor, getUser } from '../../auth/session'
 import { RateLimiter } from '../../auth/rateLimit'
 import { mailConfig, mailEnabled } from '../../mail/config'
-import { trySendMail } from '../../mail/mailer'
-import { verifyEmail } from '../../mail/templates'
-import { consumeEmailToken, issueEmailToken, VERIFY_TTL_MS } from '../../mail/tokens'
+import { sendVerificationMail } from '../../mail/verification'
+import { consumeEmailToken } from '../../mail/tokens'
+import { emailRequiredForAccounts } from '../../auth/accountEmail'
 import { MAX_TOKEN_LENGTH } from '../../../shared/input-limits'
 
 // Sending a verification mail is a free outbound message triggered by a logged-in
@@ -30,13 +30,18 @@ const verifyClaimLimiter = new RateLimiter('email-verify-claim', {
 
 export const emailRouter = router({
   /** Whether this instance can send mail, and the state of the current user's
-   *  address. Drives the account settings card. */
+   *  address. Drives the account settings card and the confirm-your-address
+   *  nudge. */
   status: publicProcedure.query(async ({ ctx }) => {
     const me = ctx.userId ? await getUser(ctx.db, ctx.userId) : null
     return {
       enabled: mailEnabled(),
       email: me?.email ?? null,
       verified: (me?.emailVerifiedAt ?? null) !== null,
+      // Whether this instance requires accounts to have an address (#199). New
+      // accounts are made to supply one; existing ones are only nudged, so the
+      // client needs to know the instance cares before it nags anyone.
+      required: emailRequiredForAccounts(),
     }
   }),
 
@@ -59,21 +64,7 @@ export const emailRouter = router({
     }
     await verifySendLimiter.fail(ctx.db, me.id, now)
 
-    const token = await issueEmailToken(ctx.db, {
-      userId: me.id,
-      purpose: 'email_verify',
-      email: me.email,
-      ttlMs: VERIFY_TTL_MS,
-    })
-    const sent = await trySendMail(
-      verifyEmail({
-        to: me.email,
-        origin: config.publicUrl,
-        token,
-        displayName: me.displayName,
-        ttlMs: VERIFY_TTL_MS,
-      }),
-    )
+    const sent = await sendVerificationMail(ctx.db, { id: me.id, email: me.email, displayName: me.displayName })
     // Record the request, never the token (issue #49).
     recordSecurityEvent(ctx, {
       entityType: 'user',
