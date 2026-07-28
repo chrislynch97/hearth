@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
-import { appRouter } from '../trpc/router'
+import { appRouter } from './router'
 import { getOwnerUser } from '../auth/session'
 import { household, membership } from '../db/schema'
 import type { DB } from '../db/client'
