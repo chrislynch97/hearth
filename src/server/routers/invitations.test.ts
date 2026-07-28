@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
 import { appRouter } from '../trpc/router'
-import { getOwnerUser, hashToken, newSessionId } from '../auth/session'
+import { getOwnerUser } from '../auth/session'
+import { hashToken, newBearerToken } from '../auth/bearer'
 import { invitation, member, membership } from '../db/schema'
 import { newId } from '../../shared/ids'
 import type { DB } from '../db/client'
@@ -33,7 +34,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 async function seedInvite(db: DB, over: Partial<typeof invitation.$inferInsert> = {}) {
   const now = new Date()
   const id = newId()
-  const token = newSessionId()
+  const token = newBearerToken()
   await db.insert(invitation).values({
     id,
     tokenHash: hashToken(token),
@@ -351,5 +352,69 @@ describe('invitations — member linking (#82)', () => {
       password: 'a-strong-password',
     })
     expect(res).toEqual({ ok: true })
+  })
+})
+
+describe('invite by email (#111)', () => {
+  const ORIGIN = 'https://hearth.example.com'
+
+  /** Send through the `log` transport and read the link back out of what it
+   *  printed, so the template and link-builder are exercised for real. */
+  async function withMail(work: (logged: string[]) => Promise<void>) {
+    const logged: string[] = []
+    const spy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logged.push(args.map(String).join(' '))
+    })
+    process.env.HEARTH_MAIL_TRANSPORT = 'log'
+    process.env.HEARTH_MAIL_FROM = 'Hearth <hearth@example.com>'
+    process.env.HEARTH_PUBLIC_URL = ORIGIN
+    try {
+      await work(logged)
+    } finally {
+      spy.mockRestore()
+      delete process.env.HEARTH_MAIL_TRANSPORT
+      delete process.env.HEARTH_MAIL_FROM
+      delete process.env.HEARTH_PUBLIC_URL
+    }
+  }
+
+  it('emails the link, and returns the same token so copy-a-link still works', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    await withMail(async (logged) => {
+      const res = await caller(db, { role: 'owner' }).c.invitations.create({
+        role: 'member',
+        email: 'them@example.com',
+      })
+      expect(res.emailed).toBe(true)
+
+      const mail = logged.join('\n')
+      expect(mail).toContain('to: them@example.com')
+      // The token rides in the fragment, never the path (#176).
+      expect(mail).toContain(`${ORIGIN}/invite#${res.token}`)
+    })
+  })
+
+  it('still mints a working invite when email is off', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const res = await caller(db, { role: 'owner' }).c.invitations.create({
+      role: 'member',
+      email: 'them@example.com',
+    })
+    expect(res.emailed).toBe(false)
+
+    const info = await caller(db).c.invitations.info({ token: res.token })
+    expect(info).toMatchObject({ role: 'member' })
+  })
+
+  it('sends nothing when no address was given', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    await withMail(async (logged) => {
+      const res = await caller(db, { role: 'owner' }).c.invitations.create({ role: 'viewer' })
+      expect(res.emailed).toBe(false)
+      expect(logged.join('\n')).not.toContain('/invite#')
+    })
   })
 })

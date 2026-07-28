@@ -20,6 +20,11 @@ export const PUBLIC_PROCEDURES = new Set([
   'auth.register',
   'invitations.info',
   'invitations.accept',
+  // Account recovery and address verification (#111): all three are reached from
+  // an emailed link or the login screen, so by definition with no session.
+  'auth.requestPasswordReset',
+  'auth.resetPassword',
+  'email.verify',
 ])
 
 // Ship only a code and a safe message to the browser — never a stack trace or
@@ -71,6 +76,9 @@ export const WRITE_ROLE_EXEMPT = new Set([
   'auth.disableMfa',
   'users.updateProfile',
   'users.switchHousehold',
+  // Address verification is self-service on your own account, so a viewer may
+  // confirm their address too; neither touches household data.
+  'email.sendVerification',
   // Per-user UI state, not household data: hiding your own getting-started
   // checklist (#62) is self-service, so a viewer can dismiss it too.
   'onboarding.dismiss',
@@ -84,6 +92,12 @@ export const WRITE_ROLE_EXEMPT = new Set([
   // Each self-gates (token validity / registration-open + throttle).
   'auth.register',
   'invitations.accept',
+  // Account recovery: authenticated by the emailed token, not by a household
+  // role, so the caller legitimately has none. Each self-gates on token validity
+  // and its own throttle.
+  'auth.requestPasswordReset',
+  'auth.resetPassword',
+  'email.verify',
   // A read, and a mutation only so the invite token stays out of a logged URL
   // (#176) — it writes nothing, so no write role applies.
   'invitations.info',

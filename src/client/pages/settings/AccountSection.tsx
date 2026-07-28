@@ -11,6 +11,7 @@ import {
     Title,
 } from "@mantine/core";
 import { trpc } from "@/trpc";
+import { EmailVerification } from "./EmailVerification";
 
 interface AccountForm {
     username: string;
@@ -57,6 +58,12 @@ export const AccountSection = () => {
     const needsPassword =
         Boolean(status.data?.passwordSet) && (changesUsername || changesEmail);
 
+    // Password reset only ever mails a *confirmed* address, so on an instance
+    // that can send mail the field is worth more than a note to yourself.
+    const emailDescription = status.data?.passwordResetAvailable
+        ? "Used for invitations, and to reset your password if you lose it."
+        : "Optional — only used for invitations on this instance.";
+
     const handleSave = async () => {
         if (!form) return;
         setError("");
@@ -70,6 +77,9 @@ export const AccountSection = () => {
             await Promise.all([
                 utils.users.me.invalidate(),
                 utils.auth.status.invalidate(),
+                // A changed address goes back to unconfirmed (#111), so the
+                // verification card has to re-read its state.
+                utils.email.status.invalidate(),
             ]);
             setCurrentPassword("");
             setSaved(true);
@@ -103,11 +113,12 @@ export const AccountSection = () => {
                 </Group>
                 <TextInput
                     label="Email"
-                    description="Optional — only used for invitations and (later) password reset."
+                    description={emailDescription}
                     value={form.email}
                     onChange={(e) => set("email", e.currentTarget.value)}
                     type="email"
                 />
+                <EmailVerification />
                 {needsPassword && (
                     <PasswordInput
                         label="Current password"

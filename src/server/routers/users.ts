@@ -8,7 +8,7 @@ import { recordAudit } from '../trpc/audit'
 import { isUniqueViolation } from '../db/errors'
 import { verifyPassword } from '../auth/password'
 import { MAX_PASSWORD_LENGTH } from '../../shared/password-policy'
-import { MAX_NAME_LENGTH } from '../../shared/input-limits'
+import { MAX_EMAIL_LENGTH, MAX_NAME_LENGTH } from '../../shared/input-limits'
 import { acceptedMembership, getUser, getUserByUsername, getValidSession, isInstanceOwner, normalizeUsername } from '../auth/session'
 
 export const usersRouter = router({
@@ -40,6 +40,7 @@ export const usersRouter = router({
       username: u.username,
       displayName: u.displayName,
       email: u.email,
+      emailVerified: u.emailVerifiedAt !== null,
       activeHouseholdId: ctx.householdId,
       role: ctx.role ?? null,
       // Instance operator = the single account controlling instance-wide actions.
@@ -71,7 +72,7 @@ export const usersRouter = router({
       z.object({
         username: z.string().min(1).max(MAX_NAME_LENGTH).optional(),
         displayName: z.string().min(1).max(MAX_NAME_LENGTH).optional(),
-        email: z.string().email().max(MAX_NAME_LENGTH).nullable().optional(),
+        email: z.string().email().max(MAX_EMAIL_LENGTH).nullable().optional(),
         currentPassword: z.string().max(MAX_PASSWORD_LENGTH).optional(),
       }),
     )
@@ -108,6 +109,10 @@ export const usersRouter = router({
             ...(input.username !== undefined ? { username: normalizeUsername(input.username) } : {}),
             ...(input.displayName !== undefined ? { displayName: input.displayName.trim() } : {}),
             ...(input.email !== undefined ? { email: input.email } : {}),
+            // A new address is unproven until it's clicked a verification link,
+            // even if the old one was verified — otherwise moving the address
+            // would silently carry the recovery route over to it (#111).
+            ...(changesEmail ? { emailVerifiedAt: null } : {}),
             updatedAt: new Date(),
           })
           .where(eq(user.id, ctx.userId))

@@ -7,14 +7,45 @@ import { recordSecurityEvent } from '../trpc/audit'
 import { household, invitation, member } from '../db/schema'
 import { isUniqueViolation } from '../db/errors'
 import { hashPassword } from '../auth/password'
-import { createSession, createUserWithMembership, getUserByUsername, hashToken, newSessionId, normalizeUsername } from '../auth/session'
+import { createSession, createUserWithMembership, getUserByUsername, normalizeUsername } from '../auth/session'
+import { hashToken, newBearerToken } from '../auth/bearer'
+import { getUser } from '../auth/session'
+import { mailConfig } from '../mail/config'
+import { trySendMail } from '../mail/mailer'
+import { inviteEmail } from '../mail/templates'
 import { newId } from '../../shared/ids'
 import { validatePassword, MAX_PASSWORD_LENGTH } from '../../shared/password-policy'
-import { MAX_NAME_LENGTH, MAX_TOKEN_LENGTH } from '../../shared/input-limits'
+import { MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_TOKEN_LENGTH } from '../../shared/input-limits'
 import { RateLimiter } from '../auth/rateLimit'
+import type { Context } from '../trpc/context'
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const inviteRole = z.enum(['admin', 'member', 'viewer'])
+
+/** Send the invite link to `to`. Never throws and never blocks the invite: the
+ *  row is already committed and the token is returned regardless, so a mail
+ *  failure costs the invitee an email, not their invitation. Returns whether it
+ *  went out, so the UI can say "emailed" rather than guess. */
+async function emailInvite(
+  ctx: Context,
+  opts: { to: string; token: string; role: string; expiresAt: Date },
+): Promise<boolean> {
+  const config = mailConfig()
+  if (!config) return false
+  const [hh] = await ctx.db.select().from(household).where(eq(household.id, ctx.householdId))
+  const inviter = ctx.userId ? await getUser(ctx.db, ctx.userId) : null
+  return trySendMail(
+    inviteEmail({
+      to: opts.to,
+      origin: config.publicUrl,
+      token: opts.token,
+      householdName: hh?.displayName ?? 'a household',
+      role: opts.role,
+      invitedBy: inviter?.displayName ?? null,
+      ttlMs: INVITE_TTL_MS,
+    }),
+  )
+}
 
 // Throttle invite acceptance so the username-taken response can't be used as an
 // unbounded enumeration oracle: 10 attempts per hour per client, then a block.
@@ -49,9 +80,15 @@ export const invitationsRouter = router({
   }),
 
   /** Create an invite. Admins can invite member/viewer; owners can also invite
-   *  admins. Returns the token — the client builds the shareable link from it. */
+   *  admins. Returns the token — the client builds the shareable link from it.
+   *
+   *  When an address is given and email is configured, the link is also sent
+   *  there (#111). The token still comes back either way: emailing is a
+   *  convenience layered over the copy-a-link flow, not a replacement, so a
+   *  relay that's down or unconfigured leaves the inviter with a working link
+   *  rather than a dead end. */
   create: publicProcedure
-    .input(z.object({ role: inviteRole, email: z.string().email().nullable().optional(), memberId: z.string().nullable().optional() }))
+    .input(z.object({ role: inviteRole, email: z.string().email().max(MAX_EMAIL_LENGTH).nullable().optional(), memberId: z.string().nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       assertRole(ctx.role, input.role === 'admin' ? 'owner' : 'admin')
       // A tied member must be an unlinked person in this household. Reject a bad
@@ -71,7 +108,7 @@ export const invitationsRouter = router({
       }
       const now = new Date()
       const expiresAt = new Date(now.getTime() + INVITE_TTL_MS)
-      const token = newSessionId()
+      const token = newBearerToken()
       const id = newId()
       await ctx.db.insert(invitation).values({
         id,
@@ -92,7 +129,17 @@ export const invitationsRouter = router({
         action: 'invite_created',
         details: { role: input.role, email: input.email ?? null, memberId: input.memberId ?? null },
       })
-      return { token, role: input.role, expiresAt }
+
+      const emailed = input.email ? await emailInvite(ctx, { to: input.email, token, role: input.role, expiresAt }) : false
+      if (emailed) {
+        recordSecurityEvent(ctx, {
+          entityType: 'invitation',
+          entityId: id,
+          action: 'invite_emailed',
+          details: { email: input.email ?? null },
+        })
+      }
+      return { token, role: input.role, expiresAt, emailed }
     }),
 
   revoke: publicProcedure

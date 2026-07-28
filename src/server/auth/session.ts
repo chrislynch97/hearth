@@ -2,15 +2,16 @@
  *  authenticated when that id resolves to a live (unexpired) session row.
  *  Replaces the old stateless HMAC(password) token so sessions can carry user
  *  identity and be revoked (logout, password change, "sign out everywhere"). */
-import { createHash, randomBytes } from 'node:crypto'
 import { and, asc, eq, isNotNull, lt, ne, or } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import type { DB, DBOrTx } from '../db/client'
+import { hashToken, newBearerToken } from './bearer'
 import { SchedulerLock, withLeaderLock } from '../db/leader'
 import { membership, session, user } from '../db/schema'
 import type { Session, User } from '../db/schema'
 import { getInstanceSettings, setAuthRequired, setInstanceOwnerId } from '../db/instanceSettings'
 import { DEFAULT_HOUSEHOLD_ID, ROLE_RANK, type Role } from '../trpc/tenant'
+import { deleteExpiredEmailTokens } from '../mail/tokens'
 import { newId } from '../../shared/ids'
 
 /** Idle window. A session dies this long after its last use, not after its
@@ -73,19 +74,6 @@ export async function createUserWithMembership(
   return userId
 }
 
-/** A fresh, unguessable bearer token (256 bits). Used for both session cookies
- *  and invite links — the raw value goes to the client; only its hash is stored. */
-export function newSessionId(): string {
-  return randomBytes(32).toString('hex')
-}
-
-/** Storage form of a bearer token: sha256(token) as hex. The tokens are 256-bit
- *  random, so a single fast hash (no KDF) makes lookups cheap while ensuring a
- *  leaked database or backup exposes only hashes, never usable credentials. */
-export function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex')
-}
-
 /** Where a session was established. Recorded so `sessions.list` can show a user
  *  something recognisable ("Firefox on Windows, from 192.168.1.9") rather than an
  *  opaque row they can't judge. Both are client-controlled hints, never trusted
@@ -107,7 +95,7 @@ export async function createSession(
   householdId: string,
   origin: SessionOrigin = {},
 ): Promise<string> {
-  const token = newSessionId()
+  const token = newBearerToken()
   const now = new Date()
   await db
     .insert(session)
@@ -214,14 +202,19 @@ export async function deleteExpiredSessions(db: DB, now: Date = new Date()): Pro
   await db.delete(session).where(or(lt(session.expiresAt, now), lt(session.absoluteExpiresAt, now)))
 }
 
-/** Start the periodic purge of expired sessions. Mirrors the backup scheduler:
- *  an unref'd interval that never keeps the process alive on its own, running an
- *  immediate first sweep so a fresh boot doesn't wait an hour to clear a backlog.
- *  Leader-guarded (#113) so only one replica sweeps per tick. */
+/** Start the periodic purge of expired sessions and spent email tokens. Mirrors
+ *  the backup scheduler: an unref'd interval that never keeps the process alive
+ *  on its own, running an immediate first sweep so a fresh boot doesn't wait an
+ *  hour to clear a backlog. Leader-guarded (#113) so only one replica sweeps per
+ *  tick — the two tables are swept together because they expire on the same
+ *  order of timescale and neither is worth its own scheduler. */
 export function startSessionPurgeScheduler(db: DB): void {
   const tick = async () => {
     try {
-      await withLeaderLock(db, SchedulerLock.sessionPurge, () => deleteExpiredSessions(db))
+      await withLeaderLock(db, SchedulerLock.sessionPurge, async () => {
+        await deleteExpiredSessions(db)
+        await deleteExpiredEmailTokens(db)
+      })
     } catch (err) {
       console.error('Expired-session purge failed:', err)
     }

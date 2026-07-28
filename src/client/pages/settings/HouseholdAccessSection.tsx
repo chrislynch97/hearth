@@ -10,6 +10,7 @@ import {
     Select,
     Stack,
     Text,
+    TextInput,
     Title,
 } from "@mantine/core";
 import { trpc } from "@/trpc";
@@ -40,8 +41,14 @@ export const HouseholdAccessSection = () => {
 
     const [inviteRole, setInviteRole] = useState("member");
     const [inviteMemberId, setInviteMemberId] = useState<string | null>(null);
+    const [inviteEmail, setInviteEmail] = useState("");
     const [link, setLink] = useState("");
+    const [emailedTo, setEmailedTo] = useState("");
     const [error, setError] = useState("");
+
+    // Only offer to send the invite when this instance can actually send mail
+    // (#111); otherwise the address is just a label on the pending-invite list.
+    const canEmail = trpc.email.status.useQuery().data?.enabled ?? false;
 
     if (!me.data) return null;
 
@@ -58,10 +65,13 @@ export const HouseholdAccessSection = () => {
         try {
             const res = await createInvite.mutateAsync({
                 role: inviteRole as "admin" | "member" | "viewer",
+                email: inviteEmail.trim() || null,
                 memberId: inviteMemberId,
             });
             setLink(inviteLink(window.location.origin, res.token));
+            setEmailedTo(res.emailed ? inviteEmail.trim() : "");
             setInviteMemberId(null);
+            setInviteEmail("");
             await utils.invitations.list.invalidate();
         } catch (e) {
             setError(
@@ -135,6 +145,19 @@ export const HouseholdAccessSection = () => {
                                 allowDeselect={false}
                                 w={220}
                             />
+                            {canEmail && (
+                                <TextInput
+                                    label="Email"
+                                    description="Optional — we'll send them the link."
+                                    placeholder="them@example.com"
+                                    value={inviteEmail}
+                                    onChange={(e) =>
+                                        setInviteEmail(e.currentTarget.value)
+                                    }
+                                    type="email"
+                                    w={240}
+                                />
+                            )}
                             {memberOptions.length > 0 && (
                                 <Select
                                     label="Link to member"
@@ -151,7 +174,9 @@ export const HouseholdAccessSection = () => {
                                 onClick={() => void handleCreateInvite()}
                                 loading={createInvite.isPending}
                             >
-                                Create invite link
+                                {canEmail && inviteEmail.trim()
+                                    ? "Send invite"
+                                    : "Create invite link"}
                             </Button>
                         </Group>
                         {error && (
@@ -163,7 +188,11 @@ export const HouseholdAccessSection = () => {
                             <Alert
                                 color="moss"
                                 variant="light"
-                                title="Invite link — share it with the person you're inviting"
+                                title={
+                                    emailedTo
+                                        ? `Invite sent to ${emailedTo}`
+                                        : "Invite link — share it with the person you're inviting"
+                                }
                             >
                                 <Group gap="xs" wrap="nowrap">
                                     <Code
@@ -185,7 +214,9 @@ export const HouseholdAccessSection = () => {
                                     </CopyButton>
                                 </Group>
                                 <Text size="xs" c="dimmed" mt={4}>
-                                    The link works once and expires in 7 days.
+                                    {emailedTo
+                                        ? "Here's the same link, in case it doesn't arrive. It works once and expires in 7 days."
+                                        : "The link works once and expires in 7 days."}
                                 </Text>
                             </Alert>
                         )}

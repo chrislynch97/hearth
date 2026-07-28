@@ -343,6 +343,14 @@ name this file rather than the default one.
 | `HEARTH_BACKUP_HEARTBEAT_URL` | unset | A ping URL (e.g. a [Healthchecks.io](https://healthchecks.io) check) that Hearth `POST`s after each successful automatic backup, and to `<url>/fail` when one fails. Gives you dead-man's-switch alerting: you hear about backups that stopped running, not just ones that ran and failed. |
 | `HEARTH_ALERT_WEBHOOK` | unset | Endpoint that receives operational alerts as JSON (`{ event, message, detail, at }`) — backup failures, off-site upload failures, and failed-login bursts. Point it at whatever you already get notified through. |
 | `HEARTH_AUTH_ALERT_THRESHOLD` | `10` | Failed sign-ins in an hour that raise an `auth_failures` alert. `0` turns the check off. |
+| `HEARTH_MAIL_TRANSPORT` | `off` | Turns on the email-backed features — invite-by-email, address confirmation, self-service password reset (see [Email](#email-optional)). `off` \| `smtp` \| `log`. The `log` transport prints each message instead of sending it, which puts live invite and reset tokens in the server log; `HEARTH_PUBLIC=1` therefore refuses to start with it. |
+| `HEARTH_MAIL_FROM` | unset | `From:` address on outgoing mail, e.g. `Hearth <hearth@example.com>`. **Required** when email is on. |
+| `HEARTH_PUBLIC_URL` | unset | The origin people reach this instance on (`https://hearth.example.com`). Every emailed link is built from it, so a wrong value sends invitees and reset links somewhere else entirely. **Required** when email is on; a value that isn't an absolute `http(s)` URL is a startup error. |
+| `HEARTH_SMTP_HOST` | unset | Relay hostname. **Required** for `HEARTH_MAIL_TRANSPORT=smtp`. |
+| `HEARTH_SMTP_PORT` | `587` (`465` with implicit TLS) | Relay port. |
+| `HEARTH_SMTP_TLS` | `starttls` | `starttls` upgrades the connection and **refuses to send** if the relay doesn't offer it — so a relay that quietly stops advertising TLS fails loudly instead of posting reset tokens in plaintext. `implicit` is TLS from the first byte (port 465). `none` is cleartext; only defensible for a relay on localhost. |
+| `HEARTH_SMTP_USER` | unset | Relay username. Omit (with `HEARTH_SMTP_PASS`) for an unauthenticated relay. |
+| `HEARTH_SMTP_PASS` | unset | Relay password. Setting a user with an empty password is a startup error — it would authenticate as nobody and fail at the first send. |
 | `HEARTH_DEPLOY` | unset | Set to `image` by the GHCR compose files. Marks this as the prebuilt-image deploy so the in-app update UI shows `pull`-based commands and (with the host updater) one-click / automatic updates. Any other value means build-from-source. See [Updating](#updating--three-ways). |
 | `HEARTH_COMPOSE_FILE` | inferred | The compose file the in-app update card names in its copy-paste commands. Left unset, Hearth infers it from `HEARTH_DEPLOY` and `DATABASE_URL` (one of the four shipped files). Set it when you run a different one — `docker-compose.public.yml` sets it to itself. The host updater reads the same variable on the host side. |
 | `HEARTH_UPDATE_DIR` | `<data>/updates` | Directory the app and host updater exchange update control files in (request / result / heartbeat). Defaults next to the data dir; override only if you relocate that exchange. |
@@ -367,6 +375,107 @@ everyone out for 15 minutes), the session cookie never gets `Secure` because
 entry records the proxy's address instead of the real one. Nothing about the running
 instance looks wrong. `HEARTH_PUBLIC=1` therefore makes an unset value a startup
 error; if you genuinely have no proxy, set `HEARTH_TRUST_PROXY=0` to say so.
+
+---
+
+## Email (optional)
+
+Off by default. A LAN install has no relay and doesn't need one: invites are
+copy-a-link, and a lost owner password is recovered on the box with
+`reset-owner-password`. Configure a relay and three flows switch on —
+**invite-by-email**, **address confirmation**, and **self-service password
+reset**. A hosted or invite-only public deploy wants all three; the CLI reset
+doesn't scale past the one person with shell access.
+
+```env
+HEARTH_MAIL_TRANSPORT=smtp
+HEARTH_MAIL_FROM=Hearth <hearth@example.com>
+HEARTH_PUBLIC_URL=https://hearth.example.com
+HEARTH_SMTP_HOST=smtp.example.com
+HEARTH_SMTP_USER=apikey
+HEARTH_SMTP_PASS=<the relay password>
+```
+
+Any transactional provider works — the relay just has to speak SMTP. Use a
+dedicated sending credential scoped to one sender, not your own mailbox login.
+
+Hearth reports what it resolved at startup (`[hearth] email via smtp …`), so a
+config that didn't take is visible in the first ten lines of the log rather than
+at the first invite. A relay that's enabled but broken is fatal at boot, not
+silently ignored.
+
+**What the design guarantees**
+
+- **Tokens never reach a log.** Every emailed link carries its token in the URL
+  *fragment*, which browsers don't send to servers — so it can't land in Hearth's
+  request log or a reverse proxy's access log (#176). The audit trail records
+  that a link was sent, never the link.
+- **Only confirmed addresses get a reset.** An address typed into a profile form
+  or onto an invite is unproven; until someone clicks a confirmation link sent to
+  it, `requestPasswordReset` mails nothing. A typo can't hand recovery to a
+  stranger who happens to own that address.
+- **Reset requests are silent.** The endpoint answers identically whether the
+  account exists, has an address, or has a confirmed one — otherwise it's an
+  account-enumeration oracle. What actually happened is in the log and the audit
+  trail, where only you can see it.
+- **A reset doesn't sign anyone in.** It sets the password, revokes every
+  session, and sends the person to the login screen — so two-factor
+  authentication still applies and a reset can't be used to step around it.
+- **TLS is not optional by accident.** `HEARTH_SMTP_TLS=starttls` (the default)
+  refuses to send when the relay doesn't offer STARTTLS.
+
+**Trying it without a relay:** `HEARTH_MAIL_TRANSPORT=log` prints each message to
+the server log instead of sending it, so you can follow the links by hand. That
+means live tokens in the log, so it's development-only — `HEARTH_PUBLIC=1`
+refuses to start with it set.
+
+### Setting it up, start to finish
+
+**1. Pick a relay.** Any transactional provider (Postmark, Resend, Mailgun,
+Brevo, Amazon SES…) — all have free tiers far above what Hearth sends, which is
+a handful of messages a *year*: invites, one confirmation per person, the
+occasional reset.
+
+Note that some privacy-focused mail hosts — **Tuta and Proton among them** —
+don't offer SMTP at all, by design, because it's incompatible with their
+end-to-end encryption. If that's where your mail lives, it can still *receive*
+everything Hearth sends; it just can't be the thing that sends it.
+
+**2. Send from a subdomain.** Use `mail.<your-domain>` (or similar) rather than
+the domain your personal mail already uses:
+
+```env
+HEARTH_MAIL_FROM=Hearth <hearth@mail.example.com>
+```
+
+Your existing mail host keeps the root domain's SPF/DKIM records untouched, the
+relay gets the subdomain, and neither can break the other. It also keeps Hearth's
+sending reputation separate from your own correspondence. Point the subdomain's
+DNS at the provider using the records they give you.
+
+**One address is enough.** `HEARTH_MAIL_FROM` is a single value applied to every
+message — there's no per-flow sender, and splitting one out would need a code
+change. It would buy nothing anyway: deliverability reputation is per *domain*,
+not per mailbox, so `invites@` and `security@` on the same subdomain are
+indistinguishable to a receiving server. Decide only whether replies should go
+anywhere: on most providers the sending address isn't a real mailbox, so either
+name it `noreply@` or set up forwarding for it.
+
+**3. Prove the flows locally first.** Before touching DNS, run with
+`HEARTH_MAIL_TRANSPORT=log` and walk an invite, a confirmation and a reset,
+following the links out of the server log. Catches template and URL problems
+without a relay in the loop.
+
+**4. Turn it on, and check the startup line.** After deploying, the log's first
+few lines should read `[hearth] email via smtp <host>:<port> (starttls), from …,
+links point at …`. If `HEARTH_PUBLIC_URL` is wrong, every link you send goes to
+the wrong host — this is where you notice.
+
+**5. Confirm the owner's address immediately.** Settings → Account → *Send
+confirmation email*. Do this while you're still set up to fix problems: until
+that address is confirmed, `requestPasswordReset` will mail you nothing, and
+you're still on the `reset-owner-password` CLI path — which on a VPS means an
+SSH session. Everything else here can wait; this shouldn't.
 
 ---
 
@@ -503,6 +612,53 @@ table on an unattended box. Hearth sweeps the last hour and raises an
 failures cross `HEARTH_AUTH_ALERT_THRESHOLD` (default 10). Set it to `0` to turn
 the check off — worth doing on a LAN-only instance, where a fat-fingered
 password is the only thing it will ever catch.
+
+### Where to send alerts
+
+`HEARTH_BACKUP_HEARTBEAT_URL` and `HEARTH_ALERT_WEBHOOK` both take any URL,
+because Hearth deliberately implements no notification *policy* — no
+deduplication, no escalation, no quiet hours. Point them at something that
+already does all three. A setup that covers both failure classes:
+
+```env
+HEARTH_BACKUP_HEARTBEAT_URL=https://hc-ping.com/<check-uuid>
+HEARTH_ALERT_WEBHOOK=https://ntfy.sh/<long-random-topic>
+```
+
+The two are not interchangeable, and it's worth knowing why:
+
+- **The heartbeat catches silence.** It's the only thing that notices Hearth
+  stopped running at all — a dead process raises nothing, so the absence of a
+  ping *is* the signal. This needs a service that watches for it
+  ([Healthchecks.io](https://healthchecks.io) or equivalent); a push service
+  cannot do it, by construction.
+- **The webhook catches events.** Backup and off-site failures, failed-login
+  bursts. A push target like [ntfy](https://ntfy.sh) is ideal here — it reaches
+  your phone in seconds and needs no account.
+
+**Two things to know about ntfy specifically.** Posting to `ntfy.sh/<topic>`
+makes the request body the notification text, and Hearth sends JSON — so the
+notification shows the raw `{"event":…,"message":…}` rather than a tidy title.
+Readable, but not pretty. And a topic on the public instance is readable by
+anyone who guesses its name: the payloads carry error text (which can include
+file paths and database errors) and failed-login counts, which is a running
+commentary on your instance and when it's being probed. Use a long random topic
+name at minimum, ntfy's access control or a self-hosted instance ideally.
+
+**Why not email, now that Hearth can send it?** [Email](#email-optional) is for
+messages a *person* asked for and is waiting on. Machine-generated alerts stay
+on the webhook for three reasons:
+
+1. The failures you most need to hear about — disk full, database unreachable,
+   network or relay down — are exactly the ones that stop an email going out.
+   `sendAlert` is best-effort and swallows its own failures, so a lost alert is
+   silent.
+2. Alerts would share a relay credential, quota and sender reputation with
+   password reset. A burst that trips a rate limit or gets the sender flagged
+   would take account recovery down with it, and you'd find out when someone
+   couldn't get back into their account.
+3. Whatever you point the webhook at already does dedup and escalation properly,
+   and can email you itself if that's what you want.
 
 ### Log rotation
 

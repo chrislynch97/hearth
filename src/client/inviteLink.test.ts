@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { inviteLink, readInviteToken } from "@/inviteLink";
+import {
+    inviteLink,
+    readInviteToken,
+    readResetPasswordToken,
+    readVerifyEmailToken,
+} from "@/inviteLink";
+import { resetPasswordLink, verifyEmailLink } from "@shared/links";
 
 const TOKEN = "a".repeat(64);
 
@@ -46,5 +52,35 @@ describe("readInviteToken", () => {
             inviteLink("https://hearth.example", TOKEN)
         );
         expect(readInviteToken({ pathname, hash })).toBe(TOKEN);
+    });
+});
+
+describe("readVerifyEmailToken / readResetPasswordToken", () => {
+    it("round-trip their own built links", () => {
+        const verify = new URL(
+            verifyEmailLink("https://hearth.example", TOKEN)
+        );
+        expect(readVerifyEmailToken(verify)).toBe(TOKEN);
+
+        const reset = new URL(
+            resetPasswordLink("https://hearth.example", TOKEN)
+        );
+        expect(readResetPasswordToken(reset)).toBe(TOKEN);
+    });
+
+    it("do not answer for each other's route, or the invite route", () => {
+        expect(
+            readVerifyEmailToken(loc("/reset-password", `#${TOKEN}`))
+        ).toBeNull();
+        expect(
+            readResetPasswordToken(loc("/verify-email", `#${TOKEN}`))
+        ).toBeNull();
+        expect(readInviteToken(loc("/verify-email", `#${TOKEN}`))).toBeNull();
+    });
+
+    it("do not read a legacy path segment — only invites ever sent those", () => {
+        expect(readResetPasswordToken(loc(`/reset-password/${TOKEN}`))).toBe(
+            ""
+        );
     });
 });

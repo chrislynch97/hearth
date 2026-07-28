@@ -17,3 +17,7 @@ export const MAX_CODE_LENGTH = 100
 
 /** Invitation tokens are 64 hex chars (a 32-byte session id); allow headroom. */
 export const MAX_TOKEN_LENGTH = 200
+
+/** Email addresses. RFC 5321 caps a path at 254 octets; nothing real is longer,
+ *  and the reset endpoint takes one unauthenticated. */
+export const MAX_EMAIL_LENGTH = 254
