@@ -1,4 +1,4 @@
-import { normaliseToMonthly, roundMinor, type Recurrence } from '../../shared/recurrence'
+import { normaliseToMonthly, roundMinor, type Recurrence } from '../../../shared/recurrence'
 
 /** A bill, reduced to what the standing-order requirement cares about. Only
  *  active `pot_manual` bills contribute — `pot_auto`/`main` have no standing order. */

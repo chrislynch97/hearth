@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { asc } from 'drizzle-orm'
-import { router, publicProcedure } from '../trpc/trpc'
-import { scopeWhere } from '../trpc/tenant'
-import { billPrice } from '../db/schema'
+import { router, publicProcedure } from '../../trpc/trpc'
+import { scopeWhere } from '../../trpc/tenant'
+import { billPrice } from '../../db/schema'
 
 export const billPricesRouter = router({
   // Effective-dated price history (issue #68). Optionally scoped to one bill;

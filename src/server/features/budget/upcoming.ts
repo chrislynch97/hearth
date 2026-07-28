@@ -1,6 +1,6 @@
 /** Projects recurring outgoings into concrete cash-out dates over a horizon
  *  (spec §5.1 / §6.6). Pure: dates are `YYYY-MM-DD`, amounts integer minor units. */
-import { addMonths } from '../../shared/dates'
+import { addMonths } from '../../../shared/dates'
 
 type ExpenseRecurrence = 'monthly' | 'quarterly' | 'yearly'
 

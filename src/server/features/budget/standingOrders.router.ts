@@ -1,18 +1,18 @@
 import { z } from 'zod'
 import { eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
-import { router, publicProcedure } from '../trpc/trpc'
-import { scopeWhere } from '../trpc/tenant'
-import { recordAudit } from '../trpc/audit'
-import { expense, pot, billPrice, standingOrderAck } from '../db/schema'
-import type { DB } from '../db/client'
-import { newId } from '../../shared/ids'
-import type { Recurrence } from '../../shared/recurrence'
+import { router, publicProcedure } from '../../trpc/trpc'
+import { scopeWhere } from '../../trpc/tenant'
+import { recordAudit } from '../../trpc/audit'
+import { expense, pot, billPrice, standingOrderAck } from '../../db/schema'
+import type { DB } from '../../db/client'
+import { newId } from '../../../shared/ids'
+import type { Recurrence } from '../../../shared/recurrence'
 import {
   computeStandingOrderAlerts,
   potManualMonthly,
   type StandingOrderBillInput,
-} from '../plan/standingOrders'
+} from './standingOrders'
 
 /** Active bills reduced to the standing-order shape. Shared by the alert read and
  *  the acknowledge write so both derive the requirement identically. */

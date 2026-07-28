@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Bill-review ranking (issue #70) — shared so the page and its test agree on it.
 // ---------------------------------------------------------------------------
-// The figures are computed server-side (see server/plan/billReview.ts); ranking
+// The figures are computed server-side (see server/features/budget/billReview.ts); ranking
 // is a pure UI concern the page re-runs when the user flips the sort metric.
 
 /** How to rank the review — by annualised £ change or by percent. Both surface

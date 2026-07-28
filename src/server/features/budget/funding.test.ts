@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { computeFundingPlan, type FundingBillInput } from './funding'
-import type { Recurrence } from '../../shared/recurrence'
+import type { Recurrence } from '../../../shared/recurrence'
 
 /** Adapt the old per-share expense fixtures to single-pot bills (one bill per share). */
 function toBills(

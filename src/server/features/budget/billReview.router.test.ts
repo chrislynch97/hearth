@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { makeTestDb } from '../db/testdb'
-import { ensureSeed } from '../db/seed'
-import { appRouter } from '../trpc/router'
-import { spendTransaction } from '../db/schema'
-import { newId } from '../../shared/ids'
+import { makeTestDb } from '../../db/testdb'
+import { ensureSeed } from '../../db/seed'
+import { appRouter } from '../../trpc/router'
+import { spendTransaction } from '../../db/schema'
+import { newId } from '../../../shared/ids'
 
 describe('bill review (issue #70)', () => {
   async function setup() {

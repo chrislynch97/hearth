@@ -1,5 +1,5 @@
-import { annualise, normaliseToMonthly, roundMinor, type Recurrence } from '../../shared/recurrence'
-import { subtractMonths } from '../../shared/dates'
+import { annualise, normaliseToMonthly, roundMinor, type Recurrence } from '../../../shared/recurrence'
+import { subtractMonths } from '../../../shared/dates'
 
 // ---------------------------------------------------------------------------
 // Subscription / bill review (issue #70)

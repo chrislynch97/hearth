@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { TRPCError } from '@trpc/server'
-import { makeTestDb } from '../db/testdb'
-import { ensureSeed } from '../db/seed'
-import { appRouter } from '../trpc/router'
+import { makeTestDb } from '../../db/testdb'
+import { ensureSeed } from '../../db/seed'
+import { appRouter } from '../../trpc/router'
 
 describe('pots router', () => {
   it('create with valid ownerId → list returns it', async () => {

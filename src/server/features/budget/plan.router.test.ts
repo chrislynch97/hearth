@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { makeTestDb } from '../db/testdb'
-import { ensureSeed } from '../db/seed'
-import { appRouter } from '../trpc/router'
-import { addDays, todayIso } from '../../shared/dates'
+import { makeTestDb } from '../../db/testdb'
+import { ensureSeed } from '../../db/seed'
+import { appRouter } from '../../trpc/router'
+import { addDays, todayIso } from '../../../shared/dates'
 
 describe('plan router', () => {
   it('funding computes pot fundings and per-person setAside from seeded data', async () => {

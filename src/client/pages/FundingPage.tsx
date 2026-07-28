@@ -5,7 +5,7 @@ import { formatMoney } from '../../shared/money'
 import { periodConfig, periodUnitLabel, periodAdverb } from '../../shared/period'
 import { useMoney, type MoneyFormat } from '../useMoney'
 import { StandingOrderAlerts } from './StandingOrderAlerts'
-import type { PotFunding } from '../../server/plan/funding'
+import type { PotFunding } from '../../server/features/budget/funding'
 
 /** The per-person standing orders as plaintext, ready to paste into a bank.
  *  `unit` is the household's per-period suffix (e.g. `/mo`, `/4 wks`). */

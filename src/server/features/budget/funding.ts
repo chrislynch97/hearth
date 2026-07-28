@@ -4,9 +4,9 @@ import {
   monthlyToPeriod,
   roundMinor,
   type Recurrence,
-} from '../../shared/recurrence'
-import type { PeriodFrequency } from '../../shared/period'
-import { allocate } from '../../shared/money'
+} from '../../../shared/recurrence'
+import type { PeriodFrequency } from '../../../shared/period'
+import { allocate } from '../../../shared/money'
 
 /** A bill (money out). Pot-funded bills fund their pot; `main` bills are paid from the main account. */
 export interface FundingBillInput {

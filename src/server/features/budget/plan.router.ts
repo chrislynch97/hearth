@@ -1,14 +1,14 @@
 import { z } from 'zod'
 import { eq, isNull } from 'drizzle-orm'
-import { router, publicProcedure } from '../trpc/trpc'
-import { scopeWhere } from '../trpc/tenant'
-import { expense, setAside, household, member, pot } from '../db/schema'
-import { computeFundingPlan } from '../plan/funding'
-import { computeIncomeByMember } from '../features/income/service'
-import { projectUpcoming, type UpcomingExpenseInput } from '../plan/upcoming'
-import { periodConfig } from '../../shared/period'
-import { addDays, todayIso } from '../../shared/dates'
-import type { Recurrence } from '../../shared/recurrence'
+import { router, publicProcedure } from '../../trpc/trpc'
+import { scopeWhere } from '../../trpc/tenant'
+import { expense, setAside, household, member, pot } from '../../db/schema'
+import { computeFundingPlan } from './funding'
+import { computeIncomeByMember } from '../income/service'
+import { projectUpcoming, type UpcomingExpenseInput } from './upcoming'
+import { periodConfig } from '../../../shared/period'
+import { addDays, todayIso } from '../../../shared/dates'
+import type { Recurrence } from '../../../shared/recurrence'
 
 /** Whole days from `from` to `to` (both `YYYY-MM-DD`); negative when `to` is earlier. */
 function daysBetweenIso(from: string, to: string): number {
