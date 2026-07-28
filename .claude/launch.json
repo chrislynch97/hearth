@@ -36,6 +36,23 @@
         "HEARTH_PUBLIC_URL": "http://localhost:5173"
       },
       "port": 8787
+    },
+    {
+      "name": "demo-hosted",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "demo"],
+      "env": {
+        "HOST": "127.0.0.1",
+        "HEARTH_PUBLIC": "1",
+        "HEARTH_ALLOW_OPEN": "",
+        "HEARTH_MAIL_TRANSPORT": "smtp",
+        "HEARTH_MAIL_FROM": "Hearth <hearth@example.com>",
+        "HEARTH_SMTP_HOST": "127.0.0.1",
+        "HEARTH_SMTP_PORT": "1025",
+        "HEARTH_SMTP_TLS": "none",
+        "HEARTH_PUBLIC_URL": "http://localhost:5173"
+      },
+      "port": 8787
     }
   ]
 }

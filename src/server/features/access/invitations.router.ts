@@ -3,16 +3,18 @@ import { and, desc, eq, gt, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../../trpc/trpc'
 import { assertRole, scopeWhere } from '../../trpc/tenant'
-import { recordSecurityEvent } from '../../trpc/audit'
+import { recordSecurityEvent, writeSecurityEvent } from '../../trpc/audit'
 import { household, invitation, member } from '../../db/schema'
 import { isUniqueViolation } from '../../db/errors'
 import { hashPassword } from '../../auth/password'
 import { createSession, createUserWithMembership, getUserByUsername, normalizeUsername } from '../../auth/session'
 import { hashToken, newBearerToken } from '../../auth/bearer'
 import { getUser } from '../../auth/session'
-import { mailConfig } from '../../mail/config'
+import { mailConfig, mailEnabled } from '../../mail/config'
 import { trySendMail } from '../../mail/mailer'
 import { inviteEmail } from '../../mail/templates'
+import { sendVerificationMail } from '../../mail/verification'
+import { EMAIL_REQUIRED_MESSAGE, emailRequiredForAccounts } from '../../auth/accountEmail'
 import { newId } from '../../../shared/ids'
 import { validatePassword, MAX_PASSWORD_LENGTH } from '../../../shared/password-policy'
 import { MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_TOKEN_LENGTH } from '../../../shared/input-limits'
@@ -172,11 +174,25 @@ export const invitationsRouter = router({
     const [inv] = await ctx.db.select().from(invitation).where(eq(invitation.tokenHash, hashToken(input.token)))
     if (!inv || inv.acceptedAt !== null || inv.expiresAt.getTime() < Date.now()) return null
     const [hh] = await ctx.db.select().from(household).where(eq(household.id, inv.householdId))
-    return { householdName: hh?.displayName ?? 'Household', role: inv.role }
+    // Whether the accept form has to ask for an address (#199): only when this
+    // instance requires one and the invite didn't already carry it. The address
+    // itself stays out of the response — the token holder is meant to be the
+    // invitee, but the link travels by whatever route the inviter chose.
+    return {
+      householdName: hh?.displayName ?? 'Household',
+      role: inv.role,
+      needsEmail: emailRequiredForAccounts() && !inv.email,
+    }
   }),
 
   /** Public: accept an invite by creating an account, joining the household, and
-   *  logging in. */
+   *  logging in.
+   *
+   *  The account's address comes from the invite when it has one, else from the
+   *  invitee — who is asked for it when this instance requires one (#199). An
+   *  invite created without an address is exactly how a second household member
+   *  ends up with no recovery route at all, so that gap is closed here rather
+   *  than by forcing every inviter to know the address up front. */
   accept: publicProcedure
     .input(
       z.object({
@@ -184,6 +200,7 @@ export const invitationsRouter = router({
         username: z.string().min(1).max(MAX_NAME_LENGTH),
         displayName: z.string().min(1).max(MAX_NAME_LENGTH),
         password: z.string().max(MAX_PASSWORD_LENGTH),
+        email: z.string().email().max(MAX_EMAIL_LENGTH).nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -203,6 +220,13 @@ export const invitationsRouter = router({
       if (weak) {
         await acceptLimiter.fail(ctx.db, key, nowCheck)
         throw new TRPCError({ code: 'BAD_REQUEST', message: weak })
+      }
+      // The invite's own address wins: it's what an admin addressed the invite
+      // to, and the accept form only offers the field when there isn't one.
+      const email = preview.email ?? input.email?.trim() ?? null
+      if (!email && emailRequiredForAccounts()) {
+        await acceptLimiter.fail(ctx.db, key, nowCheck)
+        throw new TRPCError({ code: 'BAD_REQUEST', message: EMAIL_REQUIRED_MESSAGE })
       }
       // Friendly best-effort check; the unique index on user.username is the real
       // guard against a concurrent same-username race (handled below).
@@ -231,7 +255,7 @@ export const invitationsRouter = router({
           const userId = await createUserWithMembership(tx, {
             username: normalizeUsername(input.username),
             displayName: input.displayName.trim(),
-            email: claimed.email,
+            email,
             passwordHash,
             householdId: claimed.householdId,
             role: claimed.role,
@@ -276,6 +300,25 @@ export const invitationsRouter = router({
         householdId: result.householdId,
         actorUserId: result.userId,
       })
+      // Confirm the address straight away — it's the half of #199 that actually
+      // buys recovery, and the invitee is expecting mail from us either way.
+      if (email && mailEnabled()) {
+        const sent = await sendVerificationMail(ctx.db, {
+          id: result.userId,
+          email,
+          displayName: input.displayName.trim(),
+        })
+        // Written directly rather than staged: the request context has no
+        // identity until the session below exists (issue #49).
+        await writeSecurityEvent(ctx.db, {
+          householdId: result.householdId,
+          actorUserId: result.userId,
+          entityType: 'user',
+          entityId: result.userId,
+          action: 'email_verification_sent',
+          details: { email, sent },
+        })
+      }
       ctx.setSessionCookie?.(await createSession(ctx.db, result.userId, result.householdId))
       return { ok: true as const }
     }),

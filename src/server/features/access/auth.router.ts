@@ -33,12 +33,14 @@ import {
   verifyTotp,
 } from '../../auth/totp'
 import { isOpenAccessBlocked, openGuardConfig } from '../../auth/gate'
+import { EMAIL_REQUIRED_MESSAGE, emailRequiredForAccounts } from '../../auth/accountEmail'
 import { mailConfig, mailEnabled } from '../../mail/config'
 import { trySendMail } from '../../mail/mailer'
 import { passwordResetEmail } from '../../mail/templates'
 import { consumeEmailToken, issueEmailToken, RESET_TTL_MS } from '../../mail/tokens'
+import { sendVerificationMail } from '../../mail/verification'
 import { validatePassword, MAX_PASSWORD_LENGTH } from '../../../shared/password-policy'
-import { MAX_CODE_LENGTH, MAX_NAME_LENGTH, MAX_TOKEN_LENGTH } from '../../../shared/input-limits'
+import { MAX_CODE_LENGTH, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_TOKEN_LENGTH } from '../../../shared/input-limits'
 import { RateLimiter } from '../../auth/rateLimit'
 import { verifyMfaCode } from '../../auth/mfa'
 import { recordLoginFailure } from '../../auth/loginAudit'
@@ -131,6 +133,10 @@ export const authRouter = router({
       // works on an instance that can send mail (#111). Self-host without a relay
       // keeps the CLI reset (`npm run reset-owner-password`) as its answer.
       passwordResetAvailable: mailEnabled(),
+      // Whether the sign-up form must collect an address (#199). Read here rather
+      // than guessed from `passwordResetAvailable`: mail being available and an
+      // address being compulsory are separate facts.
+      emailRequired: emailRequiredForAccounts(),
       mfaEnabled: (cur?.mfaEnabledAt ?? null) !== null,
       user: cur ? { id: cur.id, username: cur.username, displayName: cur.displayName } : null,
     }
@@ -242,7 +248,12 @@ export const authRouter = router({
     }),
 
   /** Self-register: create an account and a brand-new household you own, then log
-   *  in. Only when open registration is enabled. */
+   *  in. Only when open registration is enabled.
+   *
+   *  An address is optional on a self-host LAN install and compulsory on a hosted
+   *  one (#199) — see `emailRequiredForAccounts`. When mail is on, the
+   *  confirmation link goes out immediately: the person typed the address
+   *  seconds ago, so a confirmation email is expected rather than surprising. */
   register: publicProcedure
     .input(
       z.object({
@@ -250,6 +261,7 @@ export const authRouter = router({
         displayName: z.string().min(1).max(MAX_NAME_LENGTH),
         password: z.string().max(MAX_PASSWORD_LENGTH),
         householdName: z.string().min(1).max(MAX_NAME_LENGTH),
+        email: z.string().email().max(MAX_EMAIL_LENGTH).nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -262,6 +274,11 @@ export const authRouter = router({
       const now = Date.now()
       if (!(await registerLimiter.check(ctx.db, key, now)).allowed) {
         throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many sign-ups from here. Try again later.' })
+      }
+
+      const email = input.email?.trim() || null
+      if (!email && emailRequiredForAccounts()) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: EMAIL_REQUIRED_MESSAGE })
       }
 
       const weak = validatePassword(input.password)
@@ -292,7 +309,7 @@ export const authRouter = router({
           const uid = await createUserWithMembership(tx, {
             username: normalizeUsername(input.username),
             displayName: input.displayName.trim(),
-            email: null,
+            email,
             passwordHash,
             householdId: hid,
             role: 'owner',
@@ -308,6 +325,19 @@ export const authRouter = router({
       }
 
       await registerLimiter.fail(ctx.db, key, now) // count this sign-up toward the per-client cap
+      if (email && mailEnabled()) {
+        const sent = await sendVerificationMail(ctx.db, { id: userId, email, displayName: input.displayName.trim() })
+        // Record the send, never the token (issue #49). Written directly: the
+        // request context has no identity until the session below exists.
+        await writeSecurityEvent(ctx.db, {
+          householdId,
+          actorUserId: userId,
+          entityType: 'user',
+          entityId: userId,
+          action: 'email_verification_sent',
+          details: { email, sent },
+        })
+      }
       ctx.setSessionCookie?.(await createSession(ctx.db, userId, householdId, ctx.sessionOrigin))
       return { ok: true as const }
     }),

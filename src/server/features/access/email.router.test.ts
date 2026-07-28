@@ -75,7 +75,12 @@ const actions = async (db: DB) => (await db.select().from(auditLog)).map((r) => 
 describe('email.status', () => {
   it('reports the address and whether this instance can send at all', async () => {
     const { authed } = await setup()
-    expect(await authed.caller.email.status()).toEqual({ enabled: true, email: ADDRESS, verified: false })
+    expect(await authed.caller.email.status()).toEqual({
+      enabled: true,
+      email: ADDRESS,
+      verified: false,
+      required: false,
+    })
 
     delete process.env.HEARTH_MAIL_TRANSPORT
     expect((await authed.caller.email.status()).enabled).toBe(false)
@@ -144,6 +149,7 @@ describe('email verification', () => {
       enabled: true,
       email: 'moved@example.com',
       verified: false,
+      required: false,
     })
   })
 

@@ -59,10 +59,13 @@ export const AccountSection = () => {
         Boolean(status.data?.passwordSet) && (changesUsername || changesEmail);
 
     // Password reset only ever mails a *confirmed* address, so on an instance
-    // that can send mail the field is worth more than a note to yourself.
-    const emailDescription = status.data?.passwordResetAvailable
-        ? "Used for invitations, and to reset your password if you lose it."
-        : "Optional — only used for invitations on this instance.";
+    // that can send mail the field is worth more than a note to yourself — and on
+    // a hosted one it's the only recovery route there is, so it can't be cleared.
+    const emailDescription = status.data?.emailRequired
+        ? "Required on this instance — it's the only way to recover your account if you lose your password."
+        : status.data?.passwordResetAvailable
+          ? "Used for invitations, and to reset your password if you lose it."
+          : "Optional — only used for invitations on this instance.";
 
     const handleSave = async () => {
         if (!form) return;

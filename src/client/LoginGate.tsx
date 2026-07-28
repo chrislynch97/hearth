@@ -22,6 +22,7 @@ export function LoginGate() {
     const [password, setPassword] = useState("");
     const [displayName, setDisplayName] = useState("");
     const [householdName, setHouseholdName] = useState("");
+    const [email, setEmail] = useState("");
     const [code, setCode] = useState("");
     const [mfaRequired, setMfaRequired] = useState(false);
     const [error, setError] = useState("");
@@ -30,6 +31,10 @@ export function LoginGate() {
     // Only offered when the instance can send mail (#111); self-host without a
     // relay resets the owner password from the CLI instead.
     const canReset = status.data?.passwordResetAvailable ?? false;
+    // A hosted instance can't recover an addressless account by any route, so it
+    // asks for one up front (#199). A LAN install doesn't, and doesn't show the
+    // field at all — the owner resets from a shell there.
+    const emailRequired = status.data?.emailRequired ?? false;
 
     async function submit() {
         setError("");
@@ -58,6 +63,9 @@ export function LoginGate() {
 
     async function submitRegister() {
         setError("");
+        if (emailRequired && !email.trim()) {
+            return setError("Enter an email address.");
+        }
         const weak = validatePassword(password);
         if (weak) return setError(weak);
         try {
@@ -66,6 +74,7 @@ export function LoginGate() {
                 displayName: displayName.trim(),
                 password,
                 householdName: householdName.trim(),
+                email: email.trim() || null,
             });
             await utils.invalidate();
         } catch (e) {
@@ -106,6 +115,16 @@ export function LoginGate() {
                         onChange={(e) => setUsername(e.currentTarget.value)}
                         autoComplete="username"
                     />
+                    {emailRequired && (
+                        <TextInput
+                            label="Email"
+                            description="Where a password-reset link would go. We'll send a confirmation link to check it's yours."
+                            value={email}
+                            onChange={(e) => setEmail(e.currentTarget.value)}
+                            type="email"
+                            autoComplete="email"
+                        />
+                    )}
                     <TextInput
                         label="Household name"
                         description="Your new household — you'll be its owner."

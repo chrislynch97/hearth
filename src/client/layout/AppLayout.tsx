@@ -11,6 +11,7 @@ import { UserMenu } from "@/layout/UserMenu";
 import { NavSection } from "@/layout/NavSection";
 import { HearthLink } from "@/layout/HearthLink";
 import { UpdateBanner } from "@/layout/UpdateBanner";
+import { AccountEmailBanner } from "@/layout/AccountEmailBanner";
 
 export function AppLayout() {
     const location = useLocation();
@@ -157,6 +158,7 @@ export function AppLayout() {
 
             <AppShell.Main>
                 <UpdateBanner />
+                <AccountEmailBanner />
                 <Outlet />
             </AppShell.Main>
 

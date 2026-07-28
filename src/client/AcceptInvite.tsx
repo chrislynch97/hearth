@@ -17,6 +17,7 @@ export function AcceptInvite({ token }: { token: string }) {
     const [username, setUsername] = useState("");
     const [displayName, setDisplayName] = useState("");
     const [password, setPassword] = useState("");
+    const [email, setEmail] = useState("");
     const [error, setError] = useState("");
 
     const loadInfo = info.mutate;
@@ -27,6 +28,10 @@ export function AcceptInvite({ token }: { token: string }) {
     // Idle counts as loading: the mutation hasn't fired yet on the first render,
     // and a "not valid" alert there would be wrong.
     const checking = info.isIdle || info.isPending;
+    // Only asked for when this instance requires an address and the invite didn't
+    // already carry one (#199) — otherwise joining a household is how an account
+    // ends up with no recovery route at all.
+    const needsEmail = info.data?.needsEmail ?? false;
 
     async function submit() {
         setError("");
@@ -34,12 +39,15 @@ export function AcceptInvite({ token }: { token: string }) {
         if (weak) return setError(weak);
         if (!username.trim() || !displayName.trim())
             return setError("Fill in your name and a username.");
+        if (needsEmail && !email.trim())
+            return setError("Enter an email address.");
         try {
             await accept.mutateAsync({
                 token,
                 username: username.trim(),
                 displayName: displayName.trim(),
                 password,
+                email: email.trim() || null,
             });
             window.location.href = "/";
         } catch (e) {
@@ -81,6 +89,16 @@ export function AcceptInvite({ token }: { token: string }) {
                         onChange={(e) => setUsername(e.currentTarget.value)}
                         autoComplete="username"
                     />
+                    {needsEmail && (
+                        <TextInput
+                            label="Email"
+                            description="Where a password-reset link would go. We'll send a confirmation link to check it's yours."
+                            value={email}
+                            onChange={(e) => setEmail(e.currentTarget.value)}
+                            type="email"
+                            autoComplete="email"
+                        />
+                    )}
                     <PasswordInput
                         label="Password"
                         description={`At least ${MIN_PASSWORD_LENGTH} characters`}
