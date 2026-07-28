@@ -1,7 +1,7 @@
 /** Pure report aggregations (spec §5.6 Reports). Amounts are integer minor
  *  units; dates are `YYYY-MM-DD`. Callers pre-filter spends by period. */
-import { normaliseToMonthly, roundMinor, type Recurrence } from '../../shared/recurrence'
-import { subtractMonths } from '../../shared/dates'
+import { normaliseToMonthly, roundMinor, type Recurrence } from '../../../shared/recurrence'
+import { subtractMonths } from '../../../shared/dates'
 
 export interface CategoryRef {
   id: string

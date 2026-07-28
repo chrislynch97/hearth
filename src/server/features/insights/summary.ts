@@ -1,5 +1,5 @@
 /** Pure dashboard aggregations (spec §5.6 D & E). Amounts are integer minor units. */
-import { subtractMonths } from '../../shared/dates'
+import { subtractMonths } from '../../../shared/dates'
 
 export interface CategoryAllocation {
   categoryId: string | null

@@ -1,5 +1,5 @@
 import { type MoneyFormat, useFormatDate } from "@/useMoney";
-import type { AccountWithValue } from "../../../../server/routers/accounts";
+import type { AccountWithValue } from "../../../../server/features/networth/accounts.router";
 import {
     ActionIcon,
     Badge,

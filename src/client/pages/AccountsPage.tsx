@@ -12,7 +12,7 @@ import {
 import { trpc } from "@/trpc";
 import { useMoney } from "@/useMoney";
 import type { Account } from "../../server/db/schema";
-import type { AccountWithValue } from "../../server/routers/accounts";
+import type { AccountWithValue } from "../../server/features/networth/accounts.router";
 import { NetWorthHeadline } from "@/features/accounts/components/NetWorkHeadline";
 import { TrendCard } from "@/features/accounts/components/TrendCard";
 import { BalancesModal } from "@/features/accounts/components/BalancesModal";

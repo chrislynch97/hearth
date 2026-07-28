@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { makeTestDb } from '../db/testdb'
-import { ensureSeed } from '../db/seed'
-import { appRouter } from '../trpc/router'
-import { todayIso } from '../../shared/dates'
-import { periodForDate } from '../../shared/period'
+import { makeTestDb } from '../../db/testdb'
+import { ensureSeed } from '../../db/seed'
+import { appRouter } from '../../trpc/router'
+import { todayIso } from '../../../shared/dates'
+import { periodForDate } from '../../../shared/period'
 
 describe('reports.overview', () => {
   it('reports spend vs allocation, category breakdown and fairness', async () => {
