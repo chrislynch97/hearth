@@ -4,7 +4,7 @@
  *  convention and internal-move rules. No DB or IO — the set of already-imported
  *  refs is passed in. Replaces the old Monzo-only mapper. */
 
-import { toMinor } from '../../shared/money'
+import { toMinor } from '../../../../shared/money'
 import type { ColumnMap, ImportProfile } from './profiles'
 
 export type RowStatus = 'new' | 'duplicate' | 'excluded' | 'foreign' | 'error'

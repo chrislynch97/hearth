@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { eq } from 'drizzle-orm'
-import { makeTestDb } from '../db/testdb'
-import { ensureSeed } from '../db/seed'
-import { appRouter } from '../trpc/router'
-import { expense } from '../db/schema'
+import { makeTestDb } from '../../db/testdb'
+import { ensureSeed } from '../../db/seed'
+import { appRouter } from '../../trpc/router'
+import { expense } from '../../db/schema'
 
 describe('spends router — needsPot filter', () => {
   it('excludes main-account (settled, pot-less) spends from "needs a pot"', async () => {

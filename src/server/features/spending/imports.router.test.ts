@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { makeTestDb } from '../db/testdb'
-import { ensureSeed, provisionHousehold } from '../db/seed'
-import { appRouter } from '../trpc/router'
+import { makeTestDb } from '../../db/testdb'
+import { ensureSeed, provisionHousehold } from '../../db/seed'
+import { appRouter } from '../../trpc/router'
 
 const CSV = [
   'Transaction ID,Date,Type,Name,Amount,Currency,Local currency,Category',

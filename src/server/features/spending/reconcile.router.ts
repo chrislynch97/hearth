@@ -1,14 +1,14 @@
 import { z } from 'zod'
 import { desc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
-import { router, publicProcedure } from '../trpc/trpc'
-import { scopeWhere } from '../trpc/tenant'
-import { recordAudit } from '../trpc/audit'
-import { spendTransaction, pot, reconciliationBatch } from '../db/schema'
-import type { ReconciliationBatch } from '../db/schema'
-import type { DBOrTx } from '../db/client'
-import { newId } from '../../shared/ids'
-import { computeBacklog, type BacklogResidual } from '../spending/backlog'
+import { router, publicProcedure } from '../../trpc/trpc'
+import { scopeWhere } from '../../trpc/tenant'
+import { recordAudit } from '../../trpc/audit'
+import { spendTransaction, pot, reconciliationBatch } from '../../db/schema'
+import type { ReconciliationBatch } from '../../db/schema'
+import type { DBOrTx } from '../../db/client'
+import { newId } from '../../../shared/ids'
+import { computeBacklog, type BacklogResidual } from './backlog'
 
 /** A batch's contribution to its pot/payer residual: what was required minus what
  *  actually moved. `movedAmount` null means "moved in full", i.e. no residual. */
