@@ -1,7 +1,8 @@
-import { Alert, Anchor, Button, Group } from "@mantine/core";
+import { Alert, Anchor, Button, Group, Text } from "@mantine/core";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { trpc } from "@/trpc";
+import { useEmailConfirmation } from "@/useEmailConfirmation";
 
 // Dismissal is keyed on the address it was shown for, so moving to a new
 // (again unconfirmed) address brings the nudge back rather than staying hidden
@@ -9,41 +10,41 @@ import { trpc } from "@/trpc";
 const DISMISS_KEY = "hearth:email-nudge-dismissed";
 const NO_ADDRESS = "none";
 
-/** Nudges an account that predates the require-an-address rule into getting a
- *  confirmed one (#199). Deliberately a prompt and not a gate: these accounts
- *  work fine today, and locking someone out of their own finances to make a
- *  recovery point would be worse than the gap it closes.
+/** Nudges an account towards a *confirmed* address, which is what password reset
+ *  actually needs (#199, #198). Deliberately a prompt and not a gate: these
+ *  accounts work fine today, and locking someone out of their own finances to
+ *  make a recovery point would be worse than the gap it closes.
  *
- *  Only on an instance that both requires an address and can send mail — without
- *  a relay there is nothing to confirm with, and asking would be nonsense. */
+ *  Only on an instance that can send mail — without a relay there is nothing to
+ *  confirm with, and asking would be nonsense. */
 export const AccountEmailBanner = () => {
-    const status = trpc.email.status.useQuery();
-    const send = trpc.email.sendVerification.useMutation();
+    const status = trpc.auth.status.useQuery();
+    const { enabled, email, verified, required, sentTo, error, sending, send } =
+        useEmailConfirmation();
     const [dismissed, setDismissed] = useState(() =>
         localStorage.getItem(DISMISS_KEY)
     );
-    const [sent, setSent] = useState(false);
 
-    const data = status.data;
-    const address = data?.email ?? null;
+    // No address at all is only worth raising where one is required (#199) —
+    // going without is a legitimate choice on a LAN install. An address that's
+    // present but unproven is dead for recovery anywhere there's a password to
+    // lose (#198), and an invited account arrives in exactly that state.
+    const worthSaying = email
+        ? required || Boolean(status.data?.passwordSet)
+        : required;
 
     if (
-        !data?.enabled ||
-        !data.required ||
-        data.verified ||
-        dismissed === (address ?? NO_ADDRESS)
+        !enabled ||
+        verified ||
+        !worthSaying ||
+        dismissed === (email ?? NO_ADDRESS)
     ) {
         return null;
     }
 
     const dismiss = () => {
-        localStorage.setItem(DISMISS_KEY, address ?? NO_ADDRESS);
-        setDismissed(address ?? NO_ADDRESS);
-    };
-
-    const confirm = async () => {
-        await send.mutateAsync();
-        setSent(true);
+        localStorage.setItem(DISMISS_KEY, email ?? NO_ADDRESS);
+        setDismissed(email ?? NO_ADDRESS);
     };
 
     return (
@@ -51,26 +52,27 @@ export const AccountEmailBanner = () => {
             color="orange"
             variant="light"
             withCloseButton
+            closeButtonLabel="Dismiss"
             onClose={dismiss}
             title={
-                address ? "Confirm your email address" : "Add an email address"
+                email ? "Confirm your email address" : "Add an email address"
             }
             mb="lg"
         >
             <Group gap="sm">
                 <span>
-                    {sent
-                        ? `Check ${address} for the confirmation link.`
-                        : address
+                    {sentTo
+                        ? `Check ${sentTo} for the confirmation link.`
+                        : email
                           ? "Until it's confirmed, it can't reset your password if you lose it."
                           : "Without one there's no way to reset your password if you lose it."}
                 </span>
-                {!sent &&
-                    (address ? (
+                {!sentTo &&
+                    (email ? (
                         <Button
                             size="xs"
-                            loading={send.isPending}
-                            onClick={() => void confirm()}
+                            loading={sending}
+                            onClick={() => void send()}
                         >
                             Send confirmation email
                         </Button>
@@ -80,6 +82,11 @@ export const AccountEmailBanner = () => {
                         </Anchor>
                     ))}
             </Group>
+            {error && (
+                <Text size="sm" c="red" mt="xs">
+                    {error}
+                </Text>
+            )}
         </Alert>
     );
 };
