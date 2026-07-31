@@ -1,68 +1,51 @@
-import { useState } from "react";
 import { Alert, Anchor, Badge, Button, Group, Text } from "@mantine/core";
-import { trpc } from "@/trpc";
+import type { EmailConfirmation } from "@/useEmailConfirmation";
+
+export interface EmailVerificationProps {
+    confirmation: EmailConfirmation;
+}
 
 /** Confirmation state for the account's email address, and the button that sends
  *  a fresh link (#111). Only rendered on an instance that can send mail — an
  *  address on a self-host install with no relay is just a note to itself, and
- *  telling people to "confirm" it with no way to would be nonsense. */
-export const EmailVerification = () => {
-    const status = trpc.email.status.useQuery();
-    const send = trpc.email.sendVerification.useMutation();
+ *  telling people to "confirm" it with no way to would be nonsense. State comes
+ *  from the parent so the confirm-on-save dialog and this card agree (#198). */
+export const EmailVerification = ({ confirmation }: EmailVerificationProps) => {
+    const { enabled, email, verified, sentTo, error, sending, send } =
+        confirmation;
 
-    const [error, setError] = useState("");
-    const [sentTo, setSentTo] = useState("");
-
-    const data = status.data;
-
-    if (!data?.enabled || !data.email) return null;
-
-    const handleSend = async () => {
-        setError("");
-        try {
-            await send.mutateAsync();
-            setSentTo(data.email ?? "");
-        } catch (e) {
-            setError(
-                e instanceof Error
-                    ? e.message
-                    : "Could not send the verification email."
-            );
-        }
-    };
-
-    if (data.verified) {
-        return (
-            <Group gap="xs">
-                <Badge color="moss" variant="light">
-                    Confirmed
-                </Badge>
-                <Text size="xs" c="dimmed">
-                    This address can be used to reset your password.
-                </Text>
-            </Group>
-        );
-    }
+    if (!enabled || !email) return null;
 
     return (
         <>
-            <Group gap="xs">
-                <Badge color="orange" variant="light">
-                    Not confirmed
-                </Badge>
-                <Text size="xs" c="dimmed" style={{ flex: 1 }}>
-                    Confirm this address so you can reset your password if you
-                    lose it.
-                </Text>
-                <Button
-                    size="compact-sm"
-                    variant="default"
-                    onClick={() => void handleSend()}
-                    loading={send.isPending}
-                >
-                    Send confirmation email
-                </Button>
-            </Group>
+            {verified ? (
+                <Group gap="xs">
+                    <Badge color="moss" variant="light">
+                        Confirmed
+                    </Badge>
+                    <Text size="xs" c="dimmed">
+                        This address can be used to reset your password.
+                    </Text>
+                </Group>
+            ) : (
+                <Group gap="xs">
+                    <Badge color="orange" variant="light">
+                        Not confirmed
+                    </Badge>
+                    <Text size="xs" c="dimmed" style={{ flex: 1 }}>
+                        Confirm this address so you can reset your password if
+                        you lose it.
+                    </Text>
+                    <Button
+                        size="compact-sm"
+                        variant="default"
+                        onClick={() => void send()}
+                        loading={sending}
+                    >
+                        Send confirmation email
+                    </Button>
+                </Group>
+            )}
             {sentTo && (
                 <Alert color="moss" variant="light" title="Email sent">
                     <Text size="sm">
@@ -73,7 +56,7 @@ export const EmailVerification = () => {
                             component="button"
                             type="button"
                             size="sm"
-                            onClick={() => void handleSend()}
+                            onClick={() => void send()}
                         >
                             send another
                         </Anchor>

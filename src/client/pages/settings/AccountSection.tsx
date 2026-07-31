@@ -11,6 +11,8 @@ import {
     Title,
 } from "@mantine/core";
 import { trpc } from "@/trpc";
+import { useEmailConfirmation } from "@/useEmailConfirmation";
+import { ConfirmEmailChange } from "./ConfirmEmailChange";
 import { EmailVerification } from "./EmailVerification";
 
 interface AccountForm {
@@ -24,10 +26,13 @@ export const AccountSection = () => {
     const me = trpc.users.me.useQuery();
     const status = trpc.auth.status.useQuery();
     const update = trpc.users.updateProfile.useMutation();
+    const confirmation = useEmailConfirmation();
 
     // One derived form object (see GeneralSection) — no per-field copy line.
     const [edits, setForm] = useState<AccountForm | null>(null);
     const [currentPassword, setCurrentPassword] = useState("");
+    const [confirming, setConfirming] = useState(false);
+    const [pending, setPending] = useState<"save" | "send" | null>(null);
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState("");
 
@@ -67,31 +72,47 @@ export const AccountSection = () => {
           ? "Used for invitations, and to reset your password if you lose it."
           : "Optional — only used for invitations on this instance.";
 
-    const handleSave = async () => {
+    // Moving the address drops its confirmed state, so warn before saving (#198).
+    // Nothing to warn about on an instance that can't send the link anyway, or
+    // when the address is being cleared rather than moved.
+    const newEmail = form.email.trim();
+    const confirmsEmailChange =
+        confirmation.enabled && changesEmail && newEmail !== "";
+
+    const handleSave = async (sendConfirmation = false) => {
         if (!form) return;
         setError("");
+        setPending(sendConfirmation ? "send" : "save");
         try {
             await update.mutateAsync({
                 username: form.username.trim(),
                 displayName: form.displayName.trim(),
-                email: form.email.trim() || null,
+                email: newEmail || null,
                 currentPassword: needsPassword ? currentPassword : undefined,
             });
-            await Promise.all([
-                utils.users.me.invalidate(),
-                utils.auth.status.invalidate(),
-                // A changed address goes back to unconfirmed (#111), so the
-                // verification card has to re-read its state.
-                utils.email.status.invalidate(),
-            ]);
-            setCurrentPassword("");
-            setSaved(true);
-            setTimeout(() => setSaved(false), 2000);
         } catch (e) {
             setError(
                 e instanceof Error ? e.message : "Could not save your profile."
             );
+            setPending(null);
+            setConfirming(false);
+            return;
         }
+        // Saved. A failed send is reported by the verification card below rather
+        // than as a save error — the profile change did land.
+        if (sendConfirmation) await confirmation.send(newEmail);
+        await Promise.all([
+            utils.users.me.invalidate(),
+            utils.auth.status.invalidate(),
+            // A changed address goes back to unconfirmed (#111), so the
+            // verification card has to re-read its state.
+            utils.email.status.invalidate(),
+        ]);
+        setCurrentPassword("");
+        setPending(null);
+        setConfirming(false);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
     };
 
     return (
@@ -121,7 +142,7 @@ export const AccountSection = () => {
                     onChange={(e) => set("email", e.currentTarget.value)}
                     type="email"
                 />
-                <EmailVerification />
+                <EmailVerification confirmation={confirmation} />
                 {needsPassword && (
                     <PasswordInput
                         label="Current password"
@@ -144,14 +165,24 @@ export const AccountSection = () => {
                         </Text>
                     )}
                     <Button
-                        onClick={() => void handleSave()}
-                        loading={update.isPending}
+                        onClick={() => {
+                            if (confirmsEmailChange) setConfirming(true);
+                            else void handleSave();
+                        }}
+                        loading={update.isPending && !confirming}
                         disabled={needsPassword && !currentPassword}
                     >
                         Save
                     </Button>
                 </Group>
             </Stack>
+            <ConfirmEmailChange
+                opened={confirming}
+                email={newEmail}
+                pending={pending}
+                onCancel={() => setConfirming(false)}
+                onConfirm={(send) => void handleSave(send)}
+            />
         </Card>
     );
 };
