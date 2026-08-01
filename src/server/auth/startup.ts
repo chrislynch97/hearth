@@ -36,8 +36,10 @@ export interface StartupSafetyInput {
   /** Whether anyone who can reach the instance can create an account. */
   allowOpenRegistration: boolean
   /** HEARTH_PUBLIC=1 (`isPublicDeploy`). Most problems below are states that are
-   *  legitimate on a LAN, so the caller decides fatal-vs-warn from this; the
-   *  trust-proxy check is the exception and only fires when it's true. */
+   *  legitimate on a LAN, so the caller decides fatal-vs-warn from this. It also
+   *  widens two of the checks, which a loopback bind would otherwise excuse: a
+   *  public instance bound to loopback is fronted by a proxy on the same host,
+   *  not unreachable (#115). The trust-proxy check only fires when it's true. */
   isPublic: boolean
   /** HEARTH_TRUST_PROXY, RAW — deliberately not run through `parseTrustProxy`.
    *  Unset and an explicit '0' both parse to `false`, and the check below turns
@@ -62,19 +64,26 @@ export interface StartupSafetyInput {
 export function startupSafetyProblems(input: StartupSafetyInput): string[] {
   const problems: string[] = []
 
-  // HEARTH_ALLOW_OPEN only does anything on a non-loopback bind, and what it
-  // does is switch off the guard that stops anonymous callers being resolved as
-  // the owner. Flagged even when an owner password is currently set: the flag
-  // has no legitimate purpose on a public box, and clearing that password later
-  // would silently throw the instance open with nothing left to catch it.
-  if (input.allowOpen && !input.bindIsLoopback) {
+  // HEARTH_ALLOW_OPEN switches off the guard that stops anonymous callers being
+  // resolved as the owner. Flagged even when an owner password is currently set:
+  // the flag has no legitimate purpose on a public box, and clearing that
+  // password later would silently throw the instance open with nothing left to
+  // catch it. On a LAN instance only a non-loopback bind can expose anything; on
+  // a declared-public one the bind address proves nothing, because a loopback
+  // bind there means a reverse proxy on the same host (#115).
+  if (input.allowOpen && (!input.bindIsLoopback || input.isPublic)) {
     problems.push(
-      input.locked
-        ? `HEARTH_ALLOW_OPEN=1 is set while bound to ${input.host}. It has no effect right now ` +
-            '(an owner password is set), but it disarms the guard that would otherwise stop an ' +
-            'anonymous caller acting as the owner if that password were ever cleared. Unset it.'
-        : `HEARTH_ALLOW_OPEN=1 is set while bound to ${input.host} and no owner password is set — ` +
-            'anyone who can reach this address has full owner access. Unset it and set an owner password.',
+      input.isPublic
+        ? 'HEARTH_ALLOW_OPEN=1 is set on an instance declared internet-facing (HEARTH_PUBLIC=1). ' +
+            'Open access hands every anonymous caller the first household as its owner, which is ' +
+            'never right where the accounts on this instance belong to different people. The ' +
+            'runtime guard ignores the flag here — unset it so nothing depends on that.'
+        : input.locked
+          ? `HEARTH_ALLOW_OPEN=1 is set while bound to ${input.host}. It has no effect right now ` +
+              '(an owner password is set), but it disarms the guard that would otherwise stop an ' +
+              'anonymous caller acting as the owner if that password were ever cleared. Unset it.'
+          : `HEARTH_ALLOW_OPEN=1 is set while bound to ${input.host} and no owner password is set — ` +
+              'anyone who can reach this address has full owner access. Unset it and set an owner password.',
     )
   }
 
@@ -92,13 +101,15 @@ export function startupSafetyProblems(input: StartupSafetyInput): string[] {
   // A public instance is always behind a TLS-terminating proxy or tunnel — the
   // app speaks plain HTTP — so an unset HEARTH_TRUST_PROXY leaves `req.ip` as
   // that proxy on every request. Three defences fail at once, all invisibly: the
-  // per-IP login limiter throttles the whole internet as one client (ten bad
-  // guesses from anyone locks everyone out), the session cookie loses `Secure`
-  // because `x-forwarded-proto` is only honoured from a trusted proxy, and every
-  // session and audit row records the same address. Public-only: a LAN instance
-  // is usually directly exposed, and warning there would be noise that trains
-  // people to skip past the two checks above.
-  if (input.isPublic && !input.bindIsLoopback && (input.trustProxy ?? '').trim() === '') {
+  // per-IP login limiter throttles the whole internet as one client (enough bad
+  // guesses from anyone locks every household out), the session cookie loses
+  // `Secure` because `x-forwarded-proto` is only honoured from a trusted proxy,
+  // and every session and audit row records the same address. Checked whatever
+  // the bind address: a public instance bound to loopback is the *most* likely
+  // one to have a proxy on the same host in front of it (#115). Public-only: a
+  // LAN instance is usually directly exposed, and warning there would be noise
+  // that trains people to skip past the two checks above.
+  if (input.isPublic && (input.trustProxy ?? '').trim() === '') {
     problems.push(
       `HEARTH_PUBLIC=1 is set while bound to ${input.host}, but HEARTH_TRUST_PROXY is unset. ` +
         'A public instance sits behind a proxy, so every request will look like it came from ' +

@@ -28,6 +28,7 @@ async function buildApp(opts: {
   locked: boolean
   bindIsLoopback?: boolean
   allowOpen?: boolean
+  isPublic?: boolean
 }): Promise<FastifyInstance> {
   const db = await makeTestDb()
   await ensureSeed(db)
@@ -51,8 +52,11 @@ async function buildApp(opts: {
   const app = Fastify({ routerOptions: { maxParamLength: 5000 }, bodyLimit: 64 * 1024 * 1024 })
   await registerTrpcScope(app, {
     db,
-    bindIsLoopback: opts.bindIsLoopback ?? true,
-    allowOpen: opts.allowOpen ?? false,
+    openGuard: {
+      bindIsLoopback: opts.bindIsLoopback ?? true,
+      allowOpen: opts.allowOpen ?? false,
+      isPublic: opts.isPublic ?? false,
+    },
     allowedOrigins: [],
   })
   await app.register(fastifyStatic, { root: clientDir })
@@ -127,6 +131,23 @@ describe('the /trpc gate is bound to the route, not to a req.url prefix', () => 
       expect(res.statusCode, url).toBe(403)
       expect(res.json().error, url).toMatch(/no owner password/)
     }
+    await app.close()
+  })
+
+  // #115: on a declared-public instance the two states that excuse open access
+  // on a LAN — a loopback bind, HEARTH_ALLOW_OPEN=1 — excuse nothing, so the
+  // guard still refuses everything but the lockdown endpoints.
+  it('holds on a public deploy despite a loopback bind and the open opt-in', async () => {
+    const app = await buildApp({ locked: false, bindIsLoopback: true, allowOpen: true, isPublic: true })
+    const res = await app.inject({ method: 'GET', url: '/trpc/pots.list' })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error).toMatch(/no owner password/)
+
+    // The first-run endpoints stay past the gate, or there'd be no way to set a
+    // password. Only the gate's verdict is asserted: the resolver behind it runs
+    // against the process-wide db, not this test's, so it can't answer here.
+    const status = await app.inject({ method: 'GET', url: '/trpc/auth.status' })
+    expect(status.statusCode).not.toBe(403)
     await app.close()
   })
 

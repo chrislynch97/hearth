@@ -46,18 +46,36 @@ import { verifyMfaCode } from '../../auth/mfa'
 import { recordLoginFailure } from '../../auth/loginAudit'
 import type { Context } from '../../trpc/context'
 
-// Throttle password attempts: 10 per 15 minutes per client, then a 15-minute block.
+// Throttle password attempts: 30 per 15 minutes per client, then a 15-minute
+// block. Deliberately looser than the per-client-per-account cap below, because
+// a block here is the one with collateral: on a hosted instance whole buildings
+// share an egress address (office NAT, CGNAT, a VPN exit), so a cap tight enough
+// to stop one person guessing at one account is also tight enough for that
+// person to lock every unrelated household behind the same address out of
+// signing in (#115).
 const loginLimiter = new RateLimiter('login-ip', {
+  windowMs: 15 * 60 * 1000,
+  maxAttempts: 30,
+  blockMs: 15 * 60 * 1000,
+})
+
+// The tight throttle, keyed on client AND target account: 10 attempts per 15
+// minutes, the cap the per-client limiter used to carry. A blocked key names one
+// (attacker, victim) pair, so tripping it can neither lock the account's real
+// owner out (they're a different client) nor stop a neighbour on the same
+// address signing in to their own household.
+const loginClientAccountLimiter = new RateLimiter('login-ip-account', {
   windowMs: 15 * 60 * 1000,
   maxAttempts: 10,
   blockMs: 15 * 60 * 1000,
 })
 
-// Second, account-scoped throttle keyed on the target username, to catch a
+// Third, account-scoped throttle keyed on the target username, to catch a
 // *distributed* brute-force of one account (an attacker rotating source IPs to
-// stay under the per-IP cap). The cap is deliberately higher than the per-IP cap
-// so a single client — already limited to 10 — can never trip it, which stops an
-// attacker from locking a known victim out of their own account (griefing).
+// stay under the caps above). This is the one that can lock a victim out of
+// their own account, so the cap is set well above what one client can spend on
+// one account (10), leaving griefing to an attacker who controls five source
+// addresses — and costing the victim a 15-minute wait, not their account.
 const loginAccountLimiter = new RateLimiter('login-account', {
   windowMs: 15 * 60 * 1000,
   maxAttempts: 50,
@@ -119,7 +137,7 @@ export const authRouter = router({
     const owner = await getOwnerUser(ctx.db)
     const s = await getValidSession(ctx.db, ctx.sessionToken)
     const cur = s ? await getUser(ctx.db, s.userId) : locked ? null : owner
-    const { bindIsLoopback, allowOpen } = openGuardConfig()
+    const openGuard = openGuardConfig()
     return {
       passwordSet: locked,
       authenticated: locked ? s !== null : true,
@@ -128,7 +146,7 @@ export const authRouter = router({
       // "set your owner password" screen instead of a dead app (#34). `auth.status`
       // and `auth.setPassword` are on the gate's allowlist, so this reaches the
       // client and the gate can act on it.
-      firstRunRequired: isOpenAccessBlocked({ locked, bindIsLoopback, allowOpen }),
+      firstRunRequired: isOpenAccessBlocked({ locked, ...openGuard }),
       // Whether the login screen should offer "forgot your password?" — it only
       // works on an instance that can send mail (#111). Self-host without a relay
       // keeps the CLI reset (`npm run reset-owner-password`) as its answer.
@@ -155,20 +173,27 @@ export const authRouter = router({
 
       const key = ctx.clientKey ?? 'unknown'
       const acctKey = normalizeUsername(input.username)
+      // The client+account key. `|` can't appear in an IP, so no pair of
+      // (client, account) values can collide on one key.
+      const pairKey = `${key}|${acctKey}`
       const now = Date.now()
-      const ipLimit = await loginLimiter.check(ctx.db, key, now)
-      const acctLimit = await loginAccountLimiter.check(ctx.db, acctKey, now)
-      if (!ipLimit.allowed || !acctLimit.allowed) {
-        const retryAfterMs = Math.max(ipLimit.retryAfterMs, acctLimit.retryAfterMs)
+      const limits = [
+        await loginLimiter.check(ctx.db, key, now),
+        await loginClientAccountLimiter.check(ctx.db, pairKey, now),
+        await loginAccountLimiter.check(ctx.db, acctKey, now),
+      ]
+      if (limits.some((l) => !l.allowed)) {
+        const retryAfterMs = Math.max(...limits.map((l) => l.retryAfterMs))
         throw new TRPCError({
           code: 'TOO_MANY_REQUESTS',
           message: `Too many attempts. Try again in ${Math.ceil(retryAfterMs / 60000)} minute(s).`,
         })
       }
 
-      // Record a failed attempt against both the per-IP and per-account limiters.
+      // Record a failed attempt against all three limiters.
       const recordFail = async () => {
         await loginLimiter.fail(ctx.db, key, now)
+        await loginClientAccountLimiter.fail(ctx.db, pairKey, now)
         await loginAccountLimiter.fail(ctx.db, acctKey, now)
       }
 
@@ -196,6 +221,7 @@ export const authRouter = router({
       }
 
       await loginLimiter.reset(ctx.db, key)
+      await loginClientAccountLimiter.reset(ctx.db, pairKey)
       await loginAccountLimiter.reset(ctx.db, acctKey)
       const householdId = await defaultHouseholdFor(ctx.db, u.id)
       // Record the successful sign-in against the household the session lands in.

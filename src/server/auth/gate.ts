@@ -2,6 +2,8 @@
  *  and side-effect-free so they can be unit-tested without booting the server
  *  (importing index.ts would run `main()` and start listening). */
 
+import { isPublicDeploy } from './startup'
+
 /** Hosts that only accept connections from the same machine. Binding to one of
  *  these means an open instance isn't actually reachable from the network, so the
  *  open-on-public guard doesn't apply. `127.0.0.0/8` is loopback in its entirety,
@@ -19,31 +21,47 @@ export function isLoopbackHost(host: string): boolean {
   return LOOPBACK_HOSTS.has(bare) || LOOPBACK_V4.test(bare)
 }
 
+export interface OpenGuardConfig {
+  /** Whether the bind address is unreachable from off-box. */
+  bindIsLoopback: boolean
+  /** HEARTH_ALLOW_OPEN=1 — operator opt-in to open (password-less) access. */
+  allowOpen: boolean
+  /** HEARTH_PUBLIC=1 — the operator declared this instance internet-facing. */
+  isPublic: boolean
+}
+
 /** The open-on-public guard's runtime config, read from the process environment.
  *  Shared by the HTTP gate (index.ts) and `auth.status` so the client can be told
  *  it needs a first-run password screen without the two layers drifting on how
  *  "reachable off-box" and "operator opted in" are computed. Defaults mirror
- *  index.ts's HOST/HEARTH_ALLOW_OPEN handling. */
-export function openGuardConfig(env: NodeJS.ProcessEnv = process.env): {
-  bindIsLoopback: boolean
-  allowOpen: boolean
-} {
+ *  index.ts's HOST/HEARTH_ALLOW_OPEN handling. Values are RAW: the policy that
+ *  reads them lives in `isOpenAccessBlocked`, and the startup checks need to see
+ *  a flag that runtime ignores in order to tell the operator to remove it. */
+export function openGuardConfig(env: NodeJS.ProcessEnv = process.env): OpenGuardConfig {
   return {
     bindIsLoopback: isLoopbackHost(env.HOST ?? '0.0.0.0'),
     allowOpen: env.HEARTH_ALLOW_OPEN === '1',
+    isPublic: isPublicDeploy(env),
   }
 }
 
 /** True when the instance is open (no owner password) AND reachable off-box AND
  *  the operator hasn't opted into open access — the "bricked first-run" state the
  *  UI must break out of with a set-owner-password gate (#34). In that state the
- *  HTTP gate 403s everything but the `OPEN_ON_PUBLIC_ALLOWED` auth endpoints. */
-export function isOpenAccessBlocked(opts: {
-  locked: boolean
-  bindIsLoopback: boolean
-  allowOpen: boolean
-}): boolean {
-  return !opts.locked && !opts.bindIsLoopback && !opts.allowOpen
+ *  HTTP gate 403s everything but the `OPEN_ON_PUBLIC_ALLOWED` auth endpoints.
+ *
+ *  A declared-public instance (HEARTH_PUBLIC=1) overrides both escape hatches
+ *  (#115). It is reachable off-box whatever it binds — a loopback bind there
+ *  means a reverse proxy on the same host, not an unreachable server — and
+ *  HEARTH_ALLOW_OPEN, which resolves every anonymous caller as the owner of the
+ *  first household, has no meaning where the tenants don't trust each other. The
+ *  boot checks refuse to start on that flag; this makes it inert even if a
+ *  deployment somehow gets past them. */
+export function isOpenAccessBlocked(opts: OpenGuardConfig & { locked: boolean }): boolean {
+  if (opts.locked) return false
+  const reachable = opts.isPublic || !opts.bindIsLoopback
+  const optedIn = opts.allowOpen && !opts.isPublic
+  return reachable && !optedIn
 }
 
 /** Origins the operator has explicitly declared safe, from HEARTH_ALLOWED_ORIGINS
