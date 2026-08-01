@@ -19,7 +19,8 @@ import { createContext, rememberValidatedSession } from './trpc/context'
 import { parseSessionCookie } from './auth/cookies'
 import { getValidSession, isInstanceLocked } from './auth/session'
 import { PUBLIC_PROCEDURES } from './trpc/trpc'
-import { allProceduresIn, isAllowedOrigin, trpcProcedures } from './auth/gate'
+import { allProceduresIn, isAllowedOrigin, isOpenAccessBlocked, trpcProcedures } from './auth/gate'
+import type { OpenGuardConfig } from './auth/gate'
 import type { DB } from './db/client'
 
 export const TRPC_PREFIX = '/trpc'
@@ -52,17 +53,17 @@ function requestedProcedures(req: FastifyRequest): string[] {
 
 export interface TrpcScopeOptions {
   db: DB
-  /** Whether the server is bound to a loopback-only address. */
-  bindIsLoopback: boolean
-  /** HEARTH_ALLOW_OPEN=1 — operator opt-in to open (password-less) access. */
-  allowOpen: boolean
+  /** Bind address, opt-in and public-deploy flags for the open-on-public guard.
+   *  Passed whole and evaluated through `isOpenAccessBlocked`, so this gate and
+   *  the `firstRunRequired` flag the client reads can't drift apart. */
+  openGuard: OpenGuardConfig
   /** Extra origins accepted by the cross-origin write guard. */
   allowedOrigins: string[]
 }
 
 export async function registerTrpcScope(
   app: FastifyInstance,
-  { db, bindIsLoopback, allowOpen, allowedOrigins }: TrpcScopeOptions,
+  { db, openGuard, allowedOrigins }: TrpcScopeOptions,
 ): Promise<void> {
   await app.register(
     async (scope) => {
@@ -103,15 +104,18 @@ export async function registerTrpcScope(
         const procedures = requestedProcedures(req)
 
         if (!(await isInstanceLocked(db))) {
-          // Open instance. Fine on loopback, or when the operator has opted in.
+          // Open instance. Fine on loopback, or when the operator has opted in —
+          // neither of which a declared-public deploy can claim (#115).
           // Otherwise it's reachable from the network with no password, so anyone
           // could act as the owner — allow only the endpoints needed to lock it.
-          if (bindIsLoopback || allowOpen) return
+          if (!isOpenAccessBlocked({ locked: false, ...openGuard })) return
           if (allProceduresIn(procedures, OPEN_ON_PUBLIC_ALLOWED)) return
           return reply.code(403).send({
-            error:
-              'This instance has no owner password and is exposed on a non-loopback address. ' +
-              'Set an owner password, or set HEARTH_ALLOW_OPEN=1 to permit open access.',
+            error: openGuard.isPublic
+              ? 'This instance has no owner password and is declared internet-facing. ' +
+                'Set an owner password to use it.'
+              : 'This instance has no owner password and is exposed on a non-loopback address. ' +
+                'Set an owner password, or set HEARTH_ALLOW_OPEN=1 to permit open access.',
           })
         }
 

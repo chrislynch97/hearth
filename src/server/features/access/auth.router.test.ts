@@ -23,6 +23,12 @@ function makeCaller(db: DB, sessionToken?: string) {
   return { caller, cookies }
 }
 
+/** A caller that looks like it came from a particular client address, so the
+ *  login limiters (keyed on it) can be exercised from more than one "client". */
+function makeClient(db: DB, clientKey: string) {
+  return appRouter.createCaller({ db, householdId: 'household', role: 'owner', clientKey })
+}
+
 /** Set the owner password (from the open instance) and return an authed caller. */
 async function lockAndLogin(db: DB) {
   const setup = makeCaller(db)
@@ -111,6 +117,38 @@ describe('auth router', () => {
 
     const authed = makeCaller(db, issued)
     expect((await authed.caller.auth.status()).authenticated).toBe(true)
+  })
+
+  // #115: hosted, the accounts on one instance belong to people who don't trust
+  // each other, and plenty of them share an egress address. A login block must
+  // therefore land on the (client, account) pair that earned it and nowhere
+  // else — not on the account, and not on everyone behind that address.
+  it('a client exhausting its attempts blocks only itself, at only that account', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    await makeCaller(db).caller.auth.setPassword({ newPassword: PW }) // lock the instance
+
+    const attacker = makeClient(db, '203.0.113.9')
+    for (let i = 0; i < 10; i++) {
+      await expect(attacker.auth.login({ username: USER, password: `wrong-${i}` })).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+      })
+    }
+    // The 11th attempt at that account from that client is refused outright.
+    await expect(attacker.auth.login({ username: USER, password: 'wrong-again' })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+    })
+
+    // Another account from the same address still gets a real answer: the
+    // per-client cap is deliberately looser than the per-client-per-account one,
+    // so a NAT neighbour isn't collateral.
+    await expect(attacker.auth.login({ username: 'nobody', password: 'nope' })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+
+    // And the account's real owner, on a different address, signs in normally.
+    const victim = makeClient(db, '198.51.100.4')
+    expect(await victim.auth.login({ username: USER, password: PW })).toEqual({ ok: true })
   })
 
   it('caps the length of unauthenticated inputs, before any scrypt work (#45)', async () => {

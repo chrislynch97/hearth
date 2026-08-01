@@ -59,6 +59,22 @@ describe('startupSafetyProblems', () => {
     ).toEqual([])
   })
 
+  // ...unless the operator has declared the instance internet-facing, where a
+  // loopback bind means a reverse proxy on the same host (#115).
+  it('flags HEARTH_ALLOW_OPEN on a public deploy whatever it binds', () => {
+    const problems = startupSafetyProblems({
+      ...SAFE,
+      isPublic: true,
+      trustProxy: '1',
+      allowOpen: true,
+      bindIsLoopback: true,
+      host: '127.0.0.1',
+    })
+    expect(problems).toHaveLength(1)
+    expect(problems[0]).toContain('HEARTH_ALLOW_OPEN=1')
+    expect(problems[0]).toContain('HEARTH_PUBLIC=1')
+  })
+
   it('flags open registration with no owner password', () => {
     const problems = startupSafetyProblems({ ...SAFE, allowOpenRegistration: true, locked: false })
     expect(problems).toHaveLength(1)
@@ -122,8 +138,12 @@ describe('startupSafetyProblems — trust proxy', () => {
     expect(startupSafetyProblems({ ...SAFE, trustProxy: undefined })).toEqual([])
   })
 
-  // Loopback isn't reachable off-box, so there is no proxy chain to describe.
-  it('says nothing on a loopback bind', () => {
-    expect(startupSafetyProblems({ ...PUBLIC, bindIsLoopback: true, host: '127.0.0.1' })).toEqual([])
+  // A public instance bound to loopback is the most likely one of all to have a
+  // proxy on the same host in front of it, and it inherits the same shared-IP
+  // limiter and missing-Secure-cookie failures (#115).
+  it('flags a loopback bind too', () => {
+    const problems = startupSafetyProblems({ ...PUBLIC, bindIsLoopback: true, host: '127.0.0.1' })
+    expect(problems).toHaveLength(1)
+    expect(problems[0]).toContain('HEARTH_TRUST_PROXY is unset')
   })
 })

@@ -13,7 +13,7 @@ import { startUpdateScheduler } from './updateScheduler'
 import { isInstanceLocked, startSessionPurgeScheduler } from './auth/session'
 import { allowedOrigins, openGuardConfig } from './auth/gate'
 import { registerTrpcScope } from './httpGate'
-import { isPublicDeploy, startupSafetyProblems } from './auth/startup'
+import { startupSafetyProblems } from './auth/startup'
 import { getInstanceSettings } from './db/instanceSettings'
 import { parseTrustProxy } from './auth/trustProxy'
 import { redactUrl } from './logRedact'
@@ -26,11 +26,12 @@ const HOST = process.env.HOST ?? '0.0.0.0'
 // Read the open-on-public guard config through the shared helper so this gate and
 // `auth.status` (which tells the client whether to show the first-run screen) can
 // never disagree on how "reachable off-box" / "operator opted in" are computed.
-const { bindIsLoopback: BIND_IS_LOOPBACK, allowOpen: ALLOW_OPEN } = openGuardConfig()
+const OPEN_GUARD = openGuardConfig()
 // Whether the operator has declared this instance internet-facing
-// (HEARTH_PUBLIC=1). Only affects how loudly the startup safety checks below
-// complain: fatal when public, a warning otherwise. See auth/startup.ts.
-const IS_PUBLIC = isPublicDeploy()
+// (HEARTH_PUBLIC=1). Decides how loudly the startup safety checks below complain
+// — fatal when public, a warning otherwise — and, inside the guard, overrides
+// both of the escape hatches that only make sense on a LAN. See auth/startup.ts.
+const IS_PUBLIC = OPEN_GUARD.isPublic
 // Extra origins accepted by the CSRF check below, for deployments where a proxy
 // rewrites Host so it no longer matches the browser's origin. Empty by default.
 const ALLOWED_ORIGINS = allowedOrigins()
@@ -183,12 +184,7 @@ async function main() {
   // The /trpc routes plus the body cap, cross-origin write guard and auth gate
   // in front of them, as one encapsulated scope so the gates are bound to the
   // route rather than to a `req.url` prefix test. See httpGate.ts (#179).
-  await registerTrpcScope(app, {
-    db,
-    bindIsLoopback: BIND_IS_LOOPBACK,
-    allowOpen: ALLOW_OPEN,
-    allowedOrigins: ALLOWED_ORIGINS,
-  })
+  await registerTrpcScope(app, { db, openGuard: OPEN_GUARD, allowedOrigins: ALLOWED_ORIGINS })
 
   const clientDir =
     process.env.CLIENT_DIR ?? join(dirname(fileURLToPath(import.meta.url)), '../client')
@@ -212,8 +208,8 @@ async function assertStartupSafety(): Promise<void> {
   const { allowOpenRegistration } = await getInstanceSettings(db)
   const problems = startupSafetyProblems({
     host: HOST,
-    bindIsLoopback: BIND_IS_LOOPBACK,
-    allowOpen: ALLOW_OPEN,
+    bindIsLoopback: OPEN_GUARD.bindIsLoopback,
+    allowOpen: OPEN_GUARD.allowOpen,
     locked: await isInstanceLocked(db),
     allowOpenRegistration,
     isPublic: IS_PUBLIC,

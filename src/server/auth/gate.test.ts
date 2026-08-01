@@ -154,28 +154,56 @@ describe('isLoopbackHost', () => {
 
 describe('openGuardConfig', () => {
   it('defaults to a non-loopback bind with open access off', () => {
-    expect(openGuardConfig({})).toEqual({ bindIsLoopback: false, allowOpen: false })
+    expect(openGuardConfig({})).toEqual({ bindIsLoopback: false, allowOpen: false, isPublic: false })
   })
 
-  it('reads HOST and HEARTH_ALLOW_OPEN', () => {
-    expect(openGuardConfig({ HOST: '127.0.0.1' })).toEqual({ bindIsLoopback: true, allowOpen: false })
-    expect(openGuardConfig({ HOST: '0.0.0.0', HEARTH_ALLOW_OPEN: '1' })).toEqual({
+  it('reads HOST, HEARTH_ALLOW_OPEN and HEARTH_PUBLIC', () => {
+    expect(openGuardConfig({ HOST: '127.0.0.1' })).toEqual({
+      bindIsLoopback: true,
+      allowOpen: false,
+      isPublic: false,
+    })
+    expect(openGuardConfig({ HOST: '0.0.0.0', HEARTH_ALLOW_OPEN: '1', HEARTH_PUBLIC: '1' })).toEqual({
       bindIsLoopback: false,
       allowOpen: true,
+      isPublic: true,
     })
     // Only the exact string '1' opts in.
     expect(openGuardConfig({ HEARTH_ALLOW_OPEN: 'true' }).allowOpen).toBe(false)
   })
+
+  // Reported raw even though the guard ignores it on a public deploy: the
+  // startup checks have to see the flag to tell the operator to remove it.
+  it('reports HEARTH_ALLOW_OPEN as set even on a public deploy', () => {
+    expect(openGuardConfig({ HEARTH_ALLOW_OPEN: '1', HEARTH_PUBLIC: '1' }).allowOpen).toBe(true)
+  })
 })
 
 describe('isOpenAccessBlocked', () => {
+  const LAN = { locked: false, bindIsLoopback: false, allowOpen: false, isPublic: false }
+
   it('blocks only an open instance that is off-box with no opt-in', () => {
-    expect(isOpenAccessBlocked({ locked: false, bindIsLoopback: false, allowOpen: false })).toBe(true)
+    expect(isOpenAccessBlocked(LAN)).toBe(true)
   })
 
   it('is not blocked once locked, on loopback, or opted in', () => {
-    expect(isOpenAccessBlocked({ locked: true, bindIsLoopback: false, allowOpen: false })).toBe(false)
-    expect(isOpenAccessBlocked({ locked: false, bindIsLoopback: true, allowOpen: false })).toBe(false)
-    expect(isOpenAccessBlocked({ locked: false, bindIsLoopback: false, allowOpen: true })).toBe(false)
+    expect(isOpenAccessBlocked({ ...LAN, locked: true })).toBe(false)
+    expect(isOpenAccessBlocked({ ...LAN, bindIsLoopback: true })).toBe(false)
+    expect(isOpenAccessBlocked({ ...LAN, allowOpen: true })).toBe(false)
+  })
+
+  // #115: on a hosted instance neither escape hatch means what it does on a LAN.
+  // A loopback bind is a same-host reverse proxy, and open access would hand
+  // every anonymous caller the first household as its owner.
+  it('ignores both escape hatches on a declared-public deploy', () => {
+    expect(isOpenAccessBlocked({ ...LAN, isPublic: true, allowOpen: true })).toBe(true)
+    expect(isOpenAccessBlocked({ ...LAN, isPublic: true, bindIsLoopback: true })).toBe(true)
+    expect(isOpenAccessBlocked({ ...LAN, isPublic: true, bindIsLoopback: true, allowOpen: true })).toBe(true)
+  })
+
+  // A public instance with an owner password is a normally-running one, not a
+  // first run — the flags above only matter while there's no password.
+  it('is not blocked on a locked public deploy', () => {
+    expect(isOpenAccessBlocked({ ...LAN, isPublic: true, locked: true })).toBe(false)
   })
 })
