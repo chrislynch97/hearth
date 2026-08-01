@@ -187,9 +187,37 @@ describe('spends router — lastByOwner', () => {
     await caller.spends.add({ date: '2026-07-12', description: 'a', amount: 100, ownerId: alice.id })
 
     const rows = await caller.spends.lastByOwner()
-    const byOwner = new Map(rows.map((r) => [r.ownerId, r.lastDate]))
-    expect(byOwner.get(joint.id)).toBe('2026-07-16')
-    expect(byOwner.get(alice.id)).toBe('2026-07-12')
+    const byOwner = new Map(rows.map((r) => [r.ownerId, r]))
+    expect(byOwner.get(joint.id)?.lastDate).toBe('2026-07-16')
+    expect(byOwner.get(alice.id)?.lastDate).toBe('2026-07-12')
+  })
+
+  it('names the spend that date came from', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
+
+    await caller.spends.add({ date: '2026-07-10', description: 'early', amount: 100, ownerId: joint.id })
+    await caller.spends.add({ date: '2026-07-16', description: 'Tesco', amount: 100, ownerId: joint.id })
+
+    const rows = await caller.spends.lastByOwner()
+    expect(rows.find((r) => r.ownerId === joint.id)?.lastDescription).toBe('Tesco')
+  })
+
+  it('breaks a same-day tie on entry order, like the register does', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
+
+    await caller.spends.add({ date: '2026-07-16', description: 'first', amount: 100, ownerId: joint.id })
+    await caller.spends.add({ date: '2026-07-16', description: 'second', amount: 100, ownerId: joint.id })
+
+    const rows = await caller.spends.lastByOwner()
+    const row = rows.find((r) => r.ownerId === joint.id)
+    expect(row?.lastDate).toBe('2026-07-16')
+    expect(row?.lastDescription).toBe('second')
   })
 
   it('omits owners with no spends (client fills these in as "none yet")', async () => {

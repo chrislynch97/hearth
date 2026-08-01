@@ -5,27 +5,47 @@
  * `@layer microcharts.tokens`, and unlayered rules beat layered ones whatever
  * their specificity. That also neutralises its `prefers-color-scheme` block,
  * which would otherwise paint charts dark while the rest of the app obeys a
- * light scheme forced in Appearance settings. `light-dark()` follows Mantine's
- * `color-scheme` instead, so the two always agree.
+ * light scheme forced in Appearance settings.
+ *
+ * The scheme is keyed off Mantine's resolved `data-mantine-color-scheme`
+ * attribute rather than `light-dark()`. These tokens are substituted into SVG
+ * `fill`/`stroke`, and a `light-dark()` an engine won't accept there makes the
+ * whole declaration invalid at computed-value time — which paints the bar its
+ * initial value, solid black, in *both* schemes. Plain hex can't fail that way.
  */
 :root {
     /* Data ink — moss, matching every other bar and line in the app. */
-    --mc-stroke: light-dark(#47613f, #86a971);
-    --mc-accent: light-dark(#47613f, #86a971);
+    --mc-stroke: #47613f;
+    --mc-accent: #47613f;
 
     /* Valence. Apricot is Hearth's attention colour; we never use pure red. */
-    --mc-positive: light-dark(#3e7c4f, #7fb98c);
-    --mc-negative: light-dark(#c9744a, #e29a6c);
+    --mc-positive: #3e7c4f;
+    --mc-negative: #c9744a;
 
     /* Baselines, axis ticks and value labels. */
-    --mc-neutral: light-dark(#7c8676, #82887a);
-    --mc-band: light-dark(rgba(71, 97, 63, 0.1), rgba(163, 188, 144, 0.14));
+    --mc-neutral: #7c8676;
+    --mc-band: rgba(71, 97, 63, 0.1);
 
     --mc-font: var(--mantine-font-family);
     --mc-label-size: 0.72em;
 
     /* Hover readouts on the interactive variants read as Mantine surfaces. */
-    --mc-surface: light-dark(#fbfaf4, #2c3227);
-    --mc-surface-ink: light-dark(#22261f, #c7cbc0);
-    --mc-surface-edge: light-dark(#e7e2d5, #434a3e);
+    --mc-surface: #fbfaf4;
+    --mc-surface-ink: #22261f;
+    --mc-surface-edge: #e7e2d5;
+}
+
+:root[data-mantine-color-scheme="dark"] {
+    --mc-stroke: #86a971;
+    --mc-accent: #86a971;
+
+    --mc-positive: #7fb98c;
+    --mc-negative: #e29a6c;
+
+    --mc-neutral: #82887a;
+    --mc-band: rgba(163, 188, 144, 0.14);
+
+    --mc-surface: #2c3227;
+    --mc-surface-ink: #c7cbc0;
+    --mc-surface-edge: #434a3e;
 }

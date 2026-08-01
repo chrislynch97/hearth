@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Alert, Button, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { Alert, Button, Card, Center, Group, Loader, SimpleGrid, Stack, Text, Title } from '@mantine/core'
 import { trpc } from '../trpc'
 import { formatMoney } from '../../shared/money'
 import { periodConfig, periodUnitLabel, periodAdverb } from '../../shared/period'
@@ -114,7 +114,9 @@ export function FundingPage() {
             </Alert>
           )}
 
-          <Group grow align="stretch">
+          {/* Stacked on a phone: side-by-side puts each person's figures in a
+              column too narrow for the amounts, which then wrap mid-number. */}
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
             {plan.perPerson.map((person) => (
               <Card key={person.memberId} withBorder padding="md">
                 <Stack gap={6}>
@@ -142,7 +144,7 @@ export function FundingPage() {
                 </Stack>
               </Card>
             ))}
-          </Group>
+          </SimpleGrid>
 
           {pooled ? (
             <Card withBorder padding="md">

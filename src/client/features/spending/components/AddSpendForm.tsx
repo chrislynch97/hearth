@@ -13,6 +13,7 @@ import {
     NumberInput,
     SegmentedControl,
     Select,
+    SimpleGrid,
     Stack,
     Text,
     TextInput,
@@ -263,7 +264,9 @@ export const AddSpendForm = ({ members, pots, money }: AddSpendFormProps) => {
                         onChange={selectOutgoing}
                     />
                 )}
-                <Group grow align="flex-end" wrap="wrap">
+                {/* One per row on a phone: three controls sharing a line leaves
+                    the amount too narrow to read back what you typed. */}
+                <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
                     <NumberInput
                         label="Amount"
                         placeholder="0.00"
@@ -299,7 +302,7 @@ export const AddSpendForm = ({ members, pots, money }: AddSpendFormProps) => {
                             ]}
                         />
                     </div>
-                </Group>
+                </SimpleGrid>
                 <TextInput
                     label="Description"
                     placeholder="e.g. Tesco"

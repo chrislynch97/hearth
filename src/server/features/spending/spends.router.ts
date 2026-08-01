@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { desc, eq, isNull, max } from 'drizzle-orm'
+import { desc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../../trpc/trpc'
 import { scopeWhere } from '../../trpc/tenant'
@@ -51,16 +51,26 @@ export const spendsRouter = router({
       return input?.limit !== undefined ? base.limit(input.limit) : base
     }),
 
-  /** Latest recorded spend date per owner, across all sources (manual + import).
-   *  Answers "how far is each person covered to?" without scanning the register.
-   *  Members with no spends won't appear here — the client fills those in as
-   *  "none yet" by joining against the member list. */
+  /** The latest recorded spend per owner, across all sources (manual + import).
+   *  Answers "how far is each person covered to?" without scanning the register,
+   *  and names the spend so the answer is recognisable — a date alone doesn't
+   *  tell you whether you already logged the big Tesco shop. Members with no
+   *  spends won't appear here — the client fills those in as "none yet" by
+   *  joining against the member list.
+   *
+   *  DISTINCT ON rather than MAX(date) + GROUP BY: the description has to come
+   *  from the same row as the date, and the tie-break on same-day spends is the
+   *  same one the register orders by. */
   lastByOwner: publicProcedure.query(async ({ ctx }) => {
     return ctx.db
-      .select({ ownerId: spendTransaction.ownerId, lastDate: max(spendTransaction.date) })
+      .selectDistinctOn([spendTransaction.ownerId], {
+        ownerId: spendTransaction.ownerId,
+        lastDate: spendTransaction.date,
+        lastDescription: spendTransaction.description,
+      })
       .from(spendTransaction)
       .where(scopeWhere(ctx.householdId, spendTransaction.householdId))
-      .groupBy(spendTransaction.ownerId)
+      .orderBy(spendTransaction.ownerId, desc(spendTransaction.date), desc(spendTransaction.createdAt))
   }),
 
   add: publicProcedure

@@ -23,9 +23,10 @@ export interface CoverageStripProps {
 }
 
 /**
- * How far each person's spends are recorded up to — their latest spend date and
- * how long ago that was. The gap to today is the backlog you're about to work
- * through. Clicking a row filters the register to that person.
+ * How far each person's spends are recorded up to — their latest spend, how long
+ * ago that was, and what it was. The gap to today is the backlog you're about to
+ * work through, and the name is what tells you whether you already logged the
+ * shop you're holding the receipt for. Clicking a row filters the register.
  */
 export const CoverageStrip = ({
     members,
@@ -36,9 +37,13 @@ export const CoverageStrip = ({
     const lastByOwnerQuery = trpc.spends.lastByOwner.useQuery();
 
     const lastByOwner = useMemo(() => {
-        const map = new Map<string, string>();
+        const map = new Map<string, { date: string; description: string }>();
         for (const row of lastByOwnerQuery.data ?? []) {
-            if (row.lastDate) map.set(row.ownerId, row.lastDate);
+            if (row.lastDate)
+                map.set(row.ownerId, {
+                    date: row.lastDate,
+                    description: row.lastDescription,
+                });
         }
         return map;
     }, [lastByOwnerQuery.data]);
@@ -67,33 +72,49 @@ export const CoverageStrip = ({
                                         onSelectOwner(active ? null : m.id)
                                     }
                                     label={
-                                        <Group
-                                            justify="space-between"
-                                            gap="sm"
-                                            wrap="nowrap"
-                                        >
-                                            <Text fw={500}>
-                                                {m.displayName}
-                                            </Text>
-                                            {last ? (
-                                                <Text
-                                                    size="sm"
-                                                    c="dimmed"
-                                                    style={{
-                                                        whiteSpace: "nowrap",
-                                                    }}
-                                                >
-                                                    covered to {fmt(last)} ·{" "}
-                                                    {ageLabel(
-                                                        diffDays(last, today)
-                                                    )}
+                                        <Stack gap={0}>
+                                            <Group
+                                                justify="space-between"
+                                                gap="sm"
+                                                wrap="nowrap"
+                                            >
+                                                <Text fw={500}>
+                                                    {m.displayName}
                                                 </Text>
-                                            ) : (
-                                                <Text size="sm" c="dimmed">
-                                                    none yet
+                                                {last ? (
+                                                    <Text
+                                                        size="sm"
+                                                        c="dimmed"
+                                                        style={{
+                                                            whiteSpace:
+                                                                "nowrap",
+                                                        }}
+                                                    >
+                                                        covered to{" "}
+                                                        {fmt(last.date)} ·{" "}
+                                                        {ageLabel(
+                                                            diffDays(
+                                                                last.date,
+                                                                today
+                                                            )
+                                                        )}
+                                                    </Text>
+                                                ) : (
+                                                    <Text size="sm" c="dimmed">
+                                                        none yet
+                                                    </Text>
+                                                )}
+                                            </Group>
+                                            {last && (
+                                                <Text
+                                                    size="xs"
+                                                    c="dimmed"
+                                                    truncate
+                                                >
+                                                    {last.description}
                                                 </Text>
                                             )}
-                                        </Group>
+                                        </Stack>
                                     }
                                 />
                             );
