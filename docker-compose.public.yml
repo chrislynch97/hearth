@@ -77,6 +77,10 @@ services:
       # real client IP; the session cookie gets `Secure` from x-forwarded-proto.
       # Keep this in step with the Caddyfile, which overwrites X-Forwarded-For.
       - HEARTH_TRUST_PROXY=1
+      # Caddy terminates TLS and does forward x-forwarded-proto, so neither of
+      # these is normally needed — they're here for a different proxy in front.
+      - HEARTH_SECURE_COOKIES=${HEARTH_SECURE_COOKIES:-}
+      - HEARTH_ALLOWED_ORIGINS=${HEARTH_ALLOWED_ORIGINS:-}
       # Tells the in-app update UI this is the image deploy (pull-based commands,
       # and one-click / automatic updates with the host updater), and which
       # compose file those commands should name.
@@ -88,11 +92,27 @@ services:
       - HEARTH_UPDATE_TOKEN=${HEARTH_UPDATE_TOKEN:-}
       - HEARTH_FEEDBACK_TOKEN=${HEARTH_FEEDBACK_TOKEN:-}
       - HEARTH_FEEDBACK_REPO=${HEARTH_FEEDBACK_REPO:-}
+      # Email (#111) — invite-by-email, address confirmation, password reset. On
+      # a public instance it's the only account-recovery route, so this is the
+      # one to set. See docs/deployment.md → Email.
+      - HEARTH_MAIL_TRANSPORT=${HEARTH_MAIL_TRANSPORT:-}
+      - HEARTH_MAIL_FROM=${HEARTH_MAIL_FROM:-}
+      - HEARTH_PUBLIC_URL=${HEARTH_PUBLIC_URL:-}
+      - HEARTH_SMTP_HOST=${HEARTH_SMTP_HOST:-}
+      - HEARTH_SMTP_PORT=${HEARTH_SMTP_PORT:-}
+      - HEARTH_SMTP_TLS=${HEARTH_SMTP_TLS:-}
+      - HEARTH_SMTP_USER=${HEARTH_SMTP_USER:-}
+      - HEARTH_SMTP_PASS=${HEARTH_SMTP_PASS:-}
+      # Local snapshots: how many to keep, and a directory on another volume if
+      # you want them off the database's disk. See docs/deployment.md → Data & backups.
+      - HEARTH_BACKUP_KEEP=${HEARTH_BACKUP_KEEP:-}
+      - HEARTH_BACKUP_LOCAL_DIR=${HEARTH_BACKUP_LOCAL_DIR:-}
       # Off-site backups: a VPS whose disk you don't own is exactly the case
       # they're for. Set these in .env to turn them on; `directory` mode also
       # needs its target mounted in. See docs/deployment.md → Off-site backups.
       - HEARTH_BACKUP_OFFSITE=${HEARTH_BACKUP_OFFSITE:-off}
       - HEARTH_BACKUP_PASSPHRASE=${HEARTH_BACKUP_PASSPHRASE:-}
+      - HEARTH_BACKUP_DIR=${HEARTH_BACKUP_DIR:-}
       - HEARTH_BACKUP_WEBHOOK_URL=${HEARTH_BACKUP_WEBHOOK_URL:-}
       - HEARTH_BACKUP_WEBHOOK_AUTH=${HEARTH_BACKUP_WEBHOOK_AUTH:-}
       - HEARTH_BACKUP_S3_ENDPOINT=${HEARTH_BACKUP_S3_ENDPOINT:-}
@@ -109,6 +129,12 @@ services:
       # each backup, and a webhook for backup / failed-login alerts.
       - HEARTH_BACKUP_HEARTBEAT_URL=${HEARTH_BACKUP_HEARTBEAT_URL:-}
       - HEARTH_ALERT_WEBHOOK=${HEARTH_ALERT_WEBHOOK:-}
+      - HEARTH_AUTH_ALERT_THRESHOLD=${HEARTH_AUTH_ALERT_THRESHOLD:-}
+      - HEARTH_DISK_MIN_FREE_MB=${HEARTH_DISK_MIN_FREE_MB:-}
+      # `off` stops the release check contacting GitHub at all — the app's only
+      # outbound request. The dir is where the host updater exchanges control files.
+      - HEARTH_UPDATE_CHECK=${HEARTH_UPDATE_CHECK:-}
+      - HEARTH_UPDATE_DIR=${HEARTH_UPDATE_DIR:-}
     # Proper PID 1 (tini) so SIGTERM reaches node for a clean shutdown.
     init: true
     restart: unless-stopped

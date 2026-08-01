@@ -332,6 +332,13 @@ name this file rather than the default one.
 
 ## Configuration reference
 
+Every `HEARTH_*` variable below can be set in a `.env` file next to whichever
+compose file you run — they're all passed into the container. Two exceptions,
+both deliberate: `docker-compose.public.yml` ignores `HEARTH_ALLOW_OPEN`
+entirely (so a value left over from a LAN `.env` can't reach a public box) and
+fixes `HEARTH_PUBLIC=1` / `HEARTH_TRUST_PROXY=1`, and `HEARTH_DEPLOY` is set by
+the file rather than by you.
+
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `8787` | Port the server listens on. |

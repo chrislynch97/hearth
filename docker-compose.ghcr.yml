@@ -34,6 +34,53 @@ services:
       - HEARTH_DEPLOY=image
       - HEARTH_ALLOW_OPEN=${HEARTH_ALLOW_OPEN:-0}
       - HEARTH_PUBLIC=${HEARTH_PUBLIC:-0}
+      # Behind a reverse proxy or tunnel: the hop count that recovers the real
+      # client IP, plus the escape hatches for a proxy that doesn't forward
+      # x-forwarded-proto or rewrites Host. See docs/deployment.md.
+      - HEARTH_TRUST_PROXY=${HEARTH_TRUST_PROXY:-}
+      - HEARTH_SECURE_COOKIES=${HEARTH_SECURE_COOKIES:-}
+      - HEARTH_ALLOWED_ORIGINS=${HEARTH_ALLOWED_ORIGINS:-}
+      # Email (#111) — invite-by-email, address confirmation, password reset.
+      # Off until HEARTH_MAIL_TRANSPORT is set. See docs/deployment.md → Email.
+      - HEARTH_MAIL_TRANSPORT=${HEARTH_MAIL_TRANSPORT:-}
+      - HEARTH_MAIL_FROM=${HEARTH_MAIL_FROM:-}
+      - HEARTH_PUBLIC_URL=${HEARTH_PUBLIC_URL:-}
+      - HEARTH_SMTP_HOST=${HEARTH_SMTP_HOST:-}
+      - HEARTH_SMTP_PORT=${HEARTH_SMTP_PORT:-}
+      - HEARTH_SMTP_TLS=${HEARTH_SMTP_TLS:-}
+      - HEARTH_SMTP_USER=${HEARTH_SMTP_USER:-}
+      - HEARTH_SMTP_PASS=${HEARTH_SMTP_PASS:-}
+      # Local snapshots: how many to keep, and a directory on another volume if
+      # you want them off the database's disk. See docs/deployment.md → Data & backups.
+      - HEARTH_BACKUP_KEEP=${HEARTH_BACKUP_KEEP:-}
+      - HEARTH_BACKUP_LOCAL_DIR=${HEARTH_BACKUP_LOCAL_DIR:-}
+      # Off-site backups (#39, #114). Off unless set in .env; `directory` mode
+      # also needs its target mounted in. See docs/deployment.md → Off-site backups.
+      - HEARTH_BACKUP_OFFSITE=${HEARTH_BACKUP_OFFSITE:-off}
+      - HEARTH_BACKUP_PRIMARY=${HEARTH_BACKUP_PRIMARY:-local}
+      - HEARTH_BACKUP_PASSPHRASE=${HEARTH_BACKUP_PASSPHRASE:-}
+      - HEARTH_BACKUP_DIR=${HEARTH_BACKUP_DIR:-}
+      - HEARTH_BACKUP_WEBHOOK_URL=${HEARTH_BACKUP_WEBHOOK_URL:-}
+      - HEARTH_BACKUP_WEBHOOK_AUTH=${HEARTH_BACKUP_WEBHOOK_AUTH:-}
+      - HEARTH_BACKUP_S3_ENDPOINT=${HEARTH_BACKUP_S3_ENDPOINT:-}
+      - HEARTH_BACKUP_S3_BUCKET=${HEARTH_BACKUP_S3_BUCKET:-}
+      - HEARTH_BACKUP_S3_REGION=${HEARTH_BACKUP_S3_REGION:-}
+      - HEARTH_BACKUP_S3_ACCESS_KEY_ID=${HEARTH_BACKUP_S3_ACCESS_KEY_ID:-}
+      - HEARTH_BACKUP_S3_SECRET_ACCESS_KEY=${HEARTH_BACKUP_S3_SECRET_ACCESS_KEY:-}
+      - HEARTH_BACKUP_S3_PREFIX=${HEARTH_BACKUP_S3_PREFIX:-}
+      # Monitoring (#57): the /healthz free-space threshold, a dead-man's-switch
+      # ping after each backup, and a webhook for backup / failed-login alerts.
+      # See docs/deployment.md → Monitoring & alerting.
+      - HEARTH_DISK_MIN_FREE_MB=${HEARTH_DISK_MIN_FREE_MB:-}
+      - HEARTH_BACKUP_HEARTBEAT_URL=${HEARTH_BACKUP_HEARTBEAT_URL:-}
+      - HEARTH_ALERT_WEBHOOK=${HEARTH_ALERT_WEBHOOK:-}
+      - HEARTH_AUTH_ALERT_THRESHOLD=${HEARTH_AUTH_ALERT_THRESHOLD:-}
+      # Updates: `off` stops the release check contacting GitHub at all. The two
+      # paths below only matter if you relocate the updater exchange or run a
+      # compose file other than this one. See docs/deployment.md → Updating.
+      - HEARTH_UPDATE_CHECK=${HEARTH_UPDATE_CHECK:-}
+      - HEARTH_UPDATE_DIR=${HEARTH_UPDATE_DIR:-}
+      - HEARTH_COMPOSE_FILE=${HEARTH_COMPOSE_FILE:-}
     # Proper PID 1 (tini) so SIGTERM reaches node for a clean shutdown.
     init: true
     restart: unless-stopped

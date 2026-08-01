@@ -58,7 +58,12 @@ services:
       - HEARTH_UPDATE_TOKEN=${HEARTH_UPDATE_TOKEN:-}
       - HEARTH_FEEDBACK_TOKEN=${HEARTH_FEEDBACK_TOKEN:-}
       - HEARTH_FEEDBACK_REPO=${HEARTH_FEEDBACK_REPO:-}
-      - HEARTH_BACKUP_LOCAL_DIR=/data/backups
+      # On a postgres:// URL the backup runner would otherwise default to
+      # ./data/backups inside the container. Default it to the mounted volume;
+      # .env can still point it somewhere else.
+      - HEARTH_BACKUP_LOCAL_DIR=${HEARTH_BACKUP_LOCAL_DIR:-/data/backups}
+      # How many local snapshots to keep. See docs/deployment.md → Data & backups.
+      - HEARTH_BACKUP_KEEP=${HEARTH_BACKUP_KEEP:-}
       # Off-site backups (#39, #114). Off unless set in .env. `HEARTH_BACKUP_DIR`
       # is the `directory` target and needs its own mount; the `s3` target needs
       # nothing mounted, which is why it's the one to use when ./data isn't
@@ -79,10 +84,41 @@ services:
       # mounted /data so the updater sees it -- with a postgres DATABASE_URL the
       # app can't derive it from the DB path (unlike the PGlite variant), so it
       # would otherwise default to /app/data/updates, which isn't mounted.
-      - HEARTH_UPDATE_DIR=/data/updates
+      - HEARTH_UPDATE_DIR=${HEARTH_UPDATE_DIR:-/data/updates}
       # Tells the in-app update UI this is the image deploy.
       - HEARTH_DEPLOY=image
       - HEARTH_ALLOW_OPEN=${HEARTH_ALLOW_OPEN:-0}
+      # Set to 1 on an internet-facing instance: the startup safety checks then
+      # refuse to boot on a config that would expose your data, instead of only
+      # warning. Leave 0 on a home LAN.
+      - HEARTH_PUBLIC=${HEARTH_PUBLIC:-0}
+      # Behind a reverse proxy or tunnel: the hop count that recovers the real
+      # client IP, plus the escape hatches for a proxy that doesn't forward
+      # x-forwarded-proto or rewrites Host. See docs/deployment.md.
+      - HEARTH_TRUST_PROXY=${HEARTH_TRUST_PROXY:-}
+      - HEARTH_SECURE_COOKIES=${HEARTH_SECURE_COOKIES:-}
+      - HEARTH_ALLOWED_ORIGINS=${HEARTH_ALLOWED_ORIGINS:-}
+      # Email (#111) — invite-by-email, address confirmation, password reset.
+      # Off until HEARTH_MAIL_TRANSPORT is set. See docs/deployment.md → Email.
+      - HEARTH_MAIL_TRANSPORT=${HEARTH_MAIL_TRANSPORT:-}
+      - HEARTH_MAIL_FROM=${HEARTH_MAIL_FROM:-}
+      - HEARTH_PUBLIC_URL=${HEARTH_PUBLIC_URL:-}
+      - HEARTH_SMTP_HOST=${HEARTH_SMTP_HOST:-}
+      - HEARTH_SMTP_PORT=${HEARTH_SMTP_PORT:-}
+      - HEARTH_SMTP_TLS=${HEARTH_SMTP_TLS:-}
+      - HEARTH_SMTP_USER=${HEARTH_SMTP_USER:-}
+      - HEARTH_SMTP_PASS=${HEARTH_SMTP_PASS:-}
+      # Monitoring (#57): the /healthz free-space threshold, a dead-man's-switch
+      # ping after each backup, and a webhook for backup / failed-login alerts.
+      # See docs/deployment.md → Monitoring & alerting.
+      - HEARTH_DISK_MIN_FREE_MB=${HEARTH_DISK_MIN_FREE_MB:-}
+      - HEARTH_BACKUP_HEARTBEAT_URL=${HEARTH_BACKUP_HEARTBEAT_URL:-}
+      - HEARTH_ALERT_WEBHOOK=${HEARTH_ALERT_WEBHOOK:-}
+      - HEARTH_AUTH_ALERT_THRESHOLD=${HEARTH_AUTH_ALERT_THRESHOLD:-}
+      # `off` stops the release check contacting GitHub at all; the compose file
+      # is what the in-app update card names in its commands.
+      - HEARTH_UPDATE_CHECK=${HEARTH_UPDATE_CHECK:-}
+      - HEARTH_COMPOSE_FILE=${HEARTH_COMPOSE_FILE:-}
     depends_on:
       db:
         condition: service_healthy
