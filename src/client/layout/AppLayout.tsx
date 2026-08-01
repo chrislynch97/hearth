@@ -57,14 +57,6 @@ export function AppLayout() {
             } else if (e.key === "/") {
                 e.preventDefault();
                 setPaletteOpen(true);
-            } else if (e.key === "[" || e.key === "]") {
-                // Prev/next budget period — period-aware pages listen for this.
-                e.preventDefault();
-                window.dispatchEvent(
-                    new CustomEvent("hearth:period", {
-                        detail: e.key === "[" ? -1 : 1,
-                    })
-                );
             } else if (e.key === "g") {
                 gPending = true;
                 gTimer = setTimeout(() => {

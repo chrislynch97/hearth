@@ -4,7 +4,7 @@ import { ensureSeed } from '../../db/seed'
 import { appRouter } from '../../trpc/router'
 
 describe('dashboard.summary', () => {
-  it('composes period, funding, backlog, allocation, trend, recent activity and upcoming', async () => {
+  it('composes funding, backlog, allocation, trend, recent activity and upcoming', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
     const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
@@ -21,9 +21,6 @@ describe('dashboard.summary', () => {
     await caller.spends.add({ description: 'Tesco', amount: 4200, ownerId: alice.id, potId: pot.id })
 
     const summary = await caller.dashboard.summary()
-
-    // Period is a well-formed range.
-    expect(summary.period.start <= summary.period.end).toBe(true)
 
     // Funding: Alice's Rent pot funded at 100000/mo.
     expect(summary.funding.pots.find((p) => p.potId === pot.id)?.fundingPerPeriod).toBe(100000)

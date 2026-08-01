@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useEffectEvent, useState } from "react";
+import { lazy, Suspense } from "react";
 import {
     Anchor,
     Badge,
@@ -19,7 +19,6 @@ import { GettingStarted } from "@/components/GettingStarted";
 import { AllocationCard } from "@/features/home/components/AllocationCard";
 import { NetWorthTile } from "@/features/home/components/NetWorthTile";
 import { formatMoney } from "../../shared/money";
-import { periodConfig, periodForDate, shiftPeriod } from "../../shared/period";
 import type { MoneyFormat } from "../useMoney";
 import { useFormatDate, useMoney } from "../useMoney";
 import { hearthTokens } from "../theme";
@@ -497,14 +496,7 @@ function RecentActivityCard({
 export function HomePage() {
     const money = useMoney();
     const ctx = trpc.bootstrap.context.useQuery();
-    const periodCfg = periodConfig(ctx.data?.household ?? 1);
-
-    const [periodStart, setPeriodStart] = useState<string | undefined>(
-        undefined
-    );
-    const summaryQuery = trpc.dashboard.summary.useQuery(
-        periodStart ? { periodStart } : undefined
-    );
+    const summaryQuery = trpc.dashboard.summary.useQuery();
     const accountsSummary = trpc.accounts.summary.useQuery();
 
     const me = trpc.users.me.useQuery();
@@ -514,24 +506,6 @@ export function HomePage() {
     const greetingName =
         me.data?.linkedMemberName || me.data?.displayName || householdName;
     const summary = summaryQuery.data;
-
-    function shift(delta: number) {
-        const base =
-            summary?.period ??
-            periodForDate(new Date().toISOString().slice(0, 10), periodCfg);
-        setPeriodStart(shiftPeriod(base, delta, periodCfg).start);
-    }
-
-    // `[` / `]` (handled globally in AppLayout) shift the period. An effect event
-    // always sees the latest `shift` without re-subscribing each render.
-    const onPeriod = useEffectEvent((e: Event) =>
-        shift((e as CustomEvent<number>).detail)
-    );
-    useEffect(() => {
-        const listener = (e: Event) => onPeriod(e);
-        window.addEventListener("hearth:period", listener);
-        return () => window.removeEventListener("hearth:period", listener);
-    }, []);
 
     if (ctx.isLoading || summaryQuery.isLoading) {
         return (
@@ -554,42 +528,6 @@ export function HomePage() {
             </Group>
 
             <GettingStarted />
-
-            {summary && (
-                <Group justify="space-between" align="center">
-                    <Group gap="xs">
-                        <Anchor
-                            component="button"
-                            type="button"
-                            onClick={() => shift(-1)}
-                            size="sm"
-                        >
-                            ‹ Prev
-                        </Anchor>
-                        <Text size="sm" c="dimmed">
-                            {summary.period.start} – {summary.period.end}
-                        </Text>
-                        <Anchor
-                            component="button"
-                            type="button"
-                            onClick={() => shift(1)}
-                            size="sm"
-                        >
-                            Next ›
-                        </Anchor>
-                    </Group>
-                    {periodStart && (
-                        <Anchor
-                            component="button"
-                            type="button"
-                            onClick={() => setPeriodStart(undefined)}
-                            size="sm"
-                        >
-                            This period
-                        </Anchor>
-                    )}
-                </Group>
-            )}
 
             {summary && (
                 <>

@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import { desc, eq, isNull } from 'drizzle-orm'
 import { router, publicProcedure } from '../../trpc/trpc'
 import { scopeWhere } from '../../trpc/tenant'
@@ -8,7 +7,7 @@ import { computeFundingPlan } from '../budget/funding'
 import { computeIncomeByMember, loadPayslipSummaries } from '../income/service'
 import { allocationByCategory, monthlyNetTrend } from './summary'
 import { projectUpcoming, type UpcomingExpenseInput } from '../budget/upcoming'
-import { periodForDate, periodConfig } from '../../../shared/period'
+import { periodConfig } from '../../../shared/period'
 import { addDays, todayIso } from '../../../shared/dates'
 import { monthlyToPeriod, roundMinor, type Recurrence } from '../../../shared/recurrence'
 
@@ -17,8 +16,7 @@ const UPCOMING_HORIZON_DAYS = 30
 export const dashboardRouter = router({
   /** One aggregated call powering the home dashboard (spec §5.6). */
   summary: publicProcedure
-    .input(z.object({ periodStart: z.string().optional() }).optional())
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx }) => {
       const today = todayIso()
 
       // These reads are all independent, so fire them together rather than
@@ -72,7 +70,6 @@ export const dashboardRouter = router({
         | 'custom'
       const jointFundingModel = (householdRow?.jointFundingModel ?? 'split') as 'split' | 'pooled'
       const cfg = periodConfig(householdRow ?? 1)
-      const period = periodForDate(input?.periodStart ?? today, cfg)
 
       // B / C — funding plan (per-person set-aside, remainder, income share).
       const funding = computeFundingPlan({
@@ -180,7 +177,6 @@ export const dashboardRouter = router({
       const coupleSurplus = funding.coupleSurplus
 
       return {
-        period,
         backlog,
         funding,
         allocation,

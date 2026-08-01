@@ -2,7 +2,6 @@ import { Group, Kbd, Modal, Stack, Text } from "@mantine/core"
 
 const rows: [string, string][] = [
     ["/", "Go to page…"],
-    ["[ ]", "Previous / next period"],
     ["g then d", "Go to Overview"],
     ["g then p / o / b", "Pots / Outgoings / Bill review"],
     ["g then f / u", "Funding / Upcoming"],
