@@ -3,7 +3,7 @@ import { eq, inArray } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../../trpc/trpc'
 import { household, member, membership, session, user } from '../../db/schema'
-import { scopeWhere } from '../../trpc/tenant'
+import { DEFAULT_HOUSEHOLD_ID, scopeWhere } from '../../trpc/tenant'
 import { recordAudit } from '../../trpc/audit'
 import { isUniqueViolation } from '../../db/errors'
 import { verifyPassword } from '../../auth/password'
@@ -43,6 +43,11 @@ export const usersRouter = router({
       email: u.email,
       emailVerified: u.emailVerifiedAt !== null,
       activeHouseholdId: ctx.householdId,
+      // Whether the active household is the instance's primary one. Several
+      // tenant-facing actions are refused there (erasure is the instance-wide
+      // `reset` instead), and the UI has to explain that rather than guess at the
+      // magic id — which the client has no business knowing.
+      isPrimaryHousehold: ctx.householdId === DEFAULT_HOUSEHOLD_ID,
       role: ctx.role ?? null,
       // Instance operator = the single account controlling instance-wide actions.
       // Derived from the same source of truth as server enforcement (not a second

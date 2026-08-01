@@ -224,6 +224,13 @@ the sign-in screen; it's **off by default**, keeping a self-host invite-only.
 Whole-instance tools (data export/import/reset, backups) are reserved for the
 instance owner. See [docs/deployment.md](docs/deployment.md#https--security).
 
+**Your data** — a household **owner** can export their own household as JSON, or
+delete it outright, from **Settings → Household → Your data**. That's the in-app
+route for an access, portability or erasure request; what erasure does and
+doesn't reach (backups keep a copy until they roll off) and what an operator does
+when a request arrives are in
+[docs/legal/data-rights.md](docs/legal/data-rights.md).
+
 ## Email (optional)
 
 **Off by default, and a self-host install doesn't need it.** Invites are

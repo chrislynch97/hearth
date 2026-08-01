@@ -365,3 +365,25 @@ export async function defaultHouseholdFor(db: DB, userId: string): Promise<strin
   rows.sort((a, b) => rank(b.role) - rank(a.role))
   return rows[0]?.householdId ?? DEFAULT_HOUSEHOLD_ID
 }
+
+/** Move a user's sessions off `householdId` onto their next-best remaining one,
+ *  returning where they went — or null when they belong to no other household.
+ *
+ *  Called just before a household is deleted (#228). `session.activeHouseholdId`
+ *  FK-cascades, so erasing one household would otherwise sign its owner out
+ *  everywhere, including from households they still belong to. Only this user's
+ *  sessions move: everyone else's access went away with the household, and ending
+ *  their sessions is the right outcome. */
+export async function repointSessionsAwayFrom(db: DB, userId: string, householdId: string): Promise<string | null> {
+  const rows = (await listMemberships(db, userId)).filter((m) => m.householdId !== householdId)
+  const rank = (r: string) => ROLE_RANK[r as Role] ?? -1
+  rows.sort((a, b) => rank(b.role) - rank(a.role))
+  const next = rows[0]?.householdId ?? null
+  if (next) {
+    await db
+      .update(session)
+      .set({ activeHouseholdId: next })
+      .where(and(eq(session.userId, userId), eq(session.activeHouseholdId, householdId)))
+  }
+  return next
+}

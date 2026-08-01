@@ -3,7 +3,7 @@ import { and, count, eq } from 'drizzle-orm'
 import type { PgTable } from 'drizzle-orm/pg-core'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../../trpc/trpc'
-import { assertInstanceOwner, reconcileInstanceOwner } from '../../auth/session'
+import { assertInstanceOwner, reconcileInstanceOwner, repointSessionsAwayFrom } from '../../auth/session'
 import { assertRole } from '../../trpc/tenant'
 import { household } from '../../db/schema'
 // From target, not client: importing client opens (or creates) the real
@@ -15,7 +15,7 @@ import { ensureSeed } from '../../db/seed'
 import { rescaleMinor } from '../../../shared/money'
 import { applySnapshot, buildHouseholdSnapshot, buildSnapshot, EXPORT_VERSION } from '../../db/snapshot'
 import { DEFAULT_HOUSEHOLD_ID } from '../../trpc/tenant'
-import { backupPrimary, runBackup, type BackupPrimary } from '../../backup/runner'
+import { backupPrimary, keepBackups, runBackup, type BackupPrimary } from '../../backup/runner'
 import {
   downloadOffsite,
   isReadable,
@@ -115,7 +115,10 @@ export const dataRouter = router({
    *  and everything under it. The FK cascades from `household` remove every child
    *  row, its memberships, invitations, audit trail and sessions. Household-owner
    *  only. The primary/instance household is refused — wiping it is the
-   *  instance-wide `reset`, not tenant self-service. */
+   *  instance-wide `reset`, not tenant self-service.
+   *
+   *  `nextHouseholdId` is where the caller's own session was moved to, or null if
+   *  they had nowhere left to go and are now signed out (#228). */
   eraseHousehold: publicProcedure.mutation(async ({ ctx }) => {
     assertRole(ctx.role, 'owner')
     if (ctx.householdId === DEFAULT_HOUSEHOLD_ID) {
@@ -132,8 +135,18 @@ export const dataRouter = router({
       action: 'household_erased',
       householdId: DEFAULT_HOUSEHOLD_ID,
     })
+    const nextHouseholdId = ctx.userId ? await repointSessionsAwayFrom(ctx.db, ctx.userId, ctx.householdId) : null
     await ctx.db.delete(household).where(eq(household.id, ctx.householdId))
-    return { ok: true as const }
+    return { ok: true as const, nextHouseholdId }
+  }),
+
+  /** How long a copy of erased data survives in backups, for the erasure warning
+   *  (#228). Retention is a snapshot count, not a time window — with daily backups
+   *  the default keeps roughly a fortnight. Household-owner readable: it's the one
+   *  fact the person exercising erasure needs, and it's instance config, not data. */
+  backupRetention: publicProcedure.query(({ ctx }) => {
+    assertRole(ctx.role, 'owner')
+    return { keep: keepBackups() }
   }),
 
   /** Change the currency's decimal places, rescaling every money column to match. */
