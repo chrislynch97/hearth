@@ -24,6 +24,11 @@ if (!forced) process.env.DATABASE_URL = DEFAULT_DEMO_URL
 // non-loopback bind. Opt the demo into open access explicitly.
 process.env.HEARTH_ALLOW_OPEN ??= '1'
 
+// A demo run isn't a deployment: there's nothing to `docker compose pull`, so the
+// "update available" banner and its host commands are noise. Same switch the e2e
+// suite uses; an operator demoing the update flow can still set it explicitly.
+process.env.HEARTH_UPDATE_CHECK ??= 'off'
+
 // Belt-and-suspenders guard mirroring scripts/seed-demo.ts: refuse to touch
 // anything that still looks like the real database.
 const target = process.env.DATABASE_URL ?? DEFAULT_DEMO_URL

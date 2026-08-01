@@ -10,6 +10,11 @@
 // `??=` so an explicit `HEARTH_ALLOW_OPEN=0` in your environment still wins.
 process.env.HEARTH_ALLOW_OPEN ??= '1'
 
+// A `tsx watch` dev run isn't a deployment — there's no image to pull and no
+// compose file to rebuild — so the update banner and its host commands are noise.
+// Only this script is affected; `npm start` and the image still check.
+process.env.HEARTH_UPDATE_CHECK ??= 'off'
+
 // A dynamic import (not a static one) so the env var above is set before the
 // server module's top-level code runs. `export {}` marks this file as a module,
 // which top-level `await` requires.
