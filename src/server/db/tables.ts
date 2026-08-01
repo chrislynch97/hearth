@@ -23,6 +23,11 @@ import {
   raise,
   account,
   accountBalance,
+  auditLog,
+  emailToken,
+  instanceSettings,
+  rateLimit,
+  session,
 } from './schema'
 
 /** Every table, in FK-dependency (insert-safe) order — parents first. Reverse
@@ -50,6 +55,25 @@ export const ALL_TABLES: ReadonlyArray<readonly [string, PgTable]> = [
   ['raise', raise],
   ['account', account],
   ['accountBalance', accountBalance],
+] as const
+
+/** Tables deliberately kept OUT of the snapshot, each with the reason. Exists so
+ *  a deliberate exclusion is distinguishable from a forgotten one: tables.test.ts
+ *  asserts ALL_TABLES ∪ SNAPSHOT_EXCLUDED covers the whole schema, so a new table
+ *  fails the suite until someone classifies it. Without that, a missed table
+ *  defaults to silent data loss on restore — applySnapshot deletes every table it
+ *  knows about and cascades into ones it doesn't, then re-inserts only its own
+ *  (issue #99: bill_price vanished on every restore for exactly this reason). */
+export const SNAPSHOT_EXCLUDED: ReadonlyArray<readonly [string, PgTable, string]> = [
+  ['session', session, 'ephemeral: live logins, restoring them would resurrect revoked sessions'],
+  ['rateLimit', rateLimit, 'ephemeral: instance-level throttle counters, meaningless once restored'],
+  ['emailToken', emailToken, 'ephemeral: single-use short-lived tokens, restoring them un-consumes them'],
+  [
+    'instanceSettings',
+    instanceSettings,
+    'instance-scoped, and a security problem to restore: a stale auth_required would reopen a locked instance (#63)',
+  ],
+  ['auditLog', auditLog, 'operational metadata: an append-only record of what happened on THIS instance'],
 ] as const
 
 /** JS property names that hold money in minor units. Integer columns with one

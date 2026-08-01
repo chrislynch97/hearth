@@ -86,8 +86,7 @@ function redactUser(row: Record<string, unknown>): Record<string, unknown> {
  *  the instance-wide export that reads every tenant. `household` is the one
  *  matching row; `user` is limited to this household's members and stripped of
  *  credentials; every other table is scoped by its `household_id`. Excludes the
- *  same operational tables buildSnapshot does — session / instance_settings /
- *  audit_log are not in ALL_TABLES. */
+ *  same operational tables buildSnapshot does — see SNAPSHOT_EXCLUDED. */
 export async function buildHouseholdSnapshot(db: DB, householdId: string): Promise<Snapshot> {
   const memberships = await db
     .select({ userId: membership.userId })
