@@ -12,6 +12,7 @@ import {
     Text,
     TextInput,
     Title,
+    Tooltip,
 } from "@mantine/core";
 import { trpc } from "@/trpc";
 import { inviteLink } from "@/inviteLink";
@@ -37,6 +38,7 @@ export const HouseholdAccessSection = () => {
         enabled: isAdmin,
     });
     const createInvite = trpc.invitations.create.useMutation();
+    const resend = trpc.invitations.resend.useMutation();
     const revoke = trpc.invitations.revoke.useMutation();
 
     const [inviteRole, setInviteRole] = useState("member");
@@ -44,6 +46,7 @@ export const HouseholdAccessSection = () => {
     const [inviteEmail, setInviteEmail] = useState("");
     const [link, setLink] = useState("");
     const [emailedTo, setEmailedTo] = useState("");
+    const [resent, setResent] = useState(false);
     const [error, setError] = useState("");
 
     // Only offer to send the invite when this instance can actually send mail
@@ -70,6 +73,7 @@ export const HouseholdAccessSection = () => {
             });
             setLink(inviteLink(window.location.origin, res.token));
             setEmailedTo(res.emailed ? inviteEmail.trim() : "");
+            setResent(false);
             setInviteMemberId(null);
             setInviteEmail("");
             await utils.invitations.list.invalidate();
@@ -78,6 +82,30 @@ export const HouseholdAccessSection = () => {
                 e instanceof Error
                     ? e.message
                     : "Could not create the invitation."
+            );
+        }
+    };
+
+    // Resending mints a new link (#197) — show it, since it's now the only one
+    // that works and the relay may still have dropped the email.
+    const handleResend = async (id: string, email: string) => {
+        setError("");
+        try {
+            const res = await resend.mutateAsync({ id });
+            setLink(inviteLink(window.location.origin, res.token));
+            setEmailedTo(res.emailed ? email : "");
+            setResent(true);
+            if (!res.emailed) {
+                setError(
+                    "The email didn't send. Share the new link below instead."
+                );
+            }
+            await utils.invitations.list.invalidate();
+        } catch (e) {
+            setError(
+                e instanceof Error
+                    ? e.message
+                    : "Could not resend the invitation."
             );
         }
     };
@@ -190,7 +218,7 @@ export const HouseholdAccessSection = () => {
                                 variant="light"
                                 title={
                                     emailedTo
-                                        ? `Invite sent to ${emailedTo}`
+                                        ? `Invite ${resent ? "re-sent" : "sent"} to ${emailedTo}`
                                         : "Invite link — share it with the person you're inviting"
                                 }
                             >
@@ -217,6 +245,8 @@ export const HouseholdAccessSection = () => {
                                     {emailedTo
                                         ? "Here's the same link, in case it doesn't arrive. It works once and expires in 7 days."
                                         : "The link works once and expires in 7 days."}
+                                    {resent &&
+                                        " Any earlier link for this invitation has stopped working."}
                                 </Text>
                             </Alert>
                         )}
@@ -228,44 +258,83 @@ export const HouseholdAccessSection = () => {
                                     labelPosition="left"
                                 />
                                 <Stack gap={4}>
-                                    {invites.data?.map((inv) => (
-                                        <Group
-                                            key={inv.id}
-                                            justify="space-between"
-                                            px="xs"
-                                            py={4}
-                                        >
-                                            <Text size="sm">
-                                                {inv.email ?? "Invite link"}{" "}
-                                                <Text span size="xs" c="dimmed">
-                                                    · {inv.role}
-                                                    {inv.memberName
-                                                        ? ` · links to ${inv.memberName}`
-                                                        : ""}{" "}
-                                                    · expires{" "}
-                                                    {fmt(
-                                                        msToLocalIso(
-                                                            inv.expiresAt.getTime()
-                                                        )
-                                                    )}
-                                                </Text>
-                                            </Text>
-                                            <Button
-                                                size="compact-xs"
-                                                variant="subtle"
-                                                color="red"
-                                                loading={revoke.isPending}
-                                                onClick={async () => {
-                                                    await revoke.mutateAsync({
-                                                        id: inv.id,
-                                                    });
-                                                    await utils.invitations.list.invalidate();
-                                                }}
+                                    {invites.data?.map((inv) => {
+                                        const email = inv.email;
+                                        return (
+                                            <Group
+                                                key={inv.id}
+                                                justify="space-between"
+                                                px="xs"
+                                                py={4}
                                             >
-                                                Revoke
-                                            </Button>
-                                        </Group>
-                                    ))}
+                                                <Text size="sm">
+                                                    {email ?? "Invite link"}{" "}
+                                                    <Text
+                                                        span
+                                                        size="xs"
+                                                        c="dimmed"
+                                                    >
+                                                        · {inv.role}
+                                                        {inv.memberName
+                                                            ? ` · links to ${inv.memberName}`
+                                                            : ""}{" "}
+                                                        · expires{" "}
+                                                        {fmt(
+                                                            msToLocalIso(
+                                                                inv.expiresAt.getTime()
+                                                            )
+                                                        )}
+                                                    </Text>
+                                                </Text>
+                                                <Group gap={6} wrap="nowrap">
+                                                    {canEmail && email && (
+                                                        <Tooltip
+                                                            label="Emails a new link — the previous one stops working."
+                                                            multiline
+                                                            w={240}
+                                                            withArrow
+                                                        >
+                                                            <Button
+                                                                size="compact-xs"
+                                                                variant="subtle"
+                                                                loading={
+                                                                    resend.isPending &&
+                                                                    resend
+                                                                        .variables
+                                                                        ?.id ===
+                                                                        inv.id
+                                                                }
+                                                                onClick={() =>
+                                                                    void handleResend(
+                                                                        inv.id,
+                                                                        email
+                                                                    )
+                                                                }
+                                                            >
+                                                                Resend
+                                                            </Button>
+                                                        </Tooltip>
+                                                    )}
+                                                    <Button
+                                                        size="compact-xs"
+                                                        variant="subtle"
+                                                        color="red"
+                                                        loading={
+                                                            revoke.isPending
+                                                        }
+                                                        onClick={async () => {
+                                                            await revoke.mutateAsync(
+                                                                { id: inv.id }
+                                                            );
+                                                            await utils.invitations.list.invalidate();
+                                                        }}
+                                                    >
+                                                        Revoke
+                                                    </Button>
+                                                </Group>
+                                            </Group>
+                                        );
+                                    })}
                                 </Stack>
                             </>
                         )}

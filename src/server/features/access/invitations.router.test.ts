@@ -5,7 +5,7 @@ import { ensureSeed } from '../../db/seed'
 import { appRouter } from '../../trpc/router'
 import { getOwnerUser } from '../../auth/session'
 import { hashToken, newBearerToken } from '../../auth/bearer'
-import { invitation, member, membership } from '../../db/schema'
+import { auditLog, invitation, member, membership } from '../../db/schema'
 import { newId } from '../../../shared/ids'
 import type { DB } from '../../db/client'
 
@@ -26,6 +26,28 @@ function caller(
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
+const ORIGIN = 'https://hearth.example.com'
+
+/** Run `work` with email configured to the `log` transport, and hand it the
+ *  lines that were printed — so the template and link-builder are exercised for
+ *  real and the emitted link can be read back out. */
+async function withMail(work: (logged: string[]) => Promise<void>) {
+  const logged: string[] = []
+  const spy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+    logged.push(args.map(String).join(' '))
+  })
+  process.env.HEARTH_MAIL_TRANSPORT = 'log'
+  process.env.HEARTH_MAIL_FROM = 'Hearth <hearth@example.com>'
+  process.env.HEARTH_PUBLIC_URL = ORIGIN
+  try {
+    await work(logged)
+  } finally {
+    spy.mockRestore()
+    delete process.env.HEARTH_MAIL_TRANSPORT
+    delete process.env.HEARTH_MAIL_FROM
+    delete process.env.HEARTH_PUBLIC_URL
+  }
+}
 
 /** Insert an invitation row directly so we can control its expiry/accepted state
  *  — the create procedure always stamps a fresh 7-day, unaccepted token. Returns
@@ -356,28 +378,6 @@ describe('invitations — member linking (#82)', () => {
 })
 
 describe('invite by email (#111)', () => {
-  const ORIGIN = 'https://hearth.example.com'
-
-  /** Send through the `log` transport and read the link back out of what it
-   *  printed, so the template and link-builder are exercised for real. */
-  async function withMail(work: (logged: string[]) => Promise<void>) {
-    const logged: string[] = []
-    const spy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
-      logged.push(args.map(String).join(' '))
-    })
-    process.env.HEARTH_MAIL_TRANSPORT = 'log'
-    process.env.HEARTH_MAIL_FROM = 'Hearth <hearth@example.com>'
-    process.env.HEARTH_PUBLIC_URL = ORIGIN
-    try {
-      await work(logged)
-    } finally {
-      spy.mockRestore()
-      delete process.env.HEARTH_MAIL_TRANSPORT
-      delete process.env.HEARTH_MAIL_FROM
-      delete process.env.HEARTH_PUBLIC_URL
-    }
-  }
-
   it('emails the link, and returns the same token so copy-a-link still works', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
@@ -415,6 +415,108 @@ describe('invite by email (#111)', () => {
       const res = await caller(db, { role: 'owner' }).c.invitations.create({ role: 'viewer' })
       expect(res.emailed).toBe(false)
       expect(logged.join('\n')).not.toContain('/invite#')
+    })
+  })
+})
+
+describe('invitations.resend (#197)', () => {
+  it('re-mails the address on the row, rotating the link but keeping the invitation', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { id, token } = await seedInvite(db, { role: 'viewer', email: 'them@example.com' })
+
+    await withMail(async (logged) => {
+      const before = Date.now()
+      const res = await caller(db, { role: 'admin' }).c.invitations.resend({ id })
+      expect(res).toMatchObject({ role: 'viewer', emailed: true })
+      expect(res.token).not.toBe(token)
+      // The clock restarts, so the invitee gets a full window from this mail.
+      expect(res.expiresAt.getTime() - before).toBeGreaterThan(6.9 * DAY_MS)
+
+      const mail = logged.join('\n')
+      expect(mail).toContain('to: them@example.com')
+      expect(mail).toContain(`${ORIGIN}/invite#${res.token}`)
+
+      // Same invitation, new link: the old token is dead, the new one works.
+      expect(await caller(db).c.invitations.info({ token })).toBeNull()
+      expect(await caller(db).c.invitations.info({ token: res.token })).toMatchObject({ role: 'viewer' })
+      const listed = await caller(db, { role: 'admin' }).c.invitations.list()
+      expect(listed.map((r) => r.id)).toEqual([id])
+    })
+  })
+
+  it('records an invite_emailed entry marked as a resend', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+    const { id } = await seedInvite(db, { email: 'them@example.com' })
+
+    await withMail(async () => {
+      await caller(db, { role: 'admin', userId: owner!.id }).c.invitations.resend({ id })
+    })
+
+    const rows = await db.select().from(auditLog).where(eq(auditLog.action, 'invite_emailed'))
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ entityType: 'invitation', entityId: id, actorUserId: owner!.id })
+    expect(JSON.parse(rows[0]!.changes!).details).toMatchObject({
+      email: 'them@example.com',
+      resent: true,
+      emailed: true,
+    })
+    // The token is never written to the trail (issue #49).
+    expect(rows[0]!.changes).not.toContain('invite#')
+  })
+
+  it('refuses an invite with no address, an accepted one, and an expired one', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const linkOnly = await seedInvite(db)
+    const accepted = await seedInvite(db, { email: 'a@example.com', acceptedAt: new Date() })
+    const expired = await seedInvite(db, { email: 'e@example.com', expiresAt: new Date(Date.now() - DAY_MS) })
+
+    await withMail(async (logged) => {
+      const admin = caller(db, { role: 'admin' })
+      await expect(admin.c.invitations.resend({ id: linkOnly.id })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      await expect(admin.c.invitations.resend({ id: accepted.id })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      await expect(admin.c.invitations.resend({ id: expired.id })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      await expect(admin.c.invitations.resend({ id: 'nope' })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+      expect(logged.join('\n')).not.toContain('/invite#')
+    })
+
+    // A refusal leaves every token exactly as it was.
+    expect(await caller(db).c.invitations.info({ token: linkOnly.token })).not.toBeNull()
+  })
+
+  it('needs admin, and needs mail to be configured', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { id } = await seedInvite(db, { email: 'them@example.com' })
+
+    // Role is checked first: a member is refused whether or not mail is on.
+    await expect(caller(db, { role: 'member' }).c.invitations.resend({ id })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    await expect(caller(db, { role: 'admin' }).c.invitations.resend({ id })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    })
+  })
+
+  it('caps resends per invitation, without capping other invitations', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const flooded = await seedInvite(db, { email: 'them@example.com' })
+    const other = await seedInvite(db, { email: 'other@example.com' })
+
+    await withMail(async () => {
+      const admin = caller(db, { role: 'admin' })
+      for (let i = 0; i < 3; i++) {
+        await expect(admin.c.invitations.resend({ id: flooded.id })).resolves.toMatchObject({ emailed: true })
+      }
+      await expect(admin.c.invitations.resend({ id: flooded.id })).rejects.toMatchObject({
+        code: 'TOO_MANY_REQUESTS',
+      })
+      // The cap is per invitation, so the other one is unaffected.
+      await expect(admin.c.invitations.resend({ id: other.id })).resolves.toMatchObject({ emailed: true })
     })
   })
 })

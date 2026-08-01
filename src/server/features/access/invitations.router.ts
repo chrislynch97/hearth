@@ -57,6 +57,15 @@ const acceptLimiter = new RateLimiter('invite-accept', {
   blockMs: 60 * 60 * 1000,
 })
 
+// Resend is a button an admin can lean on, and every press is mail into someone
+// else's inbox. Keyed per invitation, because what needs capping is how much one
+// address receives — not how much one admin sends across different people.
+const resendLimiter = new RateLimiter('invite-resend', {
+  windowMs: 60 * 60 * 1000,
+  maxAttempts: 3,
+  blockMs: 60 * 60 * 1000,
+})
+
 export const invitationsRouter = router({
   /** Pending (unaccepted, unexpired) invitations for the active household. */
   list: publicProcedure.query(async ({ ctx }) => {
@@ -142,6 +151,84 @@ export const invitationsRouter = router({
         })
       }
       return { token, role: input.role, expiresAt, emailed }
+    }),
+
+  /** Re-send a pending invitation's email without revoking it (#197), for when
+   *  the first one didn't arrive.
+   *
+   *  The invitation keeps its identity — same row, same role, same tied member,
+   *  one continuous audit trail — but the *link* changes. Only the token's hash
+   *  is stored (never the token itself), so there is nothing to re-send and a
+   *  fresh token is minted, restarting the 7-day clock. Any copy of the old link
+   *  stops working; that's the price of not persisting credentials, and it's
+   *  still less destructive than revoke-and-recreate.
+   *
+   *  Deliberately takes no address: re-pointing an invite at someone else is a
+   *  revoke and a new invite, so one invitation is never offered to two people. */
+  resend: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      assertRole(ctx.role, 'admin')
+      if (!mailEnabled()) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'This instance is not set up to send email.' })
+      }
+      const [inv] = await ctx.db
+        .select()
+        .from(invitation)
+        .where(scopeWhere(ctx.householdId, invitation.householdId, eq(invitation.id, input.id)))
+      if (!inv) throw new TRPCError({ code: 'NOT_FOUND', message: 'Invitation not found' })
+      if (!inv.email) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'That invitation has no email address — share its link instead.',
+        })
+      }
+      if (inv.acceptedAt !== null) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'That invitation has already been accepted.' })
+      }
+      const now = new Date()
+      if (inv.expiresAt.getTime() <= now.getTime()) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'That invitation has expired. Create a new one.' })
+      }
+      if (!(await resendLimiter.check(ctx.db, inv.id, now.getTime())).allowed) {
+        throw new TRPCError({
+          code: 'TOO_MANY_REQUESTS',
+          message: 'That invitation has been re-sent too many times. Try again later.',
+        })
+      }
+      await resendLimiter.fail(ctx.db, inv.id, now.getTime())
+
+      const token = newBearerToken()
+      const expiresAt = new Date(now.getTime() + INVITE_TTL_MS)
+      // Rotate only while the invite is still pending: an acceptance landing
+      // between the read above and here wins, and this resend does nothing.
+      const [rotated] = await ctx.db
+        .update(invitation)
+        .set({ tokenHash: hashToken(token), expiresAt })
+        .where(
+          scopeWhere(
+            ctx.householdId,
+            invitation.householdId,
+            and(eq(invitation.id, inv.id), isNull(invitation.acceptedAt)),
+          ),
+        )
+        .returning({ id: invitation.id })
+      if (!rotated) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'That invitation has already been accepted.' })
+      }
+
+      const emailed = await emailInvite(ctx, { to: inv.email, token, role: inv.role, expiresAt })
+      // Recorded whether or not the relay took it: the token was rotated either
+      // way, so the trail has to show that the old link died here.
+      recordSecurityEvent(ctx, {
+        entityType: 'invitation',
+        entityId: inv.id,
+        action: 'invite_emailed',
+        details: { email: inv.email, role: inv.role, resent: true, emailed },
+      })
+      // The token comes back like create's does — it's now the only link that
+      // works, so a failed relay shouldn't leave the admin with nothing to send.
+      return { token, role: inv.role, expiresAt, emailed }
     }),
 
   revoke: publicProcedure
