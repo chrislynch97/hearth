@@ -39,10 +39,10 @@ export function alertWebhookUrl(env: NodeJS.ProcessEnv = process.env): string | 
   return envUrl(env.HEARTH_ALERT_WEBHOOK)
 }
 
-async function post(url: string, body: string): Promise<void> {
+async function post(url: string, body: string, headers: Record<string, string>): Promise<void> {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body,
     signal: AbortSignal.timeout(TIMEOUT_MS),
   })
@@ -73,6 +73,29 @@ export async function pingHeartbeat(
   }
 }
 
+/** ntfy priority per event; anything unlisted gets its default. */
+const PRIORITY: Record<string, string> = {
+  backup_failed: 'high',
+  offsite_backup_failed: 'high',
+}
+
+/** Header values must be printable ASCII — an alert must never fail to send
+ *  because of a character in its event name. */
+function headerSafe(value: string): string {
+  return value.replace(/[^\x20-\x7e]/g, ' ').slice(0, 120)
+}
+
+/** Notification hints for the webhook target, as headers so the JSON body stays
+ *  the contract: [ntfy](https://ntfy.sh) renders them, every other consumer
+ *  ignores headers it doesn't know. ntfy still shows the JSON body as the
+ *  message text — this only buys a title and a priority. */
+function alertHeaders(alert: Alert): Record<string, string> {
+  return {
+    'x-title': headerSafe(`Hearth: ${alert.event}`),
+    'x-priority': PRIORITY[alert.event] ?? 'default',
+  }
+}
+
 /** POST an alert to the configured webhook. No-op when unconfigured, and never
  *  throws. The alert is always logged too, so an instance with no webhook still
  *  leaves a trace in the container logs. */
@@ -81,7 +104,7 @@ export async function sendAlert(alert: Alert, env: NodeJS.ProcessEnv = process.e
   const url = alertWebhookUrl(env)
   if (!url) return
   try {
-    await post(url, JSON.stringify({ ...alert, at: new Date().toISOString() }))
+    await post(url, JSON.stringify({ ...alert, at: new Date().toISOString() }), alertHeaders(alert))
   } catch (err) {
     console.error('[hearth] alert webhook failed:', err)
   }

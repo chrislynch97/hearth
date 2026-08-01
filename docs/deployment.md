@@ -341,7 +341,7 @@ name this file rather than the default one.
 | `HEARTH_BACKUP_WEBHOOK_AUTH` | unset | `webhook` mode (optional): a value sent verbatim as the `Authorization` header, e.g. `Bearer <token>`. |
 | `HEARTH_DISK_MIN_FREE_MB` | `512` | Free space on the data volume below which `/healthz` reports **degraded** (HTTP 503). See [Monitoring & alerting](#monitoring--alerting). A non-integer value is ignored and the default kept. |
 | `HEARTH_BACKUP_HEARTBEAT_URL` | unset | A ping URL (e.g. a [Healthchecks.io](https://healthchecks.io) check) that Hearth `POST`s after each successful automatic backup, and to `<url>/fail` when one fails. Gives you dead-man's-switch alerting: you hear about backups that stopped running, not just ones that ran and failed. |
-| `HEARTH_ALERT_WEBHOOK` | unset | Endpoint that receives operational alerts as JSON (`{ event, message, detail, at }`) — backup failures, off-site upload failures, and failed-login bursts. Point it at whatever you already get notified through. |
+| `HEARTH_ALERT_WEBHOOK` | unset | Endpoint that receives operational alerts as JSON (`{ event, message, detail, at }`) — backup failures, off-site upload failures, and failed-login bursts. [ntfy](https://ntfy.sh)'s `X-Title` / `X-Priority` headers are sent alongside so the notification is titled and failures arrive as high priority; other targets ignore them. Point it at whatever you already get notified through. |
 | `HEARTH_AUTH_ALERT_THRESHOLD` | `10` | Failed sign-ins in an hour that raise an `auth_failures` alert. `0` turns the check off. |
 | `HEARTH_MAIL_TRANSPORT` | `off` | Turns on the email-backed features — invite-by-email, address confirmation, self-service password reset (see [Email](#email-optional)). `off` \| `smtp` \| `log`. The `log` transport prints each message instead of sending it, which puts live invite and reset tokens in the server log; `HEARTH_PUBLIC=1` therefore refuses to start with it. |
 | `HEARTH_MAIL_FROM` | unset | `From:` address on outgoing mail, e.g. `Hearth <hearth@example.com>`. **Required** when email is on. |
@@ -672,11 +672,13 @@ The two are not interchangeable, and it's worth knowing why:
   bursts. A push target like [ntfy](https://ntfy.sh) is ideal here — it reaches
   your phone in seconds and needs no account.
 
-**Two things to know about ntfy specifically.** Posting to `ntfy.sh/<topic>`
-makes the request body the notification text, and Hearth sends JSON — so the
-notification shows the raw `{"event":…,"message":…}` rather than a tidy title.
-Readable, but not pretty. And a topic on the public instance is readable by
-anyone who guesses its name: the payloads carry error text (which can include
+**Two things to know about ntfy specifically.** Alerts arrive titled
+`Hearth: <event>`, and backup failures arrive at `high` priority, because Hearth
+sends ntfy's `X-Title` and `X-Priority` headers alongside the JSON (any other
+webhook target ignores them). The notification *text*, though, is whatever's in
+the request body — so it shows the raw `{"event":…,"message":…}` under that
+title. Readable, but not pretty. And a topic on the public instance is readable
+by anyone who guesses its name: the payloads carry error text (which can include
 file paths and database errors) and failed-login counts, which is a running
 commentary on your instance and when it's being probed. Use a long random topic
 name at minimum, ntfy's access control or a self-hosted instance ideally.
