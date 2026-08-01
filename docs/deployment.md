@@ -236,14 +236,23 @@ The VPS disk is not yours and the provider's snapshots aren't a restore you've
 tested. Turn on [off-site backups](#off-site-backups-optional) — add to `.env`:
 
 ```bash
-HEARTH_BACKUP_OFFSITE=webhook
-HEARTH_BACKUP_WEBHOOK_URL=https://…            # presigned object-store URL, or your own collector
+HEARTH_BACKUP_OFFSITE=s3
+HEARTH_BACKUP_S3_ENDPOINT=https://<bucket>.s3.<region>.amazonaws.com
+HEARTH_BACKUP_S3_BUCKET=<bucket>
+HEARTH_BACKUP_S3_REGION=<region>
+HEARTH_BACKUP_S3_ACCESS_KEY_ID=<key>
+HEARTH_BACKUP_S3_SECRET_ACCESS_KEY=<secret>
 HEARTH_BACKUP_PASSPHRASE=<a long random passphrase>
 ```
 
 then `docker compose -f docker-compose.public.yml up -d` to apply. Enable the
 schedule in **Settings → Data**, hit **Back up now**, and confirm a copy actually
 landed at the target.
+
+If the VPS's disk isn't durable across redeploys, also set
+`HEARTH_BACKUP_PRIMARY=offsite` so a failed upload fails the backup instead of
+leaving you with files the next deploy deletes — see
+[Making off-site the primary store](#making-off-site-the-primary-store).
 
 **Keep the passphrase off the box** — in your password manager, not in the `.env`
 you'd lose along with the server.
@@ -332,13 +341,20 @@ name this file rather than the default one.
 | `HEARTH_TRUST_PROXY` | unset | Set to the **number of proxy hops** in front of Hearth (a single reverse proxy / tunnel = `1`) so Fastify reads the real client IP from `X-Forwarded-For` and the login rate limiter throttles per-client. Set it to `0` to declare that nothing is proxying Hearth. Do **not** set it to `true`/all — trusting the whole chain lets a client spoof `X-Forwarded-For` and dodge the limiter. Your proxy must **overwrite** (not append to) `X-Forwarded-For`. Also accepts a comma-separated list of trusted proxy IPs/CIDRs. **Required when `HEARTH_PUBLIC=1`** — see the next row. |
 | `HEARTH_PUBLIC` | unset | Set to `1` on an **internet-facing** instance. Hearth checks its own configuration at startup and, with this set, **refuses to start** rather than come up misconfigured: `HEARTH_ALLOW_OPEN=1`, open registration with no owner password, or `HEARTH_TRUST_PROXY` left unset. Left unset (a home LAN) the first two only log a warning and the third isn't checked at all. With it set, the bind address stops excusing anything — a public instance bound to `127.0.0.1` has a reverse proxy on the same host, so it is treated as reachable off-box and `HEARTH_ALLOW_OPEN` is ignored outright. It additionally makes an email address **compulsory on every new account** — see [Account recovery](#account-recovery). `NODE_ENV` can't stand in for this: the Docker image sets it to `production` for every deployment, LAN ones included. |
 | `HEARTH_ALLOW_OPEN` | unset | Set to `1` to allow running **open** (no owner password) while bound to a non-loopback address — a trusted home LAN. Without it, an open instance on `0.0.0.0` serves only the login/first-run endpoints and refuses budgeting data, so an accidental public deploy can't hand anonymous callers owner access. It is a LAN-only flag: with `HEARTH_PUBLIC=1` it is refused at startup and ignored at runtime, because open access resolves every anonymous caller as the owner of the first household. |
-| `HEARTH_BACKUP_KEEP` | `14` | How many local snapshots to keep; older ones are pruned after each successful backup. Minimum `1` (a `0` is clamped up rather than pruning the backup just written); a non-integer value is ignored with a warning and the default kept. |
+| `HEARTH_BACKUP_KEEP` | `14` | How many snapshots to keep; older ones are pruned after each successful backup. Applies to the local store and — for targets Hearth can enumerate (`s3`, `directory`) — to the off-site one too. Minimum `1` (a `0` is clamped up rather than pruning the backup just written); a non-integer value is ignored with a warning and the default kept. |
 | `HEARTH_BACKUP_LOCAL_DIR` | unset | Absolute path for the **local** snapshots, overriding the default `<data>/backups`. Use it to land backups on a different volume from the database without setting up the off-site machinery. Not to be confused with `HEARTH_BACKUP_DIR` below, which is the *off-site* `directory` target. |
-| `HEARTH_BACKUP_OFFSITE` | `off` | Push each verified backup, **encrypted**, to a second location so a lost data volume doesn't lose every backup too (see [Off-site backups](#off-site-backups-optional)). `off` (default) \| `directory` (copy to `HEARTH_BACKUP_DIR`) \| `webhook` (POST to `HEARTH_BACKUP_WEBHOOK_URL`). |
+| `HEARTH_BACKUP_OFFSITE` | `off` | Push each verified backup, **encrypted**, to a second location so a lost data volume doesn't lose every backup too (see [Off-site backups](#off-site-backups-optional)). `off` (default) \| `s3` (any S3-compatible object store) \| `directory` (copy to `HEARTH_BACKUP_DIR`) \| `webhook` (POST to `HEARTH_BACKUP_WEBHOOK_URL`). |
+| `HEARTH_BACKUP_PRIMARY` | `local` | Which copy *is* the backup. `local` (default) keeps today's behaviour: the off-site copy is supplementary and a failed upload never fails the backup. `offsite` makes the remote copy authoritative for a host with no durable disk — Hearth refuses to start without a working off-site target, a failed upload fails the backup, and the local file is staging only. See [Making off-site the primary store](#making-off-site-the-primary-store). An unrecognised value is fatal rather than silently treated as `local`. |
 | `HEARTH_BACKUP_PASSPHRASE` | unset | Encrypt backups at rest (AES-256-GCM). When set, **both** the local `<data>/backups` snapshots (`*.json.enc`) and any off-site copies are encrypted with this passphrase; when unset, local snapshots are plaintext JSON. **Required** when `HEARTH_BACKUP_OFFSITE` is enabled. Keep it somewhere separate from the backups — you need it to restore. |
 | `HEARTH_BACKUP_DIR` | unset | `directory` mode: the path to copy encrypted backups into. Point it at a **different physical volume** (a second disk, or an NFS/CIFS/rsync mount) — a path on the same volume as the data gives no protection. |
 | `HEARTH_BACKUP_WEBHOOK_URL` | unset | `webhook` mode: the endpoint the encrypted backup is `POST`ed to (`application/octet-stream` body; the filename is sent in an `X-Hearth-Backup` header). Use a presigned object-store URL or your own collector. |
-| `HEARTH_BACKUP_WEBHOOK_AUTH` | unset | `webhook` mode (optional): a value sent verbatim as the `Authorization` header, e.g. `Bearer <token>`. |
+| `HEARTH_BACKUP_WEBHOOK_AUTH` | unset | `webhook` mode (optional): a value sent verbatim as the `Authorization` header, e.g. `Bearer <token>`. Write-only, so this target supports neither in-app restore nor off-site retention. |
+| `HEARTH_BACKUP_S3_ENDPOINT` | unset | `s3` mode: the service origin. If the bucket name starts the hostname (`https://<bucket>.s3.<region>.amazonaws.com`) requests are addressed virtual-hosted; otherwise (`https://minio.example.com`) path-style. No SDK is used — requests are signed with SigV4 directly. |
+| `HEARTH_BACKUP_S3_BUCKET` | unset | `s3` mode: the bucket name. |
+| `HEARTH_BACKUP_S3_REGION` | `us-east-1` | `s3` mode: the signing region. `auto` for Cloudflare R2; the default suits MinIO and other services that don't care. |
+| `HEARTH_BACKUP_S3_ACCESS_KEY_ID` | unset | `s3` mode: access key. Needs `PutObject`, `GetObject`, `DeleteObject` and `ListBucket` — the last two for retention and in-app restore. |
+| `HEARTH_BACKUP_S3_SECRET_ACCESS_KEY` | unset | `s3` mode: secret key. |
+| `HEARTH_BACKUP_S3_PREFIX` | unset | `s3` mode (optional): key prefix, so one bucket can hold several instances. Letters, digits, dot, dash, underscore and slash only. |
 | `HEARTH_DISK_MIN_FREE_MB` | `512` | Free space on the data volume below which `/healthz` reports **degraded** (HTTP 503). See [Monitoring & alerting](#monitoring--alerting). A non-integer value is ignored and the default kept. |
 | `HEARTH_BACKUP_HEARTBEAT_URL` | unset | A ping URL (e.g. a [Healthchecks.io](https://healthchecks.io) check) that Hearth `POST`s after each successful automatic backup, and to `<url>/fail` when one fails. Gives you dead-man's-switch alerting: you hear about backups that stopped running, not just ones that ran and failed. |
 | `HEARTH_ALERT_WEBHOOK` | unset | Endpoint that receives operational alerts as JSON (`{ event, message, detail, at }`) — backup failures, off-site upload failures, and failed-login bursts. [ntfy](https://ntfy.sh)'s `X-Title` / `X-Priority` headers are sent alongside so the notification is titled and failures arrive as high priority; other targets ignore them. Point it at whatever you already get notified through. |
@@ -569,7 +585,16 @@ are **always encrypted** (AES-256-GCM, key derived from your passphrase). Set th
 target and passphrase via [environment variables](#configuration-reference):
 
 ```bash
-# Copy each backup to a second mounted volume:
+# Object storage — S3, Cloudflare R2, Backblaze B2, MinIO, anything S3-compatible:
+HEARTH_BACKUP_OFFSITE=s3
+HEARTH_BACKUP_S3_ENDPOINT=https://hearth-backups.s3.eu-west-2.amazonaws.com
+HEARTH_BACKUP_S3_BUCKET=hearth-backups
+HEARTH_BACKUP_S3_REGION=eu-west-2
+HEARTH_BACKUP_S3_ACCESS_KEY_ID=<key>
+HEARTH_BACKUP_S3_SECRET_ACCESS_KEY=<secret>
+HEARTH_BACKUP_PASSPHRASE=<a long random passphrase>
+
+# ...or copy each backup to a second mounted volume:
 HEARTH_BACKUP_OFFSITE=directory
 HEARTH_BACKUP_DIR=/mnt/backup-drive/hearth
 HEARTH_BACKUP_PASSPHRASE=<a long random passphrase>
@@ -581,17 +606,57 @@ HEARTH_BACKUP_WEBHOOK_AUTH=Bearer <token>      # optional
 HEARTH_BACKUP_PASSPHRASE=<a long random passphrase>
 ```
 
-Off-site upload is **best-effort**: the local backup is written, verified and kept
-regardless, and an off-site failure is logged (and surfaced on **Settings → Data →
-Back up now**) but never fails or blocks the local backup. Keep the passphrase
-somewhere separate from the backups — you need it to restore.
+`HEARTH_BACKUP_S3_ENDPOINT` decides how requests are addressed: if the bucket name
+is already the start of the hostname, Hearth signs virtual-hosted requests (what
+AWS wants); otherwise it signs path-style (what MinIO and most self-hosted gateways
+want). For Cloudflare R2 set the region to `auto`. `HEARTH_BACKUP_S3_PREFIX` puts
+the objects under a key prefix, so one bucket can hold several instances.
 
-**Restoring an off-site copy.** The files are `*.json.enc`. Decrypt one back to a
-normal Hearth JSON snapshot, then import it from **Settings → Data → Import**:
+By default off-site upload is **best-effort**: the local backup is written, verified
+and kept regardless, and an off-site failure is logged (and surfaced on **Settings →
+Data → Back up now**) but never fails or blocks the local backup. Keep the
+passphrase somewhere separate from the backups — you need it to restore.
+
+`HEARTH_BACKUP_KEEP` now applies to the off-site store as well as the local one, for
+targets Hearth can enumerate (`s3`, `directory`). A `webhook` target is write-only —
+there's no verb to list or delete with — so its retention stays the receiving
+service's job (an S3 lifecycle rule, say).
+
+**Restoring an off-site copy.** For an `s3` or `directory` target, restore in the
+app: **Settings → Data → Restore from off-site** lists what's stored, and the server
+fetches and decrypts the one you pick. Otherwise (or from a machine that isn't the
+instance) decrypt the `*.json.enc` file back to a normal Hearth JSON snapshot and
+import it from **Settings → Data → Import**:
 
 ```bash
 HEARTH_BACKUP_PASSPHRASE=<passphrase> npm run backup:decrypt -- backup.json.enc
 ```
+
+### Making off-site the primary store
+
+On a host whose disk doesn't survive a redeploy — a container platform with
+ephemeral storage, or any setup where `./data` isn't a real volume — a "successful"
+local backup is worthless, and worse, it *looks* fine. Set:
+
+```bash
+HEARTH_BACKUP_PRIMARY=offsite
+```
+
+and the off-site copy becomes the backup rather than a supplement:
+
+- Hearth **refuses to start** unless a working off-site target is configured, rather
+  than falling back to a disk it's about to lose.
+- A failed upload **fails the whole backup**: the household is left due so the next
+  hourly tick retries, the backup heartbeat fails, and the `backup_failed` alert
+  fires. Nothing is marked as backed up until the durable copy has actually landed.
+- Older copies are only pruned **after** a successful upload, so a bad run can never
+  evict the good ones.
+- The local file becomes short-lived staging (only the newest is kept). It's still
+  written and still restore-verified — that round-trip is how a backup proves itself
+  — it just isn't what you'd restore from.
+
+Use `s3` for this. A `directory` target on an ephemeral host is the same disk with
+extra steps, and `webhook` gives you no way to get the data back through the app.
 
 ---
 

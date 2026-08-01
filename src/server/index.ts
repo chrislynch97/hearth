@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs'
 import { runMigrations } from './db/migrate'
 import { ensureSeed } from './db/seed'
 import { db, closeDb } from './db/client'
-import { startBackupScheduler } from './backup/runner'
+import { assertBackupConfig, startBackupScheduler } from './backup/runner'
 import { startAuditPruneScheduler } from './features/admin/prune'
 import { startUpdateScheduler } from './updateScheduler'
 import { isInstanceLocked, startSessionPurgeScheduler } from './auth/session'
@@ -89,6 +89,10 @@ async function main() {
   // dev, demo) the same states are legitimate, so we only warn.
   await assertStartupSafety()
   reportMailConfig()
+  // Throws on a backup config that can't do what it claims (#114) — same
+  // reasoning as the mail check: an instance backing up to nowhere looks exactly
+  // like one that's backing up fine, right until you need the backup.
+  console.log(`[hearth] ${assertBackupConfig()}`)
 
   startBackupScheduler(db)
   startAuditPruneScheduler(db)

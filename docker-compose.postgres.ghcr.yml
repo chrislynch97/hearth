@@ -59,6 +59,22 @@ services:
       - HEARTH_FEEDBACK_TOKEN=${HEARTH_FEEDBACK_TOKEN:-}
       - HEARTH_FEEDBACK_REPO=${HEARTH_FEEDBACK_REPO:-}
       - HEARTH_BACKUP_LOCAL_DIR=/data/backups
+      # Off-site backups (#39, #114). Off unless set in .env. `HEARTH_BACKUP_DIR`
+      # is the `directory` target and needs its own mount; the `s3` target needs
+      # nothing mounted, which is why it's the one to use when ./data isn't
+      # durable. See docs/deployment.md → Off-site backups.
+      - HEARTH_BACKUP_OFFSITE=${HEARTH_BACKUP_OFFSITE:-off}
+      - HEARTH_BACKUP_PRIMARY=${HEARTH_BACKUP_PRIMARY:-local}
+      - HEARTH_BACKUP_PASSPHRASE=${HEARTH_BACKUP_PASSPHRASE:-}
+      - HEARTH_BACKUP_DIR=${HEARTH_BACKUP_DIR:-}
+      - HEARTH_BACKUP_WEBHOOK_URL=${HEARTH_BACKUP_WEBHOOK_URL:-}
+      - HEARTH_BACKUP_WEBHOOK_AUTH=${HEARTH_BACKUP_WEBHOOK_AUTH:-}
+      - HEARTH_BACKUP_S3_ENDPOINT=${HEARTH_BACKUP_S3_ENDPOINT:-}
+      - HEARTH_BACKUP_S3_BUCKET=${HEARTH_BACKUP_S3_BUCKET:-}
+      - HEARTH_BACKUP_S3_REGION=${HEARTH_BACKUP_S3_REGION:-}
+      - HEARTH_BACKUP_S3_ACCESS_KEY_ID=${HEARTH_BACKUP_S3_ACCESS_KEY_ID:-}
+      - HEARTH_BACKUP_S3_SECRET_ACCESS_KEY=${HEARTH_BACKUP_S3_SECRET_ACCESS_KEY:-}
+      - HEARTH_BACKUP_S3_PREFIX=${HEARTH_BACKUP_S3_PREFIX:-}
       # Where the app and host updater exchange control files. Must be under the
       # mounted /data so the updater sees it -- with a postgres DATABASE_URL the
       # app can't derive it from the DB path (unlike the PGlite variant), so it

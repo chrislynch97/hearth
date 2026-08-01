@@ -16,6 +16,7 @@ import { useFormatDate } from "@/useMoney";
 import { downloadBlob, downloadJson, toCsv } from "@/csv";
 import { zipStore } from "@/zip";
 import { msToLocalIso } from "./util";
+import { OffsiteRestore } from "./OffsiteRestore";
 
 export const DataSection = () => {
     const utils = trpc.useUtils();
@@ -25,6 +26,7 @@ export const DataSection = () => {
     const resetMut = trpc.data.reset.useMutation();
     const updateHousehold = trpc.household.update.useMutation();
     const backupNow = trpc.data.backupNow.useMutation();
+    const backups = trpc.data.listBackups.useQuery();
     const fileRef = useRef<HTMLInputElement>(null);
 
     const hh = ctx.data?.household;
@@ -39,8 +41,19 @@ export const DataSection = () => {
 
     const handleBackupNow = async () => {
         setError("");
-        const result = await backupNow.mutateAsync();
+        setMessage("");
+        let result;
+        try {
+            // Under HEARTH_BACKUP_PRIMARY=offsite a failed upload fails the whole
+            // backup, so this rejects rather than reporting a partial success.
+            result = await backupNow.mutateAsync();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Backup failed.");
+            return;
+        }
         await utils.bootstrap.context.invalidate();
+        // The snapshot just written is one of the restorable ones now.
+        await utils.data.listBackups.invalidate();
         if (result.offsite && !result.offsite.ok) {
             setMessage(`Backup written to ${result.file}.`);
             setError(`Off-site copy failed: ${result.offsite.error}`);
@@ -135,11 +148,24 @@ export const DataSection = () => {
                             Automatic backups
                         </Text>
                         <Text size="xs" c="dimmed">
-                            Written to a{" "}
-                            <Text span ff="monospace" fz="xs">
-                                backups/
-                            </Text>{" "}
-                            folder next to your database (last 14 kept).
+                            {backups.data?.primary === "offsite" ? (
+                                <>
+                                    Written to your{" "}
+                                    <Text span ff="monospace" fz="xs">
+                                        {backups.data.kind}
+                                    </Text>{" "}
+                                    off-site target; the local copy is staging
+                                    only.
+                                </>
+                            ) : (
+                                <>
+                                    Written to a{" "}
+                                    <Text span ff="monospace" fz="xs">
+                                        backups/
+                                    </Text>{" "}
+                                    folder next to your database (last 14 kept).
+                                </>
+                            )}
                             {hh?.backupLastAt
                                 ? ` Last: ${fmt(msToLocalIso(hh.backupLastAt.getTime()))} ${hh.backupLastAt.toLocaleTimeString()}.`
                                 : " None yet."}
@@ -230,6 +256,7 @@ export const DataSection = () => {
                         }}
                     />
                 </Group>
+                <OffsiteRestore />
                 <Divider />
                 <Group justify="space-between">
                     <div>

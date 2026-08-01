@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
+import { encryptSnapshot } from '../../backup/encrypt'
 import { makeTestDb } from '../../db/testdb'
 import type { DB } from '../../db/client'
 import { ensureSeed } from '../../db/seed'
@@ -257,5 +261,111 @@ describe('data router', () => {
     const stats = await caller.data.stats()
     expect(stats.counts['household']).toBe(1)
     expect(stats.counts['member']).toBe(2) // joint + Alice
+  })
+})
+
+// Restore straight from the off-site store (#114) — the path a hosted instance
+// depends on, where there is no local filesystem to fetch a snapshot from.
+describe('data router — off-site backups', () => {
+  const PASS = 'test-passphrase'
+  let dir: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'hearth-router-offsite-'))
+    process.env.HEARTH_BACKUP_OFFSITE = 'directory'
+    process.env.HEARTH_BACKUP_DIR = dir
+    process.env.HEARTH_BACKUP_PASSPHRASE = PASS
+  })
+
+  afterEach(() => {
+    for (const k of Object.keys(process.env)) {
+      if (k.startsWith('HEARTH_BACKUP_')) delete process.env[k]
+    }
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  /** Put a snapshot in the off-site store the way `runBackup` would. */
+  const store = (name: string, snapshot: unknown): void =>
+    writeFileSync(join(dir, name), encryptSnapshot(JSON.stringify(snapshot), PASS))
+
+  it('lists the stored backups and reports the target as restorable', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner', userId: owner!.id })
+    store('hearth-backup-2026-01-01.json.enc', await caller.data.export())
+
+    const listed = await caller.data.listBackups()
+
+    expect(listed).toMatchObject({ kind: 'directory', restorable: true, primary: 'local', error: null })
+    expect(listed.entries.map((e) => e.name)).toEqual(['hearth-backup-2026-01-01.json.enc'])
+  })
+
+  it('reports a misconfiguration instead of blanking the panel', async () => {
+    delete process.env.HEARTH_BACKUP_PASSPHRASE
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner', userId: owner!.id })
+
+    const listed = await caller.data.listBackups()
+
+    expect(listed.error).toMatch(/HEARTH_BACKUP_PASSPHRASE/)
+    expect(listed.entries).toEqual([])
+  })
+
+  it('restores the whole database from an off-site snapshot', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner', userId: owner!.id })
+
+    const alice = await caller.members.addPerson({ displayName: 'Alice' })
+    await caller.pots.create({ name: 'Rent', ownerId: alice.id })
+    store('hearth-backup-2026-01-01.json.enc', await caller.data.export())
+
+    await caller.pots.create({ name: 'Extra Pot', ownerId: alice.id })
+    expect(await caller.pots.list()).toHaveLength(2)
+
+    await caller.data.restoreBackup({ name: 'hearth-backup-2026-01-01.json.enc' })
+
+    const pots = await caller.pots.list()
+    expect(pots.map((p) => p.name)).toEqual(['Rent'])
+    // Recorded in the restored data, where it's the only trace of what happened.
+    const events = await db.select().from(auditLog).where(eq(auditLog.action, 'restored_from_offsite'))
+    expect(events).toHaveLength(1)
+  })
+
+  it('refuses a name that is not a backup object we could have written', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner', userId: owner!.id })
+
+    await expect(caller.data.restoreBackup({ name: '../../../etc/passwd' })).rejects.toThrow(/refusing to use/)
+  })
+
+  it('refuses a snapshot from an unsupported export version', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner', userId: owner!.id })
+    store('hearth-backup-2026-01-01.json.enc', { version: 99, tables: { household: [{ id: 'household' }] } })
+
+    await expect(caller.data.restoreBackup({ name: 'hearth-backup-2026-01-01.json.enc' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+  })
+
+  it('restricts listing and restoring to the instance owner', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const outsiderId = await makeSecondHousehold(db)
+    const outsider = appRouter.createCaller({ db, householdId: 'h2', role: 'owner', userId: outsiderId })
+
+    await expect(outsider.data.listBackups()).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    await expect(outsider.data.restoreBackup({ name: 'hearth-backup-x.json.enc' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
   })
 })
