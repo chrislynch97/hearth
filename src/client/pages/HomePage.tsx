@@ -522,7 +522,11 @@ export function HomePage() {
                     {getGreeting()}
                     {greetingName ? `, ${greetingName}` : ""}
                 </Title>
-                <Button component={Link} to="/spending">
+                <Button
+                    component={Link}
+                    to="/spending"
+                    w={{ base: "100%", sm: "auto" }}
+                >
                     + Quick add
                 </Button>
             </Group>
