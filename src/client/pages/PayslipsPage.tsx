@@ -14,9 +14,9 @@ import {
   NumberInput,
   SegmentedControl,
   Select,
+  SimpleGrid,
   Stack,
   Switch,
-  Table,
   Text,
   TextInput,
   Title,
@@ -24,14 +24,18 @@ import {
 import { BarChart } from '@mantine/charts'
 import { trpc } from '../trpc'
 import { formatMoney, fromMinor, toMinor } from '../../shared/money'
-import { subtractMonths } from '../../shared/dates'
-import { useMoney, useFormatDate } from '../useMoney'
+import { subtractMonths, todayIso } from '../../shared/dates'
+import { formatMonthYear } from '../../shared/dateFormat'
+import { useMoney } from '../useMoney'
 import type { MoneyFormat } from '../useMoney'
 import { hearthTokens, chartXAxisProps } from '../theme'
 import type { Member, PayslipComponentType } from '../../server/db/schema'
 import type { PayslipWithLines } from '../../server/features/income/payslips.router'
 import { normalizeComponentDraft } from './payslipDraft'
 import type { ComponentKind } from './payslipDraft'
+import { useIsMobile } from '@/useIsMobile'
+import { PayslipTable } from '@/features/income/components/PayslipTable'
+import { PayslipCardList } from '@/features/income/components/PayslipCardList'
 
 const KIND_OPTIONS = [
   { value: 'earning', label: 'Earning' },
@@ -238,13 +242,17 @@ interface PayslipModalProps {
   lastPayslip: PayslipWithLines | null
   payslip: PayslipWithLines | null
   money: MoneyFormat
+  /** Touch only: with no × on the card, deleting happens from in here. */
+  onDelete: (id: string) => Promise<void>
 }
 
-function PayslipModal({ opened, onClose, ownerId, components, lastPayslip, payslip, money }: PayslipModalProps) {
+function PayslipModal({ opened, onClose, ownerId, components, lastPayslip, payslip, money, onDelete }: PayslipModalProps) {
   const utils = trpc.useUtils()
+  const isMobile = useIsMobile()
   const create = trpc.payslips.create.useMutation()
   const update = trpc.payslips.update.useMutation()
   const isEditing = payslip !== null
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   // Seed amounts: editing → this payslip's lines; adding → carry stable lines from
   // the last payslip, zero the variable ones (spec §5.4).
@@ -261,8 +269,14 @@ function PayslipModal({ opened, onClose, ownerId, components, lastPayslip, paysl
     }
     return seed
   })
-  const [payDate, setPayDate] = useState(payslip?.payDate ?? '')
-  const [periodLabel, setPeriodLabel] = useState(payslip?.periodLabel ?? '')
+  // A payslip you're adding is nearly always today's, for the month it lands in.
+  const [payDate, setPayDate] = useState(payslip?.payDate ?? todayIso())
+  const [periodLabel, setPeriodLabel] = useState(
+    payslip?.periodLabel ?? formatMonthYear(payslip?.payDate ?? todayIso(), money.locale),
+  )
+  // An untouched label keeps following the pay date. Once it's been typed in it
+  // stops moving under the person typing.
+  const [labelEdited, setLabelEdited] = useState(payslip?.periodLabel != null)
   const [netOverride, setNetOverride] = useState<number | string>(
     payslip?.netPay != null ? fromMinor(payslip.netPay, money.decimalPlaces) : '',
   )
@@ -300,12 +314,17 @@ function PayslipModal({ opened, onClose, ownerId, components, lastPayslip, paysl
     onClose()
   }
 
+  function changePayDate(next: string) {
+    setPayDate(next)
+    if (!labelEdited) setPeriodLabel(formatMonthYear(next, money.locale))
+  }
+
   function field(c: PayslipComponentType) {
     return (
       <NumberInput
         key={c.id}
         label={c.name}
-        size="xs"
+        size={isMobile ? 'sm' : 'xs'}
         placeholder="0.00"
         decimalScale={money.decimalPlaces}
         fixedDecimalScale
@@ -319,22 +338,27 @@ function PayslipModal({ opened, onClose, ownerId, components, lastPayslip, paysl
   return (
     <Modal opened={opened} onClose={onClose} title={isEditing ? 'Edit payslip' : 'Add payslip'} size="lg">
       <Stack gap="sm">
-        <Group grow>
-          <TextInput label="Pay date" type="date" value={payDate} onChange={(e) => setPayDate(e.currentTarget.value)} />
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+          <TextInput label="Pay date" type="date" value={payDate} onChange={(e) => changePayDate(e.currentTarget.value)} />
           <TextInput
             label="Period label (optional)"
             placeholder="e.g. October 2026"
             value={periodLabel}
-            onChange={(e) => setPeriodLabel(e.currentTarget.value)}
+            onChange={(e) => {
+              setPeriodLabel(e.currentTarget.value)
+              setLabelEdited(true)
+            }}
           />
-        </Group>
+        </SimpleGrid>
 
         {earnings.length > 0 && (
           <>
             <Text size="xs" fw={700} c="dimmed" tt="uppercase">
               Earnings
             </Text>
-            <Group grow>{earnings.map(field)}</Group>
+            <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="sm">
+              {earnings.map(field)}
+            </SimpleGrid>
           </>
         )}
         {deductions.length > 0 && (
@@ -342,7 +366,9 @@ function PayslipModal({ opened, onClose, ownerId, components, lastPayslip, paysl
             <Text size="xs" fw={700} c="dimmed" tt="uppercase">
               Deductions
             </Text>
-            <Group grow>{deductions.map(field)}</Group>
+            <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="sm">
+              {deductions.map(field)}
+            </SimpleGrid>
           </>
         )}
         {employerInfo.length > 0 && (
@@ -350,7 +376,9 @@ function PayslipModal({ opened, onClose, ownerId, components, lastPayslip, paysl
             <Text size="xs" fw={700} c="dimmed" tt="uppercase">
               Employer info (not counted)
             </Text>
-            <Group grow>{employerInfo.map(field)}</Group>
+            <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="sm">
+              {employerInfo.map(field)}
+            </SimpleGrid>
           </>
         )}
 
@@ -377,7 +405,7 @@ function PayslipModal({ opened, onClose, ownerId, components, lastPayslip, paysl
           </Group>
         </Card>
 
-        <Group align="flex-end" gap="sm">
+        <Group align="flex-end" gap="sm" preventGrowOverflow={false}>
           <NumberInput
             label="Actual net pay (optional override)"
             placeholder="0.00"
@@ -386,7 +414,7 @@ function PayslipModal({ opened, onClose, ownerId, components, lastPayslip, paysl
             min={0}
             value={netOverride}
             onChange={setNetOverride}
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: 180 }}
           />
           {overrideMinor !== null && (
             <Badge color={delta === 0 ? 'moss' : 'apricot'} variant="light" mb={8}>
@@ -400,13 +428,44 @@ function PayslipModal({ opened, onClose, ownerId, components, lastPayslip, paysl
             {error || create.error?.message || update.error?.message}
           </Alert>
         )}
-        <Group justify="flex-end">
-          <Button variant="default" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={() => void handleSubmit()} loading={create.isPending || update.isPending}>
-            {isEditing ? 'Save' : 'Add payslip'}
-          </Button>
+        {confirmDelete && (
+          <Alert color="red" title="Delete this payslip?">
+            <Stack gap="xs">
+              <Text size="sm">
+                {periodLabel || payDate} will be removed from your income history. This can't be undone.
+              </Text>
+              <Group gap="xs">
+                <Button
+                  size="xs"
+                  color="red"
+                  onClick={async () => {
+                    if (payslip) await onDelete(payslip.id)
+                    onClose()
+                  }}
+                >
+                  Delete
+                </Button>
+                <Button size="xs" variant="default" onClick={() => setConfirmDelete(false)}>
+                  Keep
+                </Button>
+              </Group>
+            </Stack>
+          </Alert>
+        )}
+        <Group justify={isEditing && isMobile ? 'space-between' : 'flex-end'}>
+          {isEditing && isMobile && (
+            <Button variant="subtle" color="red" onClick={() => setConfirmDelete(true)}>
+              Delete
+            </Button>
+          )}
+          <Group gap="xs">
+            <Button variant="default" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={() => void handleSubmit()} loading={create.isPending || update.isPending}>
+              {isEditing ? 'Save' : 'Add payslip'}
+            </Button>
+          </Group>
         </Group>
       </Stack>
     </Modal>
@@ -483,7 +542,7 @@ function NetTrendCard({ payslips, money }: { payslips: PayslipWithLines[]; money
 
 export function PayslipsPage() {
   const money = useMoney()
-  const fmt = useFormatDate()
+  const isMobile = useIsMobile()
   const membersQuery = trpc.members.list.useQuery()
   const persons = (membersQuery.data ?? []).filter((m) => m.archivedAt === null && m.kind === 'person')
 
@@ -527,6 +586,11 @@ export function PayslipsPage() {
   async function handleDelete(id: string) {
     await remove.mutateAsync({ id })
     await Promise.all([utils.payslips.list.invalidate(), utils.income.overview.invalidate()])
+  }
+
+  function openEdit(p: PayslipWithLines) {
+    setEditing(p)
+    setModalOpen(true)
   }
 
   const lastPayslip = payslips[0] ?? null // list is newest-first
@@ -585,81 +649,18 @@ export function PayslipsPage() {
 
       {payslips.length > 0 && <NetTrendCard payslips={payslips} money={money} />}
 
-      {payslips.length > 0 && (
-        <Card withBorder padding="md">
-          <Table.ScrollContainer minWidth={640}>
-          <Table verticalSpacing="xs" horizontalSpacing="md">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th style={{ whiteSpace: 'nowrap' }}>Pay date</Table.Th>
-                <Table.Th style={{ textAlign: 'right' }}>Gross</Table.Th>
-                <Table.Th style={{ textAlign: 'right' }}>Deductions</Table.Th>
-                <Table.Th style={{ textAlign: 'right' }}>Net</Table.Th>
-                <Table.Th style={{ textAlign: 'right' }}>Rolling 12m</Table.Th>
-                <Table.Th style={{ textAlign: 'right' }}>Running total</Table.Th>
-                <Table.Th />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {payslips.map((p) => {
-                const d = derived.get(p.id)
-                return (
-                  <Table.Tr key={p.id}>
-                    <Table.Td>
-                      <Group gap="xs" wrap="nowrap">
-                        <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{p.periodLabel || fmt(p.payDate)}</Text>
-                        {p.hasVariablePay && (
-                          <Badge size="xs" variant="light" color="apricot">
-                            variable
-                          </Badge>
-                        )}
-                      </Group>
-                    </Table.Td>
-                    <Table.Td style={{ textAlign: 'right' }}>{formatMoney(p.totals.grossPay, money)}</Table.Td>
-                    <Table.Td style={{ textAlign: 'right' }}>{formatMoney(p.totals.totalDeductions, money)}</Table.Td>
-                    <Table.Td style={{ textAlign: 'right' }}>
-                      <Text size="sm" fw={600}>
-                        {formatMoney(p.totals.effectiveNet, money)}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td style={{ textAlign: 'right' }} c="dimmed">
-                      {d ? formatMoney(d.rolling, money) : '—'}
-                    </Table.Td>
-                    <Table.Td style={{ textAlign: 'right' }} c="dimmed">
-                      {d ? formatMoney(d.running, money) : '—'}
-                    </Table.Td>
-                    <Table.Td>
-                      <Group gap={4} justify="flex-end" wrap="nowrap">
-                        <ActionIcon
-                          variant="subtle"
-                          size="sm"
-                          aria-label="Edit payslip"
-                          onClick={() => {
-                            setEditing(p)
-                            setModalOpen(true)
-                          }}
-                        >
-                          ✎
-                        </ActionIcon>
-                        <ActionIcon
-                          variant="subtle"
-                          color="red"
-                          size="sm"
-                          aria-label="Delete payslip"
-                          onClick={() => void handleDelete(p.id)}
-                        >
-                          ×
-                        </ActionIcon>
-                      </Group>
-                    </Table.Td>
-                  </Table.Tr>
-                )
-              })}
-            </Table.Tbody>
-          </Table>
-          </Table.ScrollContainer>
-        </Card>
-      )}
+      {payslips.length > 0 &&
+        (isMobile ? (
+          <PayslipCardList payslips={payslips} derived={derived} money={money} onEdit={openEdit} />
+        ) : (
+          <PayslipTable
+            payslips={payslips}
+            derived={derived}
+            money={money}
+            onEdit={openEdit}
+            onDelete={(id) => void handleDelete(id)}
+          />
+        ))}
 
       {activeOwner && modalOpen && (
         <PayslipModal
@@ -670,6 +671,7 @@ export function PayslipsPage() {
           lastPayslip={lastPayslip}
           payslip={editing}
           money={money}
+          onDelete={handleDelete}
         />
       )}
     </Stack>

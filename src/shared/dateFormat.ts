@@ -20,3 +20,11 @@ export function formatDate(date: string, opts: { locale: string; dateFormat: Dat
   const dt = new Date(y, m - 1, d)
   return new Intl.DateTimeFormat(opts.locale, STYLES[opts.dateFormat]).format(dt)
 }
+
+/** The month a date falls in, e.g. `July 2026` — the default label for a pay
+ *  period. Empty for malformed input, so the caller can fall back to its own text. */
+export function formatMonthYear(date: string, locale: string): string {
+  const [y, m] = (date ?? '').split('-').map(Number)
+  if (!y || !m) return ''
+  return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(new Date(y, m - 1, 1))
+}

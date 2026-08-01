@@ -13,6 +13,7 @@ import {
   Modal,
   NumberInput,
   Select,
+  SimpleGrid,
   Stack,
   Text,
   TextInput,
@@ -25,6 +26,8 @@ import { normaliseToMonthly, roundMinor, type Recurrence } from '../../shared/re
 import { orderMembers } from '../potOptions'
 import { useMoney, type MoneyFormat } from '../useMoney'
 import { notifySuccess } from '../notify'
+import { useIsMobile } from '@/useIsMobile'
+import { EditableListRow } from '@/components/EditableListRow'
 
 /** Monthly-equivalent total of a pot's contribution lines. */
 function contributionMonthly(lines: SetAside[]): number {
@@ -69,6 +72,7 @@ function linesFromSetAsides(setAsides: SetAside[], pot: Pot, decimalPlaces: numb
 
 function PotRow({ pot, members, categories, unused, setAsides, money }: PotRowProps) {
   const utils = trpc.useUtils()
+  const isMobile = useIsMobile()
   const [editOpen, setEditOpen] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
   const archive = trpc.pots.archive.useMutation()
@@ -88,89 +92,89 @@ function PotRow({ pot, members, categories, unused, setAsides, money }: PotRowPr
     notifySuccess(`Archived ${pot.name}.`)
   }
 
+  const ownerBadge = owner && (
+    <Badge
+      size="sm"
+      variant="light"
+      color={owner.color ?? undefined}
+      style={
+        owner.color
+          ? {
+              backgroundColor: owner.color + '22',
+              color: owner.color,
+              borderColor: owner.color + '55',
+            }
+          : undefined
+      }
+    >
+      {owner.displayName}
+    </Badge>
+  )
+  const unusedBadge = unused && (
+    <Badge
+      size="sm"
+      variant="outline"
+      color="gray"
+      title="Never referenced by an outgoing, spend, or reconciliation — safe to delete"
+    >
+      unused
+    </Badge>
+  )
+  const contribTitle = hasBreakdown
+    ? setAsides.map((s) => `${s.name} ${formatMoney(s.amount, money)}`).join(' · ')
+    : undefined
+  const contribText =
+    contribTotal > 0
+      ? `${formatMoney(contribTotal, money)}/mo in${hasBreakdown ? ` (${setAsides.length} parts)` : ''}`
+      : ''
+
   return (
     <>
-      <Group
-        justify="space-between"
-        px="xs"
-        py={6}
-        wrap="nowrap"
-        style={{
-          borderRadius: 6,
-          background: 'light-dark(var(--mantine-color-sand-0), var(--mantine-color-dark-6))',
-        }}
+      <EditableListRow
+        onEdit={() => setEditOpen(true)}
+        onDelete={() => setConfirmArchive(true)}
+        editLabel={`Edit ${pot.name}`}
+        deleteLabel={`Archive ${pot.name}`}
+        style={{ background: 'light-dark(var(--mantine-color-sand-0), var(--mantine-color-dark-6))' }}
       >
-        <Group gap="xs" wrap="wrap">
-          <Text size="sm" fw={500}>
-            {pot.name}
-          </Text>
-          {owner && (
-            <Badge
-              size="sm"
-              variant="light"
-              color={owner.color ?? undefined}
-              style={
-                owner.color
-                  ? {
-                      backgroundColor: owner.color + '22',
-                      color: owner.color,
-                      borderColor: owner.color + '55',
-                    }
-                  : undefined
-              }
-            >
-              {owner.displayName}
-            </Badge>
-          )}
-          {unused && (
-            <Badge
-              size="sm"
-              variant="outline"
-              color="gray"
-              title="Never referenced by an outgoing, spend, or reconciliation — safe to delete"
-            >
-              unused
-            </Badge>
-          )}
-          {contribTotal > 0 && (
-            <Text
-              size="xs"
-              c="dimmed"
-              title={
-                hasBreakdown
-                  ? setAsides.map((s) => `${s.name} ${formatMoney(s.amount, money)}`).join(' · ')
-                  : undefined
-              }
-            >
-              · {formatMoney(contribTotal, money)}/mo in{hasBreakdown ? ` (${setAsides.length} parts)` : ''}
+        {isMobile ? (
+          // Two lines, not one wrapping row: the name, its badges, the monthly
+          // contribution and the note all flowing together is what makes this
+          // list unreadable on a phone.
+          <Stack gap={2}>
+            <Group gap="xs" wrap="nowrap" preventGrowOverflow={false}>
+              <Text size="sm" fw={500} truncate style={{ minWidth: 0 }}>
+                {pot.name}
+              </Text>
+              {ownerBadge}
+              {unusedBadge}
+            </Group>
+            {(contribText || pot.note) && (
+              <Text size="xs" c="dimmed" truncate title={contribTitle}>
+                {[contribText, pot.note].filter(Boolean).join(' · ')}
+              </Text>
+            )}
+          </Stack>
+        ) : (
+          <Group gap="xs" wrap="wrap">
+            <Text size="sm" fw={500}>
+              {pot.name}
             </Text>
-          )}
-          {pot.note && (
-            <Text size="xs" c="dimmed">
-              {pot.note}
-            </Text>
-          )}
-        </Group>
-        <Group gap={4}>
-          <ActionIcon
-            variant="subtle"
-            size="sm"
-            aria-label={`Edit ${pot.name}`}
-            onClick={() => setEditOpen(true)}
-          >
-            ✎
-          </ActionIcon>
-          <ActionIcon
-            variant="subtle"
-            color="red"
-            size="sm"
-            aria-label={`Archive ${pot.name}`}
-            onClick={() => setConfirmArchive(true)}
-          >
-            ×
-          </ActionIcon>
-        </Group>
-      </Group>
+            {ownerBadge}
+            {unusedBadge}
+            {contribText && (
+              <Text size="xs" c="dimmed" title={contribTitle}>
+                · {contribText}
+              </Text>
+            )}
+            {pot.note && (
+              <Text size="xs" c="dimmed">
+                {pot.note}
+              </Text>
+            )}
+          </Group>
+        )}
+      </EditableListRow>
       <Modal
         opened={confirmArchive}
         onClose={() => setConfirmArchive(false)}
@@ -200,6 +204,14 @@ function PotRow({ pot, members, categories, unused, setAsides, money }: PotRowPr
           money={money}
           pot={pot}
           setAsides={setAsides}
+          onArchive={
+            isMobile
+              ? () => {
+                  setEditOpen(false)
+                  setConfirmArchive(true)
+                }
+              : undefined
+          }
         />
       )}
     </>
@@ -217,6 +229,7 @@ function PotFormModal({
   money,
   pot,
   setAsides = [],
+  onArchive,
 }: {
   opened: boolean
   onClose: () => void
@@ -225,6 +238,8 @@ function PotFormModal({
   money: MoneyFormat
   pot?: Pot
   setAsides?: SetAside[]
+  /** Touch only: with no × on the row, the destructive action lives in here. */
+  onArchive?: () => void
 }) {
   const utils = trpc.useUtils()
   const create = trpc.pots.createWithContributions.useMutation()
@@ -307,7 +322,7 @@ function PotFormModal({
             }}
             data-autofocus
           />
-          <Group grow>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
             <Select
               label="Owner"
               placeholder="Choose owner"
@@ -328,7 +343,7 @@ function PotFormModal({
               searchable
               clearable
             />
-          </Group>
+          </SimpleGrid>
           <TextInput label="Note (optional)" placeholder="Optional note" value={note} onChange={(e) => setNote(e.currentTarget.value)} />
 
           <Divider label="Monthly contribution" labelPosition="left" />
@@ -389,13 +404,20 @@ function PotFormModal({
               {error}
             </Alert>
           )}
-          <Group justify="flex-end">
-            <Button type="button" variant="default" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={pending}>
-              {isEditing ? 'Save' : 'Add pot'}
-            </Button>
+          <Group justify={onArchive ? 'space-between' : 'flex-end'}>
+            {onArchive && (
+              <Button type="button" variant="subtle" color="red" onClick={onArchive}>
+                Archive
+              </Button>
+            )}
+            <Group gap="xs">
+              <Button type="button" variant="default" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={pending}>
+                {isEditing ? 'Save' : 'Add pot'}
+              </Button>
+            </Group>
           </Group>
         </Stack>
       </form>

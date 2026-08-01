@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import {
-  ActionIcon,
   Button,
   Card,
   Center,
@@ -12,12 +11,17 @@ import {
   TextInput,
   Title,
 } from '@mantine/core'
-import { trpc } from '../trpc'
+import { trpc } from '@/trpc'
+import { useIsMobile } from '@/useIsMobile'
+import { EditableListRow } from '@/components/EditableListRow'
+import { CategoryEditModal } from '@/features/categories/components/CategoryEditModal'
 import type { Category } from '../../server/db/schema'
 
 function CategoryRow({ category }: { category: Category }) {
   const utils = trpc.useUtils()
+  const isMobile = useIsMobile()
   const [editing, setEditing] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
   const [name, setName] = useState(category.name)
   const [confirmArchive, setConfirmArchive] = useState(false)
   const update = trpc.categories.update.useMutation()
@@ -42,55 +46,68 @@ function CategoryRow({ category }: { category: Category }) {
     setConfirmArchive(false)
   }
 
-  return (
-    <>
+  // Renaming in place is a desktop affordance: on a phone the row becomes a
+  // field plus two buttons on one line, which doesn't fit. Same ✎, sheet instead.
+  if (editing && !isMobile) {
+    return (
       <Group justify="space-between" px="xs" py={6} wrap="nowrap">
-        {editing ? (
-          <Group gap="xs" style={{ flex: 1 }} wrap="nowrap">
-            <TextInput
-              size="xs"
-              value={name}
-              onChange={(e) => setName(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void handleSave()
-                if (e.key === 'Escape') {
-                  setName(category.name)
-                  setEditing(false)
-                }
-              }}
-              autoFocus
-              style={{ flex: 1 }}
-            />
-            <Button size="xs" onClick={() => void handleSave()} loading={update.isPending}>
-              Save
-            </Button>
-            <Button
-              size="xs"
-              variant="default"
-              onClick={() => {
+        <Group gap="xs" style={{ flex: 1 }} wrap="nowrap">
+          <TextInput
+            size="xs"
+            aria-label={`Rename ${category.name}`}
+            value={name}
+            onChange={(e) => setName(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void handleSave()
+              if (e.key === 'Escape') {
                 setName(category.name)
                 setEditing(false)
-              }}
-            >
-              Cancel
-            </Button>
-          </Group>
-        ) : (
-          <>
-            <Text size="sm" fw={500}>
-              {category.name}
-            </Text>
-            <Group gap={4}>
-              <ActionIcon variant="subtle" size="sm" aria-label={`Rename ${category.name}`} onClick={() => setEditing(true)}>
-                ✎
-              </ActionIcon>
-              <ActionIcon variant="subtle" color="red" size="sm" aria-label={`Archive ${category.name}`} onClick={() => setConfirmArchive(true)}>
-                ×
-              </ActionIcon>
-            </Group>
-          </>
-        )}
+              }
+            }}
+            autoFocus
+            style={{ flex: 1 }}
+          />
+          <Button size="xs" onClick={() => void handleSave()} loading={update.isPending}>
+            Save
+          </Button>
+          <Button
+            size="xs"
+            variant="default"
+            onClick={() => {
+              setName(category.name)
+              setEditing(false)
+            }}
+          >
+            Cancel
+          </Button>
+        </Group>
       </Group>
+    )
+  }
+
+  return (
+    <>
+      <EditableListRow
+        onEdit={() => (isMobile ? setSheetOpen(true) : setEditing(true))}
+        onDelete={() => setConfirmArchive(true)}
+        editLabel={`Rename ${category.name}`}
+        deleteLabel={`Archive ${category.name}`}
+      >
+        <Text size="sm" fw={500}>
+          {category.name}
+        </Text>
+      </EditableListRow>
+      {sheetOpen && (
+        <CategoryEditModal
+          category={category}
+          opened={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          onArchive={() => {
+            setSheetOpen(false)
+            setConfirmArchive(true)
+          }}
+        />
+      )}
       <Modal opened={confirmArchive} onClose={() => setConfirmArchive(false)} title="Archive category?" size="sm">
         <Stack gap="md">
           <Text size="sm">

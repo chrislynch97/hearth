@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatDate } from './dateFormat'
+import { formatDate, formatMonthYear } from './dateFormat'
 
 describe('formatDate', () => {
   it('returns the raw ISO string for iso format', () => {
@@ -21,5 +21,21 @@ describe('formatDate', () => {
   it('falls back to the raw string for malformed input', () => {
     expect(formatDate('not-a-date', { locale: 'en-GB', dateFormat: 'medium' })).toBe('not-a-date')
     expect(formatDate('', { locale: 'en-GB', dateFormat: 'medium' })).toBe('')
+  })
+})
+
+describe('formatMonthYear', () => {
+  it('names the month the date falls in', () => {
+    expect(formatMonthYear('2026-07-25', 'en-GB')).toBe('July 2026')
+  })
+  it('does not roll into the previous month across timezones', () => {
+    expect(formatMonthYear('2026-01-01', 'en-GB')).toBe('January 2026')
+  })
+  it('follows the locale', () => {
+    expect(formatMonthYear('2026-07-25', 'fr-FR')).toBe('juillet 2026')
+  })
+  it('is empty for malformed input', () => {
+    expect(formatMonthYear('not-a-date', 'en-GB')).toBe('')
+    expect(formatMonthYear('', 'en-GB')).toBe('')
   })
 })
