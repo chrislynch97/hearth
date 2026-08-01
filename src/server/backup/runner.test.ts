@@ -7,7 +7,7 @@ import { makeTestDb } from '../db/testdb'
 import { household } from '../db/schema'
 import { applySnapshot, type Snapshot } from '../db/snapshot'
 import { decryptSnapshot } from './encrypt'
-import { backupDir, keepBackups, runBackup } from './runner'
+import { assertBackupConfig, backupDir, backupPrimary, keepBackups, runBackup } from './runner'
 
 // runBackup writes into `<DATABASE_URL dir>/backups`; point it at a throwaway
 // temp dir so tests never touch ./data. (The actual DB under test is a separate
@@ -267,6 +267,26 @@ describe('backup retention', () => {
     expect(left).not.toContain('hearth-backup-2000-01-01.json')
   })
 
+  it('prunes the off-site copies to the same retention (#114)', async () => {
+    const offsiteDir = join(tmp, 'offsite')
+    mkdirSync(offsiteDir, { recursive: true })
+    for (const stamp of ['2000-01-01', '2000-01-02', '2000-01-03']) {
+      writeFileSync(join(offsiteDir, `hearth-backup-${stamp}.json.enc`), 'x')
+    }
+    process.env.HEARTH_BACKUP_KEEP = '2'
+    process.env.HEARTH_BACKUP_OFFSITE = 'directory'
+    process.env.HEARTH_BACKUP_DIR = offsiteDir
+    process.env.HEARTH_BACKUP_PASSPHRASE = 'test-passphrase'
+
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+    await runBackup(db, ['household'])
+
+    const left = readdirSync(offsiteDir).sort()
+    expect(left.length).toBe(2)
+    expect(left).not.toContain('hearth-backup-2000-01-01.json.enc')
+  })
+
   it('writes into HEARTH_BACKUP_LOCAL_DIR when set', async () => {
     const custom = join(tmp, 'elsewhere')
     process.env.HEARTH_BACKUP_LOCAL_DIR = custom
@@ -277,5 +297,143 @@ describe('backup retention', () => {
 
     expect(dirname(file)).toBe(custom)
     expect(readdirSync(custom).filter((f) => f.startsWith('hearth-backup-')).length).toBe(1)
+  })
+})
+
+describe('backupPrimary', () => {
+  it('defaults to local', () => {
+    expect(backupPrimary({})).toBe('local')
+    expect(backupPrimary({ HEARTH_BACKUP_PRIMARY: '  LOCAL ' })).toBe('local')
+  })
+
+  it('reads offsite', () => {
+    expect(backupPrimary({ HEARTH_BACKUP_PRIMARY: 'offsite' })).toBe('offsite')
+  })
+
+  // Unlike HEARTH_BACKUP_KEEP, a typo here can't fall back to a default: guessing
+  // "local" would silently downgrade a hosted instance to backups it will lose.
+  it('throws on an unknown value rather than guessing', () => {
+    expect(() => backupPrimary({ HEARTH_BACKUP_PRIMARY: 'remote' })).toThrow(/HEARTH_BACKUP_PRIMARY/)
+  })
+})
+
+describe('assertBackupConfig', () => {
+  it('describes a plain local setup', () => {
+    expect(assertBackupConfig({})).toMatch(/local .*backups \(primary\)/)
+  })
+
+  it('mentions the supplementary off-site target', () => {
+    expect(
+      assertBackupConfig({
+        HEARTH_BACKUP_OFFSITE: 'directory',
+        HEARTH_BACKUP_DIR: '/mnt/backup',
+        HEARTH_BACKUP_PASSPHRASE: 'p',
+      }),
+    ).toMatch(/off-site copies to directory/)
+  })
+
+  it('refuses to boot when off-site is primary but not configured', () => {
+    expect(() => assertBackupConfig({ HEARTH_BACKUP_PRIMARY: 'offsite' })).toThrow(/nowhere\s+durable/)
+  })
+
+  it('refuses to boot when off-site is primary but misconfigured', () => {
+    expect(() =>
+      assertBackupConfig({ HEARTH_BACKUP_PRIMARY: 'offsite', HEARTH_BACKUP_OFFSITE: 'directory' }),
+    ).toThrow(/HEARTH_BACKUP_PASSPHRASE/)
+  })
+
+  it('warns that a write-only target has no restore or retention', () => {
+    expect(
+      assertBackupConfig({
+        HEARTH_BACKUP_PRIMARY: 'offsite',
+        HEARTH_BACKUP_OFFSITE: 'webhook',
+        HEARTH_BACKUP_WEBHOOK_URL: 'https://example.test/b',
+        HEARTH_BACKUP_PASSPHRASE: 'p',
+      }),
+    ).toMatch(/write-only/)
+  })
+})
+
+// With the off-site copy promoted to primary (#114), a failed upload is a failed
+// backup — the local file is on a disk the instance is assumed to be about to
+// lose, so treating it as success is the bug this mode exists to prevent.
+describe('runBackup — HEARTH_BACKUP_PRIMARY=offsite', () => {
+  beforeEach(() => {
+    process.env.HEARTH_BACKUP_PRIMARY = 'offsite'
+    process.env.HEARTH_BACKUP_PASSPHRASE = 'test-passphrase'
+  })
+
+  it('stamps the household once the off-site copy has landed', async () => {
+    const offsiteDir = join(tmp, 'offsite')
+    process.env.HEARTH_BACKUP_OFFSITE = 'directory'
+    process.env.HEARTH_BACKUP_DIR = offsiteDir
+
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+
+    const { at, offsite } = await runBackup(db, ['household'])
+
+    expect(offsite).toEqual({ kind: 'directory', ok: true })
+    expect(readdirSync(offsiteDir).length).toBe(1)
+    const [row] = await db.select().from(household).where(eq(household.id, 'household'))
+    expect(row!.backupLastAt?.getTime()).toBe(at)
+  })
+
+  it('fails the backup and leaves the household due when the upload fails', async () => {
+    process.env.HEARTH_BACKUP_OFFSITE = 'webhook'
+    process.env.HEARTH_BACKUP_WEBHOOK_URL = 'https://example.test/backup'
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('boom', { status: 500, statusText: 'err' })))
+
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+
+    await expect(runBackup(db, ['household'])).rejects.toThrow(/off-site backup upload failed \(webhook\)/)
+
+    // Not stamped, so the hourly tick retries instead of waiting a whole day.
+    const [row] = await db.select().from(household).where(eq(household.id, 'household'))
+    expect(row!.backupLastAt).toBeNull()
+  })
+
+  it('leaves older local snapshots alone when the upload fails', async () => {
+    process.env.HEARTH_BACKUP_OFFSITE = 'webhook'
+    process.env.HEARTH_BACKUP_WEBHOOK_URL = 'https://example.test/backup'
+    process.env.HEARTH_BACKUP_KEEP = '1'
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('boom', { status: 500, statusText: 'err' })))
+    const dir = join(tmp, 'backups')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'hearth-backup-2000-01-01.json.enc'), '{}')
+
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+
+    await expect(runBackup(db, ['household'])).rejects.toThrow()
+
+    // The old copy may be the only good one left — pruning runs after the upload
+    // for exactly this reason.
+    expect(readdirSync(dir)).toContain('hearth-backup-2000-01-01.json.enc')
+  })
+
+  it('refuses to run at all when off-site backups are switched off', async () => {
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+
+    await expect(runBackup(db, ['household'])).rejects.toThrow(/HEARTH_BACKUP_OFFSITE/)
+  })
+
+  it('keeps only the newest local snapshot — it is staging, not the backup', async () => {
+    process.env.HEARTH_BACKUP_OFFSITE = 'directory'
+    process.env.HEARTH_BACKUP_DIR = join(tmp, 'offsite')
+    process.env.HEARTH_BACKUP_KEEP = '14' // retention applies to the off-site store
+    const dir = join(tmp, 'backups')
+    mkdirSync(dir, { recursive: true })
+    for (const stamp of ['2000-01-01', '2000-01-02']) {
+      writeFileSync(join(dir, `hearth-backup-${stamp}.json.enc`), '{}')
+    }
+
+    const db = await makeTestDb()
+    await addHousehold(db, 'household', 'daily')
+    const { file } = await runBackup(db, ['household'])
+
+    expect(readdirSync(dir)).toEqual([basename(file)])
   })
 })

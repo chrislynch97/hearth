@@ -95,6 +95,16 @@ services:
       - HEARTH_BACKUP_PASSPHRASE=${HEARTH_BACKUP_PASSPHRASE:-}
       - HEARTH_BACKUP_WEBHOOK_URL=${HEARTH_BACKUP_WEBHOOK_URL:-}
       - HEARTH_BACKUP_WEBHOOK_AUTH=${HEARTH_BACKUP_WEBHOOK_AUTH:-}
+      - HEARTH_BACKUP_S3_ENDPOINT=${HEARTH_BACKUP_S3_ENDPOINT:-}
+      - HEARTH_BACKUP_S3_BUCKET=${HEARTH_BACKUP_S3_BUCKET:-}
+      - HEARTH_BACKUP_S3_REGION=${HEARTH_BACKUP_S3_REGION:-}
+      - HEARTH_BACKUP_S3_ACCESS_KEY_ID=${HEARTH_BACKUP_S3_ACCESS_KEY_ID:-}
+      - HEARTH_BACKUP_S3_SECRET_ACCESS_KEY=${HEARTH_BACKUP_S3_SECRET_ACCESS_KEY:-}
+      - HEARTH_BACKUP_S3_PREFIX=${HEARTH_BACKUP_S3_PREFIX:-}
+      # Set to `offsite` when the container's disk isn't durable (#114): the
+      # off-site copy becomes the backup, so a failed upload fails the backup
+      # instead of quietly leaving you with files you're about to lose.
+      - HEARTH_BACKUP_PRIMARY=${HEARTH_BACKUP_PRIMARY:-local}
       # Alerting on a box you don't sit next to: a dead-man's-switch ping after
       # each backup, and a webhook for backup / failed-login alerts.
       - HEARTH_BACKUP_HEARTBEAT_URL=${HEARTH_BACKUP_HEARTBEAT_URL:-}

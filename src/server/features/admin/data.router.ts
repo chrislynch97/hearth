@@ -15,7 +15,15 @@ import { ensureSeed } from '../../db/seed'
 import { rescaleMinor } from '../../../shared/money'
 import { applySnapshot, buildHouseholdSnapshot, buildSnapshot, EXPORT_VERSION } from '../../db/snapshot'
 import { DEFAULT_HOUSEHOLD_ID } from '../../trpc/tenant'
-import { runBackup } from '../../backup/runner'
+import { backupPrimary, runBackup, type BackupPrimary } from '../../backup/runner'
+import {
+  downloadOffsite,
+  isReadable,
+  listOffsite,
+  resolveOffsiteConfig,
+  type OffsiteEntry,
+  type OffsiteKind,
+} from '../../backup/offsite'
 import { appVersion } from '../../version'
 import { checkForUpdates, deployMode } from '../../updates'
 import { getInstanceSettings, setUpdateSettings } from '../../db/instanceSettings'
@@ -34,6 +42,18 @@ import { recordSecurityEvent } from '../../trpc/audit'
 // drizzle's dynamic-table typing is intentionally strict; these thin casts let us
 // iterate the table registry generically for whole-database operations.
 type AnyTable = PgTable & { id: unknown; householdId: unknown }
+
+/** What the restore UI needs to know about the off-site store (#114). Declared as
+ *  one shape rather than inferred, so the success and failure paths stay a single
+ *  type the client can read without narrowing. `kind: null` means off-site backups
+ *  are switched off — the self-hosted default, and the UI renders nothing. */
+interface OffsiteBackupsView {
+  primary: BackupPrimary
+  kind: OffsiteKind | null
+  restorable: boolean
+  entries: OffsiteEntry[]
+  error: string | null
+}
 
 export const dataRouter = router({
   /** The portability contract: every table's rows as JSON. */
@@ -172,6 +192,85 @@ export const dataRouter = router({
     await assertInstanceOwner(ctx.db, ctx.userId)
     return runBackup(ctx.db, [ctx.householdId])
   }),
+
+  /** What's currently sitting in the off-site store (#114), for the restore UI.
+   *
+   *  Deliberately total rather than throwing: this drives a settings panel, and a
+   *  misconfigured target or an unreachable bucket is exactly the state the
+   *  operator most needs to *see*. So a failure comes back as `error` alongside
+   *  `kind`/`primary` instead of blanking the panel. */
+  listBackups: publicProcedure.query(async ({ ctx }): Promise<OffsiteBackupsView> => {
+    await assertInstanceOwner(ctx.db, ctx.userId)
+    try {
+      const primary = backupPrimary()
+      const config = resolveOffsiteConfig()
+      if (!config) return { primary, kind: null, restorable: false, entries: [], error: null }
+      return {
+        primary,
+        kind: config.target.kind,
+        restorable: isReadable(config.target),
+        entries: (await listOffsite(config)) ?? [],
+        error: null,
+      }
+    } catch (err) {
+      return {
+        primary: 'local',
+        kind: null,
+        restorable: false,
+        entries: [],
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+  }),
+
+  /** Replace all data with an off-site backup, fetched and decrypted server-side
+   *  (#114). The counterpart to `import` for a hosted instance, where the operator
+   *  has no filesystem to download the snapshot from — and where the off-site copy
+   *  is the only one that survived whatever prompted the restore.
+   *
+   *  Instance-owner only, like `import`: the snapshot spans every household. */
+  restoreBackup: publicProcedure
+    .input(z.object({ name: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertInstanceOwner(ctx.db, ctx.userId)
+      const config = resolveOffsiteConfig()
+      if (!config) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Off-site backups are not configured.' })
+      }
+      // `downloadOffsite` re-validates the name inside the target too; checking
+      // here keeps the untrusted value from reaching a path or URL at all.
+      let snapshot: { version?: unknown; tables?: Record<string, Array<Record<string, unknown>>> }
+      try {
+        snapshot = JSON.parse(await downloadOffsite(config, input.name)) as typeof snapshot
+      } catch (err) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Couldn't read that backup: ${err instanceof Error ? err.message : String(err)}`,
+        })
+      }
+      if (snapshot.version !== EXPORT_VERSION) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `Unsupported export version ${snapshot.version}` })
+      }
+      if (!snapshot.tables?.['household']?.length) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'That backup contains no household row' })
+      }
+
+      const result = await applySnapshot(ctx.db, snapshot.tables)
+      // Same reason as `import`: the snapshot replaced the user table but not
+      // `instance_settings`, so the owner id and lock flag can now be stale (#63).
+      await reconcileInstanceOwner(ctx.db)
+      // Staged, so it flushes after the restore and lands in the restored data —
+      // which is the only place it's any use. Best-effort by design: if the
+      // snapshot came from a different instance the actor no longer exists and
+      // the entry is dropped rather than failing a restore that already worked.
+      recordSecurityEvent(ctx, {
+        entityType: 'instance',
+        entityId: 'backup',
+        action: 'restored_from_offsite',
+        details: { name: input.name, target: config.target.kind },
+      })
+      return result
+    }),
 
   /** Row counts per table + the database location, for the About screen. */
   stats: publicProcedure.query(async ({ ctx }) => {

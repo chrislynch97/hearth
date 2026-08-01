@@ -21,7 +21,7 @@ import * as schema from '../db/schema'
 import { ALL_TABLES } from '../db/tables'
 import { applySnapshot, buildSnapshot, type Snapshot } from '../db/snapshot'
 import { shouldBackup, type BackupFrequency } from './schedule'
-import { resolveOffsiteConfig, uploadOffsite } from './offsite'
+import { isReadable, resolveOffsiteConfig, uploadOffsite, type OffsiteConfig } from './offsite'
 import { encryptSnapshot, decryptSnapshot } from './encrypt'
 import { pingHeartbeat, sendAlert } from '../ops/alerts'
 import type { PgTable } from 'drizzle-orm/pg-core'
@@ -29,6 +29,9 @@ import type { PgTable } from 'drizzle-orm/pg-core'
 const DEFAULT_KEEP_BACKUPS = 14
 const CHECK_INTERVAL_MS = 60 * 60 * 1000 // check hourly; frequency gates the actual write
 const PREFIX = 'hearth-backup-'
+// In `offsite` primary mode the local file is a staging/verification artefact on
+// a disk we assume is about to disappear, so only the newest is worth keeping.
+const LOCAL_CACHE_KEEP = 1
 
 /** How many local snapshots to keep, from `HEARTH_BACKUP_KEEP` (default 14).
  *  Clamped to at least 1: a retention of 0 would prune the backup we just wrote,
@@ -45,6 +48,26 @@ export function keepBackups(env: NodeJS.ProcessEnv = process.env): number {
     return DEFAULT_KEEP_BACKUPS
   }
   return Math.max(1, Number(raw))
+}
+
+/** Which copy *is* the backup (#114).
+ *
+ *  `local` (the default, and the whole self-hosted story): the file under
+ *  `<data>/backups` is authoritative and the off-site copy is a bonus — a failed
+ *  upload is logged and alerted but never fails the backup.
+ *
+ *  `offsite`: the remote copy is authoritative, for a hosted container whose disk
+ *  doesn't survive a deploy. A failed upload fails the whole backup, so the
+ *  household stays due and retries, the heartbeat fails, and the local file is
+ *  kept only as a short-lived staging copy. Off-site must be configured — see
+ *  `assertBackupConfig`, which refuses to boot otherwise. */
+export type BackupPrimary = 'local' | 'offsite'
+
+export function backupPrimary(env: NodeJS.ProcessEnv = process.env): BackupPrimary {
+  const raw = (env.HEARTH_BACKUP_PRIMARY ?? '').trim().toLowerCase()
+  if (raw === '' || raw === 'local') return 'local'
+  if (raw === 'offsite') return 'offsite'
+  throw new Error(`unknown HEARTH_BACKUP_PRIMARY "${raw}" (expected local or offsite)`)
 }
 
 /** Outcome of the optional off-site copy, surfaced on the backup result so the
@@ -161,8 +184,12 @@ async function verifyRestores(snapshot: Snapshot): Promise<void> {
  *
  *  The snapshot is written atomically and then verified by restoring it into a
  *  throwaway database; if verification fails we throw before pruning or stamping,
- *  so a bad backup can't evict good older ones and the household stays "due". */
+ *  so a bad backup can't evict good older ones and the household stays "due".
+ *  The off-site push sits inside that same guard (#114) — build, write, verify,
+ *  upload, prune, stamp — so under `HEARTH_BACKUP_PRIMARY=offsite` a backup only
+ *  counts once the durable copy has actually landed. */
 export async function runBackup(db: DB, stampHouseholdIds: string[]): Promise<BackupResult> {
+  const primary = backupPrimary()
   const snapshot = await buildSnapshot(db)
   const dir = backupDir()
   mkdirSync(dir, { recursive: true })
@@ -183,13 +210,14 @@ export async function runBackup(db: DB, stampHouseholdIds: string[]): Promise<Ba
   const restoredJson = passphrase ? decryptSnapshot(written, passphrase) : written.toString('utf8')
   await verifyRestores(JSON.parse(restoredJson) as Snapshot)
 
-  const keep = keepBackups()
-  const existing = readdirSync(dir)
-    .filter((f) => f.startsWith(PREFIX) && (f.endsWith('.json') || f.endsWith('.json.enc')))
-    .sort()
-  for (const old of existing.slice(0, Math.max(0, existing.length - keep))) {
-    rmSync(join(dir, old), { force: true })
-  }
+  // Ship the verified snapshot off-site (opt-in, #39) BEFORE pruning or stamping.
+  // In `offsite` mode this throws on failure, and the ordering is the point: the
+  // household stays due for a retry and the older copies — which may be the only
+  // surviving ones — are still there.
+  const offsite = await pushOffsite(`${PREFIX}${stamp}.json.enc`, json, primary)
+
+  pruneLocal(dir, primary === 'offsite' ? LOCAL_CACHE_KEEP : keepBackups())
+  await pruneOffsite()
 
   const at = Date.now()
   if (stampHouseholdIds.length > 0) {
@@ -200,33 +228,101 @@ export async function runBackup(db: DB, stampHouseholdIds: string[]): Promise<Ba
       .where(inArray(household.id, stampHouseholdIds))
   }
 
-  // Ship a verified snapshot off-site (opt-in, #39). Best-effort: the local backup
-  // above is already written, verified and stamped, so a misconfigured or flaky
-  // off-site target is logged and reported but never fails the local backup (which
-  // would otherwise re-run and re-write every hour) or evicts a good local copy.
-  const offsite = await pushOffsite(`${PREFIX}${stamp}.json.enc`, json)
   return { file, at, offsite }
 }
 
-/** Encrypt and push the snapshot to the configured off-site target. Returns
- *  `undefined` when off-site backups are disabled, and never throws — any
- *  misconfiguration or upload failure is logged and returned as `{ ok: false }`. */
-async function pushOffsite(name: string, json: string): Promise<OffsiteOutcome | undefined> {
-  let config
+/** Keep the newest `keep` local snapshots and delete the rest. Filenames carry an
+ *  ISO stamp, so a lexical sort is a chronological one. */
+function pruneLocal(dir: string, keep: number): void {
+  const existing = readdirSync(dir)
+    .filter((f) => f.startsWith(PREFIX) && (f.endsWith('.json') || f.endsWith('.json.enc')))
+    .sort()
+  for (const old of existing.slice(0, Math.max(0, existing.length - keep))) {
+    rmSync(join(dir, old), { force: true })
+  }
+}
+
+/** Apply the same retention off-site, for targets that can be enumerated and
+ *  deleted from (#114). Without this the remote store grows forever — which is
+ *  the store you're paying for, and the one that matters when it's primary.
+ *
+ *  Never throws: the backup itself has already succeeded by this point, and a
+ *  target that can list but not delete (a read-only key) shouldn't turn a good
+ *  backup into a failed one. A write-only `webhook` target has no retention here
+ *  at all; that stays the receiving service's job. */
+async function pruneOffsite(): Promise<void> {
+  try {
+    const config = resolveOffsiteConfig()
+    if (!config || !isReadable(config.target)) return
+    const keep = keepBackups()
+    const names = (await config.target.list()).map((e) => e.name).sort()
+    for (const old of names.slice(0, Math.max(0, names.length - keep))) {
+      await config.target.remove(old)
+    }
+  } catch (err) {
+    console.error('Off-site backup pruning failed (the backup itself succeeded):', err)
+  }
+}
+
+/** Encrypt and push the snapshot to the configured off-site target.
+ *
+ *  In `local` primary mode this never throws: the local backup is already written
+ *  and verified, so a misconfigured or flaky off-site target is logged and
+ *  returned as `{ ok: false }` rather than failing a backup that would otherwise
+ *  re-run and re-write every hour. In `offsite` mode the upload *is* the backup,
+ *  so every one of those cases throws instead. */
+async function pushOffsite(name: string, json: string, primary: BackupPrimary): Promise<OffsiteOutcome | undefined> {
+  const strict = primary === 'offsite'
+  let config: OffsiteConfig | null
   try {
     config = resolveOffsiteConfig()
   } catch (err) {
+    if (strict) throw err
     console.error('Off-site backup is misconfigured (local backup is unaffected):', err)
     return { kind: 'unknown', ok: false, error: errorText(err) }
   }
-  if (!config) return undefined
+  if (!config) {
+    if (strict) {
+      throw new Error(
+        'HEARTH_BACKUP_PRIMARY=offsite, but off-site backups are switched off — set HEARTH_BACKUP_OFFSITE.',
+      )
+    }
+    return undefined
+  }
   try {
     await uploadOffsite(config, name, json)
     return { kind: config.target.kind, ok: true }
   } catch (err) {
+    if (strict) {
+      throw new Error(`off-site backup upload failed (${config.target.kind}): ${errorText(err)}`, { cause: err })
+    }
     console.error('Off-site backup upload failed (local backup is unaffected):', err)
     return { kind: config.target.kind, ok: false, error: errorText(err) }
   }
+}
+
+/** Fail fast at boot when `HEARTH_BACKUP_PRIMARY=offsite` can't actually work.
+ *  A hosted instance that quietly falls back to writing backups onto a disk it's
+ *  about to lose looks healthy right up until the deploy that needs them, so a
+ *  bad config is fatal at startup rather than an hourly log line. Returns a line
+ *  describing what it found, for the caller to log. */
+export function assertBackupConfig(env: NodeJS.ProcessEnv = process.env): string {
+  const primary = backupPrimary(env)
+  const config = resolveOffsiteConfig(env)
+  if (primary === 'local') {
+    const offsite = config ? `, off-site copies to ${config.target.kind}` : ''
+    return `backups: local ${backupDir(env)} (primary)${offsite}`
+  }
+  if (!config) {
+    throw new Error(
+      'HEARTH_BACKUP_PRIMARY=offsite, but HEARTH_BACKUP_OFFSITE is off — there would be nowhere ' +
+        'durable to put the backups. Configure an off-site target, or unset HEARTH_BACKUP_PRIMARY.',
+    )
+  }
+  const restorable = isReadable(config.target)
+    ? ''
+    : ` (write-only — no in-app restore or remote retention from a ${config.target.kind} target)`
+  return `backups: ${config.target.kind} off-site (primary)${restorable}, local ${backupDir(env)} as staging`
 }
 
 function errorText(err: unknown): string {

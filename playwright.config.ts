@@ -53,6 +53,13 @@ export default defineConfig({
       // being reachable. It also renders the update banner, which is a second
       // `role="alert"` on every page.
       HEARTH_UPDATE_CHECK: 'off',
+      // Off-site backups on, pointed at a throwaway directory under the demo
+      // data dir, so the restore panel (#114) is actually exercised rather than
+      // rendering nothing — which is what it does when off-site is switched off.
+      HEARTH_BACKUP_OFFSITE: 'directory',
+      HEARTH_BACKUP_DIR: resolve('data/demo-offsite'),
+      HEARTH_BACKUP_LOCAL_DIR: resolve('data/demo-backups'),
+      HEARTH_BACKUP_PASSPHRASE: 'e2e-passphrase',
     },
     // Never reuse: a server left over from a previous run has a mutated database.
     reuseExistingServer: false,
