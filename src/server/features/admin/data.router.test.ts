@@ -7,7 +7,7 @@ import { encryptSnapshot } from '../../backup/encrypt'
 import { makeTestDb } from '../../db/testdb'
 import type { DB } from '../../db/client'
 import { ensureSeed } from '../../db/seed'
-import { getOwnerUser } from '../../auth/session'
+import { createSession, getOwnerUser, getValidSession } from '../../auth/session'
 import { appRouter } from '../../trpc/router'
 import { auditLog, household, member, membership, pot, user } from '../../db/schema'
 import { newId } from '../../../shared/ids'
@@ -235,7 +235,7 @@ describe('data router', () => {
     const primary = appRouter.createCaller({ db, householdId: 'household', role: 'owner', userId: owner!.id })
     await expect(primary.data.eraseHousehold()).rejects.toMatchObject({ code: 'FORBIDDEN' })
 
-    await expect(h2.data.eraseHousehold()).resolves.toEqual({ ok: true })
+    await expect(h2.data.eraseHousehold()).resolves.toEqual({ ok: true, nextHouseholdId: null })
 
     // h2 and everything under it is gone; the primary survives.
     expect((await db.select().from(household)).map((h) => h.id)).toEqual(['household'])
@@ -249,6 +249,60 @@ describe('data router', () => {
     expect(events).toHaveLength(1)
     expect(events[0]?.householdId).toBe('household')
     expect(events[0]?.entityId).toBe('h2')
+  })
+
+  // Sessions FK-cascade with the household, so without the repoint the owner is
+  // signed out of households they still belong to (#228).
+  it('eraseHousehold keeps the owner signed in when they belong elsewhere (issue #228)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+
+    const h2owner = await makeSecondHousehold(db)
+    // The same person also belongs to the primary household, as a member.
+    const now = new Date()
+    await db.insert(membership).values({
+      id: newId(),
+      userId: h2owner,
+      householdId: 'household',
+      role: 'member',
+      acceptedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+    const token = await createSession(db, h2owner, 'h2')
+
+    const h2 = appRouter.createCaller({ db, householdId: 'h2', role: 'owner', userId: h2owner })
+    await expect(h2.data.eraseHousehold()).resolves.toEqual({ ok: true, nextHouseholdId: 'household' })
+
+    // The session survived the cascade, pointing at the household they have left.
+    const live = await getValidSession(db, token)
+    expect(live?.activeHouseholdId).toBe('household')
+  })
+
+  it('eraseHousehold ends the session when it was the owner’s only household (issue #228)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const h2owner = await makeSecondHousehold(db)
+    const token = await createSession(db, h2owner, 'h2')
+
+    const h2 = appRouter.createCaller({ db, householdId: 'h2', role: 'owner', userId: h2owner })
+    await expect(h2.data.eraseHousehold()).resolves.toEqual({ ok: true, nextHouseholdId: null })
+
+    // Nowhere to move it to, so it went with the household — the client lands on
+    // the sign-in screen rather than a dead active household.
+    expect(await getValidSession(db, token)).toBeNull()
+  })
+
+  it('backupRetention reports the snapshot count to a household owner, not to an admin', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const h2owner = await makeSecondHousehold(db)
+
+    const owner = appRouter.createCaller({ db, householdId: 'h2', role: 'owner', userId: h2owner })
+    expect((await owner.data.backupRetention()).keep).toBeGreaterThan(0)
+
+    const admin = appRouter.createCaller({ db, householdId: 'h2', role: 'admin', userId: h2owner })
+    await expect(admin.data.backupRetention()).rejects.toMatchObject({ code: 'FORBIDDEN' })
   })
 
   it('stats reports per-table counts', async () => {

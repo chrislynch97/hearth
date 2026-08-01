@@ -10,11 +10,14 @@ import type { DB } from '../../db/client'
 // A password comfortably clearing the strength policy.
 const PW = 'correct-horse-staple'
 
-function caller(db: DB, opts: { role?: string; userId?: string; sessionToken?: string } = {}) {
+function caller(
+  db: DB,
+  opts: { householdId?: string; role?: string; userId?: string; sessionToken?: string } = {},
+) {
   const cookies: Array<string | null> = []
   const c = appRouter.createCaller({
     db,
-    householdId: 'household',
+    householdId: opts.householdId ?? 'household',
     role: opts.role,
     userId: opts.userId,
     sessionToken: opts.sessionToken,
@@ -48,6 +51,30 @@ describe('users.me', () => {
     expect(me?.activeHouseholdId).toBe('household')
     expect(me?.role).toBe('owner')
     expect(me?.memberships.map((m) => m.householdId)).toContain('household')
+    expect(me?.isPrimaryHousehold).toBe(true)
+  })
+
+  // Drives the UI's explanation of why erasure is refused on the primary
+  // household (#228) — the client must not have to know the magic id.
+  it('flags whether the active household is the primary one', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+
+    const now = new Date()
+    await db.insert(household).values({ id: 'h2', createdAt: now, updatedAt: now })
+    await db.insert(membership).values({
+      id: 'm-h2',
+      userId: owner!.id,
+      householdId: 'h2',
+      role: 'owner',
+      acceptedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    const me = await caller(db, { householdId: 'h2', role: 'owner', userId: owner!.id }).c.users.me()
+    expect(me?.isPrimaryHousehold).toBe(false)
   })
 
   it('omits households the user was invited to but has not accepted', async () => {
