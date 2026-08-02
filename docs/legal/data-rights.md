@@ -12,8 +12,9 @@ Two audiences, deliberately in one document:
   not a courtesy.
 
 This describes what the software does and the process around it. It is not legal
-advice. The privacy policy ([#222](https://github.com/chrislynch97/hearth/issues/222))
-must link here, and its retention section must match the windows stated below.
+advice. Hearth is self-hosted and not sold, so there is no privacy policy or
+terms of service to reconcile this against — if that ever changes, whatever gets
+written must match the retention windows stated below rather than restate them.
 
 ## Who can ask for what
 
@@ -201,7 +202,9 @@ that recorded who was erased would keep exactly what the erasure was for.
 
 ## References
 
-- Privacy policy — [#222](https://github.com/chrislynch97/hearth/issues/222) (must link here)
-- ICO registration — [#225](https://github.com/chrislynch97/hearth/issues/225)
 - Breach-notification runbook — [#227](https://github.com/chrislynch97/hearth/issues/227)
 - Backup configuration and retention — [docs/deployment.md](../deployment.md)
+
+Registering with the ICO, a privacy policy and terms of service were tracked in
+#222–#225. Those are closed: they only bite once Hearth is charging people or
+open to strangers, and it is neither. Reopen them together if that changes.

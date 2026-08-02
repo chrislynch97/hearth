@@ -44,12 +44,6 @@ function sameConfig(a: MailConfig, b: MailConfig): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
-/** Drop the memoised transporter. Tests only — production config is fixed for
- *  the life of the process. */
-export function resetMailer(): void {
-  cached = null
-}
-
 /** Send a message. Throws when email is off or delivery fails — callers that
  *  must not surface either use `trySendMail`. */
 export async function sendMail(message: MailMessage, env: NodeJS.ProcessEnv = process.env): Promise<void> {
