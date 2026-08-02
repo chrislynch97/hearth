@@ -16,6 +16,7 @@ import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { SETTINGS, UNREPORTED, composeDriftWarning, missingComposeSettings } from './composeEnv'
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
 const serverDir = join(repoRoot, 'src', 'server')
@@ -25,21 +26,26 @@ const serverDir = join(repoRoot, 'src', 'server')
 const EXEMPT: Record<string, Record<string, string>> = {
   'docker-compose.yml': {
     HEARTH_DEPLOY: 'builds from source; `image` here would lie to the update UI',
+    HEARTH_IMAGE: 'set by the Dockerfile, not by a compose file',
     HEARTH_VERSION: 'baked in at build time by scripts/gen-version.mjs',
   },
   'docker-compose.ghcr.yml': {
+    HEARTH_IMAGE: 'set by the Dockerfile, not by a compose file',
     HEARTH_VERSION: 'baked into the image at build time',
   },
   'docker-compose.postgres.yml': {
     HEARTH_DEPLOY: 'builds from source; `image` here would lie to the update UI',
+    HEARTH_IMAGE: 'set by the Dockerfile, not by a compose file',
     HEARTH_VERSION: 'baked in at build time by scripts/gen-version.mjs',
   },
   'docker-compose.postgres.ghcr.yml': {
+    HEARTH_IMAGE: 'set by the Dockerfile, not by a compose file',
     HEARTH_VERSION: 'baked into the image at build time',
   },
   'docker-compose.public.yml': {
     HEARTH_ALLOW_OPEN:
       'omitted on purpose: passing it through would let a value left over from a LAN .env reach a public box',
+    HEARTH_IMAGE: 'set by the Dockerfile, not by a compose file',
     HEARTH_VERSION: 'baked into the image at build time',
   },
 }
@@ -59,10 +65,14 @@ function tsFiles(dir: string): string[] {
 /** Every `HEARTH_*` the server source names. Deliberately a text scan, not a
  *  scan of `process.env.X` property reads: several are read indirectly by name
  *  (`required(env, 'HEARTH_BACKUP_S3_BUCKET', …)`), and one mentioned only in a
- *  comment is still a variable an operator can set. */
-function serverVars(): string[] {
+ *  comment is still a variable an operator can set.
+ *
+ *  `skip` drops a file from the scan, so the hand-kept list in composeEnv.ts can
+ *  be checked against the rest of the source rather than against itself. */
+function serverVars(skip?: string): string[] {
   const found = new Set<string>()
   for (const file of tsFiles(serverDir)) {
+    if (skip && file.endsWith(skip)) continue
     for (const match of readFileSync(file, 'utf8').matchAll(/HEARTH_[A-Z0-9_]+/g)) found.add(match[0])
   }
   return [...found].sort()
@@ -126,6 +136,70 @@ describe('compose environment pass-through', () => {
       .filter(([name, value]) => value.includes('${') && !value.startsWith(`\${${name}`))
       .map(([name]) => name)
     expect(wrong).toEqual([])
+  })
+})
+
+/** The runtime half of #210: the same drift, but in the copy of the compose file
+ *  already sitting on a deployed machine, which no update path ever touches. The
+ *  tests above can't see that — they only ever read the files in this repo. */
+describe('compose drift detection', () => {
+  it('SETTINGS names every variable the server reads', () => {
+    // Scanned without composeEnv.ts, so the list is checked against the code
+    // that does the reading rather than against itself.
+    const missing = serverVars('composeEnv.ts').filter((v) => !SETTINGS.includes(v))
+    expect(missing, 'add these to SETTINGS in composeEnv.ts').toEqual([])
+  })
+
+  it('SETTINGS has no entries the server never reads', () => {
+    // Catches a typo'd name, which would otherwise be reported as missing on
+    // every deploy forever.
+    const vars = serverVars()
+    expect(SETTINGS.filter((v) => !vars.includes(v))).toEqual([])
+  })
+
+  it('never reports a variable a compose file omits on purpose', () => {
+    // Otherwise the deploys those omissions exist for warn on every boot, and
+    // the warning becomes noise people learn to skip past.
+    const deliberate = [...new Set(Object.values(EXEMPT).flatMap((e) => Object.keys(e)))].sort()
+    expect(deliberate.filter((v) => !(v in UNREPORTED))).toEqual([])
+  })
+
+  it('UNREPORTED names only real settings', () => {
+    expect(Object.keys(UNREPORTED).filter((v) => !SETTINGS.includes(v))).toEqual([])
+  })
+
+  /** A container whose compose file passes every setting through — each one
+   *  defined but empty, exactly as `${…:-}` renders when `.env` is silent. */
+  const currentEnv = (...omit: string[]): NodeJS.ProcessEnv => {
+    const env: NodeJS.ProcessEnv = {}
+    for (const name of SETTINGS) if (!omit.includes(name)) env[name] = ''
+    env.HEARTH_IMAGE = '1'
+    return env
+  }
+
+  it('reports nothing when the environment defines every setting, even empty', () => {
+    // Defined-and-empty is a setting the operator simply hasn't set, not a
+    // compose file that can't pass it.
+    expect(missingComposeSettings(currentEnv())).toEqual([])
+  })
+
+  it('reports the settings an older compose file never mentions', () => {
+    const env = currentEnv('HEARTH_BACKUP_S3_BUCKET', 'HEARTH_BACKUP_OFFSITE')
+    expect(missingComposeSettings(env)).toEqual(['HEARTH_BACKUP_OFFSITE', 'HEARTH_BACKUP_S3_BUCKET'])
+  })
+
+  it('stays quiet off the Docker image', () => {
+    // A bare-Node or dev run defines no HEARTH_* at all, so every setting would
+    // look missing — a warning naming all of them is pure noise there.
+    expect(missingComposeSettings({})).toEqual([])
+    expect(missingComposeSettings({ HEARTH_MAIL_TRANSPORT: 'smtp' })).toEqual([])
+  })
+
+  it('names the remedy, not just the variables', () => {
+    const warning = composeDriftWarning(['HEARTH_BACKUP_S3_BUCKET'])
+    expect(warning).toContain('HEARTH_BACKUP_S3_BUCKET')
+    expect(warning).toContain('Re-copy it')
+    expect(composeDriftWarning([])).toBeNull()
   })
 })
 

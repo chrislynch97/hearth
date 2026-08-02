@@ -305,6 +305,11 @@ docker compose -f docker-compose.public.yml pull
 docker compose -f docker-compose.public.yml up -d
 ```
 
+Re-copy `docker-compose.public.yml` from the release you've pulled as part of
+that — the pull updates the image only, and a compose file older than the image
+silently drops any `HEARTH_*` added since. See
+[Updating — three ways](#updating--three-ways).
+
 For **Update now** and scheduled auto-updates from inside the app, install the
 host updater as in [Updating — three ways](#updating--three-ways), pointing it at
 this compose file:
@@ -333,11 +338,17 @@ name this file rather than the default one.
 ## Configuration reference
 
 Every `HEARTH_*` variable below can be set in a `.env` file next to whichever
-compose file you run — they're all passed into the container. Two exceptions,
-both deliberate: `docker-compose.public.yml` ignores `HEARTH_ALLOW_OPEN`
-entirely (so a value left over from a LAN `.env` can't reach a public box) and
-fixes `HEARTH_PUBLIC=1` / `HEARTH_TRUST_PROXY=1`, and `HEARTH_DEPLOY` is set by
-the file rather than by you.
+compose file you run — **provided your copy of the compose file is as new as the
+variable**. A `.env` value only reaches the container if the compose file passes
+it through, and updating the image does not update your compose file (see
+[Updating — three ways](#updating--three-ways)). Hearth checks this for you: it
+logs a warning at startup, and shows one in **Settings → System → Updates**,
+naming every setting your compose file doesn't pass in.
+
+Two variables are deliberately not passed through and aren't part of that check:
+`docker-compose.public.yml` ignores `HEARTH_ALLOW_OPEN` entirely (so a value left
+over from a LAN `.env` can't reach a public box) and fixes `HEARTH_PUBLIC=1` /
+`HEARTH_TRUST_PROXY=1`, and `HEARTH_DEPLOY` is set by the file rather than by you.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -801,6 +812,21 @@ Hearth also checks GitHub for new releases and shows an **update banner** and a
 update depends on how you deploy:
 
 ### Updating — three ways
+
+> **Updating the image does not update your compose file.** A pull replaces the
+> image and leaves the compose file exactly as you copied it, so any `HEARTH_*`
+> variable added since then exists in the app but is never passed into the
+> container — setting it in `.env` does nothing, silently. Re-copy the compose
+> file from [the release you're running](https://github.com/chrislynch97/hearth/releases)
+> whenever you update, keeping any changes you made to it, then
+> `docker compose … up -d`. Building from source (option 1) does this for you:
+> `git pull` refreshes the compose file alongside the code.
+>
+> Hearth won't let this stay invisible — it logs a warning at startup, and shows
+> one in **Settings → System → Updates**, naming every setting your compose file
+> is missing. The updater deliberately doesn't rewrite the file for you: it's
+> yours to edit (ports, volumes, extra services), and silently overwriting an
+> operator's customisations is worse than telling them what to re-copy.
 
 **1. Build from source (the default).** With `docker-compose.yml` /
 `docker-compose.postgres.yml` you build the image locally, so updating is the
