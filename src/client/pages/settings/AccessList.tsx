@@ -18,17 +18,22 @@ export interface AccessListProps {
     isOwner: boolean;
 }
 
-/** The people with accepted access to the active household: change a role,
- *  reset a locked-out member's password, or revoke access. Admin+ only; the
- *  server enforces that only owners touch owners/admins. */
+/** The people with accepted access to the active household: change a role, end
+ *  someone's sessions, reset a locked-out member's password, or revoke access.
+ *  Admin+ only; the server enforces that only owners touch owners/admins. */
 export const AccessList = ({ isOwner }: AccessListProps) => {
     const utils = trpc.useUtils();
     const list = trpc.access.list.useQuery();
     const setRole = trpc.access.setRole.useMutation();
     const remove = trpc.access.remove.useMutation();
     const resetPassword = trpc.access.resetPassword.useMutation();
+    const revokeSessions = trpc.access.revokeSessions.useMutation();
 
     const [pendingRemove, setPendingRemove] = useState<string | null>(null);
+    const [signOutFor, setSignOutFor] = useState<{
+        userId: string;
+        name: string;
+    } | null>(null);
     const [resetFor, setResetFor] = useState<{
         userId: string;
         name: string;
@@ -85,6 +90,27 @@ export const AccessList = ({ isOwner }: AccessListProps) => {
         } catch (e) {
             setError(
                 e instanceof Error ? e.message : "Could not remove access."
+            );
+        }
+    };
+
+    const confirmSignOut = async () => {
+        if (!signOutFor) return;
+        setError("");
+        setNotice("");
+        try {
+            const { count } = await revokeSessions.mutateAsync({
+                userId: signOutFor.userId,
+            });
+            setSignOutFor(null);
+            setNotice(
+                count === 0
+                    ? `${signOutFor.name} had no active sessions.`
+                    : `Signed ${signOutFor.name} out of ${count} session${count === 1 ? "" : "s"}. Their password is unchanged, so they can sign back in.`
+            );
+        } catch (e) {
+            setError(
+                e instanceof Error ? e.message : "Could not end their sessions."
             );
         }
     };
@@ -146,7 +172,6 @@ export const AccessList = ({ isOwner }: AccessListProps) => {
                         <Group
                             key={r.userId}
                             justify="space-between"
-                            wrap="nowrap"
                             px="xs"
                             py={4}
                         >
@@ -165,8 +190,11 @@ export const AccessList = ({ isOwner }: AccessListProps) => {
                                     {r.mfaEnabled ? " · 2FA on" : ""}
                                 </Text>
                             </div>
+                            {/* Four controls don't fit beside a name on a phone,
+                                so both this group and the row wrap rather than
+                                clipping the last one out of reach. */}
                             {canManage ? (
-                                <Group gap={6} wrap="nowrap">
+                                <Group gap={6}>
                                     <Select
                                         size="xs"
                                         w={116}
@@ -179,6 +207,19 @@ export const AccessList = ({ isOwner }: AccessListProps) => {
                                             void changeRole(r.userId, v)
                                         }
                                     />
+                                    <Button
+                                        size="compact-xs"
+                                        variant="subtle"
+                                        onClick={() => {
+                                            setNotice("");
+                                            setSignOutFor({
+                                                userId: r.userId,
+                                                name: r.displayName,
+                                            });
+                                        }}
+                                    >
+                                        Sign out
+                                    </Button>
                                     <Button
                                         size="compact-xs"
                                         variant="subtle"
@@ -232,6 +273,45 @@ export const AccessList = ({ isOwner }: AccessListProps) => {
                     );
                 })}
             </Stack>
+
+            <Modal
+                opened={signOutFor !== null}
+                onClose={() => setSignOutFor(null)}
+                title={`Sign out — ${signOutFor?.name ?? ""}`}
+                size="sm"
+            >
+                <Stack gap="sm">
+                    {/* The name lives in the title, not mid-sentence: it clears
+                        as the modal fades, which would leave a broken clause. */}
+                    <Text size="sm">
+                        Ends every session they have, on every device. Reach for
+                        this when one of their logins looks wrong — it&apos;s
+                        the smallest thing that stops it.
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                        Their password, two-factor and access are untouched, so
+                        they can sign straight back in. If you think their
+                        password is compromised, reset it instead. If they
+                        belong to other households, this signs them out of those
+                        too.
+                    </Text>
+                    <Group justify="flex-end">
+                        <Button
+                            variant="default"
+                            onClick={() => setSignOutFor(null)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            color="red"
+                            onClick={() => void confirmSignOut()}
+                            loading={revokeSessions.isPending}
+                        >
+                            Sign them out
+                        </Button>
+                    </Group>
+                </Stack>
+            </Modal>
 
             <Modal
                 opened={resetFor !== null}

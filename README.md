@@ -190,11 +190,17 @@ out of server and proxy logs, but not out of whatever channel you send it over.
 
 **Roles** — *owner* (full control, incl. billing/reset), *admin* (manage data,
 members and invites), *member* (edit budgeting data), *viewer* (read-only).
-Owners/admins manage who has access — change roles, remove access, or reset a
-locked-out member's password — under **Settings → Households & access**. If the
-member has lost their authenticator too (and their recovery codes are gone), tick
-**Also turn off two-factor authentication** when resetting; they can enrol a new
-device once they're back in.
+Owners/admins manage who has access — change roles, remove access, sign someone
+out, or reset a locked-out member's password — under **Settings → Households &
+access**. If the member has lost their authenticator too (and their recovery codes
+are gone), tick **Also turn off two-factor authentication** when resetting; they
+can enrol a new device once they're back in.
+
+**Sign out** is the gentler neighbour of a reset: it ends every session that
+person has and changes nothing else, so they sign back in with the password they
+already have. Reach for it when one of their logins looks wrong but you've no
+reason to think the password itself has leaked. It never shows you where they've
+been — only they can see their own session list.
 
 **Locked out of the owner account?** No one outranks the owner, so there's no
 in-app reset for them. Recover from the box itself:

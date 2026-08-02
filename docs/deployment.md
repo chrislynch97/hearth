@@ -962,10 +962,19 @@ where you'd add HTTPS with a local certificate. Optional.
   `/invite/<token>` form, your proxy's access log may still hold it: revoke that
   invite from the same screen and issue a fresh one.
 - **Manage who has access** from the same screen: change a member's role, revoke
-  access, or reset a locked-out member's password (there's no email-based reset on a
-  self-host). Guardrails apply — you can't change or remove yourself, an admin can
-  only manage members/viewers, the last owner can't be removed, and you can't reset
-  the password of someone who also belongs to another household.
+  access, end their sessions, or reset a locked-out member's password (there's no
+  email-based reset on a self-host). Guardrails apply — you can't change or remove
+  yourself, an admin can only manage members/viewers, the last owner can't be
+  removed, and you can't reset the password of someone who also belongs to another
+  household.
+- **Sign one person out** (**sign out**, on their row) when a login of theirs looks
+  wrong. It ends every session they have and touches nothing else — no password, no
+  MFA, no access — so it's the proportionate move where a reset would be a hammer,
+  and they're back in with the credentials they already have. Unlike a reset it is
+  *not* refused for a multi-household member, because it hands the admin nothing:
+  it does sign them out of their other households too. No session list is exposed
+  to the admin — ending someone's logins doesn't require seeing where they've been.
+  Recorded as `sessions_revoked` with the actor named.
 - **Sign everyone out at once** (**Settings → System → Sessions**, instance owner
   only) when you suspect a session or a backup has been exposed and don't yet know
   whose. It ends every session on the instance, yours included, and changes nothing

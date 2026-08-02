@@ -19,15 +19,16 @@ import {
  * procedures give that story a direct route: look at the list, end the one you
  * don't recognise.
  *
- * Every per-user procedure is scoped to `ctx.userId`. There is deliberately no
- * way to list or revoke *another* user's sessions, not even for an owner: that
- * would be a household-admin power over someone's account, which is a different
- * feature with a different threat model. Access removal already handles the case
- * where someone should lose a household.
+ * Every per-user procedure here is scoped to `ctx.userId`, and nothing in this
+ * router *lists* another user's sessions: ending someone's logins never requires
+ * showing an admin where they've been, and their IPs and devices stay their own.
  *
- * `revokeAll` is the one exception, and a different lever entirely: it targets
- * nobody in particular — it ends every session on the instance, including the
- * caller's (#248).
+ * The two levers that reach past the caller live elsewhere, deliberately, and
+ * neither exposes that detail:
+ *   - `access.revokeSessions` — one named member's sessions, under the same
+ *     guardrails as the rest of member management (#249).
+ *   - `revokeAll`, below — every session on the instance, the caller's included.
+ *     It targets nobody in particular; it's break-glass containment (#248).
  */
 export const sessionsRouter = router({
   /** The current user's live sessions, most recently active first.

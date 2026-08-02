@@ -151,7 +151,7 @@ Do the smallest thing that stops the bleeding, in this order:
 
 1. **Consider taking it offline.** If someone is actively in, `docker compose
    stop` beats a tidy investigation. Availability is recoverable; the data isn't.
-2. **End sessions.** Four levers, and they are not equivalent. Know which you're
+2. **End sessions.** Five levers, and they are not equivalent. Know which you're
    reaching for:
    - **Everyone at once** — **Settings → System → Sessions → sign everyone
      out**, instance owner only. Ends every session on the instance, yours
@@ -166,15 +166,23 @@ Do the smallest thing that stops the bleeding, in this order:
      ```
 
      Both work on either database engine, and both are recorded in the audit
-     trail. See [#249](https://github.com/chrislynch97/hearth/issues/249) for the
-     still-missing lever: an admin ending *one named person's* sessions.
+     trail.
+   - **One named person, without touching their credentials** — **Settings →
+     Households & access → sign out**, admin+ (owner-only for an owner or admin
+     target). Ends every session that person has and nothing else, so they sign
+     back in with the password they already have. This is the proportionate one
+     when you know *whose* login looks wrong. It reaches their other households
+     too, and it never shows you their IPs or devices — revocation doesn't
+     require surveillance.
    - **Each person, for themselves** — **Settings → Account → Sessions → sign
-     out everywhere**. Nobody, not even the owner, can revoke another person's
-     sessions from the UI directly.
-   - **An admin, for one member** — **Settings → Households & access → reset
-     password**. This ends that member's sessions. It is **refused** for someone
-     who belongs to more than one household; they must reset their own, or lose
-     access (**revoke access** ends their sessions too).
+     out everywhere**. The only route that shows a session list, and everyone
+     sees only their own.
+   - **An admin, for one member, credentials included** — **Settings →
+     Households & access → reset password**. Ends their sessions *and* gives them
+     a new password. **Refused** for someone who belongs to more than one
+     household; they must reset their own, or lose access (**revoke access** ends
+     their sessions too). Reach for "sign out" above unless you actually think
+     the password is compromised.
    - **The owner account** — `reset-owner-password` on the box. It resets the
      password, clears MFA and ends every session the owner had.
 
@@ -400,7 +408,8 @@ already encrypted with a leaked key. Fix both before you need them.
   Retention: [#41](https://github.com/chrislynch97/hearth/issues/41) ·
   Alerting: [#57](https://github.com/chrislynch97/hearth/issues/57) ·
   Session revocation: [#50](https://github.com/chrislynch97/hearth/issues/50),
-  [#248](https://github.com/chrislynch97/hearth/issues/248)
+  [#248](https://github.com/chrislynch97/hearth/issues/248),
+  [#249](https://github.com/chrislynch97/hearth/issues/249)
 
 ICO registration, a privacy policy and terms of service were tracked in
 #222–#225 and are closed — they bite once Hearth is charging people or open to

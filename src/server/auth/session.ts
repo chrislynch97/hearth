@@ -187,9 +187,12 @@ export async function deleteSession(db: DB, token: string): Promise<void> {
   await db.delete(session).where(eq(session.id, hashToken(token)))
 }
 
-/** Revoke every session for a user (used on password change / clear). */
-export async function deleteUserSessions(db: DB, userId: string): Promise<void> {
-  await db.delete(session).where(eq(session.userId, userId))
+/** Revoke every session for a user (password change / clear, or an admin ending
+ *  their logins — #249). Returns how many went, for the audit entry; callers
+ *  that only need the side effect can ignore it. */
+export async function deleteUserSessions(db: DB, userId: string): Promise<number> {
+  const deleted = await db.delete(session).where(eq(session.userId, userId)).returning({ id: session.id })
+  return deleted.length
 }
 
 /** Revoke every session on the instance — everyone signs in again (#248). The
