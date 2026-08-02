@@ -36,7 +36,9 @@ export const AccessList = ({ isOwner }: AccessListProps) => {
     } | null>(null);
     const [newPw, setNewPw] = useState("");
     const [clearMfa, setClearMfa] = useState(false);
-    const [resetMsg, setResetMsg] = useState("");
+    // One dismissible "that worked, and here's what it means" line, shared by the
+    // password reset and by a removal that also deleted the account.
+    const [notice, setNotice] = useState("");
     const [error, setError] = useState("");
 
     const roleOptions = [
@@ -65,11 +67,20 @@ export const AccessList = ({ isOwner }: AccessListProps) => {
         }
     };
 
-    const confirmRemove = async (userId: string) => {
+    const confirmRemove = async (userId: string, name: string) => {
         setError("");
+        setNotice("");
         try {
-            await remove.mutateAsync({ userId });
+            const { accountDeleted } = await remove.mutateAsync({ userId });
             setPendingRemove(null);
+            // Say so when this was their last household: their account went with
+            // the membership (#230), which is more than "removed from here" and
+            // isn't something to discover later.
+            if (accountDeleted) {
+                setNotice(
+                    `${name} has been removed, and their account deleted — this was the only household they belonged to. Anything they entered here stays.`
+                );
+            }
             await utils.access.list.invalidate();
         } catch (e) {
             setError(
@@ -93,7 +104,7 @@ export const AccessList = ({ isOwner }: AccessListProps) => {
                 clearMfa && resetFor.mfaEnabled
                     ? " Their 2FA is off — ask them to set it up again."
                     : "";
-            setResetMsg(
+            setNotice(
                 `Password reset for ${resetFor.name}. Share it with them; they'll be signed out.${twoFactor}`
             );
             setResetFor(null);
@@ -117,14 +128,14 @@ export const AccessList = ({ isOwner }: AccessListProps) => {
                     {error}
                 </Alert>
             )}
-            {resetMsg && (
+            {notice && (
                 <Alert
                     color="moss"
                     variant="light"
                     withCloseButton
-                    onClose={() => setResetMsg("")}
+                    onClose={() => setNotice("")}
                 >
-                    {resetMsg}
+                    {notice}
                 </Alert>
             )}
             <Stack gap={6}>
@@ -172,7 +183,7 @@ export const AccessList = ({ isOwner }: AccessListProps) => {
                                         size="compact-xs"
                                         variant="subtle"
                                         onClick={() => {
-                                            setResetMsg("");
+                                            setNotice("");
                                             setClearMfa(false);
                                             setResetFor({
                                                 userId: r.userId,
@@ -189,7 +200,10 @@ export const AccessList = ({ isOwner }: AccessListProps) => {
                                             color="red"
                                             loading={remove.isPending}
                                             onClick={() =>
-                                                void confirmRemove(r.userId)
+                                                void confirmRemove(
+                                                    r.userId,
+                                                    r.displayName
+                                                )
                                             }
                                         >
                                             Confirm

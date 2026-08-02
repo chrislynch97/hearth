@@ -7,7 +7,7 @@ import { encryptSnapshot } from '../../backup/encrypt'
 import { makeTestDb } from '../../db/testdb'
 import type { DB } from '../../db/client'
 import { ensureSeed } from '../../db/seed'
-import { createSession, getOwnerUser, getValidSession } from '../../auth/session'
+import { createSession, getOwnerUser, getUser, getValidSession } from '../../auth/session'
 import { appRouter } from '../../trpc/router'
 import { auditLog, household, member, membership, pot, user } from '../../db/schema'
 import { newId } from '../../../shared/ids'
@@ -235,7 +235,11 @@ describe('data router', () => {
     const primary = appRouter.createCaller({ db, householdId: 'household', role: 'owner', userId: owner!.id })
     await expect(primary.data.eraseHousehold()).rejects.toMatchObject({ code: 'FORBIDDEN' })
 
-    await expect(h2.data.eraseHousehold()).resolves.toEqual({ ok: true, nextHouseholdId: null })
+    await expect(h2.data.eraseHousehold()).resolves.toEqual({
+      ok: true,
+      nextHouseholdId: null,
+      accountsDeleted: 1,
+    })
 
     // h2 and everything under it is gone; the primary survives.
     expect((await db.select().from(household)).map((h) => h.id)).toEqual(['household'])
@@ -272,11 +276,17 @@ describe('data router', () => {
     const token = await createSession(db, h2owner, 'h2')
 
     const h2 = appRouter.createCaller({ db, householdId: 'h2', role: 'owner', userId: h2owner })
-    await expect(h2.data.eraseHousehold()).resolves.toEqual({ ok: true, nextHouseholdId: 'household' })
+    await expect(h2.data.eraseHousehold()).resolves.toEqual({
+      ok: true,
+      nextHouseholdId: 'household',
+      accountsDeleted: 0,
+    })
 
     // The session survived the cascade, pointing at the household they have left.
     const live = await getValidSession(db, token)
     expect(live?.activeHouseholdId).toBe('household')
+    // They still belong somewhere, so the account is untouched by the sweep.
+    expect(await getUser(db, h2owner)).not.toBeNull()
   })
 
   it('eraseHousehold ends the session when it was the owner’s only household (issue #228)', async () => {
@@ -286,11 +296,94 @@ describe('data router', () => {
     const token = await createSession(db, h2owner, 'h2')
 
     const h2 = appRouter.createCaller({ db, householdId: 'h2', role: 'owner', userId: h2owner })
-    await expect(h2.data.eraseHousehold()).resolves.toEqual({ ok: true, nextHouseholdId: null })
+    await expect(h2.data.eraseHousehold()).resolves.toEqual({
+      ok: true,
+      nextHouseholdId: null,
+      accountsDeleted: 1,
+    })
 
     // Nowhere to move it to, so it went with the household — the client lands on
     // the sign-in screen rather than a dead active household.
     expect(await getValidSession(db, token)).toBeNull()
+  })
+
+  // The gap #230 was filed for: `user` has no FK to `household`, so before this
+  // the cascade left the login — email, password hash, MFA secret — behind with
+  // nothing that would ever remove it.
+  it('eraseHousehold deletes accounts left belonging to no household (issue #230)', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+    const h2owner = await makeSecondHousehold(db)
+
+    // A second person in h2 who also belongs to the primary household: they keep
+    // their account, unlike h2's owner who belongs nowhere else.
+    const now = new Date()
+    const stayer = newId()
+    await db.insert(user).values({
+      id: stayer,
+      username: 'stayer',
+      displayName: 'Stayer',
+      passwordHash: 'secret-hash',
+      createdAt: now,
+      updatedAt: now,
+    })
+    for (const householdId of ['h2', 'household']) {
+      await db.insert(membership).values({
+        id: newId(),
+        userId: stayer,
+        householdId,
+        role: 'member',
+        acceptedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      })
+    }
+
+    const h2 = appRouter.createCaller({ db, householdId: 'h2', role: 'owner', userId: h2owner })
+    // The impact query tells the confirmation dialog the same number, up front.
+    expect(await h2.data.erasureImpact()).toEqual({ accountsDeleted: 1, includesYou: true })
+    expect((await h2.data.eraseHousehold()).accountsDeleted).toBe(1)
+
+    expect(await getUser(db, h2owner)).toBeNull()
+    expect(await getUser(db, stayer)).not.toBeNull()
+    expect(await getUser(db, owner!.id)).not.toBeNull()
+
+    // Recorded on the primary household with a reference rather than the identity
+    // the erasure existed to remove.
+    const [event] = await db.select().from(auditLog).where(eq(auditLog.action, 'account_deleted'))
+    expect(event?.householdId).toBe('household')
+    expect(event?.actorUserId).toBeNull()
+    expect(event?.entityId).not.toBe(h2owner)
+    expect(event?.changes).not.toContain(h2owner)
+  })
+
+  // The household's history must survive the person who entered it (#230).
+  it('eraseHousehold leaves an erased account’s members in other households, unlinked', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const h2owner = await makeSecondHousehold(db)
+
+    // The h2 owner is also the budgeting participant behind a member row in the
+    // PRIMARY household, which survives the erasure.
+    const primary = appRouter.createCaller({ db, householdId: 'household', role: 'owner', userId: h2owner })
+    const alice = await primary.members.addPerson({ displayName: 'Alice' })
+    await db.update(member).set({ userId: h2owner }).where(eq(member.id, alice.id))
+
+    const h2 = appRouter.createCaller({ db, householdId: 'h2', role: 'owner', userId: h2owner })
+    await h2.data.eraseHousehold()
+
+    const [row] = await db.select().from(member).where(eq(member.id, alice.id))
+    expect(row?.displayName).toBe('Alice')
+    expect(row?.userId).toBeNull()
+  })
+
+  it('erasureImpact is owner-only', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const h2owner = await makeSecondHousehold(db)
+    const admin = appRouter.createCaller({ db, householdId: 'h2', role: 'admin', userId: h2owner })
+    await expect(admin.data.erasureImpact()).rejects.toMatchObject({ code: 'FORBIDDEN' })
   })
 
   it('backupRetention reports the snapshot count to a household owner, not to an admin', async () => {

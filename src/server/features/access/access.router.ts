@@ -2,12 +2,13 @@ import { z } from 'zod'
 import { eq, inArray } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../../trpc/trpc'
-import { assertRole, scopeWhere, type Role } from '../../trpc/tenant'
+import { assertRole, scopeWhere, DEFAULT_HOUSEHOLD_ID, type Role } from '../../trpc/tenant'
 import { recordSecurityEvent } from '../../trpc/audit'
 import { membership, user } from '../../db/schema'
 import type { DB } from '../../db/client'
 import { hashPassword } from '../../auth/password'
-import { acceptedMembership, deleteUserSessions } from '../../auth/session'
+import { accountReference, deleteUsers } from '../../auth/accountDeletion'
+import { acceptedMembership, deleteUserSessions, isInstanceOwner } from '../../auth/session'
 import { validatePassword } from '../../../shared/password-policy'
 
 const assignableRole = z.enum(['owner', 'admin', 'member', 'viewer'])
@@ -132,7 +133,32 @@ export const accessRouter = router({
         action: 'access_removed',
         details: { member: label, role: target.role },
       })
-      return { ok: true as const }
+
+      // If that was their last household the account is dead — it can't sign in
+      // and nothing can grant it a membership back — so it goes rather than
+      // sitting there holding an email address and a password hash (#230). Their
+      // budgeting history stays: `deleteUsers` unlinks `member.userId` rather
+      // than deleting the member.
+      const accountDeleted =
+        (await ctx.db.select().from(membership).where(eq(membership.userId, input.userId))).length === 0 &&
+        // Never the instance owner: that account is the instance's root of trust,
+        // and an install whose owner grant is missing must not have it swept.
+        !(await isInstanceOwner(ctx.db, input.userId))
+      if (accountDeleted) {
+        await ctx.db.transaction((tx) => deleteUsers(tx, [input.userId]))
+        // On the primary household with a non-reversible reference and no actor:
+        // see `users.deleteAccount`. The removal itself is already in this
+        // household's own trail, above.
+        recordSecurityEvent(ctx, {
+          entityType: 'user',
+          entityId: accountReference(input.userId),
+          action: 'account_deleted',
+          details: { reference: accountReference(input.userId), households: 0, via: 'access_removed' },
+          householdId: DEFAULT_HOUSEHOLD_ID,
+          actorUserId: null,
+        })
+      }
+      return { ok: true as const, accountDeleted }
     }),
 
   /** Set a new password for a member who's locked out (no email-based reset in

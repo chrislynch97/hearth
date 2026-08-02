@@ -3,9 +3,12 @@ import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../../db/testdb'
 import { ensureSeed } from '../../db/seed'
 import { appRouter } from '../../trpc/router'
-import { getOwnerUser, getUser } from '../../auth/session'
-import { household, membership, session, user } from '../../db/schema'
+import { createSession, getOwnerUser, getUser, getValidSession } from '../../auth/session'
+import { hashPassword } from '../../auth/password'
+import { generateTotp } from '../../auth/totp'
+import { auditLog, household, invitation, member, membership, pot, session, user } from '../../db/schema'
 import type { DB } from '../../db/client'
+import { newId } from '../../../shared/ids'
 
 // A password comfortably clearing the strength policy.
 const PW = 'correct-horse-staple'
@@ -258,6 +261,260 @@ describe('users.updateProfile password confirmation (issue #50)', () => {
     await expect(
       caller(racingDb, { userId }).c.users.updateProfile({ username: 'free-name', currentPassword: PW }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'That username is taken.' })
+  })
+})
+
+// Erasure under GDPR is about the person, not the tenant: #110 gave households a
+// delete button, and left every login behind (issue #230).
+describe('users.deleteAccount', () => {
+  /** A second household with its own owner account, carrying a real password hash
+   *  and MFA material so the confirmation paths have something to check. */
+  async function secondHousehold(db: DB, opts: { id?: string; username?: string } = {}) {
+    const now = new Date()
+    const householdId = opts.id ?? 'h2'
+    const userId = newId()
+    await db.insert(household).values({ id: householdId, createdAt: now, updatedAt: now })
+    await db.insert(user).values({
+      id: userId,
+      username: opts.username ?? 'h2owner',
+      email: 'h2owner@example.com',
+      displayName: 'H2 Owner',
+      passwordHash: await hashPassword(PW),
+      mfaSecret: 'JBSWY3DPEHPK3PXP',
+      mfaRecoveryCodes: JSON.stringify([]),
+      createdAt: now,
+      updatedAt: now,
+    })
+    await db.insert(membership).values({
+      id: newId(),
+      userId,
+      householdId,
+      role: 'owner',
+      acceptedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+    return { userId, householdId }
+  }
+
+  /** Add someone else to a household, so it isn't the target's alone. */
+  async function addPeer(db: DB, householdId: string, role: string, username: string) {
+    const now = new Date()
+    const userId = newId()
+    await db.insert(user).values({ id: userId, username, displayName: username, createdAt: now, updatedAt: now })
+    await db.insert(membership).values({
+      id: newId(),
+      userId,
+      householdId,
+      role,
+      acceptedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+    return userId
+  }
+
+  it('rejects an unauthenticated caller', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    await expect(caller(db).c.users.deleteAccount({})).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+  })
+
+  it('refuses the instance owner outright', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+
+    await expect(
+      caller(db, { role: 'owner', userId: owner!.id }).c.users.deleteAccount({}),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(await getUser(db, owner!.id)).not.toBeNull()
+  })
+
+  it('demands the current password', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { userId, householdId } = await secondHousehold(db)
+    const me = caller(db, { householdId, role: 'owner', userId }).c
+
+    await expect(me.users.deleteAccount({})).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+    await expect(me.users.deleteAccount({ currentPassword: 'wrong-password-x' })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+    expect(await getUser(db, userId)).not.toBeNull()
+  })
+
+  it('demands the MFA code where the account is enrolled', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { userId, householdId } = await secondHousehold(db)
+    await db.update(user).set({ mfaEnabledAt: new Date() }).where(eq(user.id, userId))
+    const me = caller(db, { householdId, role: 'owner', userId }).c
+
+    // The password alone is no longer enough, and a wrong code is not either.
+    await expect(me.users.deleteAccount({ currentPassword: PW })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+    await expect(me.users.deleteAccount({ currentPassword: PW, code: '000000' })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+    expect(await getUser(db, userId)).not.toBeNull()
+
+    const [row] = await db.select().from(user).where(eq(user.id, userId))
+    await expect(
+      me.users.deleteAccount({ currentPassword: PW, code: generateTotp(row!.mfaSecret!) }),
+    ).resolves.toMatchObject({ ok: true })
+    expect(await getUser(db, userId)).toBeNull()
+  })
+
+  it('refuses while the caller is the sole owner of a household others are still in', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { userId, householdId } = await secondHousehold(db)
+    await addPeer(db, householdId, 'member', 'peer')
+    const me = caller(db, { householdId, role: 'owner', userId }).c
+
+    const impact = await me.users.deletionImpact()
+    expect(impact.blockedBy.map((h) => h.id)).toEqual([householdId])
+    expect(impact.households).toEqual([])
+
+    await expect(me.users.deleteAccount({ currentPassword: PW })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('only owner'),
+    })
+    expect(await getUser(db, userId)).not.toBeNull()
+  })
+
+  it('lets a sole owner go once someone else owns the household too', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { userId, householdId } = await secondHousehold(db)
+    const peer = await addPeer(db, householdId, 'owner', 'coowner')
+    const me = caller(db, { householdId, role: 'owner', userId }).c
+
+    await expect(me.users.deletionImpact()).resolves.toMatchObject({ blockedBy: [], households: [] })
+    await expect(me.users.deleteAccount({ currentPassword: PW })).resolves.toEqual({
+      ok: true,
+      householdsDeleted: 0,
+    })
+
+    // The household stays, with its remaining owner.
+    expect(await getUser(db, userId)).toBeNull()
+    expect(await getUser(db, peer)).not.toBeNull()
+    expect((await db.select().from(household)).map((h) => h.id)).toContain(householdId)
+  })
+
+  it('deletes the account, its sessions and the households nobody else is left in', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { userId, householdId } = await secondHousehold(db)
+    const token = await createSession(db, userId, householdId)
+    const me = caller(db, { householdId, role: 'owner', userId }).c
+
+    await expect(me.users.deletionImpact()).resolves.toMatchObject({
+      blockedBy: [],
+      households: [{ id: householdId, name: 'My Household' }],
+      isInstanceOwner: false,
+      passwordRequired: true,
+      mfaRequired: false,
+    })
+    await expect(me.users.deleteAccount({ currentPassword: PW })).resolves.toEqual({
+      ok: true,
+      householdsDeleted: 1,
+    })
+
+    expect(await getUser(db, userId)).toBeNull()
+    expect(await getValidSession(db, token)).toBeNull()
+    expect(await db.select().from(membership).where(eq(membership.userId, userId))).toHaveLength(0)
+    // The household went too: leaving it would strand a household's financial
+    // records where nobody can ever reach — or erase — them.
+    expect((await db.select().from(household)).map((h) => h.id)).toEqual(['household'])
+  })
+
+  it('leaves the household’s budgeting history intact, with the member unlinked', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { userId, householdId } = await secondHousehold(db)
+    // A co-owner keeps the household alive, so its history has somewhere to stay.
+    await addPeer(db, householdId, 'owner', 'coowner')
+    const me = caller(db, { householdId, role: 'owner', userId }).c
+
+    const alice = await me.members.addPerson({ displayName: 'Alice' })
+    await db.update(member).set({ userId }).where(eq(member.id, alice.id))
+    const potRow = await me.pots.create({ name: 'Rent', ownerId: alice.id })
+
+    await me.users.deleteAccount({ currentPassword: PW })
+
+    // `member.userId` has no FK, so it's unlinked rather than cascaded: the
+    // household's spends must not disappear because a person left.
+    const [row] = await db.select().from(member).where(eq(member.id, alice.id))
+    expect(row?.displayName).toBe('Alice')
+    expect(row?.userId).toBeNull()
+    expect(await db.select().from(pot).where(eq(pot.id, potRow.id))).toHaveLength(1)
+  })
+
+  it('records the erasure on the primary household without keeping the identity', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { userId, householdId } = await secondHousehold(db)
+    await caller(db, { householdId, role: 'owner', userId }).c.users.deleteAccount({ currentPassword: PW })
+
+    const [event] = await db.select().from(auditLog).where(eq(auditLog.action, 'account_deleted'))
+    expect(event?.householdId).toBe('household') // survives the household it erased
+    expect(event?.actorUserId).toBeNull()
+    expect(event?.actorLabel).toBeNull()
+    expect(event?.entityId).not.toBe(userId)
+    expect(event?.changes).not.toContain(userId)
+    expect(event?.changes).not.toContain('h2owner@example.com')
+  })
+
+  it('does not block on a pending invitation the account issued', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { userId, householdId } = await secondHousehold(db)
+    await addPeer(db, householdId, 'owner', 'coowner')
+    const me = caller(db, { householdId, role: 'owner', userId }).c
+    await me.invitations.create({ role: 'member' })
+
+    // `invitation.invitedByUserId` is ON DELETE NO ACTION, so without nulling it
+    // the delete fails on the FK instead of erasing the account.
+    await expect(me.users.deleteAccount({ currentPassword: PW })).resolves.toMatchObject({ ok: true })
+    const [inv] = await db.select().from(invitation)
+    expect(inv?.invitedByUserId).toBeNull()
+  })
+})
+
+// An account with no membership can never get one back — accepting an invitation
+// always mints a new account — so it's a dead end, and letting it sign in would
+// land it on the PRIMARY household, whose reads aren't gated by role (#230).
+describe('sign-in with no household', () => {
+  it('refuses an account whose last membership is gone', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = (await getOwnerUser(db))!
+    await caller(db, { role: 'owner', userId: owner.id }).c.auth.setPassword({ newPassword: PW })
+
+    const now = new Date()
+    const orphan = newId()
+    await db.insert(user).values({
+      id: orphan,
+      username: 'orphan',
+      displayName: 'Orphan',
+      passwordHash: await hashPassword(PW),
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    const attempt = caller(db)
+    await expect(attempt.c.auth.login({ username: 'orphan', password: PW })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: expect.stringContaining('no longer belongs to any household'),
+    })
+    // No session was minted — in particular not one pointed at the primary
+    // household, which is where `defaultHouseholdFor` would have put it.
+    expect(attempt.cookies).toHaveLength(0)
+    expect(await db.select().from(session).where(eq(session.userId, orphan))).toHaveLength(0)
+
+    // A real member still signs in.
+    await expect(caller(db).c.auth.login({ username: 'owner', password: PW })).resolves.toMatchObject({ ok: true })
   })
 })
 

@@ -1,6 +1,7 @@
 import { Stack } from "@mantine/core";
 import { AccountSection } from "./AccountSection";
 import { AppearanceSection } from "./AppearanceSection";
+import { DeleteAccountSection } from "./DeleteAccountSection";
 import { SecuritySection } from "./SecuritySection";
 import { MfaSection } from "./MfaSection";
 import { SessionsSection } from "./SessionsSection";
@@ -13,5 +14,6 @@ export const AccountSettingsPage = () => (
         <SecuritySection />
         <MfaSection />
         <SessionsSection />
+        <DeleteAccountSection />
     </Stack>
 );

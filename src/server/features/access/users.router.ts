@@ -4,12 +4,14 @@ import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../../trpc/trpc'
 import { household, member, membership, session, user } from '../../db/schema'
 import { DEFAULT_HOUSEHOLD_ID, scopeWhere } from '../../trpc/tenant'
-import { recordAudit } from '../../trpc/audit'
+import { recordAudit, recordSecurityEvent } from '../../trpc/audit'
 import { isUniqueViolation } from '../../db/errors'
 import { verifyPassword } from '../../auth/password'
 import { MAX_PASSWORD_LENGTH } from '../../../shared/password-policy'
-import { MAX_EMAIL_LENGTH, MAX_NAME_LENGTH } from '../../../shared/input-limits'
+import { MAX_CODE_LENGTH, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH } from '../../../shared/input-limits'
 import { emailRequiredForAccounts } from '../../auth/accountEmail'
+import { accountDeletionImpact, accountReference, deleteUsers } from '../../auth/accountDeletion'
+import { verifyMfaCode } from '../../auth/mfa'
 import { acceptedMembership, getUser, getUserByUsername, getValidSession, isInstanceOwner, normalizeUsername } from '../../auth/session'
 
 export const usersRouter = router({
@@ -156,6 +158,118 @@ export const usersRouter = router({
         after: fields(updated),
       })
       return { id: updated!.id, username: updated!.username, displayName: updated!.displayName, email: updated!.email }
+    }),
+
+  /** What deleting your own account would do, for the confirmation screen (#230).
+   *
+   *  Same rules the mutation enforces, read-only, so the UI can state the outcome
+   *  before anyone types a password rather than after — including the households
+   *  that would go with the account, and the ones that refuse to let it go. */
+  deletionImpact: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.userId) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
+    const me = await getUser(ctx.db, ctx.userId)
+    if (!me) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
+    const impact = await accountDeletionImpact(ctx.db, me.id)
+    return {
+      ...impact,
+      isInstanceOwner: await isInstanceOwner(ctx.db, me.id),
+      passwordRequired: me.passwordHash !== null,
+      mfaRequired: me.mfaEnabledAt !== null && me.mfaSecret !== null,
+    }
+  }),
+
+  /** Delete your own account (#230). GDPR erasure is about the person, not the
+   *  tenant: `data.eraseHousehold` removes a household, but `user` has no FK to
+   *  one, so the login — username, email, password hash, MFA secret — outlived
+   *  every household the person belonged to with nothing to remove it.
+   *
+   *  Confirmed by password and, where enrolled, MFA — the same bar as the other
+   *  destructive account actions, because a stolen session must not be able to
+   *  erase the real owner. Refused for the instance owner outright (that account
+   *  is the instance's root of trust; removing it is a redeploy, not a button)
+   *  and while the caller is the sole owner of a household others still belong
+   *  to. Households nobody else belongs to go with the account — leaving one
+   *  behind would strand a household's financial records where nobody can ever
+   *  reach or erase them. */
+  deleteAccount: publicProcedure
+    .input(
+      z.object({
+        currentPassword: z.string().max(MAX_PASSWORD_LENGTH).optional(),
+        code: z.string().max(MAX_CODE_LENGTH).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.userId) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
+      const me = await getUser(ctx.db, ctx.userId)
+      if (!me) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
+
+      if (await isInstanceOwner(ctx.db, me.id)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message:
+            'This is the instance owner’s account, so it can’t be deleted from here — removing it means taking the instance down.',
+        })
+      }
+      // An open (password-less) instance has no password to confirm; the MFA
+      // check below only applies to an account that actually enrolled.
+      if (me.passwordHash !== null && !(await verifyPassword(input.currentPassword ?? '', me.passwordHash))) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Current password is incorrect' })
+      }
+      if (me.mfaEnabledAt && me.mfaSecret) {
+        if (!input.code || !(await verifyMfaCode(ctx.db, me, input.code))) {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect authentication code' })
+        }
+      }
+
+      const { blockedBy, households } = await accountDeletionImpact(ctx.db, me.id)
+      if (blockedBy.length > 0) {
+        const names = blockedBy.map((h) => h.name).join(', ')
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `You’re the only owner of ${names}, and other people are still in there. Make someone else an owner, or delete the household, before deleting your account.`,
+        })
+      }
+
+      // One transaction: the account, the households nobody else is left in, and
+      // the member rows that pointed at the account all have to move together.
+      await ctx.db.transaction(async (tx) => {
+        await deleteUsers(tx, [me.id])
+        if (households.length > 0) {
+          await tx.delete(household).where(
+            inArray(
+              household.id,
+              households.map((h) => h.id),
+            ),
+          )
+        }
+      })
+
+      // Recorded against the primary household with a non-reversible reference
+      // and no actor: the account is gone, and an entry naming it would keep the
+      // identity the erasure existed to remove. The primary household is also the
+      // only one guaranteed to outlive this — an entry on a household deleted
+      // just above would vanish with it (the trick `eraseHousehold` uses).
+      const reference = accountReference(me.id)
+      recordSecurityEvent(ctx, {
+        entityType: 'user',
+        entityId: reference,
+        action: 'account_deleted',
+        details: { reference, households: households.length, via: 'self_service' },
+        householdId: DEFAULT_HOUSEHOLD_ID,
+        actorUserId: null,
+      })
+      for (const h of households) {
+        recordSecurityEvent(ctx, {
+          entityType: 'household',
+          entityId: h.id,
+          action: 'household_erased',
+          details: { via: 'account_deleted', reference },
+          householdId: DEFAULT_HOUSEHOLD_ID,
+          actorUserId: null,
+        })
+      }
+      ctx.setSessionCookie?.(null)
+      return { ok: true as const, householdsDeleted: households.length }
     }),
 
   /** Switch the active household for this session. */

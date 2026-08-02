@@ -46,6 +46,18 @@ test('the primary household explains why it can’t be deleted here', async ({ p
   await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled()
 })
 
+// The demo instance signs in as the instance owner, whose account `deleteAccount`
+// refuses — so as with the primary household above, what's checkable end to end is
+// that the card explains itself instead of hiding. The confirmation flow is driven
+// in src/client/pages/settings/DeleteAccountSection.test.tsx (#230).
+test('the instance owner is told why their account can’t be deleted', async ({ page }) => {
+  await page.goto('/settings/account')
+
+  await expect(page.getByRole('heading', { name: 'Delete your account' })).toBeVisible()
+  await expect(page.getByText(/instance owner's account/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Delete my account' })).toBeDisabled()
+})
+
 // The whole point of the off-site restore panel (#114) is that it works on a host
 // with no filesystem to hand — so drive it end to end: take a real backup, and
 // check the copy that landed off-site is offered back.
