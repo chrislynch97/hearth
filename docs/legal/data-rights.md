@@ -202,6 +202,7 @@ that recorded who was erased would keep exactly what the erasure was for.
 
 ## References
 
+- The short version handed to people before they join — [household-notice.md](household-notice.md)
 - What to do when data leaks rather than when it's asked for — [breach-runbook.md](breach-runbook.md)
 - Backup configuration and retention — [docs/deployment.md](../deployment.md)
 

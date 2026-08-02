@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, PasswordInput, Text, TextInput } from "@mantine/core";
+import {
+    Alert,
+    Anchor,
+    Button,
+    PasswordInput,
+    Text,
+    TextInput,
+} from "@mantine/core";
 import { trpc } from "./trpc";
 import { AuthCard } from "./AuthCard";
 import {
     MIN_PASSWORD_LENGTH,
     validatePassword,
 } from "../shared/password-policy";
+import { DATA_NOTICE_TEXT, DATA_NOTICE_URL } from "@shared/data-notice";
 
 /** Shown at /invite#<token> — lets an invitee create their account and join. */
 export function AcceptInvite({ token }: { token: string }) {
@@ -112,6 +120,20 @@ export function AcceptInvite({ token }: { token: string }) {
                             {error}
                         </Alert>
                     )}
+                    {/* Mail is optional, so this screen — not the invite email —
+                        is the copy every invitee sees before joining (#229). */}
+                    <Text size="xs" c="dimmed">
+                        <b>Before you accept:</b> {DATA_NOTICE_TEXT}{" "}
+                        <Anchor
+                            href={DATA_NOTICE_URL}
+                            target="_blank"
+                            rel="noreferrer"
+                            inherit
+                        >
+                            What happens to your data here
+                        </Anchor>
+                        .
+                    </Text>
                     <Button
                         onClick={() => void submit()}
                         loading={accept.isPending}

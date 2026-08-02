@@ -8,6 +8,7 @@
 
 import type { MailMessage } from './mailer'
 import { inviteLink, resetPasswordLink, verifyEmailLink } from '../../shared/links'
+import { DATA_NOTICE_TEXT, DATA_NOTICE_URL } from '../../shared/data-notice'
 
 /** Escape text interpolated into the HTML part. Household and display names are
  *  user-supplied, so an unescaped `<` would break the markup at best. */
@@ -20,14 +21,22 @@ function esc(value: string): string {
 }
 
 /** A one-action email: a line of context, a button, and the raw URL as a
- *  fallback for clients that strip links. */
-function layout(opts: { heading: string; body: string; action: string; url: string; footer: string }): string {
+ *  fallback for clients that strip links. `note` is pre-escaped markup, for the
+ *  one mail that carries a paragraph of its own. */
+function layout(opts: {
+  heading: string
+  body: string
+  action: string
+  url: string
+  note?: string
+  footer: string
+}): string {
   return `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:15px;line-height:1.5;color:#22201d;max-width:520px">
   <p style="font-size:20px;font-weight:600;margin:0 0 16px">${esc(opts.heading)}</p>
   <p style="margin:0 0 20px">${opts.body}</p>
   <p style="margin:0 0 20px"><a href="${esc(opts.url)}" style="background:#4a6b4f;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;display:inline-block">${esc(opts.action)}</a></p>
   <p style="margin:0 0 20px;font-size:13px;color:#6b6660">Or paste this into your browser:<br><span style="word-break:break-all">${esc(opts.url)}</span></p>
-  <p style="margin:0;font-size:13px;color:#6b6660">${esc(opts.footer)}</p>
+  ${opts.note ? `<p style="margin:0 0 20px;font-size:13px;color:#6b6660">${opts.note}</p>\n  ` : ''}<p style="margin:0;font-size:13px;color:#6b6660">${esc(opts.footer)}</p>
 </div>`
 }
 
@@ -55,12 +64,13 @@ export function inviteEmail(opts: {
   return {
     to: opts.to,
     subject: `You're invited to join ${opts.householdName} on Hearth`,
-    text: `${who} to join the household "${opts.householdName}" on Hearth as ${opts.role}.\n\nCreate your account:\n${url}\n\n${validity}\n`,
+    text: `${who} to join the household "${opts.householdName}" on Hearth as ${opts.role}.\n\nCreate your account:\n${url}\n\nBefore you accept: ${DATA_NOTICE_TEXT}\n${DATA_NOTICE_URL}\n\n${validity}\n`,
     html: layout({
       heading: `Join ${opts.householdName} on Hearth`,
       body: `${esc(who)} to join the household <b>${esc(opts.householdName)}</b> as ${esc(opts.role)}.`,
       action: 'Create your account',
       url,
+      note: `<b>Before you accept:</b> ${esc(DATA_NOTICE_TEXT)} <a href="${DATA_NOTICE_URL}" style="color:#4a6b4f">What happens to your data here</a>.`,
       footer: validity,
     }),
   }
