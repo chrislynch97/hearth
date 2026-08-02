@@ -158,8 +158,6 @@ export const IMPORT_PROFILES: ImportProfile[] = [monzo, starling, revolut, gener
 
 const BY_ID = new Map(IMPORT_PROFILES.map((p) => [p.id, p]))
 
-export const DEFAULT_PROFILE_ID = monzo.id
-
 /** Look up a profile by id, falling back to Monzo for legacy/unknown sources. */
 export function getProfile(id: string | null | undefined): ImportProfile {
   return (id && BY_ID.get(id)) || monzo
