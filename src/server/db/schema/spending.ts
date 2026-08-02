@@ -25,12 +25,14 @@ export const reconciliationBatch = pgTable('reconciliation_batch', {
   householdIdx: index('reconciliation_batch_household_id_idx').on(t.householdId),
 }))
 
-// Import batches — one Monzo CSV upload (spec §5.3). Preserved for audit and
-// so a whole import can be identified (and, in future, reversed).
+// Import batches — one bank CSV upload. Preserved for audit and so a whole
+// import can be identified (and, in future, reversed).
 export const importBatch = pgTable('import_batch', {
   id: text('id').primaryKey(),
   householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
-  source: text('source').notNull(),        // 'monzo_csv'
+  // The import profile used, e.g. 'monzo_csv' — see import/profiles.ts for the
+  // current set. Free text, so an old batch keeps its id if a profile is retired.
+  source: text('source').notNull(),
   filename: text('filename'),
   rowCount: integer('row_count').notNull(),        // rows in the file
   importedCount: integer('imported_count').notNull(),
@@ -65,7 +67,9 @@ export const spendTransaction = pgTable('spend_transaction', {
   reconciledAt: timestamp('reconciled_at', { withTimezone: true, mode: 'date' }),
   reconciliationBatchId: text('reconciliation_batch_id').references(() => reconciliationBatch.id),
   source: text('source').notNull().default('manual'), // 'manual' | 'import'
-  importRef: text('import_ref'),                       // Monzo Transaction ID; unique dedup key (NULL for manual)
+  // Dedup key: the bank's own transaction id, or a `syn_` hash of date/amount/
+  // description for exports that have none. NULL for manual rows.
+  importRef: text('import_ref'),
   importBatchId: text('import_batch_id').references(() => importBatch.id),
   raw: text('raw'),                                    // JSON of the original imported row
   splitGroupId: text('split_group_id'),
@@ -75,7 +79,7 @@ export const spendTransaction = pgTable('spend_transaction', {
 }, (t) => ({
   // Import dedup is household-scoped (imports.ts filters by householdId), so the
   // uniqueness must be too — a global unique made two households importing the
-  // same Monzo transaction id collide with a raw SQLite error.
+  // same bank transaction id collide with a raw database error.
   uniqImportRef: uniqueIndex('spend_transaction_import_ref').on(t.householdId, t.importRef),
   householdIdx: index('spend_transaction_household_id_idx').on(t.householdId),
   // Per-bill payment history: "what have I actually paid for this bill?"
