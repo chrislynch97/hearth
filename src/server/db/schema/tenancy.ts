@@ -262,6 +262,61 @@ export const invitation = pgTable('invitation', {
 
 export type Invitation = typeof invitation.$inferSelect
 
+// The hosted service's subscription state for one household (#232). Keyed on the
+// household, not the user: a person can belong to several households and each is
+// billed (or not) independently. At most one live subscription per household,
+// hence the household id as the primary key.
+//
+// `status` is Hearth's OWN vocabulary, normalised at the webhook boundary — see
+// src/server/billing/status.ts. Provider strings differ between Paddle and Lemon
+// Squeezy, and letting them reach the gating middleware or the UI would make a
+// provider change a rewrite. Nothing reads this table directly either: every
+// consumer goes through getEntitlement (src/server/billing/entitlement.ts).
+//
+// Deliberately excluded from ALL_TABLES: entitlement is not the household's data
+// to take with them, and an import must not be able to forge it.
+export const subscription = pgTable('subscription', {
+  householdId: text('household_id').primaryKey().references(() => household.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull(),        // 'paddle' | 'lemonsqueezy'
+  providerCustomerId: text('provider_customer_id'),
+  providerSubscriptionId: text('provider_subscription_id'),
+  plan: text('plan').notNull(),
+  status: text('status').notNull(),            // 'active' | 'past_due' | 'cancelled'
+  currentPeriodEnd: timestamp('current_period_end', { withTimezone: true, mode: 'date' }),
+  cancelAt: timestamp('cancel_at', { withTimezone: true, mode: 'date' }),
+  // End of the post-failure grace window (#235). While it's in the future a
+  // past_due household is still fully entitled.
+  graceUntil: timestamp('grace_until', { withTimezone: true, mode: 'date' }),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => ({
+  // A redelivered webhook must find the existing row by whichever id it carries,
+  // and must never be able to create a second one for the same provider record.
+  customerIdx: uniqueIndex('subscription_provider_customer_id').on(t.providerCustomerId),
+  subscriptionIdx: uniqueIndex('subscription_provider_subscription_id').on(t.providerSubscriptionId),
+}))
+
+export type Subscription = typeof subscription.$inferSelect
+
+// Append-only log of every webhook the payment provider delivered (#232). The
+// unique `provider_event_id` is what makes idempotency enforceable in the
+// database rather than in the handler: a redelivery collides on insert instead
+// of re-applying its effect. Also the audit trail for a billing dispute, which
+// is why the raw payload is kept here and nowhere else — the subscription row
+// holds only the normalised state. Excluded from ALL_TABLES for the same reason
+// the subscription is.
+export const billingEvent = pgTable('billing_event', {
+  id: text('id').primaryKey(),
+  provider: text('provider').notNull(),
+  providerEventId: text('provider_event_id').notNull(),
+  type: text('type').notNull(),
+  receivedAt: timestamp('received_at', { withTimezone: true, mode: 'date' }).notNull(),
+  payload: text('payload').notNull(), // raw provider JSON, verbatim
+}, (t) => ({
+  eventIdx: uniqueIndex('billing_event_provider_event_id').on(t.providerEventId),
+}))
+
+export type BillingEvent = typeof billingEvent.$inferSelect
+
 // A budgeting participant within a household: a person, or the shared 'joint'
 // entity. `userId` optionally links a participant to a login identity.
 export const member = pgTable('member', {

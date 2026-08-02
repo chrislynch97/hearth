@@ -1,7 +1,7 @@
 import { eq, getTableColumns, inArray } from 'drizzle-orm'
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core'
 import type { DB } from './client'
-import { membership } from './schema'
+import { household, membership, subscription } from './schema'
 import { ALL_TABLES } from './tables'
 
 export const EXPORT_VERSION = 1
@@ -129,6 +129,13 @@ export async function buildHouseholdSnapshot(db: DB, householdId: string): Promi
  *  restore uses. Returns the number of rows inserted per table. */
 export async function applySnapshot(db: DB, tables: Snapshot['tables']): Promise<Record<string, number>> {
   await db.transaction(async (tx) => {
+    // Entitlement sits outside the portability contract in BOTH directions (#232):
+    // a snapshot can't forge it, and mustn't destroy it either. `subscription`
+    // hangs off `household` with ON DELETE CASCADE, so the wipe below would take
+    // every paying household's subscription with it — a restore-from-backup would
+    // lock the whole instance out of its own service. Carry it across instead.
+    const entitlements = await tx.select().from(subscription)
+
     for (const [, table] of [...ALL_TABLES].reverse()) {
       await tx.delete(table as PgTable)
     }
@@ -139,6 +146,12 @@ export async function applySnapshot(db: DB, tables: Snapshot['tables']): Promise
         if (chunk.length > 0) await tx.insert(table as PgTable).values(chunk as never)
       }
     }
+
+    // Only for households the snapshot brought back — one from another instance
+    // has different ids, and an entitlement with no household is meaningless.
+    const restored = new Set((await tx.select({ id: household.id }).from(household)).map((h) => h.id))
+    const survivors = entitlements.filter((s) => restored.has(s.householdId))
+    if (survivors.length > 0) await tx.insert(subscription).values(survivors)
   })
   return Object.fromEntries(ALL_TABLES.map(([n]) => [n, (tables[n] ?? []).length]))
 }

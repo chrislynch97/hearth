@@ -28,6 +28,8 @@ import {
   instanceSettings,
   rateLimit,
   session,
+  subscription,
+  billingEvent,
 } from './schema'
 
 /** Every table, in FK-dependency (insert-safe) order — parents first. Reverse
@@ -74,6 +76,16 @@ export const SNAPSHOT_EXCLUDED: ReadonlyArray<readonly [string, PgTable, string]
     'instance-scoped, and a security problem to restore: a stale auth_required would reopen a locked instance (#63)',
   ],
   ['auditLog', auditLog, 'operational metadata: an append-only record of what happened on THIS instance'],
+  [
+    'subscription',
+    subscription,
+    'entitlement, not household data: exporting it would carry a subscription between instances and importing it would forge one (#232)',
+  ],
+  [
+    'billingEvent',
+    billingEvent,
+    'provider webhook log: an instance-scoped audit trail, and the raw payloads are not the household’s data',
+  ],
 ] as const
 
 /** JS property names that hold money in minor units. Integer columns with one
