@@ -26,6 +26,7 @@ import {
 } from '../../backup/offsite'
 import { appVersion } from '../../version'
 import { checkForUpdates, deployMode } from '../../updates'
+import { missingComposeSettings } from '../../composeEnv'
 import { getInstanceSettings, setUpdateSettings } from '../../db/instanceSettings'
 import { getCachedUpdateStatus } from '../../updateScheduler'
 import { isUpdaterOnline, isUpdatePending, readUpdateResult, requestUpdate } from '../../updater'
@@ -338,6 +339,11 @@ export const dataRouter = router({
       updaterOnline: isUpdaterOnline(),
       updatePending: isUpdatePending(),
       updateResult: readUpdateResult(),
+      // Settings this image reads that the compose file never passes in, so
+      // `.env` can't reach them (#241). Surfaced here because the update card is
+      // where someone looks after updating, and updating the image is what puts
+      // an instance into this state. Empty on anything but the Docker image.
+      missingSettings: missingComposeSettings(),
     }
   }),
 

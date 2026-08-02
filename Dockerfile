@@ -54,6 +54,12 @@ COPY --from=build /app/drizzle ./drizzle
 ENV PORT=8787
 ENV DATABASE_URL=pglite:/data/pgdata
 ENV CLIENT_DIR=/app/dist/client
+# Marks a Docker deploy for the compose-drift check (#241), which compares the
+# settings this image reads against the ones the compose file actually passes
+# in. Set here rather than in a compose file on purpose: it must be as current
+# as the image, so a compose file too old to mention it can't switch the check
+# off — that's the very state being detected.
+ENV HEARTH_IMAGE=1
 EXPOSE 8787
 
 # Run unprivileged. The node:slim image ships a `node` user (uid 1000). Give it

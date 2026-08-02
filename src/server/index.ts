@@ -14,6 +14,7 @@ import { isInstanceLocked, startSessionPurgeScheduler } from './auth/session'
 import { allowedOrigins, openGuardConfig } from './auth/gate'
 import { registerTrpcScope } from './httpGate'
 import { startupSafetyProblems } from './auth/startup'
+import { composeDriftWarning, missingComposeSettings } from './composeEnv'
 import { getInstanceSettings } from './db/instanceSettings'
 import { parseTrustProxy } from './auth/trustProxy'
 import { redactUrl } from './logRedact'
@@ -76,6 +77,12 @@ async function main() {
   }
   process.on('SIGTERM', () => void shutdown('SIGTERM'))
   process.on('SIGINT', () => void shutdown('SIGINT'))
+
+  // Before anything else that reports config: a compose file older than this
+  // image drops settings on the floor, so every check below would describe a
+  // configuration the operator didn't ask for. Reading it first means the
+  // explanation precedes the symptoms in the log. Env-only, so no DB needed.
+  reportComposeDrift()
 
   await runMigrations()
   await ensureSeed(db)
@@ -202,6 +209,16 @@ async function main() {
 
   await app.listen({ port: PORT, host: HOST })
   console.log(`[hearth] listening on ${HOST}:${PORT}`)
+}
+
+/** Warn when the compose file this container was started with is older than the
+ *  image, so settings the operator put in `.env` never arrive (#241). A warning
+ *  rather than a refusal to boot: the missing settings are all optional
+ *  features, and an instance that won't start is worse than one running without
+ *  off-site backups it never had. Settings → System says the same thing. */
+function reportComposeDrift(): void {
+  const warning = composeDriftWarning(missingComposeSettings())
+  if (warning) console.error(`[hearth] WARNING: ${warning}`)
 }
 
 /** Check the boot-time config for states that are unsafe on a public instance,
