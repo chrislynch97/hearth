@@ -2,6 +2,7 @@ import { Navigate } from "@tanstack/react-router";
 import { Loader, Stack } from "@mantine/core";
 import { trpc } from "@/trpc";
 import { RegistrationSection } from "./RegistrationSection";
+import { SignOutEveryoneSection } from "./SignOutEveryoneSection";
 import { DataSection } from "./DataSection";
 import { UpdatesSection } from "./UpdatesSection";
 import { AboutSection } from "./AboutSection";
@@ -17,6 +18,7 @@ export const SystemSettingsPage = () => {
     return (
         <Stack gap="lg">
             <RegistrationSection />
+            <SignOutEveryoneSection />
             <DataSection />
             <UpdatesSection />
             <AboutSection />

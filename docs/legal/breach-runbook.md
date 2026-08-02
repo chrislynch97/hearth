@@ -151,8 +151,23 @@ Do the smallest thing that stops the bleeding, in this order:
 
 1. **Consider taking it offline.** If someone is actively in, `docker compose
    stop` beats a tidy investigation. Availability is recoverable; the data isn't.
-2. **End sessions.** Four levers, and they are not equivalent. There is no
-   single "sign everyone out" button, so know which you're reaching for:
+2. **End sessions.** Four levers, and they are not equivalent. Know which you're
+   reaching for:
+   - **Everyone at once** — **Settings → System → Sessions → sign everyone
+     out**, instance owner only. Ends every session on the instance, yours
+     included; everyone signs in again, which is the point. This is the one to
+     reach for when you don't yet know *whose* session is the problem. It changes
+     nothing else — no password, no MFA, no data — so anyone who still has their
+     credentials signs straight back in. Same thing from the box, for when the
+     app won't start:
+
+     ```bash
+     docker compose exec hearth node dist/end-all-sessions.js   # add --yes to skip the prompt
+     ```
+
+     Both work on either database engine, and both are recorded in the audit
+     trail. See [#249](https://github.com/chrislynch97/hearth/issues/249) for the
+     still-missing lever: an admin ending *one named person's* sessions.
    - **Each person, for themselves** — **Settings → Account → Sessions → sign
      out everywhere**. Nobody, not even the owner, can revoke another person's
      sessions from the UI directly.
@@ -162,18 +177,6 @@ Do the smallest thing that stops the bleeding, in this order:
      access (**revoke access** ends their sessions too).
    - **The owner account** — `reset-owner-password` on the box. It resets the
      password, clears MFA and ends every session the owner had.
-   - **Everyone at once**, with an external Postgres. Everyone signs in again,
-     which is the point:
-
-     ```bash
-     docker compose exec db psql -U hearth -d hearth -c 'delete from session;'
-     ```
-
-     On the embedded PGlite database there is no SQL prompt to do this from, so
-     the only route is the per-account ones above, one person at a time
-     ([#248](https://github.com/chrislynch97/hearth/issues/248), and
-     [#249](https://github.com/chrislynch97/hearth/issues/249) for the missing
-     admin lever). Know that before an incident rather than during one.
 
 3. **Revoke every pending invite** (**Settings → Households & access**). An
    unexpired link is a live credential.
@@ -396,7 +399,8 @@ already encrypted with a leaked key. Fix both before you need them.
   [#49](https://github.com/chrislynch97/hearth/issues/49) ·
   Retention: [#41](https://github.com/chrislynch97/hearth/issues/41) ·
   Alerting: [#57](https://github.com/chrislynch97/hearth/issues/57) ·
-  Session revocation: [#50](https://github.com/chrislynch97/hearth/issues/50)
+  Session revocation: [#50](https://github.com/chrislynch97/hearth/issues/50),
+  [#248](https://github.com/chrislynch97/hearth/issues/248)
 
 ICO registration, a privacy policy and terms of service were tracked in
 #222–#225 and are closed — they bite once Hearth is charging people or open to

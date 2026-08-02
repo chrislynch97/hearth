@@ -192,6 +192,15 @@ export async function deleteUserSessions(db: DB, userId: string): Promise<void> 
   await db.delete(session).where(eq(session.userId, userId))
 }
 
+/** Revoke every session on the instance — everyone signs in again (#248). The
+ *  break-glass containment lever for when you don't yet know *which* session is
+ *  the problem, so it deliberately spares nobody, including whoever pulled it.
+ *  Returns how many were ended, for the audit entry and the confirmation. */
+export async function deleteAllSessions(db: DB): Promise<number> {
+  const deleted = await db.delete(session).returning({ id: session.id })
+  return deleted.length
+}
+
 const PURGE_INTERVAL_MS = 60 * 60 * 1000 // hourly; expiry is 30 days, so timing is not sensitive
 
 /** Delete every session that has hit either deadline — its idle window or its

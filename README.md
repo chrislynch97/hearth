@@ -216,6 +216,23 @@ the database, so this hands an attacker nothing new; it just means a lost passwo
 or a lost phone doesn't need a SQL prompt to fix. The reset is recorded in the
 audit log as a console event.
 
+**Suspect a session has been stolen?** The instance owner can end **every**
+session on the instance in one go — **Settings → System → Sessions → sign
+everyone out**. Everyone signs in again, the owner included; nothing else
+changes, so anyone who still has their password (and authenticator) is straight
+back in. It's the containment step for when you don't yet know *whose* session is
+the problem. There's a console form for when the app won't start, and it works on
+the embedded database too:
+
+```bash
+npm run end-all-sessions        # source checkout; --yes skips the confirmation
+docker compose exec hearth node dist/end-all-sessions.js
+```
+
+Both routes are recorded in the audit log. If a password may be compromised,
+change it as well — this only ends sessions. See the
+[breach runbook](docs/legal/breach-runbook.md) for the rest of the drill.
+
 **Multiple households & sign-up** — an account can belong to more than one
 household (switch between them from the account menu). The **instance owner** (the
 owner of the first household — the person who set the server up) can turn on
