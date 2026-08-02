@@ -2,7 +2,13 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../../trpc/trpc'
 import { recordSecurityEvent } from '../../trpc/audit'
-import { deleteOtherUserSessions, deleteUserSessionById, listUserSessions } from '../../auth/session'
+import {
+  assertInstanceOwner,
+  deleteAllSessions,
+  deleteOtherUserSessions,
+  deleteUserSessionById,
+  listUserSessions,
+} from '../../auth/session'
 
 /**
  * Let a user see and end their own logins (issue #50).
@@ -13,11 +19,15 @@ import { deleteOtherUserSessions, deleteUserSessionById, listUserSessions } from
  * procedures give that story a direct route: look at the list, end the one you
  * don't recognise.
  *
- * Every procedure is scoped to `ctx.userId`. There is deliberately no way to
- * list or revoke *another* user's sessions, not even for an owner: that would be
- * a household-admin power over someone's account, which is a different feature
- * with a different threat model. Access removal already handles the case where
- * someone should lose a household.
+ * Every per-user procedure is scoped to `ctx.userId`. There is deliberately no
+ * way to list or revoke *another* user's sessions, not even for an owner: that
+ * would be a household-admin power over someone's account, which is a different
+ * feature with a different threat model. Access removal already handles the case
+ * where someone should lose a household.
+ *
+ * `revokeAll` is the one exception, and a different lever entirely: it targets
+ * nobody in particular — it ends every session on the instance, including the
+ * caller's (#248).
  */
 export const sessionsRouter = router({
   /** The current user's live sessions, most recently active first.
@@ -85,6 +95,33 @@ export const sessionsRouter = router({
         details: { count, scope: 'others' },
       })
     }
+    return { ok: true as const, count }
+  }),
+
+  /** Break-glass containment: end every session on the instance, so everyone
+   *  signs in again (#248). Instance owner only.
+   *
+   *  This is the lever for when you don't yet know *which* session is the
+   *  problem — a leaked backup holding session rows, a suspected host
+   *  compromise, a token of unknown provenance. The per-account routes each
+   *  need you to name a person first, which is exactly what you can't do.
+   *
+   *  It signs the caller out too, deliberately: an instance-wide revocation
+   *  that quietly exempted one session would leave the one account an attacker
+   *  most wants still holding a live one. `scripts/end-all-sessions.ts` does the
+   *  same thing from the console for when the app won't start. */
+  revokeAll: publicProcedure.mutation(async ({ ctx }) => {
+    await assertInstanceOwner(ctx.db, ctx.userId)
+    const count = await deleteAllSessions(ctx.db)
+    recordSecurityEvent(ctx, {
+      entityType: 'instance',
+      entityId: 'sessions',
+      action: 'sessions_revoked',
+      details: { count, scope: 'instance', via: 'settings' },
+    })
+    // The caller's own session is among the rows that just went; clear the
+    // cookie so the browser stops presenting a token the server will reject.
+    ctx.setSessionCookie?.(null)
     return { ok: true as const, count }
   }),
 })

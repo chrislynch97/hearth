@@ -183,6 +183,57 @@ describe('sessions.revokeOthers', () => {
   })
 })
 
+describe('sessions.revokeAll', () => {
+  it('ends every session on the instance, the caller’s included', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { owner, token, sessionId } = await lockedOwner(db)
+    const mine = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+    const other = await addUser(db, 'ben')
+    const theirs = await createSession(db, other, DEFAULT_HOUSEHOLD_ID)
+
+    const me = caller(db, { userId: owner.id, sessionToken: token, sessionId })
+    expect(await me.c.sessions.revokeAll()).toEqual({ ok: true, count: 3 })
+
+    expect(await getValidSession(db, mine)).toBeNull()
+    expect(await getValidSession(db, theirs)).toBeNull()
+    expect(await getValidSession(db, token)).toBeNull()
+    expect(me.cookies.at(-1)).toBeNull() // the caller is signed out too
+  })
+
+  it('is refused to anyone but the instance owner', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    await lockedOwner(db)
+    const other = await addUser(db, 'ben')
+    const theirToken = await createSession(db, other, DEFAULT_HOUSEHOLD_ID)
+
+    await expect(
+      caller(db, { userId: other, sessionToken: theirToken, sessionId: hashToken(theirToken) }).c.sessions.revokeAll(),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    await expect(caller(db).c.sessions.revokeAll()).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+    expect(await getValidSession(db, theirToken)).not.toBeNull()
+  })
+
+  it('records the revocation with its count', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const { owner, token, sessionId } = await lockedOwner(db)
+    await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+
+    await caller(db, { userId: owner.id, sessionToken: token, sessionId }).c.sessions.revokeAll()
+
+    const rows = await db.select().from(auditLog).where(eq(auditLog.action, 'sessions_revoked'))
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.actorUserId).toBe(owner.id)
+    expect(rows[0]!.entityType).toBe('instance')
+    expect(JSON.parse(rows[0]!.changes ?? '{}')).toEqual({
+      kind: 'event',
+      details: { count: 2, scope: 'instance', via: 'settings' },
+    })
+  })
+})
+
 describe('sessions audit trail', () => {
   it('records a revocation as a security event', async () => {
     const db = await makeTestDb()

@@ -58,6 +58,25 @@ test('the instance owner is told why their account can’t be deleted', async ({
   await expect(page.getByRole('button', { name: 'Delete my account' })).toBeDisabled()
 })
 
+// Break-glass containment (#248). Firing it would sign this suite out mid-run, so
+// what's driven here is that the owner-only card is really on the page and that
+// the confirmation gates it — the mutation itself is covered by
+// src/server/features/access/sessions.router.test.ts.
+test('the instance owner is offered the sign-everyone-out lever', async ({ page }) => {
+  await page.goto('/settings/system')
+
+  await page.getByRole('button', { name: 'Sign everyone out' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toContainText('signs you out too')
+  await expect(dialog.getByRole('button', { name: 'Sign everyone out' })).toBeDisabled()
+
+  await dialog.getByLabel(/to confirm/).fill('sign out everyone')
+  await expect(dialog.getByRole('button', { name: 'Sign everyone out' })).toBeEnabled()
+
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).toBeHidden()
+})
+
 // The whole point of the off-site restore panel (#114) is that it works on a host
 // with no filesystem to hand — so drive it end to end: take a real backup, and
 // check the copy that landed off-site is offered back.

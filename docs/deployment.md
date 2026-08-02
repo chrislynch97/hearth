@@ -966,6 +966,15 @@ where you'd add HTTPS with a local certificate. Optional.
   self-host). Guardrails apply — you can't change or remove yourself, an admin can
   only manage members/viewers, the last owner can't be removed, and you can't reset
   the password of someone who also belongs to another household.
+- **Sign everyone out at once** (**Settings → System → Sessions**, instance owner
+  only) when you suspect a session or a backup has been exposed and don't yet know
+  whose. It ends every session on the instance, yours included, and changes nothing
+  else — so anyone who still has their credentials signs straight back in, and you
+  follow it with password changes where they're implicated. `npm run
+  end-all-sessions` (or `docker compose exec hearth node dist/end-all-sessions.js`)
+  does the same from the box, including on the embedded database, for when the app
+  won't start. Both are recorded in the audit log; the
+  [breach runbook](legal/breach-runbook.md) has the surrounding drill.
 - **Multiple households & self-registration.** An account can belong to more than one
   household and switch between them from the account menu. The **instance owner** (the
   owner of the *first* household — whoever set the server up) can enable **open
