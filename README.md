@@ -256,6 +256,11 @@ when a request arrives are in
 being asked for, [docs/legal/breach-runbook.md](docs/legal/breach-runbook.md) is
 the procedure — what counts, where the evidence is, what to rotate, who to tell.
 
+Hosting the instance for other people puts their data on someone else's hardware.
+[docs/legal/subprocessors.md](docs/legal/subprocessors.md) is the register of who
+those third parties are, what each can see, and where — fill it in when you
+provision, not after.
+
 ## Email (optional)
 
 **Off by default, and a self-host install doesn't need it.** Invites are
