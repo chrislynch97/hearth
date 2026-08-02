@@ -202,7 +202,7 @@ that recorded who was erased would keep exactly what the erasure was for.
 
 ## References
 
-- Breach-notification runbook — [#227](https://github.com/chrislynch97/hearth/issues/227)
+- What to do when data leaks rather than when it's asked for — [breach-runbook.md](breach-runbook.md)
 - Backup configuration and retention — [docs/deployment.md](../deployment.md)
 
 Registering with the ICO, a privacy policy and terms of service were tracked in

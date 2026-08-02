@@ -1004,6 +1004,11 @@ where you'd add HTTPS with a local certificate. Optional.
   public address deliberately rather than by accident:
   [Option C](#option-c--public-vps-under-your-own-domain) is the walkthrough, and
   every bullet above is part of it.
+- **Know what you'd do if it went wrong**, before it does.
+  [legal/breach-runbook.md](legal/breach-runbook.md) is the procedure for a leak —
+  what counts, which logs to preserve first (several rotate away or die on
+  restart), every credential to rotate and where it lives, and who to tell.
+  Read it once now; it's written for someone who hasn't.
 
 ---
 
