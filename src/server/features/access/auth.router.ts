@@ -22,6 +22,7 @@ import {
   getUserByUsername,
   getValidSession,
   isInstanceLocked,
+  listMemberships,
   normalizeUsername,
   syncAuthRequired,
 } from '../../auth/session'
@@ -218,6 +219,22 @@ export const authRouter = router({
           await recordLoginFailure(ctx.db, u, acctKey, 'bad_mfa')
           throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Incorrect authentication code' })
         }
+      }
+
+      // An account with no accepted membership has nowhere to sign in to, and
+      // must not be handed a session anyway: `defaultHouseholdFor` falls back to
+      // the PRIMARY household, so it would land on a tenant it doesn't belong to
+      // with reads ungated by role (#230). Nothing can grant it a membership back
+      // either — accepting an invitation always mints a new account — so this is
+      // a dead end, not a waiting room. The paths that could produce one now
+      // delete the account instead; this is the fail-closed backstop for a row
+      // that arrives some other way (a hand-crafted import, a legacy install).
+      if ((await listMemberships(ctx.db, u.id)).length === 0) {
+        await recordLoginFailure(ctx.db, u, acctKey, 'no_household')
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'This account no longer belongs to any household. Ask whoever runs this instance to remove it.',
+        })
       }
 
       await loginLimiter.reset(ctx.db, key)

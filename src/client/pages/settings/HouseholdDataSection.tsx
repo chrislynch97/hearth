@@ -42,6 +42,12 @@ export const HouseholdDataSection = () => {
     const retention = trpc.data.backupRetention.useQuery(undefined, {
         enabled: isOwner,
     });
+    // Erasure now takes accounts that belong to nothing else with it (#230), so
+    // the dialog has to be able to say how many — and whether one is the
+    // reader's own — before they type the household's name.
+    const erasure = trpc.data.erasureImpact.useQuery(undefined, {
+        enabled: isOwner,
+    });
 
     const [confirmErase, setConfirmErase] = useState(false);
     const [typed, setTyped] = useState("");
@@ -64,6 +70,17 @@ export const HouseholdDataSection = () => {
         : keep
           ? `Backups already taken still contain a copy until they roll off: the most recent ${keep} snapshots are kept.`
           : "Backups already taken still contain a copy until they roll off.";
+
+    // An account belonging to no household can't sign in and can't be given one
+    // back, so erasure removes those too rather than leaving an email address and
+    // a password hash behind (#230).
+    const accountsDeleted = erasure.data?.accountsDeleted ?? 0;
+    const others = accountsDeleted - (erasure.data?.includesYou ? 1 : 0);
+    const accountsNote = erasure.data?.includesYou
+        ? others > 0
+            ? `your account and ${others} other ${others === 1 ? "account" : "accounts"}, because this is the only household they belong to`
+            : "your account, because this is the only household you belong to"
+        : `${accountsDeleted} ${accountsDeleted === 1 ? "account" : "accounts"}, because this is the only household they belong to`;
 
     const handleExport = async () => {
         setError("");
@@ -184,6 +201,9 @@ export const HouseholdDataSection = () => {
                             invitations
                         </List.Item>
                         <List.Item>this household&apos;s audit trail</List.Item>
+                        {accountsDeleted > 0 && (
+                            <List.Item>{accountsNote}</List.Item>
+                        )}
                     </List>
                     <Text size="sm">
                         {elsewhere.length > 0

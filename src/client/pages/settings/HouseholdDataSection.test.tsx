@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
     me: {} as Record<string, unknown>,
     ctx: {} as Record<string, unknown>,
     retention: {} as Record<string, unknown>,
+    erasure: {} as Record<string, unknown>,
 }));
 
 vi.mock("@/trpc", () => ({
@@ -26,6 +27,9 @@ vi.mock("@/trpc", () => ({
         data: {
             backupRetention: {
                 useQuery: () => ({ data: mocks.retention }),
+            },
+            erasureImpact: {
+                useQuery: () => ({ data: mocks.erasure }),
             },
             eraseHousehold: {
                 useMutation: () => ({
@@ -76,6 +80,7 @@ beforeEach(() => {
         household: { displayName: "Maple Street", backupFrequency: "daily" },
     };
     mocks.retention = { keep: 14 };
+    mocks.erasure = { accountsDeleted: 0, includesYou: false };
 });
 
 describe("HouseholdDataSection", () => {
@@ -143,6 +148,25 @@ describe("HouseholdDataSection", () => {
 
         expect(await openConfirm()).toHaveTextContent(
             /Automatic backups are off/
+        );
+    });
+
+    // Erasure now takes accounts that belong to nothing else with it (#230), and
+    // one of them may be the reader's own — that can't be a surprise afterwards.
+    it("names the accounts that go with the household", async () => {
+        mocks.erasure = { accountsDeleted: 3, includesYou: true };
+        renderSection();
+
+        expect(await openConfirm()).toHaveTextContent(
+            "your account and 2 other accounts"
+        );
+    });
+
+    it("says nothing about accounts when everyone belongs elsewhere too", async () => {
+        renderSection();
+
+        expect(await openConfirm()).not.toHaveTextContent(
+            /only household they belong to/
         );
     });
 

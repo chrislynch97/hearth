@@ -1,11 +1,17 @@
 import { z } from 'zod'
-import { and, count, eq } from 'drizzle-orm'
+import { and, count, eq, inArray } from 'drizzle-orm'
 import type { PgTable } from 'drizzle-orm/pg-core'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../../trpc/trpc'
-import { assertInstanceOwner, reconcileInstanceOwner, repointSessionsAwayFrom } from '../../auth/session'
+import {
+  assertInstanceOwner,
+  getOwnerUser,
+  reconcileInstanceOwner,
+  repointSessionsAwayFrom,
+} from '../../auth/session'
+import { accountReference, deleteUsers, orphanedUserIds } from '../../auth/accountDeletion'
 import { assertRole } from '../../trpc/tenant'
-import { household } from '../../db/schema'
+import { household, membership } from '../../db/schema'
 // From target, not client: importing client opens (or creates) the real
 // database as a module side effect — every test importing appRouter would
 // boot a file-backed PGlite on ./data/pgdata.
@@ -119,7 +125,14 @@ export const dataRouter = router({
    *  instance-wide `reset`, not tenant self-service.
    *
    *  `nextHouseholdId` is where the caller's own session was moved to, or null if
-   *  they had nowhere left to go and are now signed out (#228). */
+   *  they had nowhere left to go and are now signed out (#228).
+   *
+   *  Accounts left belonging to no household at all go with it (#230). One of
+   *  those may be the caller's own. They are dead either way — such an account
+   *  can't sign in and nothing can grant it a membership back — so leaving them
+   *  would just turn every erasure into another orphaned email address and
+   *  password hash. Each household's budgeting history is already gone with the
+   *  cascade; elsewhere, `deleteUsers` unlinks rather than deletes. */
   eraseHousehold: publicProcedure.mutation(async ({ ctx }) => {
     assertRole(ctx.role, 'owner')
     if (ctx.householdId === DEFAULT_HOUSEHOLD_ID) {
@@ -137,8 +150,47 @@ export const dataRouter = router({
       householdId: DEFAULT_HOUSEHOLD_ID,
     })
     const nextHouseholdId = ctx.userId ? await repointSessionsAwayFrom(ctx.db, ctx.userId, ctx.householdId) : null
-    await ctx.db.delete(household).where(eq(household.id, ctx.householdId))
-    return { ok: true as const, nextHouseholdId }
+    const except = (await getOwnerUser(ctx.db))?.id ?? null
+    // Whose accounts this erasure could strand — read before the cascade takes
+    // the memberships that name them.
+    const among = (await ctx.db.select().from(membership).where(eq(membership.householdId, ctx.householdId))).map(
+      (m) => m.userId,
+    )
+    const orphans = await ctx.db.transaction(async (tx) => {
+      await tx.delete(household).where(eq(household.id, ctx.householdId))
+      const ids = await orphanedUserIds(tx, { among, except })
+      await deleteUsers(tx, ids)
+      return ids
+    })
+    for (const id of orphans) {
+      recordSecurityEvent(ctx, {
+        entityType: 'user',
+        entityId: accountReference(id),
+        action: 'account_deleted',
+        details: { reference: accountReference(id), households: 0, via: 'household_erased' },
+        householdId: DEFAULT_HOUSEHOLD_ID,
+        actorUserId: null,
+      })
+    }
+    return { ok: true as const, nextHouseholdId, accountsDeleted: orphans.length }
+  }),
+
+  /** What erasing this household would take beyond its own data (#230): the
+   *  accounts that belong to nothing else and so go with it. Household-owner
+   *  readable, like `backupRetention` — the confirmation dialog has to be able to
+   *  say whose logins disappear, including the caller's own, before they type the
+   *  household's name. */
+  erasureImpact: publicProcedure.query(async ({ ctx }) => {
+    assertRole(ctx.role, 'owner')
+    const here = await ctx.db.select().from(membership).where(eq(membership.householdId, ctx.householdId))
+    const userIds = [...new Set(here.map((m) => m.userId))]
+    const all = userIds.length
+      ? await ctx.db.select().from(membership).where(inArray(membership.userId, userIds))
+      : []
+    const belongsElsewhere = new Set(all.filter((m) => m.householdId !== ctx.householdId).map((m) => m.userId))
+    const ownerUserId = (await getOwnerUser(ctx.db))?.id ?? null
+    const orphaned = userIds.filter((id) => !belongsElsewhere.has(id) && id !== ownerUserId)
+    return { accountsDeleted: orphaned.length, includesYou: ctx.userId ? orphaned.includes(ctx.userId) : false }
   }),
 
   /** How long a copy of erased data survives in backups, for the erasure warning

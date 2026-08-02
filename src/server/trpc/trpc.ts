@@ -76,6 +76,10 @@ export const WRITE_ROLE_EXEMPT = new Set([
   'auth.disableMfa',
   'users.updateProfile',
   'users.switchHousehold',
+  // Erasing your own login (#230) is self-service and carries its own password +
+  // MFA confirmation. It must stay reachable from a household where your role is
+  // viewer — or unresolvable, which is exactly the state it exists to clean up.
+  'users.deleteAccount',
   // Address verification is self-service on your own account, so a viewer may
   // confirm their address too; neither touches household data.
   'email.sendVerification',

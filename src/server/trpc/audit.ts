@@ -50,6 +50,7 @@ export type SecurityAction =
   | 'invite_revoked'
   | 'invite_accepted'
   | 'household_erased'
+  | 'account_deleted'
   | 'restored_from_offsite'
 
 type Row = Record<string, unknown>

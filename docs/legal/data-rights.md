@@ -25,8 +25,13 @@ must link here, and its retention section must match the windows stated below.
 
 A household's data is genuinely shared: one person's spending sits in the same
 records as everyone else's. That's why household-level erasure is the owner's
-call and not any member's, and why a member who wants out is handled by removing
-their access and their account rather than by deleting the household.
+call and not any member's, and why a member who wants out is handled by deleting
+their account rather than the household.
+
+An owner or admin removing someone's access (**Settings → Households & access**)
+does the same thing when that was the person's last household: the account goes
+with the membership, because an account belonging to nothing can neither sign in
+nor be given a household back.
 
 ## Doing it in the app
 
@@ -48,6 +53,13 @@ to it, any pending invitations, and that household's audit trail. If you belong
 to another household you stay signed in and land there; if it was your only one
 you are signed out.
 
+**Accounts left belonging to no household go with it** — including yours, if this
+was your only one. The confirmation dialog says how many before you commit. Such
+an account is a dead end rather than a spare login: it can't sign in, and nothing
+can give it a household back, because accepting an invitation always creates a
+new account. Leaving them behind is how an instance quietly accumulates email
+addresses and password hashes belonging to people who have gone.
+
 **The primary household can't be erased this way.** It is the instance's own
 household — deleting it would take the instance with it — so the app refuses and
 points at **Settings → System → Reset all data**, which wipes the whole instance
@@ -55,15 +67,47 @@ and returns it to the setup wizard. Self-hosters wanting to erase everything
 should use that, or simply delete the database volume.
 
 **Your own account** — **Settings → Account** to correct your name or email, and
-**Settings → Account → Sessions** to end sessions. Deleting an account outright
-is an owner/admin action under **Settings → Households & access** (remove
-access), so ask them, or use the contact route below.
+**Settings → Account → Sessions** to end sessions.
+
+**Deleting your account** — **Settings → Account → Delete your account**.
+Available to anyone signed in. It asks for your password, and for a code from
+your authenticator if you have two-factor on: the same bar as changing your
+username, because a stolen session must not be able to erase you. What goes is
+your login — name, username, email address, password hash and two-factor secret
+— and every session you have open.
+
+Two cases are refused, and the app says which:
+
+- **You're the only owner of a household other people are still in.** Somebody
+  has to be left holding it, so make someone else an owner (**Settings →
+  Households & access**) or erase the household first.
+- **You're the instance owner.** That account is what the instance
+  authenticates against; removing it means taking the instance down, not
+  pressing a button. Export the data and stand up a new instance instead.
+
+A household **nobody else belongs to** is deleted along with your account.
+Leaving it would strand a household's financial records where no one can ever
+reach — or erase — them, because there would be no one left who could sign in to
+it or invite anyone in.
+
+Your **budgeting history in households other people are still in stays put**:
+spends, payslips, pots and outgoings are the household's records, not yours
+alone, and they would take other people's data with them. The participant they
+were filed under stops being linked to any account, keeping its name.
 
 ## If you can't sign in
 
 Someone who has lost access — a former member, or anyone whose account was
 removed — can't use the in-app route, and the right doesn't disappear because
 the button is out of reach. Contact the operator of the instance directly.
+
+Usually there is nothing left to erase: losing your last household deletes the
+account with it. The exception is an instance that predates that behaviour, or
+one restored from an older snapshot. Such an account is refused at the sign-in
+screen with a message saying so, and there is no in-app route to it — nobody can
+sign in as it and it belongs to no household anyone administers. The operator
+deletes the row from the database directly (`delete from "user" where …`); it
+cannot be turned back into a working account, so deletion is the only answer.
 
 > **Operators: put your contact address here** before publishing this file with
 > your service, and use the same address in the privacy policy. For the hosted
@@ -123,6 +167,10 @@ are pruned automatically as new ones are written. Off-site copies are always
 encrypted (a passphrase is mandatory to enable them); the local copy is encrypted
 only when `HEARTH_BACKUP_PASSPHRASE` is set, so set it.
 
+This covers **accounts** as well as households: a deleted login's username, email
+address and password hash sit in every snapshot taken before the deletion, and
+age out on the same schedule. Say so when you confirm an erasure.
+
 Deleting a household does **not** reach back into snapshots already written —
 scrubbing an individual out of an encrypted backup set means restoring, editing
 and re-encrypting every snapshot, which risks the backups themselves. The
@@ -144,6 +192,12 @@ household would vanish in the same cascade. It holds the erased household's id,
 who did it and when. It does not hold any of the household's data. This is kept
 on purpose: without it there is no evidence the erasure happened, which is a
 problem for the person who asked for it as much as for the operator.
+
+A deleted **account** gets the same treatment (`account_deleted`, also on the
+primary household) with one difference: it names nobody. No actor, no username,
+no address — only a one-way reference derived from the account id, enough to tie
+the entries about one deletion together and useless for anything else. An entry
+that recorded who was erased would keep exactly what the erasure was for.
 
 ## References
 
