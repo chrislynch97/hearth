@@ -170,9 +170,10 @@ Do the smallest thing that stops the bleeding, in this order:
      ```
 
      On the embedded PGlite database there is no SQL prompt to do this from, so
-     the only route is the per-account ones above, one person at a time. If
-     you're hosting other households, that gap is worth knowing about before an
-     incident rather than during one.
+     the only route is the per-account ones above, one person at a time
+     ([#248](https://github.com/chrislynch97/hearth/issues/248), and
+     [#249](https://github.com/chrislynch97/hearth/issues/249) for the missing
+     admin lever). Know that before an incident rather than during one.
 
 3. **Revoke every pending invite** (**Settings → Households & access**). An
    unexpired link is a live credential.
