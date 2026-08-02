@@ -229,7 +229,9 @@ delete it outright, from **Settings → Household → Your data**. That's the in
 route for an access, portability or erasure request; what erasure does and
 doesn't reach (backups keep a copy until they roll off) and what an operator does
 when a request arrives are in
-[docs/legal/data-rights.md](docs/legal/data-rights.md).
+[docs/legal/data-rights.md](docs/legal/data-rights.md). If data leaks rather than
+being asked for, [docs/legal/breach-runbook.md](docs/legal/breach-runbook.md) is
+the procedure — what counts, where the evidence is, what to rotate, who to tell.
 
 ## Email (optional)
 
