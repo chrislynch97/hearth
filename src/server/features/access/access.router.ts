@@ -169,6 +169,47 @@ export const accessRouter = router({
    *  It's opt-in rather than implied by every reset — silently stripping a member's
    *  second factor is a security downgrade they never agreed to, and one they'd
    *  only discover the next time they signed in without being asked for a code. */
+  /** End every session a member has, without touching their credentials (#249).
+   *
+   *  The proportionate lever for "a session of theirs looks wrong": a password
+   *  reset would work, but it hands the resetter a credential they then have to
+   *  pass back, and revoking access is a bigger hammer still. This changes
+   *  nothing they hold — they sign back in with the password they already have.
+   *
+   *  Same guardrails as the rest of member management: admin+, owner-only for an
+   *  owner/admin target, and not yourself (that's `sessions.revokeOthers`).
+   *
+   *  Unlike `resetPassword` this does NOT refuse a multi-household member, and
+   *  the difference is deliberate: a reset lets the resetter *learn* a password
+   *  and so reach the person's other households, whereas revocation transfers
+   *  nothing and heals with one sign-in. It does reach across the boundary — the
+   *  person is signed out of their other households too, which is why the UI
+   *  says so and why the actor is named in the trail. */
+  revokeSessions: publicProcedure
+    .input(z.object({ userId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      assertRole(ctx.role, 'admin')
+      if (input.userId === ctx.userId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'End your own sessions from account settings.',
+        })
+      }
+      const target = await grantFor(ctx.db, ctx.householdId, input.userId)
+      if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'No such member.' })
+      assertCanManage(ctx.role, target.role)
+
+      const count = await deleteUserSessions(ctx.db, input.userId)
+      const member = await memberLabel(ctx.db, input.userId)
+      recordSecurityEvent(ctx, {
+        entityType: 'user',
+        entityId: input.userId,
+        action: 'sessions_revoked',
+        details: { member, count, scope: 'user' },
+      })
+      return { ok: true as const, count }
+    }),
+
   resetPassword: publicProcedure
     .input(z.object({ userId: z.string(), newPassword: z.string(), clearMfa: z.boolean().optional() }))
     .mutation(async ({ ctx, input }) => {

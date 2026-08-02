@@ -13,6 +13,7 @@ import { MantineProvider } from "@mantine/core";
 
 const mocks = vi.hoisted(() => ({
     resetMutate: vi.fn().mockResolvedValue({ ok: true }),
+    revokeMutate: vi.fn().mockResolvedValue({ ok: true, count: 2 }),
     invalidate: vi.fn().mockResolvedValue(undefined),
     rows: [] as unknown[],
 }));
@@ -31,6 +32,7 @@ vi.mock("@/trpc", () => {
                 setRole: mutation(vi.fn()),
                 remove: mutation(vi.fn()),
                 resetPassword: mutation(mocks.resetMutate),
+                revokeSessions: mutation(mocks.revokeMutate),
             },
         },
     };
@@ -136,5 +138,63 @@ describe("AccessList reset-password modal", () => {
             /password must be at least 10 characters/i
         );
         expect(mocks.resetMutate).not.toHaveBeenCalled();
+    });
+});
+
+// Ending a member's sessions (#249) — the lever that changes nothing they hold.
+// It's confirmed, and what the admin is told afterwards matters: an admin who
+// thinks this locked someone out has the wrong idea of what they just did.
+describe("AccessList sign-out modal", () => {
+    const openSignOutModal = async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+        await screen.findByRole("dialog");
+        return within(screen.getByRole("dialog"));
+    };
+
+    it("confirms before ending anything", async () => {
+        renderList();
+        await openSignOutModal();
+        expect(mocks.revokeMutate).not.toHaveBeenCalled();
+
+        fireEvent.click(
+            within(screen.getByRole("dialog")).getByRole("button", {
+                name: "Sign them out",
+            })
+        );
+        await waitFor(() => expect(mocks.revokeMutate).toHaveBeenCalled());
+        expect(mocks.revokeMutate).toHaveBeenCalledWith({ userId: "u-ben" });
+    });
+
+    it("says their credentials are untouched, and that it reaches other households", async () => {
+        renderList();
+        const modal = await openSignOutModal();
+        expect(
+            modal.getByText(/password, two-factor and access are untouched/)
+        ).toBeInTheDocument();
+        expect(
+            modal.getByText(/signs them out of those too/)
+        ).toBeInTheDocument();
+    });
+
+    it("reports the count, and that they can sign back in", async () => {
+        renderList();
+        const modal = await openSignOutModal();
+        fireEvent.click(modal.getByRole("button", { name: "Sign them out" }));
+
+        expect(
+            await screen.findByText(/out of 2 sessions/)
+        ).toBeInTheDocument();
+        expect(screen.getByText(/can sign back in/)).toBeInTheDocument();
+    });
+
+    it("doesn’t claim to have done something when there was nothing to end", async () => {
+        mocks.revokeMutate.mockResolvedValueOnce({ ok: true, count: 0 });
+        renderList();
+        const modal = await openSignOutModal();
+        fireEvent.click(modal.getByRole("button", { name: "Sign them out" }));
+
+        expect(
+            await screen.findByText(/had no active sessions/)
+        ).toBeInTheDocument();
     });
 });

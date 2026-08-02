@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { makeTestDb } from '../../db/testdb'
 import { ensureSeed } from '../../db/seed'
 import { appRouter } from '../../trpc/router'
-import { getOwnerUser, getUser } from '../../auth/session'
+import { createSession, getOwnerUser, getUser, getValidSession } from '../../auth/session'
 import { auditLog, household, member, membership, session, user } from '../../db/schema'
 import { hashPassword } from '../../auth/password'
 import { newId } from '../../../shared/ids'
@@ -183,6 +183,118 @@ describe('access.remove', () => {
     await expect(
       caller(db, { role: 'owner', userId: owner!.id }).c.access.remove({ userId: owner!.id }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+})
+
+describe('access.revokeSessions', () => {
+  it('ends every session the member has, and leaves their credentials alone', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const ben = await addMember(db, 'ben', 'member')
+    const [before] = await db.select().from(user).where(eq(user.id, ben))
+    await createSession(db, ben, 'household')
+    await createSession(db, ben, 'household')
+
+    expect(await caller(db, { role: 'admin' }).c.access.revokeSessions({ userId: ben })).toEqual({ ok: true, count: 2 })
+    expect(await db.select().from(session).where(eq(session.userId, ben))).toHaveLength(0)
+
+    // The whole point of this lever over a reset: nothing they hold changes, so
+    // they sign back in with the password they already have.
+    const [after] = await db.select().from(user).where(eq(user.id, ben))
+    expect(after!.passwordHash).toBe(before!.passwordHash)
+    expect(await caller(db).c.auth.login({ username: 'ben', password: 'their-strong-pw' })).toEqual({ ok: true })
+  })
+
+  it('leaves everyone else signed in', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const ben = await addMember(db, 'ben', 'member')
+    const cara = await addMember(db, 'cara', 'member')
+    await createSession(db, ben, 'household')
+    const hers = await createSession(db, cara, 'household')
+
+    await caller(db, { role: 'admin' }).c.access.revokeSessions({ userId: ben })
+    expect(await getValidSession(db, hers)).not.toBeNull()
+  })
+
+  it('obeys the same authority checks as the rest of member management', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = await getOwnerUser(db)
+    const ada = await addMember(db, 'ada', 'admin')
+    const ben = await addMember(db, 'ben', 'member')
+
+    // An admin can't reach a peer admin, or an owner.
+    await expect(
+      caller(db, { role: 'admin', userId: ben }).c.access.revokeSessions({ userId: ada }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    await expect(
+      caller(db, { role: 'admin', userId: ben }).c.access.revokeSessions({ userId: owner!.id }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    // …but an owner can reach an admin.
+    await expect(
+      caller(db, { role: 'owner', userId: owner!.id }).c.access.revokeSessions({ userId: ada }),
+    ).resolves.toMatchObject({ ok: true })
+
+    // A member has no business here at all.
+    await expect(caller(db, { role: 'member', userId: ben }).c.access.revokeSessions({ userId: ada })).rejects.toMatchObject(
+      { code: 'FORBIDDEN' },
+    )
+  })
+
+  it('refuses your own account and anyone outside the household', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const ada = await addMember(db, 'ada', 'admin')
+
+    await expect(caller(db, { role: 'admin', userId: ada }).c.access.revokeSessions({ userId: ada })).rejects.toMatchObject(
+      { code: 'BAD_REQUEST' },
+    )
+    await expect(
+      caller(db, { role: 'admin', userId: ada }).c.access.revokeSessions({ userId: 'nobody' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  // Deliberately unlike resetPassword, which refuses here: a reset hands over a
+  // credential, revocation hands over nothing and heals with one sign-in.
+  it('does not refuse a member who belongs to other households', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const ben = await addMember(db, 'ben', 'member')
+    await db.insert(household).values({ id: 'other', displayName: 'Other', createdAt: new Date(), updatedAt: new Date() })
+    await db.insert(membership).values({
+      id: newId(),
+      userId: ben,
+      householdId: 'other',
+      role: 'owner',
+      acceptedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    const theirs = await createSession(db, ben, 'other')
+
+    expect(await caller(db, { role: 'admin' }).c.access.revokeSessions({ userId: ben })).toEqual({ ok: true, count: 1 })
+    // It reaches across the boundary, which is the trade the UI states.
+    expect(await getValidSession(db, theirs)).toBeNull()
+  })
+
+  it('records who ended whose sessions', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const ada = await addMember(db, 'ada', 'admin')
+    const ben = await addMember(db, 'ben', 'member')
+    await createSession(db, ben, 'household')
+
+    await caller(db, { role: 'admin', userId: ada }).c.access.revokeSessions({ userId: ben })
+
+    const rows = await db.select().from(auditLog).where(eq(auditLog.action, 'sessions_revoked'))
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.actorUserId).toBe(ada)
+    expect(rows[0]!.entityId).toBe(ben)
+    expect(JSON.parse(rows[0]!.changes ?? '{}')).toEqual({
+      kind: 'event',
+      details: { member: 'ben', count: 1, scope: 'user' },
+    })
   })
 })
 
