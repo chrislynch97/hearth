@@ -16,3 +16,7 @@ data
 # Playwright E2E output
 playwright-report/
 test-results/
+
+# Private learning progress (curriculum + skills are tracked; the scorecard is not)
+.claude/learning/scorecard.md
+.claude/learning/bug-hunt-active.md
