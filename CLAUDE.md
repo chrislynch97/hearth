@@ -1,5 +1,15 @@
 # Hearth — notes for Claude
 
+## Where issues live
+
+Two trackers, deliberately:
+
+- **`chrislynch97/hearth`** (public) — issues raised by other people. Keep it
+  clean; don't file my own planning or operator tasks here.
+- **`chrislynch97/hearth-planning`** (private) — my backlog: feature work, the
+  go-live runbook, anything that's a task for me rather than a report from
+  someone else. File new work here by default.
+
 ## Working from a GitHub issue link
 
 When I send a GitHub issue link, follow this workflow:
@@ -8,8 +18,26 @@ When I send a GitHub issue link, follow this workflow:
    number followed by a short kebab-case slug of the title (e.g. issue #65
    "keep the selected date…" ⇒ `65-keep-spend-date`).
 2. Do the work on that branch.
-3. Open a PR into `main` for me to review — reference the issue in the PR body
-   (e.g. `Closes #65`).
+3. Open a PR into `main` for me to review — reference the issue in the PR body.
+   For a `hearth` issue that's `Closes #65`. For a planning issue use the full
+   `Closes chrislynch97/hearth-planning#13` — **GitHub won't auto-close across
+   repos**, so say in the PR that the issue needs closing by hand, and close it
+   once the PR merges.
+
+## Learning programme
+
+Most of this repo was written by Claude and I'm working through owning it. See
+[`.claude/learning/curriculum.md`](.claude/learning/curriculum.md) — the file
+map, the invariants that matter, and the feature ladder.
+
+Two standing rules:
+
+- **Nothing merges that I can't explain.** Run `/quiz-diff` on a change before
+  its PR merges, mine as much as yours.
+- **On home-portal features I write the implementation.** Offer `/pair` rather
+  than defaulting to building it for me.
+
+Also available: `/quiz <area>` and `/bug-hunt <area>`.
 
 ## Running / testing the app: use DEMO MODE, never real data
 
