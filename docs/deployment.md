@@ -961,6 +961,13 @@ where you'd add HTTPS with a local certificate. Optional.
   reverse proxy's access log alike. If you shared a link in the older
   `/invite/<token>` form, your proxy's access log may still hold it: revoke that
   invite from the same screen and issue a fresh one.
+- **Tell invitees what they're joining.** The invite screen and the invite email
+  both carry a paragraph saying where their finances will live and that you can
+  read, export or delete any of it — the full version is
+  [legal/household-notice.md](legal/household-notice.md). It has three blanks
+  (hosting provider and region, backup target and region, your contact address);
+  fill them in before you send anyone a link. No law requires it for a household
+  instance; the people on it are still owed the answer up front.
 - **Manage who has access** from the same screen: change a member's role, revoke
   access, end their sessions, or reset a locked-out member's password (there's no
   email-based reset on a self-host). Guardrails apply — you can't change or remove

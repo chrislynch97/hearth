@@ -259,7 +259,12 @@ the procedure — what counts, where the evidence is, what to rotate, who to tel
 Hosting the instance for other people puts their data on someone else's hardware.
 [docs/legal/subprocessors.md](docs/legal/subprocessors.md) is the register of who
 those third parties are, what each can see, and where — fill it in when you
-provision, not after.
+provision, not after. The people you invite get the plain-words version:
+[docs/legal/household-notice.md](docs/legal/household-notice.md) says what's
+stored, who can see it (you, all of it), how long backups keep it and what they
+can ask for. The invite screen and the invite email carry a summary of it, so
+nobody joins without being told; fill in its three blanks before you send anyone
+a link.
 
 ## Email (optional)
 
