@@ -7,6 +7,10 @@ answer this without looking" test at the end.
 Progress lives in `scorecard.md` (gitignored). Quiz with `/quiz <area>`, hunt
 with `/bug-hunt <area>`, build with `/pair`, gate merges with `/quiz-diff`.
 
+**This file is the map, not the plan.** For what to actually do in a given
+session — the session types, the order, and the one line to open a fresh session
+with — see [`workflow.md`](workflow.md).
+
 ---
 
 ## Tier 0 — The spine
