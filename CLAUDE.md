@@ -39,36 +39,39 @@ Two standing rules:
 
 Also available: `/quiz <area>` and `/bug-hunt <area>`.
 
-## Running / testing the app: use DEMO MODE, never real data
+## Running / testing the app: fake data only, never the real database
 
 This is a real household's live budgeting app. The database is **Postgres**
 (see [issue #25](https://github.com/chrislynch97/hearth/issues/25)). `DATABASE_URL`
 selects the engine: unset ⇒ embedded PGlite (Postgres-in-WASM) at `./data/pgdata`
-(the self-host default); `postgres://…` ⇒ a real Postgres server. That real
-database holds the owner's live financial data — **never run, seed, wipe, or
-point verification at it.**
+(the self-host default); `postgres://…` ⇒ a real Postgres server. The owner's
+live data is the **production** instance (Docker + Postgres, off this checkout) —
+**never run, seed, wipe, or point verification at it.**
 
-When you need to start the app to test a change, verify a fix, or take a
-screenshot, use **demo mode** — it runs against a separate, disposable PGlite
-database (`./data/demo`) full of deterministic fake data, so the real database is
-never touched:
+Nothing in this repo opens it. Both run modes pin `DATABASE_URL` to a disposable
+PGlite folder of their own and refuse anything that looks like the real database:
 
 ```bash
-npm run demo         # seeds ./data/demo on first run, then serves on :8787
+npm run dev:server   # ./data/dev — three fake households, logins. Everyday work.
+npm run demo         # ./data/demo — one open household, no login. Demos + e2e.
 npm run dev:client   # UI on :5173 (proxies /trpc to :8787), in another terminal
 ```
 
-- `npm run demo -- --seed` — force a fresh re-seed before serving.
-- `npm run demo:seed` — regenerate the demo data without starting the server.
+Dev mode is **locked**: log in as `ava` / `hearth-dev` (every seeded account
+shares that password). Demo mode needs no login, so prefer it for a screenshot
+and dev mode for anything touching households, roles, invites or auth.
 
-The demo dataset generator is [`src/server/db/demo.ts`](src/server/db/demo.ts)
-(edit it to change what the demo shows). The seed script refuses to write to a
-database that looks like the real one — the `pgdata` dir, a legacy `app.db`, or
-any `postgres://` URL (override only with `--force`, and don't). See the "Demo
-mode" section of the [README](README.md) for details.
+- `npm run dev:server -- --seed` / `npm run demo -- --seed` — fresh re-seed first.
+- `npm run dev:seed` / `npm run demo:seed` — re-seed without starting the server.
 
-Only use `npm run dev:server` (which serves the real database) if the task is
-explicitly about the owner's real data and they've asked for it.
+The generator is [`src/server/db/demo.ts`](src/server/db/demo.ts); the dev
+households it builds are defined in [`src/server/db/dev.ts`](src/server/db/dev.ts).
+Both seed scripts refuse to write to a database that looks like the real one — the
+`pgdata` dir, a legacy `app.db`, or any `postgres://` URL (override only with
+`--force`, and don't). See the README for details.
+
+`npm start` is the only command that serves whatever `DATABASE_URL` points at.
+Don't run it here.
 
 Tests run against ephemeral in-memory PGlite (`src/server/db/testdb.ts`), so
 `npm test` exercises the real engine and needs no running Postgres. A legacy

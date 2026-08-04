@@ -76,7 +76,8 @@ After 10, re-plan from `curriculum.md`. The savings planner (#15) is gated on
 - **Nothing merges that Chris can't explain.** `/quiz-diff` before every merge,
   including on code he wrote.
 - **On home-portal features Chris writes the implementation.** Claude navigates.
-- **Demo mode only** — `npm run demo`, never `./data/pgdata`.
+- **Fake data only** — `npm run dev:server` (./data/dev) or `npm run demo`
+  (./data/demo), never `./data/pgdata` or a `postgres://` URL.
 - **Worktree first.** Branch named `<issue-number>-<slug>`; planning issues need
   closing by hand since cross-repo `Closes` doesn't fire.
 - If Chris can't explain part of a diff, that's a signal the **code** is

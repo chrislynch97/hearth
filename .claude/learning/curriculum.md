@@ -110,8 +110,9 @@ bug rather than a style problem. If you learn nothing else, learn these.
 6. **Import `db/target`, not `db/client`, for values** — value-importing
    `db/client` opens the real database at module load.
 7. **Money is minor units.** Convert at the edges, never in the middle.
-8. **Demo mode only.** `npm run demo` against `./data/demo`. Never `./data/pgdata`,
-   never a `postgres://` URL — that's the household's live financial data.
+8. **Fake data only.** `npm run dev:server` (`./data/dev`) or `npm run demo`
+   (`./data/demo`). Never `./data/pgdata`, never a `postgres://` URL — that's the
+   household's live financial data.
 9. **One process per PGlite directory.** Two writers on `./data/demo` corrupts it.
 
 ---

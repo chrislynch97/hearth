@@ -9,6 +9,7 @@
   "scripts": {
     "dev:client": "vite --host",
     "dev:server": "tsx watch scripts/dev-server.ts",
+    "dev:seed": "tsx scripts/seed-dev.ts",
     "build": "npm run build:client && npm run build:server && npm run build:demo && npm run build:reset-password && npm run build:end-all-sessions && node scripts/gen-version.mjs",
     "build:client": "vite build",
     "build:server": "esbuild src/server/index.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=dist/server/index.js",

@@ -1,6 +1,6 @@
-// Shared guard for the demo scripts: decide whether a DATABASE_URL target looks
-// like the real production database, so demo mode never migrates/seeds/serves
-// real data. It refuses:
+// Shared guard for the fake-data scripts (demo mode and dev mode): decide
+// whether a DATABASE_URL target looks like the real production database, so
+// neither ever migrates/seeds/serves real data. It refuses:
 //   * the legacy SQLite file `app.db` (pre-Postgres installs / stale env vars), and
 //   * the embedded Postgres (PGlite) data dir `pgdata` — the current default, and
 //   * any real Postgres server URL (`postgres://` / `postgresql://`) — a demo
