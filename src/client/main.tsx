@@ -22,7 +22,6 @@ import '@mantine/notifications/styles.css'
 // them per chart, and `styles.css` would pull in all 106 (#184).
 import '@microcharts/react/styles/core.css'
 import '@microcharts/react/styles/sparkline.css'
-import '@microcharts/react/styles/progress.css'
 // Imported after Mantine's styles so our overrides win the cascade (#83).
 import './mobile.css'
 import './microcharts.css'
