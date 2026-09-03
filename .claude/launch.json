@@ -16,7 +16,7 @@
     {
       "name": "wizard-server",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:server"],
+      "runtimeArgs": ["run", "dev:server", "--", "--force"],
       "env": { "DATABASE_URL": "pglite:./data/wizard-check" },
       "port": 8787
     },

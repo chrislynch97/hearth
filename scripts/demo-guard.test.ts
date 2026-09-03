@@ -13,9 +13,11 @@ describe('looksLikeRealDb', () => {
     expect(looksLikeRealDb('file:.\\data\\App.DB')).toBe(true)
   })
 
-  it('allows the demo/test databases', () => {
+  it('allows the demo/dev/test databases', () => {
     expect(looksLikeRealDb('file:./data/demo.db')).toBe(false)
     expect(looksLikeRealDb('file:./data/test.db')).toBe(false)
+    expect(looksLikeRealDb('pglite:./data/demo')).toBe(false)
+    expect(looksLikeRealDb('pglite:./data/dev')).toBe(false)
     expect(looksLikeRealDb(':memory:')).toBe(false)
   })
 })

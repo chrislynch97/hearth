@@ -35,11 +35,31 @@ npm run dev:client   # UI on :5173 (proxies /trpc to the API)
 - `npm run test:e2e` — run the browser smoke suite (see below)
 - `npm run typecheck` — type-check the whole project
 
+`npm run dev:server` runs against its own database (`./data/dev`), seeded on first
+run with generated fake households — it never opens a real one. Log in as **`ava`**
+with the password **`hearth-dev`**.
+
+The fixture is three households of deliberately different shapes, so day-to-day
+development covers more than one happy path: a two-person GBP household on calendar
+months (the primary one), a one-person household on a four-weekly budget period, and
+a two-person euro household with pooled joint funding. The `ava` account belongs to
+all three with a different role in each, so the household switcher and role gating
+are both live. Four other accounts share that password (`ben`, `nan`, `priya`,
+`mikko`), and there's a pending invite to accept at
+`http://localhost:5173/invite#dev-invite-token`.
+
+- `npm run dev:server -- --seed` — force a fresh re-seed before serving.
+- `npm run dev:seed` — just (re)generate the dev data, without starting the server.
+
+Unlike demo mode, the dev instance is **locked**: everything you'd want more than
+one household for — switching, roles, invites — needs a real session, so it asks
+you to log in.
+
 ## Demo mode
 
-For development against fake data (so you never work over your real household) and
-for showing the app to other people, seed a **separate** demo database. It lives in
-its own PGlite folder (`./data/demo`) — your real database is never touched.
+For showing the app to other people, seed a **separate** demo database — one
+household, no password, straight into the app. It lives in its own PGlite folder
+(`./data/demo`); neither your real database nor the dev one is touched.
 
 ```bash
 npm run demo         # seed ./data/demo (first run) + serve it on :8787
@@ -71,9 +91,10 @@ of payslips with a raise and a bonus month; and asset/liability balances trendin
 toward a rising net worth. It's **deterministic** (a fixed seed) and **anchored to the
 current month**, so re-runs are identical and the trend charts always look current.
 The generator lives in [`src/server/db/demo.ts`](src/server/db/demo.ts); tweak it to
-change what the demo shows. The seed script refuses to write to a database that looks
-like your real one — the `pgdata` folder, a legacy `app.db`, or any `postgres://` URL
-(pass `--force` to override).
+change what the demo shows. It builds the dev households too — who lives in those is
+[`src/server/db/dev.ts`](src/server/db/dev.ts). Both seed scripts refuse to write to a
+database that looks like your real one — the `pgdata` folder, a legacy `app.db`, or
+any `postgres://` URL (pass `--force` to override).
 
 ### Browser smoke tests
 
@@ -168,7 +189,8 @@ hand anonymous callers full owner access. Two ways forward:
 - **Run password-less on a trusted home LAN** by opting in with
   `HEARTH_ALLOW_OPEN=1`. This is safe on a home network behind a router, not on a
   public host. It's wired up for you in the two common local setups:
-  - **Local development** — `npm run dev:server` sets it automatically.
+  - **Local demo/dev** — `npm run demo` sets it automatically (the dev server
+    sets it too, though its seeded database is locked, so it never applies).
   - **Local Docker** — launch with `HEARTH_ALLOW_OPEN=1 docker compose up -d`
     (see [Deploy](#deploy)); no file edits needed.
 
