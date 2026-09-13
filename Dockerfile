@@ -4,7 +4,7 @@
 # Base image pinned by digest for reproducible builds; Dependabot bumps the
 # digest (and node:24-slim tag) when a patched image is published. Keep both
 # stages on the same digest.
-FROM node:24-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS build
+FROM node:24-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553 AS build
 WORKDIR /app
 
 # Reproducible install from the committed lockfile. `npm ci` is strict, so keep
@@ -33,7 +33,7 @@ ENV HEARTH_VERSION=$HEARTH_VERSION
 RUN npm run build
 
 # ---- Runtime stage: prod deps only, compiled JS, non-root ----
-FROM node:24-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS runtime
+FROM node:24-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553 AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
