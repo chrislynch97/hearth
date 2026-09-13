@@ -152,11 +152,12 @@ describe('the /trpc gate is bound to the route, not to a req.url prefix', () => 
   })
 
   it('leaves a duplicate-slash prefix on the static side, never the router', async () => {
-    // `//trpc/...` is not normalised into a router match, so it falls through to
-    // the SPA fallback. What matters is that no procedure runs.
+    // `//trpc/...` is not normalised into a router match. @fastify/static refuses
+    // the duplicate slash itself (403, since 10.1.3) rather than handing it to the
+    // SPA fallback as it used to. What matters is unchanged: no procedure runs.
     const app = await buildApp({ locked: true })
     const res = await app.inject({ method: 'GET', url: '//trpc/pots.list' })
-    expect(res.body).toContain('SPA')
+    expect(res.statusCode).toBe(403)
     await app.close()
   })
 })
