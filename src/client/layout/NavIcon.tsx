@@ -47,6 +47,9 @@ const NAV_ICONS: Record<IconName, ReactElement> = {
     maintenance: (
         <path d="M14.5 3.5a4.5 4.5 0 0 0-5.9 5.9L3 15v5h5l5.6-5.6a4.5 4.5 0 0 0 5.9-5.9L17 11l-3-1-1-3z" />
     ),
+    quotes: (
+        <path d="M7 3h10a2 2 0 0 1 2 2v16l-3.5-2-3.5 2-3.5-2L5 21V5a2 2 0 0 1 2-2zM9 8h6M9 12h6M9 16h3" />
+    ),
     diy: <path d="M3 20h18M6 20V9l6-5 6 5v11M9.5 20v-5h5v5M12 4V2" />,
     trades: (
         <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0M17 3l3 2-3 2" />

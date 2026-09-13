@@ -25,6 +25,7 @@ import { Route as OutgoingsRouteImport } from "./routes/outgoings";
 import { Route as PayslipsRouteImport } from "./routes/payslips";
 import { Route as PlannersRouteImport } from "./routes/planners";
 import { Route as PotsRouteImport } from "./routes/pots";
+import { Route as QuotesRouteImport } from "./routes/quotes";
 import { Route as RaisesRouteImport } from "./routes/raises";
 import { Route as RenewalsRouteImport } from "./routes/renewals";
 import { Route as ReportsRouteImport } from "./routes/reports";
@@ -121,6 +122,11 @@ const PlannersRoute = PlannersRouteImport.update({
 const PotsRoute = PotsRouteImport.update({
   id: "/pots",
   path: "/pots",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const QuotesRoute = QuotesRouteImport.update({
+  id: "/quotes",
+  path: "/quotes",
   getParentRoute: () => rootRouteImport,
 } as any);
 const RaisesRoute = RaisesRouteImport.update({
@@ -226,6 +232,7 @@ export interface FileRoutesByFullPath {
   "/payslips": typeof PayslipsRoute;
   "/planners": typeof PlannersRoute;
   "/pots": typeof PotsRoute;
+  "/quotes": typeof QuotesRoute;
   "/raises": typeof RaisesRoute;
   "/renewals": typeof RenewalsRoute;
   "/reports": typeof ReportsRoute;
@@ -261,6 +268,7 @@ export interface FileRoutesByTo {
   "/payslips": typeof PayslipsRoute;
   "/planners": typeof PlannersRoute;
   "/pots": typeof PotsRoute;
+  "/quotes": typeof QuotesRoute;
   "/raises": typeof RaisesRoute;
   "/renewals": typeof RenewalsRoute;
   "/reports": typeof ReportsRoute;
@@ -296,6 +304,7 @@ export interface FileRoutesById {
   "/payslips": typeof PayslipsRoute;
   "/planners": typeof PlannersRoute;
   "/pots": typeof PotsRoute;
+  "/quotes": typeof QuotesRoute;
   "/raises": typeof RaisesRoute;
   "/renewals": typeof RenewalsRoute;
   "/reports": typeof ReportsRoute;
@@ -333,6 +342,7 @@ export interface FileRouteTypes {
     | "/payslips"
     | "/planners"
     | "/pots"
+    | "/quotes"
     | "/raises"
     | "/renewals"
     | "/reports"
@@ -368,6 +378,7 @@ export interface FileRouteTypes {
     | "/payslips"
     | "/planners"
     | "/pots"
+    | "/quotes"
     | "/raises"
     | "/renewals"
     | "/reports"
@@ -402,6 +413,7 @@ export interface FileRouteTypes {
     | "/payslips"
     | "/planners"
     | "/pots"
+    | "/quotes"
     | "/raises"
     | "/renewals"
     | "/reports"
@@ -438,6 +450,7 @@ export interface RootRouteChildren {
   PayslipsRoute: typeof PayslipsRoute;
   PlannersRoute: typeof PlannersRoute;
   PotsRoute: typeof PotsRoute;
+  QuotesRoute: typeof QuotesRoute;
   RaisesRoute: typeof RaisesRoute;
   RenewalsRoute: typeof RenewalsRoute;
   ReportsRoute: typeof ReportsRoute;
@@ -565,6 +578,13 @@ declare module "@tanstack/react-router" {
       path: "/pots";
       fullPath: "/pots";
       preLoaderRoute: typeof PotsRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/quotes": {
+      id: "/quotes";
+      path: "/quotes";
+      fullPath: "/quotes";
+      preLoaderRoute: typeof QuotesRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/raises": {
@@ -724,6 +744,7 @@ const rootRouteChildren: RootRouteChildren = {
   PayslipsRoute: PayslipsRoute,
   PlannersRoute: PlannersRoute,
   PotsRoute: PotsRoute,
+  QuotesRoute: QuotesRoute,
   RaisesRoute: RaisesRoute,
   RenewalsRoute: RenewalsRoute,
   ReportsRoute: ReportsRoute,

@@ -19,6 +19,7 @@ export type IconName =
     | "rooms"
     | "inventory"
     | "maintenance"
+    | "quotes"
     | "diy"
     | "trades"
     | "warranties"
@@ -53,6 +54,7 @@ export type AppRoutePath =
     | "/rooms"
     | "/inventory"
     | "/maintenance"
+    | "/quotes"
     | "/diy"
     | "/trades"
     | "/warranties"
@@ -190,6 +192,13 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
                         icon: "maintenance",
                         planned:
                             "Boiler services, gutters, smoke alarms and filters on a recurring schedule, so the jobs that only come round once a year still happen.",
+                    },
+                    {
+                        to: "/quotes",
+                        label: "Quotes",
+                        icon: "quotes",
+                        planned:
+                            "Three prices for the same job, side by side — who quoted, how much, when, and which one we went with.",
                     },
                     {
                         to: "/diy",
