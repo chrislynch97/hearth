@@ -34,23 +34,63 @@ const NAV_ICONS: Record<IconName, ReactElement> = {
         <path d="M3 9.5 12 4l9 5.5M3 21h18M5 10v8M10 10v8M14 10v8M19 10v8" />
     ),
     reports: <path d="M3 21h18M6.5 18v-6M12 18V7M17.5 18v-9" />,
+    renewals: (
+        <path d="M4 12a8 8 0 0 1 13.7-5.6L20 8M20 4v4h-4M20 12a8 8 0 0 1-13.7 5.6L4 16M4 20v-4h4" />
+    ),
+    planners: <path d="M12 21a9 9 0 1 1 9-9M12 7v5l3 2M15.5 18.5l2 2 4-4" />,
+    rooms: (
+        <path d="M3 21V7l9-4 9 4v14M3 21h18M10 21v-6h4v6M7 11h.01M17 11h.01" />
+    ),
+    inventory: (
+        <path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5 12 12m0 0 9-4.5M12 12v9" />
+    ),
+    maintenance: (
+        <path d="M14.5 3.5a4.5 4.5 0 0 0-5.9 5.9L3 15v5h5l5.6-5.6a4.5 4.5 0 0 0 5.9-5.9L17 11l-3-1-1-3z" />
+    ),
+    quotes: (
+        <path d="M7 3h10a2 2 0 0 1 2 2v16l-3.5-2-3.5 2-3.5-2L5 21V5a2 2 0 0 1 2-2zM9 8h6M9 12h6M9 16h3" />
+    ),
+    diy: <path d="M3 20h18M6 20V9l6-5 6 5v11M9.5 20v-5h5v5M12 4V2" />,
+    trades: (
+        <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0M17 3l3 2-3 2" />
+    ),
+    warranties: (
+        <path d="M12 3l7 3v5.5c0 4.3-2.9 8.2-7 9.5-4.1-1.3-7-5.2-7-9.5V6zM9 12l2 2 4-4" />
+    ),
+    vehicles: <path d="M3 13.5 5 8h14l2 5.5V18h-3v-2H6v2H3zM6.5 13.5h11" />,
+    todos: <path d="M4 6.5 6 8.5 9.5 5M4 17.5l2 2 3.5-3.5M13 7h7M13 17h7" />,
+    chores: <path d="M12 21a9 9 0 1 1 6.4-2.6M21 13v5h-5M9 12l2 2 4-4" />,
+    wishlists: (
+        <path d="M12 20.5 4.5 13a4.5 4.5 0 0 1 7.5-4.8A4.5 4.5 0 0 1 19.5 13z" />
+    ),
+    meals: (
+        <path d="M6 3v8a2 2 0 0 0 4 0V3M8 11v10M17 3c-1.5 2-2 4-2 6h4c0-2-.5-4-2-6zM17 9v12" />
+    ),
 };
 
 export interface NavIconProps {
     name: IconName;
+    /** Defaults to the sidebar's linen, which is invisible on a page body —
+     *  pass `currentColor` when rendering one outside the navbar. */
+    color?: string;
+    size?: number;
 }
 
-export const NavIcon = ({ name }: { name: IconName }) => (
+export const NavIcon = ({
+    name,
+    color = hearthTokens.brand.linen,
+    size = 18,
+}: NavIconProps) => (
     <svg
-        width={18}
-        height={18}
+        width={size}
+        height={size}
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.8}
         strokeLinecap="round"
         strokeLinejoin="round"
-        style={{ color: hearthTokens.brand.linen, flexShrink: 0 }}
+        style={{ color, flexShrink: 0 }}
     >
         {NAV_ICONS[name]}
     </svg>

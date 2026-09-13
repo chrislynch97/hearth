@@ -1,37 +1,35 @@
 import { AppShell, Burger, Group } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useEffect, useState } from "react";
-import { Outlet, useLocation, useNavigate } from "@tanstack/react-router";
+import { Outlet, useLocation } from "@tanstack/react-router";
 import { hearthTokens } from "@/theme";
 import "./nav.css";
-import { GO_TO, NAV_SECTIONS } from "./nav-config";
+import { NAV_SECTIONS } from "./nav-config";
 import { NavPalette } from "@/layout/NavPalette";
-import { ShortcutsHelp } from "@/layout/ShortcutsHelp";
 import { UserMenu } from "@/layout/UserMenu";
 import { NavSection } from "@/layout/NavSection";
+import { useOpenNavSection } from "@/layout/useOpenNavSection";
 import { HearthLink } from "@/layout/HearthLink";
 import { UpdateBanner } from "@/layout/UpdateBanner";
 import { AccountEmailBanner } from "@/layout/AccountEmailBanner";
 
 export function AppLayout() {
     const location = useLocation();
-    const navigate = useNavigate();
 
     const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] =
         useDisclosure();
-    const [helpOpen, setHelpOpen] = useState(false);
     const [paletteOpen, setPaletteOpen] = useState(false);
+    const { openSection, toggleSection } = useOpenNavSection(location.pathname);
 
     useEffect(() => {
         closeMobile();
     }, [location.pathname, closeMobile]);
 
-    // Global keyboard shortcuts
+    // `/` opens the go-to palette. The `g`-prefixed jump shortcuts were removed
+    // with the nav restructure (#12) — unused, and a flat letter per page stopped
+    // scaling once the sidebar grew past one domain.
     useEffect(() => {
-        let gPending = false;
-        let gTimer: ReturnType<typeof setTimeout> | undefined;
-
-        function onKey(e: KeyboardEvent) {
+        const onKey = (e: KeyboardEvent) => {
             if (e.metaKey || e.ctrlKey || e.altKey) return;
             const el = document.activeElement as HTMLElement | null;
             if (
@@ -43,34 +41,15 @@ export function AppLayout() {
             ) {
                 return;
             }
-            if (gPending) {
-                gPending = false;
-                const to = GO_TO[e.key.toLowerCase()];
-                if (to) {
-                    e.preventDefault();
-                    navigate({ to });
-                }
-                return;
-            }
-            if (e.key === "?") {
-                setHelpOpen(true);
-            } else if (e.key === "/") {
+            if (e.key === "/") {
                 e.preventDefault();
                 setPaletteOpen(true);
-            } else if (e.key === "g") {
-                gPending = true;
-                gTimer = setTimeout(() => {
-                    gPending = false;
-                }, 1200);
             }
-        }
+        };
 
         window.addEventListener("keydown", onKey);
-        return () => {
-            window.removeEventListener("keydown", onKey);
-            if (gTimer) clearTimeout(gTimer);
-        };
-    }, [navigate]);
+        return () => window.removeEventListener("keydown", onKey);
+    }, []);
 
     return (
         <AppShell
@@ -129,11 +108,12 @@ export function AppLayout() {
                     pt="sm"
                     style={{ overflowY: "auto", overscrollBehavior: "contain" }}
                 >
-                    {NAV_SECTIONS.map((section, i) => (
+                    {NAV_SECTIONS.map((section) => (
                         <NavSection
-                            key={section.title ?? `group-${i}`}
+                            key={section.id}
                             section={section}
-                            index={i}
+                            opened={openSection === section.id}
+                            onToggle={() => toggleSection(section.id)}
                         />
                     ))}
                 </AppShell.Section>
@@ -154,10 +134,6 @@ export function AppLayout() {
                 <Outlet />
             </AppShell.Main>
 
-            <ShortcutsHelp
-                opened={helpOpen}
-                onClose={() => setHelpOpen(false)}
-            />
             <NavPalette
                 opened={paletteOpen}
                 onClose={() => setPaletteOpen(false)}
