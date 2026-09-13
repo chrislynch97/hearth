@@ -1,85 +1,68 @@
-import { Badge, NavLink, Text } from "@mantine/core";
+import { Collapse, Group, Text, UnstyledButton } from "@mantine/core";
 import { hearthTokens } from "@/theme";
-import { Link, useLocation } from "@tanstack/react-router";
-import { NavIcon } from "@/layout/NavIcon";
+import { NavGroup } from "@/layout/NavGroup";
 import type { NavSectionConfig } from "@/layout/nav-config";
-import { trpc } from "@/trpc";
 
 export interface NavSectionProps {
     section: NavSectionConfig;
-    index: number;
+    opened: boolean;
+    onToggle: () => void;
 }
 
-export const NavSection = ({ section, index }: NavSectionProps) => {
-    const { pathname } = useLocation();
-    const backlogQuery = trpc.reconcile.backlog.useQuery();
+export const NavSection = ({ section, opened, onToggle }: NavSectionProps) => {
+    const groups = section.groups.map((group, i) => (
+        <NavGroup key={group.title ?? `group-${i}`} group={group} index={i} />
+    ));
 
-    const backlogCount = backlogQuery.data?.perPot?.length ?? 0;
+    // The section-less block at the top (Overview) is items and nothing else —
+    // no header to click, so nothing to collapse.
+    if (!section.title) return <div style={{ marginBottom: 4 }}>{groups}</div>;
 
     return (
-        <div style={{ marginBottom: 4 }}>
-            {section.title && (
-                <Text
-                    size="xs"
-                    fw={700}
-                    tt="uppercase"
-                    px="sm"
-                    mt={index === 0 ? 0 : 14}
-                    mb={4}
-                    ff="monospace"
-                    style={{
-                        color: hearthTokens.brand.linen,
-                        opacity: 0.45,
-                        letterSpacing: "0.06em",
-                    }}
-                >
-                    {section.title}
-                </Text>
-            )}
-            {section.items.map((item) => {
-                // Exact match, or a sub-route of it (e.g. a /foo/bar page keeps
-                // the /foo item active). The `+ '/'` stops '/' matching all.
-                const isActive =
-                    pathname === item.to ||
-                    pathname.startsWith(item.to + "/");
-                return (
-                    <NavLink
-                        key={item.to}
-                        component={Link}
-                        to={item.to}
-                        label={item.label}
-                        active={isActive}
-                        variant="light"
-                        className="hearth-navlink"
-                        leftSection={<NavIcon name={item.icon} />}
+        <div style={{ marginBottom: 6 }}>
+            <UnstyledButton
+                onClick={onToggle}
+                aria-expanded={opened}
+                px="sm"
+                py={6}
+                w="100%"
+                style={{ borderRadius: 8 }}
+            >
+                <Group justify="space-between" gap={6} wrap="nowrap">
+                    <Text
+                        size="xs"
+                        fw={700}
+                        tt="uppercase"
+                        ff="monospace"
                         style={{
-                            borderRadius: 8,
-                            marginBottom: 2,
-                            backgroundColor: isActive
-                                ? "rgba(239, 237, 227, 0.18)"
-                                : undefined,
+                            color: hearthTokens.brand.linen,
+                            opacity: 0.75,
+                            letterSpacing: "0.08em",
                         }}
-                        styles={{
-                            label: {
-                                color: hearthTokens.brand.linen,
-                                fontWeight: isActive ? 500 : 400,
-                            },
+                    >
+                        {section.title}
+                    </Text>
+                    <svg
+                        width={14}
+                        height={14}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{
+                            color: hearthTokens.brand.linen,
+                            opacity: 0.6,
+                            transform: opened ? "rotate(90deg)" : "none",
+                            transition: "transform 150ms ease",
                         }}
-                        rightSection={
-                            item.to === "/catchup" && backlogCount > 0 ? (
-                                <Badge
-                                    size="sm"
-                                    color="apricot"
-                                    variant="filled"
-                                    circle
-                                >
-                                    {backlogCount}
-                                </Badge>
-                            ) : undefined
-                        }
-                    />
-                );
-            })}
+                    >
+                        <path d="m9 6 6 6-6 6" />
+                    </svg>
+                </Group>
+            </UnstyledButton>
+            <Collapse expanded={opened}>{groups}</Collapse>
         </div>
     );
 };
