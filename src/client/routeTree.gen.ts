@@ -13,18 +13,32 @@ import { Route as IndexRouteImport } from "./routes/index";
 import { Route as AccountsRouteImport } from "./routes/accounts";
 import { Route as CatchupRouteImport } from "./routes/catchup";
 import { Route as CategoriesRouteImport } from "./routes/categories";
+import { Route as ChoresRouteImport } from "./routes/chores";
+import { Route as DiyRouteImport } from "./routes/diy";
 import { Route as FundingRouteImport } from "./routes/funding";
 import { Route as ImportRouteImport } from "./routes/import";
 import { Route as IncomeRouteImport } from "./routes/income";
+import { Route as InventoryRouteImport } from "./routes/inventory";
+import { Route as MaintenanceRouteImport } from "./routes/maintenance";
+import { Route as MealsRouteImport } from "./routes/meals";
 import { Route as OutgoingsRouteImport } from "./routes/outgoings";
 import { Route as PayslipsRouteImport } from "./routes/payslips";
+import { Route as PlannersRouteImport } from "./routes/planners";
 import { Route as PotsRouteImport } from "./routes/pots";
+import { Route as QuotesRouteImport } from "./routes/quotes";
 import { Route as RaisesRouteImport } from "./routes/raises";
+import { Route as RenewalsRouteImport } from "./routes/renewals";
 import { Route as ReportsRouteImport } from "./routes/reports";
 import { Route as ReviewRouteImport } from "./routes/review";
+import { Route as RoomsRouteImport } from "./routes/rooms";
 import { Route as SettingsRouteImport } from "./routes/settings";
 import { Route as SpendingRouteImport } from "./routes/spending";
+import { Route as TodosRouteImport } from "./routes/todos";
+import { Route as TradesRouteImport } from "./routes/trades";
 import { Route as UpcomingRouteImport } from "./routes/upcoming";
+import { Route as VehiclesRouteImport } from "./routes/vehicles";
+import { Route as WarrantiesRouteImport } from "./routes/warranties";
+import { Route as WishlistsRouteImport } from "./routes/wishlists";
 import { Route as SettingsIndexRouteImport } from "./routes/settings.index";
 import { Route as SettingsAccountRouteImport } from "./routes/settings.account";
 import { Route as SettingsHouseholdRouteImport } from "./routes/settings.household";
@@ -50,6 +64,16 @@ const CategoriesRoute = CategoriesRouteImport.update({
   path: "/categories",
   getParentRoute: () => rootRouteImport,
 } as any);
+const ChoresRoute = ChoresRouteImport.update({
+  id: "/chores",
+  path: "/chores",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const DiyRoute = DiyRouteImport.update({
+  id: "/diy",
+  path: "/diy",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const FundingRoute = FundingRouteImport.update({
   id: "/funding",
   path: "/funding",
@@ -65,6 +89,21 @@ const IncomeRoute = IncomeRouteImport.update({
   path: "/income",
   getParentRoute: () => rootRouteImport,
 } as any);
+const InventoryRoute = InventoryRouteImport.update({
+  id: "/inventory",
+  path: "/inventory",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const MaintenanceRoute = MaintenanceRouteImport.update({
+  id: "/maintenance",
+  path: "/maintenance",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const MealsRoute = MealsRouteImport.update({
+  id: "/meals",
+  path: "/meals",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const OutgoingsRoute = OutgoingsRouteImport.update({
   id: "/outgoings",
   path: "/outgoings",
@@ -75,14 +114,29 @@ const PayslipsRoute = PayslipsRouteImport.update({
   path: "/payslips",
   getParentRoute: () => rootRouteImport,
 } as any);
+const PlannersRoute = PlannersRouteImport.update({
+  id: "/planners",
+  path: "/planners",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const PotsRoute = PotsRouteImport.update({
   id: "/pots",
   path: "/pots",
   getParentRoute: () => rootRouteImport,
 } as any);
+const QuotesRoute = QuotesRouteImport.update({
+  id: "/quotes",
+  path: "/quotes",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const RaisesRoute = RaisesRouteImport.update({
   id: "/raises",
   path: "/raises",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const RenewalsRoute = RenewalsRouteImport.update({
+  id: "/renewals",
+  path: "/renewals",
   getParentRoute: () => rootRouteImport,
 } as any);
 const ReportsRoute = ReportsRouteImport.update({
@@ -95,6 +149,11 @@ const ReviewRoute = ReviewRouteImport.update({
   path: "/review",
   getParentRoute: () => rootRouteImport,
 } as any);
+const RoomsRoute = RoomsRouteImport.update({
+  id: "/rooms",
+  path: "/rooms",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const SettingsRoute = SettingsRouteImport.update({
   id: "/settings",
   path: "/settings",
@@ -105,9 +164,34 @@ const SpendingRoute = SpendingRouteImport.update({
   path: "/spending",
   getParentRoute: () => rootRouteImport,
 } as any);
+const TodosRoute = TodosRouteImport.update({
+  id: "/todos",
+  path: "/todos",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const TradesRoute = TradesRouteImport.update({
+  id: "/trades",
+  path: "/trades",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const UpcomingRoute = UpcomingRouteImport.update({
   id: "/upcoming",
   path: "/upcoming",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const VehiclesRoute = VehiclesRouteImport.update({
+  id: "/vehicles",
+  path: "/vehicles",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const WarrantiesRoute = WarrantiesRouteImport.update({
+  id: "/warranties",
+  path: "/warranties",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const WishlistsRoute = WishlistsRouteImport.update({
+  id: "/wishlists",
+  path: "/wishlists",
   getParentRoute: () => rootRouteImport,
 } as any);
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
@@ -136,18 +220,32 @@ export interface FileRoutesByFullPath {
   "/accounts": typeof AccountsRoute;
   "/catchup": typeof CatchupRoute;
   "/categories": typeof CategoriesRoute;
+  "/chores": typeof ChoresRoute;
+  "/diy": typeof DiyRoute;
   "/funding": typeof FundingRoute;
   "/import": typeof ImportRoute;
   "/income": typeof IncomeRoute;
+  "/inventory": typeof InventoryRoute;
+  "/maintenance": typeof MaintenanceRoute;
+  "/meals": typeof MealsRoute;
   "/outgoings": typeof OutgoingsRoute;
   "/payslips": typeof PayslipsRoute;
+  "/planners": typeof PlannersRoute;
   "/pots": typeof PotsRoute;
+  "/quotes": typeof QuotesRoute;
   "/raises": typeof RaisesRoute;
+  "/renewals": typeof RenewalsRoute;
   "/reports": typeof ReportsRoute;
   "/review": typeof ReviewRoute;
+  "/rooms": typeof RoomsRoute;
   "/settings": typeof SettingsRouteWithChildren;
   "/spending": typeof SpendingRoute;
+  "/todos": typeof TodosRoute;
+  "/trades": typeof TradesRoute;
   "/upcoming": typeof UpcomingRoute;
+  "/vehicles": typeof VehiclesRoute;
+  "/warranties": typeof WarrantiesRoute;
+  "/wishlists": typeof WishlistsRoute;
   "/settings/account": typeof SettingsAccountRoute;
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
@@ -158,17 +256,31 @@ export interface FileRoutesByTo {
   "/accounts": typeof AccountsRoute;
   "/catchup": typeof CatchupRoute;
   "/categories": typeof CategoriesRoute;
+  "/chores": typeof ChoresRoute;
+  "/diy": typeof DiyRoute;
   "/funding": typeof FundingRoute;
   "/import": typeof ImportRoute;
   "/income": typeof IncomeRoute;
+  "/inventory": typeof InventoryRoute;
+  "/maintenance": typeof MaintenanceRoute;
+  "/meals": typeof MealsRoute;
   "/outgoings": typeof OutgoingsRoute;
   "/payslips": typeof PayslipsRoute;
+  "/planners": typeof PlannersRoute;
   "/pots": typeof PotsRoute;
+  "/quotes": typeof QuotesRoute;
   "/raises": typeof RaisesRoute;
+  "/renewals": typeof RenewalsRoute;
   "/reports": typeof ReportsRoute;
   "/review": typeof ReviewRoute;
+  "/rooms": typeof RoomsRoute;
   "/spending": typeof SpendingRoute;
+  "/todos": typeof TodosRoute;
+  "/trades": typeof TradesRoute;
   "/upcoming": typeof UpcomingRoute;
+  "/vehicles": typeof VehiclesRoute;
+  "/warranties": typeof WarrantiesRoute;
+  "/wishlists": typeof WishlistsRoute;
   "/settings/account": typeof SettingsAccountRoute;
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
@@ -180,18 +292,32 @@ export interface FileRoutesById {
   "/accounts": typeof AccountsRoute;
   "/catchup": typeof CatchupRoute;
   "/categories": typeof CategoriesRoute;
+  "/chores": typeof ChoresRoute;
+  "/diy": typeof DiyRoute;
   "/funding": typeof FundingRoute;
   "/import": typeof ImportRoute;
   "/income": typeof IncomeRoute;
+  "/inventory": typeof InventoryRoute;
+  "/maintenance": typeof MaintenanceRoute;
+  "/meals": typeof MealsRoute;
   "/outgoings": typeof OutgoingsRoute;
   "/payslips": typeof PayslipsRoute;
+  "/planners": typeof PlannersRoute;
   "/pots": typeof PotsRoute;
+  "/quotes": typeof QuotesRoute;
   "/raises": typeof RaisesRoute;
+  "/renewals": typeof RenewalsRoute;
   "/reports": typeof ReportsRoute;
   "/review": typeof ReviewRoute;
+  "/rooms": typeof RoomsRoute;
   "/settings": typeof SettingsRouteWithChildren;
   "/spending": typeof SpendingRoute;
+  "/todos": typeof TodosRoute;
+  "/trades": typeof TradesRoute;
   "/upcoming": typeof UpcomingRoute;
+  "/vehicles": typeof VehiclesRoute;
+  "/warranties": typeof WarrantiesRoute;
+  "/wishlists": typeof WishlistsRoute;
   "/settings/account": typeof SettingsAccountRoute;
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
@@ -204,18 +330,32 @@ export interface FileRouteTypes {
     | "/accounts"
     | "/catchup"
     | "/categories"
+    | "/chores"
+    | "/diy"
     | "/funding"
     | "/import"
     | "/income"
+    | "/inventory"
+    | "/maintenance"
+    | "/meals"
     | "/outgoings"
     | "/payslips"
+    | "/planners"
     | "/pots"
+    | "/quotes"
     | "/raises"
+    | "/renewals"
     | "/reports"
     | "/review"
+    | "/rooms"
     | "/settings"
     | "/spending"
+    | "/todos"
+    | "/trades"
     | "/upcoming"
+    | "/vehicles"
+    | "/warranties"
+    | "/wishlists"
     | "/settings/account"
     | "/settings/household"
     | "/settings/system"
@@ -226,17 +366,31 @@ export interface FileRouteTypes {
     | "/accounts"
     | "/catchup"
     | "/categories"
+    | "/chores"
+    | "/diy"
     | "/funding"
     | "/import"
     | "/income"
+    | "/inventory"
+    | "/maintenance"
+    | "/meals"
     | "/outgoings"
     | "/payslips"
+    | "/planners"
     | "/pots"
+    | "/quotes"
     | "/raises"
+    | "/renewals"
     | "/reports"
     | "/review"
+    | "/rooms"
     | "/spending"
+    | "/todos"
+    | "/trades"
     | "/upcoming"
+    | "/vehicles"
+    | "/warranties"
+    | "/wishlists"
     | "/settings/account"
     | "/settings/household"
     | "/settings/system"
@@ -247,18 +401,32 @@ export interface FileRouteTypes {
     | "/accounts"
     | "/catchup"
     | "/categories"
+    | "/chores"
+    | "/diy"
     | "/funding"
     | "/import"
     | "/income"
+    | "/inventory"
+    | "/maintenance"
+    | "/meals"
     | "/outgoings"
     | "/payslips"
+    | "/planners"
     | "/pots"
+    | "/quotes"
     | "/raises"
+    | "/renewals"
     | "/reports"
     | "/review"
+    | "/rooms"
     | "/settings"
     | "/spending"
+    | "/todos"
+    | "/trades"
     | "/upcoming"
+    | "/vehicles"
+    | "/warranties"
+    | "/wishlists"
     | "/settings/account"
     | "/settings/household"
     | "/settings/system"
@@ -270,18 +438,32 @@ export interface RootRouteChildren {
   AccountsRoute: typeof AccountsRoute;
   CatchupRoute: typeof CatchupRoute;
   CategoriesRoute: typeof CategoriesRoute;
+  ChoresRoute: typeof ChoresRoute;
+  DiyRoute: typeof DiyRoute;
   FundingRoute: typeof FundingRoute;
   ImportRoute: typeof ImportRoute;
   IncomeRoute: typeof IncomeRoute;
+  InventoryRoute: typeof InventoryRoute;
+  MaintenanceRoute: typeof MaintenanceRoute;
+  MealsRoute: typeof MealsRoute;
   OutgoingsRoute: typeof OutgoingsRoute;
   PayslipsRoute: typeof PayslipsRoute;
+  PlannersRoute: typeof PlannersRoute;
   PotsRoute: typeof PotsRoute;
+  QuotesRoute: typeof QuotesRoute;
   RaisesRoute: typeof RaisesRoute;
+  RenewalsRoute: typeof RenewalsRoute;
   ReportsRoute: typeof ReportsRoute;
   ReviewRoute: typeof ReviewRoute;
+  RoomsRoute: typeof RoomsRoute;
   SettingsRoute: typeof SettingsRouteWithChildren;
   SpendingRoute: typeof SpendingRoute;
+  TodosRoute: typeof TodosRoute;
+  TradesRoute: typeof TradesRoute;
   UpcomingRoute: typeof UpcomingRoute;
+  VehiclesRoute: typeof VehiclesRoute;
+  WarrantiesRoute: typeof WarrantiesRoute;
+  WishlistsRoute: typeof WishlistsRoute;
 }
 
 declare module "@tanstack/react-router" {
@@ -314,6 +496,20 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof CategoriesRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    "/chores": {
+      id: "/chores";
+      path: "/chores";
+      fullPath: "/chores";
+      preLoaderRoute: typeof ChoresRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/diy": {
+      id: "/diy";
+      path: "/diy";
+      fullPath: "/diy";
+      preLoaderRoute: typeof DiyRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     "/funding": {
       id: "/funding";
       path: "/funding";
@@ -335,6 +531,27 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof IncomeRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    "/inventory": {
+      id: "/inventory";
+      path: "/inventory";
+      fullPath: "/inventory";
+      preLoaderRoute: typeof InventoryRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/maintenance": {
+      id: "/maintenance";
+      path: "/maintenance";
+      fullPath: "/maintenance";
+      preLoaderRoute: typeof MaintenanceRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/meals": {
+      id: "/meals";
+      path: "/meals";
+      fullPath: "/meals";
+      preLoaderRoute: typeof MealsRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     "/outgoings": {
       id: "/outgoings";
       path: "/outgoings";
@@ -349,6 +566,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof PayslipsRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    "/planners": {
+      id: "/planners";
+      path: "/planners";
+      fullPath: "/planners";
+      preLoaderRoute: typeof PlannersRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     "/pots": {
       id: "/pots";
       path: "/pots";
@@ -356,11 +580,25 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof PotsRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    "/quotes": {
+      id: "/quotes";
+      path: "/quotes";
+      fullPath: "/quotes";
+      preLoaderRoute: typeof QuotesRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     "/raises": {
       id: "/raises";
       path: "/raises";
       fullPath: "/raises";
       preLoaderRoute: typeof RaisesRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/renewals": {
+      id: "/renewals";
+      path: "/renewals";
+      fullPath: "/renewals";
+      preLoaderRoute: typeof RenewalsRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/reports": {
@@ -377,6 +615,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof ReviewRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    "/rooms": {
+      id: "/rooms";
+      path: "/rooms";
+      fullPath: "/rooms";
+      preLoaderRoute: typeof RoomsRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     "/settings": {
       id: "/settings";
       path: "/settings";
@@ -391,11 +636,46 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof SpendingRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    "/todos": {
+      id: "/todos";
+      path: "/todos";
+      fullPath: "/todos";
+      preLoaderRoute: typeof TodosRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/trades": {
+      id: "/trades";
+      path: "/trades";
+      fullPath: "/trades";
+      preLoaderRoute: typeof TradesRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     "/upcoming": {
       id: "/upcoming";
       path: "/upcoming";
       fullPath: "/upcoming";
       preLoaderRoute: typeof UpcomingRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/vehicles": {
+      id: "/vehicles";
+      path: "/vehicles";
+      fullPath: "/vehicles";
+      preLoaderRoute: typeof VehiclesRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/warranties": {
+      id: "/warranties";
+      path: "/warranties";
+      fullPath: "/warranties";
+      preLoaderRoute: typeof WarrantiesRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/wishlists": {
+      id: "/wishlists";
+      path: "/wishlists";
+      fullPath: "/wishlists";
+      preLoaderRoute: typeof WishlistsRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/settings/": {
@@ -452,18 +732,32 @@ const rootRouteChildren: RootRouteChildren = {
   AccountsRoute: AccountsRoute,
   CatchupRoute: CatchupRoute,
   CategoriesRoute: CategoriesRoute,
+  ChoresRoute: ChoresRoute,
+  DiyRoute: DiyRoute,
   FundingRoute: FundingRoute,
   ImportRoute: ImportRoute,
   IncomeRoute: IncomeRoute,
+  InventoryRoute: InventoryRoute,
+  MaintenanceRoute: MaintenanceRoute,
+  MealsRoute: MealsRoute,
   OutgoingsRoute: OutgoingsRoute,
   PayslipsRoute: PayslipsRoute,
+  PlannersRoute: PlannersRoute,
   PotsRoute: PotsRoute,
+  QuotesRoute: QuotesRoute,
   RaisesRoute: RaisesRoute,
+  RenewalsRoute: RenewalsRoute,
   ReportsRoute: ReportsRoute,
   ReviewRoute: ReviewRoute,
+  RoomsRoute: RoomsRoute,
   SettingsRoute: SettingsRouteWithChildren,
   SpendingRoute: SpendingRoute,
+  TodosRoute: TodosRoute,
+  TradesRoute: TradesRoute,
   UpcomingRoute: UpcomingRoute,
+  VehiclesRoute: VehiclesRoute,
+  WarrantiesRoute: WarrantiesRoute,
+  WishlistsRoute: WishlistsRoute,
 };
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

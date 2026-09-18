@@ -1,12 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { trpc } from "@/trpc";
-import { Group, Menu, Text, UnstyledButton } from "@mantine/core";
-import { hearthTokens } from "@/theme";
+import { Menu, UnstyledButton } from "@mantine/core";
+import { ChevronDown } from "lucide-react";
 import { PersonAvatar } from "@/layout/PersonAvatar";
 import { FeedbackModal } from "@/layout/FeedbackModal";
 
-export const UserMenu = () => {
+export interface UserMenuProps {
+    /** Avatar only, for the 72px rail on Overview where there's no page-list
+     *  tier to hold the full row. */
+    compact?: boolean;
+}
+
+export const UserMenu = ({ compact = false }: UserMenuProps) => {
     const navigate = useNavigate();
 
     const utils = trpc.useUtils();
@@ -52,47 +58,33 @@ export const UserMenu = () => {
             <Menu position="top-start" width={230} withinPortal shadow="md">
                 <Menu.Target>
                     <UnstyledButton
-                        flex={1}
-                        style={{ borderRadius: 8 }}
+                        className="w-full"
                         aria-label="Account menu"
                     >
-                        <Group gap={8} wrap="nowrap">
-                            <PersonAvatar name={name} />
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                                <Text
-                                    size="sm"
-                                    truncate
-                                    style={{
-                                        color: hearthTokens.brand.linen,
-                                        lineHeight: 1.2,
-                                    }}
-                                >
-                                    {name}
-                                </Text>
-                                {active && (
-                                    <Text
-                                        size="xs"
-                                        truncate
-                                        style={{
-                                            color: hearthTokens.brand.linen,
-                                            opacity: 0.6,
-                                            lineHeight: 1.2,
-                                        }}
-                                    >
-                                        {active.householdName}
-                                    </Text>
-                                )}
+                        {compact ? (
+                            <div className="flex h-11 w-full items-center justify-center rounded-md transition-colors duration-[140ms] ease-out hover:bg-hover">
+                                <PersonAvatar name={name} />
                             </div>
-                            <Text
-                                size="xs"
-                                style={{
-                                    color: hearthTokens.brand.linen,
-                                    opacity: 0.5,
-                                }}
-                            >
-                                ⌄
-                            </Text>
-                        </Group>
+                        ) : (
+                            <div className="flex h-11 w-full items-center gap-2.5 rounded-md px-2 transition-colors duration-[140ms] ease-out hover:bg-hover">
+                                <PersonAvatar name={name} />
+                                <div className="min-w-0 flex-1 text-left">
+                                    <div className="truncate text-sm font-medium leading-tight text-text">
+                                        {name}
+                                    </div>
+                                    {active && (
+                                        <div className="truncate text-xs leading-tight text-text-muted">
+                                            {active.householdName}
+                                        </div>
+                                    )}
+                                </div>
+                                <ChevronDown
+                                    size={13}
+                                    strokeWidth={1.5}
+                                    className="shrink-0 text-text-faint"
+                                />
+                            </div>
+                        )}
                     </UnstyledButton>
                 </Menu.Target>
                 <Menu.Dropdown>

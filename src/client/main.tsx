@@ -22,6 +22,10 @@ import '@mantine/notifications/styles.css'
 // them per chart, and `styles.css` would pull in all 106 (#184).
 import '@microcharts/react/styles/core.css'
 import '@microcharts/react/styles/sparkline.css'
+// Design-system tokens + Tailwind utilities. After Mantine's sheet so utilities
+// win where the two overlap; see design-system.css for why preflight is left
+// out while both libraries live in the same app.
+import './design-system.css'
 // Imported after Mantine's styles so our overrides win the cascade (#83).
 import './mobile.css'
 import './microcharts.css'

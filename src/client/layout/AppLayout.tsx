@@ -1,37 +1,33 @@
 import { AppShell, Burger, Group } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useEffect, useState } from "react";
-import { Outlet, useLocation, useNavigate } from "@tanstack/react-router";
+import { Outlet, useLocation } from "@tanstack/react-router";
 import { hearthTokens } from "@/theme";
 import "./nav.css";
-import { GO_TO, NAV_SECTIONS } from "./nav-config";
 import { NavPalette } from "@/layout/NavPalette";
-import { ShortcutsHelp } from "@/layout/ShortcutsHelp";
-import { UserMenu } from "@/layout/UserMenu";
-import { NavSection } from "@/layout/NavSection";
+import { Sidebar } from "@/layout/Sidebar";
+import { sectionForPath } from "@/layout/nav-config";
 import { HearthLink } from "@/layout/HearthLink";
 import { UpdateBanner } from "@/layout/UpdateBanner";
 import { AccountEmailBanner } from "@/layout/AccountEmailBanner";
 
 export function AppLayout() {
     const location = useLocation();
-    const navigate = useNavigate();
 
     const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] =
         useDisclosure();
-    const [helpOpen, setHelpOpen] = useState(false);
     const [paletteOpen, setPaletteOpen] = useState(false);
+    const section = sectionForPath(location.pathname);
 
     useEffect(() => {
         closeMobile();
     }, [location.pathname, closeMobile]);
 
-    // Global keyboard shortcuts
+    // `/` opens the go-to palette. The `g`-prefixed jump shortcuts were removed
+    // with the nav restructure (#12) — unused, and a flat letter per page stopped
+    // scaling once the sidebar grew past one domain.
     useEffect(() => {
-        let gPending = false;
-        let gTimer: ReturnType<typeof setTimeout> | undefined;
-
-        function onKey(e: KeyboardEvent) {
+        const onKey = (e: KeyboardEvent) => {
             if (e.metaKey || e.ctrlKey || e.altKey) return;
             const el = document.activeElement as HTMLElement | null;
             if (
@@ -43,40 +39,24 @@ export function AppLayout() {
             ) {
                 return;
             }
-            if (gPending) {
-                gPending = false;
-                const to = GO_TO[e.key.toLowerCase()];
-                if (to) {
-                    e.preventDefault();
-                    navigate({ to });
-                }
-                return;
-            }
-            if (e.key === "?") {
-                setHelpOpen(true);
-            } else if (e.key === "/") {
+            if (e.key === "/") {
                 e.preventDefault();
                 setPaletteOpen(true);
-            } else if (e.key === "g") {
-                gPending = true;
-                gTimer = setTimeout(() => {
-                    gPending = false;
-                }, 1200);
             }
-        }
+        };
 
         window.addEventListener("keydown", onKey);
-        return () => {
-            window.removeEventListener("keydown", onKey);
-            if (gTimer) clearTimeout(gTimer);
-        };
-    }, [navigate]);
+        return () => window.removeEventListener("keydown", onKey);
+    }, []);
 
     return (
         <AppShell
             header={{ height: { base: 52, sm: 0 } }}
             navbar={{
-                width: 300,
+                // 72px rail, plus the 212px page list when a section owns the
+                // route. Overview belongs to no section, so the list tier — and
+                // its width — go with it.
+                width: section ? 284 : 72,
                 breakpoint: "sm",
                 collapsed: { mobile: !mobileOpened },
             }}
@@ -87,9 +67,13 @@ export function AppLayout() {
                         "light-dark(var(--mantine-color-moss-6), var(--mantine-color-dark-7))",
                     borderBottom: "none",
                 },
+                // The navbar is the design-system sidebar now: it paints its own
+                // two surfaces and owns its borders, so the shell contributes
+                // nothing but the box.
                 navbar: {
-                    backgroundColor:
-                        "light-dark(var(--mantine-color-moss-6), var(--mantine-color-dark-7))",
+                    backgroundColor: "transparent",
+                    border: "none",
+                    padding: 0,
                 },
                 main: {
                     backgroundColor:
@@ -111,41 +95,7 @@ export function AppLayout() {
             </AppShell.Header>
 
             <AppShell.Navbar>
-                <AppShell.Section
-                    visibleFrom="sm"
-                    px="md"
-                    pt="md"
-                    pb="sm"
-                    style={{
-                        borderBottom: "1px solid rgba(239, 237, 227, 0.14)",
-                    }}
-                >
-                    <HearthLink />
-                </AppShell.Section>
-
-                <AppShell.Section
-                    grow
-                    px="xs"
-                    pt="sm"
-                    style={{ overflowY: "auto", overscrollBehavior: "contain" }}
-                >
-                    {NAV_SECTIONS.map((section, i) => (
-                        <NavSection
-                            key={section.title ?? `group-${i}`}
-                            section={section}
-                            index={i}
-                        />
-                    ))}
-                </AppShell.Section>
-
-                <AppShell.Section
-                    p={"sm"}
-                    style={{ borderTop: "1px solid rgba(239, 237, 227, 0.14)" }}
-                >
-                    <Group gap={8} justify={"center"}>
-                        <UserMenu />
-                    </Group>
-                </AppShell.Section>
+                <Sidebar section={section} />
             </AppShell.Navbar>
 
             <AppShell.Main>
@@ -154,10 +104,6 @@ export function AppLayout() {
                 <Outlet />
             </AppShell.Main>
 
-            <ShortcutsHelp
-                opened={helpOpen}
-                onClose={() => setHelpOpen(false)}
-            />
             <NavPalette
                 opened={paletteOpen}
                 onClose={() => setPaletteOpen(false)}
