@@ -8,8 +8,12 @@ test.describe('dashboard', () => {
     await expect(page.getByRole('heading', { level: 2 })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Unlock' })).toHaveCount(0)
 
-    await expect(page.getByRole('link', { name: 'Overview' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Spending' })).toBeVisible()
+    // Overview belongs to no section, so the rail is the whole sidebar here —
+    // the page-list tier only appears once you're inside a section.
+    const rail = page.getByRole('navigation', { name: 'Sections' })
+    await expect(rail.getByRole('link', { name: 'Overview' })).toBeVisible()
+    await expect(rail.getByRole('link', { name: 'Money' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Spending' })).toHaveCount(0)
   })
 
   test('nav links route to their pages', async ({ page }) => {
@@ -17,11 +21,36 @@ test.describe('dashboard', () => {
 
     // Clicking through the nav (rather than goto) is the bit that catches a
     // router-migration regression: the client-side transition, not just the URL.
-    await page.getByRole('link', { name: 'Pots' }).click()
+    // A rail section navigates to its first page and opens that section's list.
+    const rail = page.getByRole('navigation', { name: 'Sections' })
+    await rail.getByRole('link', { name: 'Money' }).click()
+    await expect(page).toHaveURL(/\/categories$/)
+
+    const pages = page.getByRole('navigation', { name: 'Money pages' })
+    await pages.getByRole('link', { name: 'Pots' }).click()
     await expect(page).toHaveURL(/\/pots$/)
     await expect(page.getByRole('heading', { name: 'Pots' })).toBeVisible()
 
-    await page.getByRole('link', { name: 'Bills', exact: true }).click()
+    await pages.getByRole('link', { name: 'Bills', exact: true }).click()
     await expect(page).toHaveURL(/\/outgoings$/)
+  })
+
+  test('shows one section at a time, with one rail item lit', async ({
+    page,
+  }) => {
+    await page.goto('/pots')
+
+    const rail = page.getByRole('navigation', { name: 'Sections' })
+    await expect(rail.locator('[aria-current]')).toHaveCount(1)
+    await expect(rail.locator('[aria-current]')).toContainText('Money')
+
+    // Home's pages belong to another section, so they aren't on screen until you
+    // move there — the list follows the route and nothing else.
+    await expect(page.getByRole('link', { name: 'Rooms' })).toHaveCount(0)
+
+    await rail.getByRole('link', { name: 'Home' }).click()
+    await expect(page).toHaveURL(/\/rooms$/)
+    await expect(rail.locator('[aria-current]')).toHaveCount(1)
+    await expect(rail.locator('[aria-current]')).toContainText('Home')
   })
 })

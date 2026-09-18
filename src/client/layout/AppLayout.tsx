@@ -6,6 +6,7 @@ import { hearthTokens } from "@/theme";
 import "./nav.css";
 import { NavPalette } from "@/layout/NavPalette";
 import { Sidebar } from "@/layout/Sidebar";
+import { sectionForPath } from "@/layout/nav-config";
 import { HearthLink } from "@/layout/HearthLink";
 import { UpdateBanner } from "@/layout/UpdateBanner";
 import { AccountEmailBanner } from "@/layout/AccountEmailBanner";
@@ -16,6 +17,7 @@ export function AppLayout() {
     const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] =
         useDisclosure();
     const [paletteOpen, setPaletteOpen] = useState(false);
+    const section = sectionForPath(location.pathname);
 
     useEffect(() => {
         closeMobile();
@@ -51,8 +53,10 @@ export function AppLayout() {
         <AppShell
             header={{ height: { base: 52, sm: 0 } }}
             navbar={{
-                // 72px rail + 212px page list.
-                width: 284,
+                // 72px rail, plus the 212px page list when a section owns the
+                // route. Overview belongs to no section, so the list tier — and
+                // its width — go with it.
+                width: section ? 284 : 72,
                 breakpoint: "sm",
                 collapsed: { mobile: !mobileOpened },
             }}
@@ -91,7 +95,7 @@ export function AppLayout() {
             </AppShell.Header>
 
             <AppShell.Navbar>
-                <Sidebar />
+                <Sidebar section={section} />
             </AppShell.Navbar>
 
             <AppShell.Main>

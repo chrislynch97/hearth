@@ -294,3 +294,25 @@ export const NAV_ITEMS: FlatNavItem[] = NAV_SECTIONS.flatMap((section) =>
         group.items.map((item) => ({ item, section, group }))
     )
 );
+
+/** Where a rail item goes. Sections land on their first page — arbitrary, but
+ *  the list is right there to pick another, and it keeps every rail item a plain
+ *  link so exactly one of them is ever lit. */
+export const sectionTarget = (section: NavSectionConfig): AppRoutePath =>
+    section.to ?? section.groups[0]!.items[0]!.to;
+
+/** The section a path belongs to, Overview included. This is what the rail
+ *  highlights, so exactly one rail item is lit on every route. */
+export const owningSection = (pathname: string): NavSectionConfig | null =>
+    NAV_ITEMS.find(
+        ({ item }) => pathname === item.to || pathname.startsWith(item.to + "/")
+    )?.section ?? null;
+
+/** The section whose page list should show — the same thing, minus Overview,
+ *  which is a single page and has no list to show. The list follows this and
+ *  nothing else, so there's no second "what am I looking at" state to disagree
+ *  with where you actually are. */
+export const sectionForPath = (pathname: string): NavSectionConfig | null => {
+    const owner = owningSection(pathname);
+    return owner && !owner.to ? owner : null;
+};

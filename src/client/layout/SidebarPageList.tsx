@@ -4,9 +4,6 @@ import { trpc } from "@/trpc";
 
 export interface SidebarPageListProps {
     section: NavSectionConfig;
-    /** False while the rail is showing a section you aren't actually in — no row
-     *  should read as active then. */
-    showsActiveRoute: boolean;
 }
 
 const SoonBadge = () => (
@@ -33,10 +30,7 @@ const rowClass = (active: boolean, planned: boolean) =>
               : "text-text-secondary hover:bg-hover",
     ].join(" ");
 
-export const SidebarPageList = ({
-    section,
-    showsActiveRoute,
-}: SidebarPageListProps) => {
+export const SidebarPageList = ({ section }: SidebarPageListProps) => {
     const { pathname } = useLocation();
     const backlogQuery = trpc.reconcile.backlog.useQuery();
 
@@ -66,9 +60,8 @@ export const SidebarPageList = ({
                         )}
                         {group.items.map((item) => {
                             const active =
-                                showsActiveRoute &&
-                                (pathname === item.to ||
-                                    pathname.startsWith(item.to + "/"));
+                                pathname === item.to ||
+                                pathname.startsWith(item.to + "/");
                             const count = countFor(item);
                             return (
                                 <Link

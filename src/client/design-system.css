@@ -160,24 +160,31 @@
 /* Preflight is off (see the top of this file), so Mantine's base styles still
    reach into the design-system subtree — underlining its links and giving its
    buttons a border and a background. Reset just the elements it uses, scoped to
-   the subtree. Delete this block when preflight comes back with Mantine's exit. */
-.hearth-ds a {
-    color: inherit;
-    text-decoration: none;
-}
+   the subtree. Delete this block when preflight comes back with Mantine's exit.
 
-.hearth-ds button {
-    appearance: none;
-    background: none;
-    border: 0;
-    padding: 0;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-}
+   It has to sit in `base`: unlayered CSS beats every layered rule, so out here
+   `background: none` would silently win against `bg-primary-tint` and
+   `color: inherit` against `text-primary`, leaving utilities in the class list
+   doing nothing. */
+@layer base {
+    .hearth-ds a {
+        color: inherit;
+        text-decoration: none;
+    }
 
-.hearth-ds :is(h1, h2, h3, p) {
-    margin: 0;
+    .hearth-ds button {
+        appearance: none;
+        background: none;
+        border: 0;
+        padding: 0;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+    }
+
+    .hearth-ds :is(h1, h2, h3, p) {
+        margin: 0;
+    }
 }
 
 /* Scoped to `.hearth-ds` while Mantine is still here — applied globally it would
