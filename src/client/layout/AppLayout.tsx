@@ -4,11 +4,8 @@ import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "@tanstack/react-router";
 import { hearthTokens } from "@/theme";
 import "./nav.css";
-import { NAV_SECTIONS } from "./nav-config";
 import { NavPalette } from "@/layout/NavPalette";
-import { UserMenu } from "@/layout/UserMenu";
-import { NavSection } from "@/layout/NavSection";
-import { useOpenNavSection } from "@/layout/useOpenNavSection";
+import { Sidebar } from "@/layout/Sidebar";
 import { HearthLink } from "@/layout/HearthLink";
 import { UpdateBanner } from "@/layout/UpdateBanner";
 import { AccountEmailBanner } from "@/layout/AccountEmailBanner";
@@ -19,7 +16,6 @@ export function AppLayout() {
     const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] =
         useDisclosure();
     const [paletteOpen, setPaletteOpen] = useState(false);
-    const { openSection, toggleSection } = useOpenNavSection(location.pathname);
 
     useEffect(() => {
         closeMobile();
@@ -55,7 +51,8 @@ export function AppLayout() {
         <AppShell
             header={{ height: { base: 52, sm: 0 } }}
             navbar={{
-                width: 300,
+                // 72px rail + 212px page list.
+                width: 284,
                 breakpoint: "sm",
                 collapsed: { mobile: !mobileOpened },
             }}
@@ -66,9 +63,13 @@ export function AppLayout() {
                         "light-dark(var(--mantine-color-moss-6), var(--mantine-color-dark-7))",
                     borderBottom: "none",
                 },
+                // The navbar is the design-system sidebar now: it paints its own
+                // two surfaces and owns its borders, so the shell contributes
+                // nothing but the box.
                 navbar: {
-                    backgroundColor:
-                        "light-dark(var(--mantine-color-moss-6), var(--mantine-color-dark-7))",
+                    backgroundColor: "transparent",
+                    border: "none",
+                    padding: 0,
                 },
                 main: {
                     backgroundColor:
@@ -90,42 +91,7 @@ export function AppLayout() {
             </AppShell.Header>
 
             <AppShell.Navbar>
-                <AppShell.Section
-                    visibleFrom="sm"
-                    px="md"
-                    pt="md"
-                    pb="sm"
-                    style={{
-                        borderBottom: "1px solid rgba(239, 237, 227, 0.14)",
-                    }}
-                >
-                    <HearthLink />
-                </AppShell.Section>
-
-                <AppShell.Section
-                    grow
-                    px="xs"
-                    pt="sm"
-                    style={{ overflowY: "auto", overscrollBehavior: "contain" }}
-                >
-                    {NAV_SECTIONS.map((section) => (
-                        <NavSection
-                            key={section.id}
-                            section={section}
-                            opened={openSection === section.id}
-                            onToggle={() => toggleSection(section.id)}
-                        />
-                    ))}
-                </AppShell.Section>
-
-                <AppShell.Section
-                    p={"sm"}
-                    style={{ borderTop: "1px solid rgba(239, 237, 227, 0.14)" }}
-                >
-                    <Group gap={8} justify={"center"}>
-                        <UserMenu />
-                    </Group>
-                </AppShell.Section>
+                <Sidebar />
             </AppShell.Navbar>
 
             <AppShell.Main>

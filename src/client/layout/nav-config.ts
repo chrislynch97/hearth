@@ -82,16 +82,19 @@ export interface NavGroupConfig {
 
 export interface NavSectionConfig {
     id: string;
-    /** null for the section-less block at the top of the sidebar, which renders
-     *  its items bare — no header, no collapse. */
-    title: string | null;
+    title: string;
     groups: NavGroupConfig[];
+    /** Set on a rail item that navigates straight to a page instead of swapping
+     *  the page list. Only Overview: it's one page, so a list of one would be
+     *  a tier of pure overhead. */
+    to?: AppRoutePath;
 }
 
 export const NAV_SECTIONS: NavSectionConfig[] = [
     {
         id: "overview",
-        title: null,
+        title: "Overview",
+        to: "/",
         groups: [
             {
                 title: null,
@@ -221,7 +224,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
                 items: [
                     {
                         to: "/warranties",
-                        label: "Warranties & documents",
+                        label: "Warranties",
                         icon: "warranties",
                         planned:
                             "Receipts, warranty expiry dates, manuals and serial numbers — the things you always need about an appliance and never have to hand.",

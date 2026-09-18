@@ -2,9 +2,15 @@ import { hearthTokens } from "@/theme";
 
 export interface HearthMarkProps {
     size?: number;
+    /** The house stroke. Defaults to linen for the dark mobile header; the light
+     *  sidebar rail passes moss. The window stays apricot either way. */
+    color?: string;
 }
 
-export const HearthMark = ({ size = 24 }: HearthMarkProps) => (
+export const HearthMark = ({
+    size = 24,
+    color = hearthTokens.brand.linen,
+}: HearthMarkProps) => (
     <svg
         width={size}
         height={size}
@@ -14,14 +20,14 @@ export const HearthMark = ({ size = 24 }: HearthMarkProps) => (
     >
         <polyline
             points="8,25 24,10 40,25"
-            stroke={hearthTokens.brand.linen}
+            stroke={color}
             strokeWidth="3.5"
             strokeLinecap="round"
             strokeLinejoin="round"
         />
         <path
             d="M14 25 V40 H34 V25"
-            stroke={hearthTokens.brand.linen}
+            stroke={color}
             strokeWidth="3.5"
             strokeLinecap="round"
             strokeLinejoin="round"

@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import path from "node:path";
 
@@ -17,6 +18,7 @@ export default defineConfig({
       semicolons: true,
     }),
     react(),
+    tailwindcss(),
   ],
   resolve: {
     alias: {

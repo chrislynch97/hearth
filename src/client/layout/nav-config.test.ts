@@ -42,14 +42,23 @@ describe("nav config", () => {
         }
     });
 
-    it("only marks sections collapsible when they have a title", () => {
-        // NavSection renders a title-less section bare, with no way to reopen it.
+    it("only lets a single-page section navigate from the rail", () => {
+        // A rail item with `to` skips the page list entirely, so it had better
+        // not be hiding pages behind itself.
         for (const section of NAV_SECTIONS) {
-            if (section.title !== null) continue;
-            expect(section.groups.flatMap((g) => g.items).length).toBeLessThan(
-                3
-            );
+            if (section.to === undefined) continue;
+            const items = section.groups.flatMap((g) => g.items);
+            expect(items, section.id).toHaveLength(1);
+            expect(items[0]?.to, section.id).toBe(section.to);
         }
+    });
+
+    it("declares the section the sidebar falls back to", () => {
+        // useSelectedSection asserts Money exists — it's what shows while you're
+        // on Overview, which owns no page list of its own.
+        const money = NAV_SECTIONS.find((s) => s.id === "money");
+        expect(money?.to).toBeUndefined();
+        expect(money?.groups.length).toBeGreaterThan(0);
     });
 
     it("wires the compile-time route check", () => {

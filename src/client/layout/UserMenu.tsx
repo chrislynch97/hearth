@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { trpc } from "@/trpc";
-import { Group, Menu, Text, UnstyledButton } from "@mantine/core";
-import { hearthTokens } from "@/theme";
+import { Menu, UnstyledButton } from "@mantine/core";
+import { ChevronDown } from "lucide-react";
 import { PersonAvatar } from "@/layout/PersonAvatar";
 import { FeedbackModal } from "@/layout/FeedbackModal";
 
@@ -51,48 +51,25 @@ export const UserMenu = () => {
             />
             <Menu position="top-start" width={230} withinPortal shadow="md">
                 <Menu.Target>
-                    <UnstyledButton
-                        flex={1}
-                        style={{ borderRadius: 8 }}
-                        aria-label="Account menu"
-                    >
-                        <Group gap={8} wrap="nowrap">
+                    <UnstyledButton className="w-full" aria-label="Account menu">
+                        <div className="flex h-11 w-full items-center gap-2.5 rounded-md px-2 transition-colors duration-[140ms] ease-out hover:bg-hover">
                             <PersonAvatar name={name} />
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                                <Text
-                                    size="sm"
-                                    truncate
-                                    style={{
-                                        color: hearthTokens.brand.linen,
-                                        lineHeight: 1.2,
-                                    }}
-                                >
+                            <div className="min-w-0 flex-1 text-left">
+                                <div className="truncate text-sm font-medium leading-tight text-text">
                                     {name}
-                                </Text>
+                                </div>
                                 {active && (
-                                    <Text
-                                        size="xs"
-                                        truncate
-                                        style={{
-                                            color: hearthTokens.brand.linen,
-                                            opacity: 0.6,
-                                            lineHeight: 1.2,
-                                        }}
-                                    >
+                                    <div className="truncate text-xs leading-tight text-text-muted">
                                         {active.householdName}
-                                    </Text>
+                                    </div>
                                 )}
                             </div>
-                            <Text
-                                size="xs"
-                                style={{
-                                    color: hearthTokens.brand.linen,
-                                    opacity: 0.5,
-                                }}
-                            >
-                                ⌄
-                            </Text>
-                        </Group>
+                            <ChevronDown
+                                size={13}
+                                strokeWidth={1.5}
+                                className="shrink-0 text-text-faint"
+                            />
+                        </div>
                     </UnstyledButton>
                 </Menu.Target>
                 <Menu.Dropdown>

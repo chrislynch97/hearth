@@ -1,0 +1,197 @@
+/* Hearth design system — tokens + Tailwind utilities.
+ *
+ * Two deliberate departures from the design handoff's drop-in file:
+ *
+ * 1. No preflight. `@import "tailwindcss"` would pull in Tailwind's reset, which
+ *    strips Mantine's own base styles out from under the ~100 files still using
+ *    it. Importing theme + utilities by layer skips it. Restore preflight when
+ *    Mantine is gone.
+ * 2. Dark mode keys off Mantine's `data-mantine-color-scheme` rather than the
+ *    handoff's `[data-theme="dark"]`, so the existing Appearance setting drives
+ *    both systems from one attribute instead of two that can disagree.
+ */
+
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme {
+    --font-display: "Spectral", Georgia, "Times New Roman", serif;
+    --font-ui: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+    --font-mono: "Space Mono", ui-monospace, Menlo, monospace;
+    --default-font-family: var(--font-ui);
+
+    --spacing: 4px;
+
+    /* `text-base` is 13px here, not Tailwind's 16px — this is a dense app. */
+    --text-eyebrow: 10.5px;
+    --text-eyebrow--line-height: 1.2;
+    --text-eyebrow--letter-spacing: 0.1em;
+    --text-xs: 11px;
+    --text-sm: 12px;
+    --text-base: 13px;
+    --text-md: 14px;
+    --text-lg: 16px;
+    --text-h3: 18px;
+    --text-h2: 22px;
+    --text-h1: 28px;
+    --text-display: 36px;
+    --text-fig-sm: 14px;
+    --text-fig: 18px;
+    --text-fig-lg: 24px;
+    --text-fig-xl: 32px;
+
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+
+    --shadow-raised: 0 1px 2px rgba(34, 38, 31, 0.05);
+    --shadow-popover:
+        0 6px 20px -4px rgba(34, 38, 31, 0.14), 0 2px 6px rgba(34, 38, 31, 0.05);
+    --shadow-modal:
+        0 24px 56px -12px rgba(34, 38, 31, 0.26),
+        0 4px 12px rgba(34, 38, 31, 0.07);
+
+    --ease-out: cubic-bezier(0.2, 0, 0, 1);
+    --ease-in-out: cubic-bezier(0.45, 0, 0.2, 1);
+
+    /* Roles point at the raw values below, so `bg-surface` and `text-primary`
+       follow the colour scheme without a dark: variant on every element. */
+    --color-bg: var(--hearth-bg);
+    --color-surface: var(--hearth-surface);
+    --color-sunken: var(--hearth-sunken);
+    --color-raised: var(--hearth-raised);
+    --color-hover: var(--hearth-hover);
+    --color-border: var(--hearth-border);
+    --color-border-strong: var(--hearth-border-strong);
+    --color-text: var(--hearth-text);
+    --color-text-secondary: var(--hearth-text-secondary);
+    --color-text-muted: var(--hearth-text-muted);
+    --color-text-faint: var(--hearth-text-faint);
+    --color-primary: var(--hearth-primary);
+    --color-primary-hover: var(--hearth-primary-hover);
+    --color-primary-active: var(--hearth-primary-active);
+    --color-primary-fg: var(--hearth-primary-fg);
+    --color-primary-tint: var(--hearth-primary-tint);
+    --color-primary-tint-weak: var(--hearth-primary-tint-weak);
+    --color-attention: var(--hearth-attention);
+    --color-attention-fg: var(--hearth-attention-fg);
+    --color-attention-tint: var(--hearth-attention-tint);
+    --color-positive-fg: var(--hearth-positive-fg);
+    --color-savings-fg: var(--hearth-savings-fg);
+    --color-danger: var(--hearth-danger);
+    --color-danger-hover: var(--hearth-danger-hover);
+    --color-danger-active: var(--hearth-danger-active);
+    --color-danger-tint: var(--hearth-danger-tint);
+    --color-ring: var(--hearth-ring);
+    --color-overlay: var(--hearth-overlay);
+}
+
+:root {
+    --hearth-bg: #fbfaf4;
+    --hearth-surface: #fbfaf4;
+    --hearth-sunken: #f4f2ea;
+    --hearth-raised: #fffef8;
+    --hearth-hover: #edeee6;
+    --hearth-border: #e7e2d5;
+    --hearth-border-strong: #d0d5c9;
+    --hearth-text: #22261f;
+    --hearth-text-secondary: #66705e;
+    --hearth-text-muted: #7c8676;
+    --hearth-text-faint: #a9a491;
+    --hearth-primary: #47613f;
+    --hearth-primary-hover: #3d5436;
+    --hearth-primary-active: #334529;
+    --hearth-primary-fg: #fbfaf4;
+    --hearth-primary-tint: #e2e5db;
+    --hearth-primary-tint-weak: #edeee6;
+    --hearth-attention: #d98c5f;
+    --hearth-attention-fg: #a85f30;
+    --hearth-attention-tint: #f8efe5;
+    --hearth-positive-fg: #3e7c4f;
+    --hearth-savings-fg: #8a7a6a;
+    --hearth-danger: #a85f30;
+    --hearth-danger-hover: #8e4e27;
+    --hearth-danger-active: #7a4220;
+    --hearth-danger-tint: #f8efe5;
+    --hearth-ring: #47613f;
+    --hearth-overlay: rgba(34, 38, 31, 0.44);
+}
+
+/* Warm bark, never slate. Two things beyond a straight swap: the rail goes
+   darker than the content rather than lighter, and moss lifts to #7FA46F —
+   #47613F is only 1.4:1 on bark. */
+[data-mantine-color-scheme="dark"] {
+    --hearth-bg: #1b1e18;
+    --hearth-surface: #22261f;
+    --hearth-sunken: #171a15;
+    --hearth-raised: #2a2f26;
+    --hearth-hover: #2e332a;
+    --hearth-border: #343a2e;
+    --hearth-border-strong: #465040;
+    --hearth-text: #efede3;
+    --hearth-text-secondary: #b7bbab;
+    --hearth-text-muted: #8c9180;
+    --hearth-text-faint: #6e735f;
+    --hearth-primary: #7fa46f;
+    --hearth-primary-hover: #8fb47e;
+    --hearth-primary-active: #6e9260;
+    --hearth-primary-fg: #171a14;
+    --hearth-primary-tint: #2c3a26;
+    --hearth-primary-tint-weak: #252c20;
+    --hearth-attention: #d98c5f;
+    --hearth-attention-fg: #d98c5f;
+    --hearth-attention-tint: #36291f;
+    --hearth-positive-fg: #5fa06f;
+    --hearth-savings-fg: #a3937f;
+    --hearth-danger: #d98c5f;
+    --hearth-danger-hover: #e39c72;
+    --hearth-danger-active: #c67c50;
+    --hearth-danger-tint: #36291f;
+    --hearth-ring: #9dbe8c;
+    --hearth-overlay: rgba(9, 11, 8, 0.62);
+    --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-popover: 0 8px 24px -4px rgba(0, 0, 0, 0.55);
+    --shadow-modal: 0 28px 64px -12px rgba(0, 0, 0, 0.66);
+}
+
+/* Preflight is off (see the top of this file), so Mantine's base styles still
+   reach into the design-system subtree — underlining its links and giving its
+   buttons a border and a background. Reset just the elements it uses, scoped to
+   the subtree. Delete this block when preflight comes back with Mantine's exit. */
+.hearth-ds a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.hearth-ds button {
+    appearance: none;
+    background: none;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.hearth-ds :is(h1, h2, h3, p) {
+    margin: 0;
+}
+
+/* Scoped to `.hearth-ds` while Mantine is still here — applied globally it would
+   double up with Mantine's own focus styles on every existing control. Drop the
+   scope (and the class) once Mantine is gone; the ring is meant to be one object
+   for the whole app. */
+.hearth-ds :focus-visible,
+.hearth-ds:focus-visible {
+    outline: none;
+    box-shadow:
+        0 0 0 2px var(--color-bg),
+        0 0 0 4px var(--color-ring);
+}
+
+.tabular {
+    font-variant-numeric: tabular-nums;
+}
