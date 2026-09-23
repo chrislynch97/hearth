@@ -1,5 +1,9 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import type { NavItem, NavSectionConfig } from "@/layout/nav-config";
+import type {
+    NavGroupConfig,
+    NavItem,
+    NavSectionConfig,
+} from "@/layout/nav-config";
 import { trpc } from "@/trpc";
 
 export interface SidebarPageListProps {
@@ -18,6 +22,11 @@ const CountBadge = ({ count }: { count: number }) => (
         {count}
     </span>
 );
+
+/** A group's items minus the retired ones — pages folded into another page
+ *  keep their route and their place in the palette, but leave the list. */
+const visible = (group: NavGroupConfig) =>
+    group.items.filter((item) => !item.hidden);
 
 const rowClass = (active: boolean, planned: boolean) =>
     [
@@ -51,43 +60,47 @@ export const SidebarPageList = ({ section }: SidebarPageListProps) => {
                 aria-label={`${section.title} pages`}
                 className="flex flex-1 flex-col gap-px overflow-y-auto px-2 pb-2"
             >
-                {section.groups.map((group, i) => (
-                    <div key={group.title ?? `group-${i}`} role="group">
-                        {group.title && (
-                            <div className="px-3 pt-[11px] pb-1 font-mono text-[9px] uppercase tracking-[0.11em] text-text-faint">
-                                {group.title}
-                            </div>
-                        )}
-                        {group.items.map((item) => {
-                            const active =
-                                pathname === item.to ||
-                                pathname.startsWith(item.to + "/");
-                            const count = countFor(item);
-                            return (
-                                <Link
-                                    key={item.to}
-                                    to={item.to}
-                                    aria-current={active ? "page" : undefined}
-                                    className={rowClass(
-                                        active,
-                                        item.planned !== undefined
-                                    )}
-                                >
-                                    {active && (
-                                        <span className="absolute -left-2 top-[7px] h-4 w-[3px] rounded-r-[2px] bg-primary" />
-                                    )}
-                                    <span className="flex-1 truncate text-base">
-                                        {item.label}
-                                    </span>
-                                    {item.planned && <SoonBadge />}
-                                    {count !== undefined && (
-                                        <CountBadge count={count} />
-                                    )}
-                                </Link>
-                            );
-                        })}
-                    </div>
-                ))}
+                {section.groups
+                    .filter((group) => visible(group).length > 0)
+                    .map((group, i) => (
+                        <div key={group.title ?? `group-${i}`} role="group">
+                            {group.title && (
+                                <div className="px-3 pt-[11px] pb-1 font-mono text-[9px] uppercase tracking-[0.11em] text-text-faint">
+                                    {group.title}
+                                </div>
+                            )}
+                            {visible(group).map((item) => {
+                                const active =
+                                    pathname === item.to ||
+                                    pathname.startsWith(item.to + "/");
+                                const count = countFor(item);
+                                return (
+                                    <Link
+                                        key={item.to}
+                                        to={item.to}
+                                        aria-current={
+                                            active ? "page" : undefined
+                                        }
+                                        className={rowClass(
+                                            active,
+                                            item.planned !== undefined
+                                        )}
+                                    >
+                                        {active && (
+                                            <span className="absolute -left-2 top-[7px] h-4 w-[3px] rounded-r-[2px] bg-primary" />
+                                        )}
+                                        <span className="flex-1 truncate text-base">
+                                            {item.label}
+                                        </span>
+                                        {item.planned && <SoonBadge />}
+                                        {count !== undefined && (
+                                            <CountBadge count={count} />
+                                        )}
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    ))}
             </nav>
         </div>
     );

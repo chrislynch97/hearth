@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+    closesMobileNav,
     NAV_ITEMS,
     NAV_SECTIONS,
     type AppRoutePath,
@@ -63,5 +64,30 @@ describe("nav config", () => {
 
     it("wires the compile-time route check", () => {
         expect(navPathsAreRealRoutes).toBe(true);
+    });
+});
+
+describe("closesMobileNav", () => {
+    // Tapping a rail section on a phone swaps the page list; closing the drawer
+    // there means reopening it to pick one of the pages you just asked to see.
+    it("stays open when the section changes", () => {
+        expect(closesMobileNav("/", "/plan")).toBe(false);
+        expect(closesMobileNav("/plan", "/rooms")).toBe(false);
+        expect(closesMobileNav("/rooms", "/todos")).toBe(false);
+    });
+
+    it("closes when a page inside the same section is picked", () => {
+        expect(closesMobileNav("/plan", "/funding")).toBe(true);
+        expect(closesMobileNav("/plan", "/plan")).toBe(true);
+        expect(closesMobileNav("/rooms", "/quotes")).toBe(true);
+    });
+
+    // Overview owns no page list, so there is nothing left to pick.
+    it("closes on the way to Overview", () => {
+        expect(closesMobileNav("/plan", "/")).toBe(true);
+    });
+
+    it("closes for a path outside the nav", () => {
+        expect(closesMobileNav("/plan", "/settings")).toBe(true);
     });
 });

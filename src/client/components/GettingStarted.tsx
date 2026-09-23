@@ -27,7 +27,7 @@ const STEPS: Step[] = [
         label: "Add a pot",
         description:
             "Pots are the buckets you divide your money into — bills, groceries, savings.",
-        to: "/pots",
+        to: "/plan",
         cta: "Add a pot",
     },
     {
@@ -43,7 +43,7 @@ const STEPS: Step[] = [
         label: "Create a set-aside",
         description:
             "Set aside a regular amount into a pot so it's funded a bit each period.",
-        to: "/pots",
+        to: "/plan",
         cta: "Set one up",
     },
 ];

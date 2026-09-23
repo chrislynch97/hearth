@@ -44,7 +44,10 @@ export const PotBacklogRow = ({ pot, members, money }: PotBacklogRow) => {
                 <Stack gap={6}>
                     {pot.payers.map((payer) => (
                         <PayerRow
-                            key={payer.ownerId}
+                            // Keyed by what is outstanding, not just the payer: once
+                            // a part-move lands, the row is a different ask and its
+                            // prefilled amount has to start again from the new one.
+                            key={`${payer.ownerId}:${payer.total}:${payer.residual}`}
                             potId={pot.potId}
                             payer={payer}
                             members={members}

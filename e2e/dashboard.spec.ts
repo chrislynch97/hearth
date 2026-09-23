@@ -24,15 +24,16 @@ test.describe('dashboard', () => {
     // A rail section navigates to its first page and opens that section's list.
     const rail = page.getByRole('navigation', { name: 'Sections' })
     await rail.getByRole('link', { name: 'Money' }).click()
-    await expect(page).toHaveURL(/\/categories$/)
+    await expect(page).toHaveURL(/\/plan$/)
 
     const pages = page.getByRole('navigation', { name: 'Money pages' })
-    await pages.getByRole('link', { name: 'Pots' }).click()
-    await expect(page).toHaveURL(/\/pots$/)
-    await expect(page.getByRole('heading', { name: 'Pots' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Plan' })).toBeVisible()
 
-    await pages.getByRole('link', { name: 'Bills', exact: true }).click()
-    await expect(page).toHaveURL(/\/outgoings$/)
+    // Categories, Pots and Bills folded into Plan: still routable, off the list.
+    await expect(pages.getByRole('link', { name: 'Pots' })).toHaveCount(0)
+
+    await pages.getByRole('link', { name: 'Upcoming' }).click()
+    await expect(page).toHaveURL(/\/upcoming$/)
   })
 
   test('shows one section at a time, with one rail item lit', async ({

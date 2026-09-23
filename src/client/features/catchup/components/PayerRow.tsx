@@ -27,6 +27,7 @@ export const PayerRow = ({ potId, payer, members, money }: PayerRowProps) => {
     const fmtDate = useFormatDate();
     const markMoved = trpc.reconcile.markPotMoved.useMutation();
     const clearResidual = trpc.reconcile.clearResidual.useMutation();
+    const payResidual = trpc.reconcile.payResidual.useMutation();
 
     const [open, setOpen] = useState(false);
 
@@ -57,6 +58,15 @@ export const PayerRow = ({ potId, payer, members, money }: PayerRowProps) => {
         await invalidate();
     };
 
+    const handlePayResidual = async () => {
+        await payResidual.mutateAsync({
+            potId,
+            ownerId: payer.ownerId,
+            movedAmount: direction * movedMinor,
+        });
+        await invalidate();
+    };
+
     const handleClear = async () => {
         await clearResidual.mutateAsync({ potId, ownerId: payer.ownerId });
         await invalidate();
@@ -67,10 +77,11 @@ export const PayerRow = ({ potId, payer, members, money }: PayerRowProps) => {
         ? "stays with Joint"
         : `→ ${payerMember?.displayName ?? "someone"}`;
     const overshoot = isOvershoot(movedMinor, required);
-    const error = markMoved.error ?? clearResidual.error;
+    const error = markMoved.error ?? payResidual.error ?? clearResidual.error;
 
-    // Residual-only row: no fresh spends, just a shortfall/credit carried over. There
-    // are no spends to reconcile, so the only action is to write it off.
+    // Residual-only row: no fresh spends, just a shortfall carried over from an
+    // earlier part-move. It keeps the amount field — chipping away at it is the
+    // normal case, and writing it off is the way out, not the only move.
     if (!hasSpends) {
         const short = payer.residual > 0;
         return (
@@ -78,19 +89,50 @@ export const PayerRow = ({ potId, payer, members, money }: PayerRowProps) => {
                 <Group justify="space-between" wrap="nowrap">
                     <Text size="sm" fw={500}>
                         {formatMoney(Math.abs(payer.residual), money)}{" "}
-                        {short ? "short" : "credit"} {arrow}
+                        {short ? "still to move" : "credit"} {arrow}
                         <Text span size="xs" c="dimmed">
                             {" "}
                             · carried over
                         </Text>
                     </Text>
+                    <Group gap={6} wrap="nowrap">
+                        <NumberInput
+                            aria-label="Amount moved"
+                            prefix={money.symbol}
+                            decimalScale={money.decimalPlaces}
+                            fixedDecimalScale
+                            min={0}
+                            value={moved}
+                            onChange={setMoved}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") void handlePayResidual();
+                            }}
+                            w={110}
+                            size="xs"
+                        />
+                        <Button
+                            size="xs"
+                            variant="light"
+                            onClick={() => void handlePayResidual()}
+                            loading={payResidual.isPending}
+                        >
+                            Move
+                        </Button>
+                    </Group>
+                </Group>
+                <Group justify="space-between" wrap="nowrap">
+                    <Text size="xs" c="dimmed">
+                        Moving less than this leaves the rest carried over
+                        again.
+                    </Text>
                     <Button
-                        size="xs"
-                        variant="default"
+                        size="compact-xs"
+                        variant="subtle"
+                        color="gray"
                         onClick={() => void handleClear()}
                         loading={clearResidual.isPending}
                     >
-                        Clear
+                        Write it off
                     </Button>
                 </Group>
                 {error && (
