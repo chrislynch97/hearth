@@ -23,6 +23,7 @@ import { Route as MaintenanceRouteImport } from "./routes/maintenance";
 import { Route as MealsRouteImport } from "./routes/meals";
 import { Route as OutgoingsRouteImport } from "./routes/outgoings";
 import { Route as PayslipsRouteImport } from "./routes/payslips";
+import { Route as PlanRouteImport } from "./routes/plan";
 import { Route as PlannersRouteImport } from "./routes/planners";
 import { Route as PotsRouteImport } from "./routes/pots";
 import { Route as QuotesRouteImport } from "./routes/quotes";
@@ -112,6 +113,11 @@ const OutgoingsRoute = OutgoingsRouteImport.update({
 const PayslipsRoute = PayslipsRouteImport.update({
   id: "/payslips",
   path: "/payslips",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const PlanRoute = PlanRouteImport.update({
+  id: "/plan",
+  path: "/plan",
   getParentRoute: () => rootRouteImport,
 } as any);
 const PlannersRoute = PlannersRouteImport.update({
@@ -230,6 +236,7 @@ export interface FileRoutesByFullPath {
   "/meals": typeof MealsRoute;
   "/outgoings": typeof OutgoingsRoute;
   "/payslips": typeof PayslipsRoute;
+  "/plan": typeof PlanRoute;
   "/planners": typeof PlannersRoute;
   "/pots": typeof PotsRoute;
   "/quotes": typeof QuotesRoute;
@@ -266,6 +273,7 @@ export interface FileRoutesByTo {
   "/meals": typeof MealsRoute;
   "/outgoings": typeof OutgoingsRoute;
   "/payslips": typeof PayslipsRoute;
+  "/plan": typeof PlanRoute;
   "/planners": typeof PlannersRoute;
   "/pots": typeof PotsRoute;
   "/quotes": typeof QuotesRoute;
@@ -302,6 +310,7 @@ export interface FileRoutesById {
   "/meals": typeof MealsRoute;
   "/outgoings": typeof OutgoingsRoute;
   "/payslips": typeof PayslipsRoute;
+  "/plan": typeof PlanRoute;
   "/planners": typeof PlannersRoute;
   "/pots": typeof PotsRoute;
   "/quotes": typeof QuotesRoute;
@@ -340,6 +349,7 @@ export interface FileRouteTypes {
     | "/meals"
     | "/outgoings"
     | "/payslips"
+    | "/plan"
     | "/planners"
     | "/pots"
     | "/quotes"
@@ -376,6 +386,7 @@ export interface FileRouteTypes {
     | "/meals"
     | "/outgoings"
     | "/payslips"
+    | "/plan"
     | "/planners"
     | "/pots"
     | "/quotes"
@@ -411,6 +422,7 @@ export interface FileRouteTypes {
     | "/meals"
     | "/outgoings"
     | "/payslips"
+    | "/plan"
     | "/planners"
     | "/pots"
     | "/quotes"
@@ -448,6 +460,7 @@ export interface RootRouteChildren {
   MealsRoute: typeof MealsRoute;
   OutgoingsRoute: typeof OutgoingsRoute;
   PayslipsRoute: typeof PayslipsRoute;
+  PlanRoute: typeof PlanRoute;
   PlannersRoute: typeof PlannersRoute;
   PotsRoute: typeof PotsRoute;
   QuotesRoute: typeof QuotesRoute;
@@ -564,6 +577,13 @@ declare module "@tanstack/react-router" {
       path: "/payslips";
       fullPath: "/payslips";
       preLoaderRoute: typeof PayslipsRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/plan": {
+      id: "/plan";
+      path: "/plan";
+      fullPath: "/plan";
+      preLoaderRoute: typeof PlanRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/planners": {
@@ -742,6 +762,7 @@ const rootRouteChildren: RootRouteChildren = {
   MealsRoute: MealsRoute,
   OutgoingsRoute: OutgoingsRoute,
   PayslipsRoute: PayslipsRoute,
+  PlanRoute: PlanRoute,
   PlannersRoute: PlannersRoute,
   PotsRoute: PotsRoute,
   QuotesRoute: QuotesRoute,

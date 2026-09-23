@@ -6,6 +6,7 @@ import type { ReactElement } from "react";
 // and match the app's existing inline-SVG style.
 const NAV_ICONS: Record<IconName, ReactElement> = {
     home: <path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5" />,
+    plan: <path d="M4 4.5h16v15H4zM9.5 4.5v15M12.5 9.5h5M12.5 13.5h3" />,
     categories: <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />,
     pots: (
         <path d="M4 8V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2M5 8h14l-1 11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z" />

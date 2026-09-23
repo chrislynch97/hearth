@@ -1,12 +1,12 @@
 import { AppShell, Burger, Group } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "@tanstack/react-router";
 import { hearthTokens } from "@/theme";
 import "./nav.css";
 import { NavPalette } from "@/layout/NavPalette";
 import { Sidebar } from "@/layout/Sidebar";
-import { sectionForPath } from "@/layout/nav-config";
+import { closesMobileNav, sectionForPath } from "@/layout/nav-config";
 import { HearthLink } from "@/layout/HearthLink";
 import { UpdateBanner } from "@/layout/UpdateBanner";
 import { AccountEmailBanner } from "@/layout/AccountEmailBanner";
@@ -19,8 +19,16 @@ export function AppLayout() {
     const [paletteOpen, setPaletteOpen] = useState(false);
     const section = sectionForPath(location.pathname);
 
+    // Not every navigation should shut the drawer — see closesMobileNav. The
+    // first line matters under StrictMode: a re-run with the path already
+    // recorded would compare it against itself and close on every route.
+    const previousPath = useRef(location.pathname);
     useEffect(() => {
-        closeMobile();
+        if (previousPath.current === location.pathname) return;
+        if (closesMobileNav(previousPath.current, location.pathname)) {
+            closeMobile();
+        }
+        previousPath.current = location.pathname;
     }, [location.pathname, closeMobile]);
 
     // `/` opens the go-to palette. The `g`-prefixed jump shortcuts were removed

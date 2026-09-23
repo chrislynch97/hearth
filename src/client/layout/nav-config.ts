@@ -1,5 +1,6 @@
 export type IconName =
     | "home"
+    | "plan"
     | "categories"
     | "pots"
     | "bills"
@@ -35,6 +36,7 @@ export type IconName =
 // through the router that these components help build.
 export type AppRoutePath =
     | "/"
+    | "/plan"
     | "/categories"
     | "/pots"
     | "/outgoings"
@@ -73,6 +75,11 @@ export interface NavItem {
      *  ComingSoon page — so the three can't drift apart. Promoting a domain is
      *  deleting this property. */
     planned?: string;
+    /** Kept out of the sidebar list, but still a real route: it still owns its
+     *  section (so a deep link keeps its sidebar) and still answers in the
+     *  palette. How a page retires — folded into another one without breaking
+     *  a bookmark. */
+    hidden?: boolean;
 }
 
 export interface NavGroupConfig {
@@ -109,14 +116,9 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
             {
                 title: "Plan",
                 items: [
-                    {
-                        to: "/categories",
-                        label: "Categories",
-                        icon: "categories",
-                    },
-                    { to: "/pots", label: "Pots", icon: "pots" },
-                    { to: "/outgoings", label: "Bills", icon: "bills" },
-                    { to: "/review", label: "Bill review", icon: "review" },
+                    { to: "/plan", label: "Plan", icon: "plan" },
+                    { to: "/funding", label: "Funding", icon: "funding" },
+                    { to: "/upcoming", label: "Upcoming", icon: "upcoming" },
                     {
                         to: "/renewals",
                         label: "Renewals",
@@ -124,8 +126,25 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
                         planned:
                             "Insurance, broadband, mobile and energy contracts with their renewal dates and current price, so nothing auto-renews at the loyalty penalty.",
                     },
-                    { to: "/funding", label: "Funding", icon: "funding" },
-                    { to: "/upcoming", label: "Upcoming", icon: "upcoming" },
+                    {
+                        to: "/categories",
+                        label: "Categories",
+                        icon: "categories",
+                        hidden: true,
+                    },
+                    { to: "/pots", label: "Pots", icon: "pots", hidden: true },
+                    {
+                        to: "/outgoings",
+                        label: "Bills",
+                        icon: "bills",
+                        hidden: true,
+                    },
+                    {
+                        to: "/review",
+                        label: "Bill review",
+                        icon: "review",
+                        hidden: true,
+                    },
                 ],
             },
             {
@@ -307,6 +326,19 @@ export const owningSection = (pathname: string): NavSectionConfig | null =>
     NAV_ITEMS.find(
         ({ item }) => pathname === item.to || pathname.startsWith(item.to + "/")
     )?.section ?? null;
+
+/** Whether a navigation should close the drawer on a phone.
+ *
+ *  Tapping a rail section is "show me this section's pages", not a destination
+ *  you asked for — closing the drawer there makes you reopen it to pick one.
+ *  Tapping a page IS the pick, so that closes. Overview owns no page list, so
+ *  landing there closes too: there would be nothing to pick from. */
+export const closesMobileNav = (from: string, to: string): boolean => {
+    const next = sectionForPath(to);
+    if (!next) return true;
+
+    return owningSection(from)?.id === next.id;
+};
 
 /** The section whose page list should show — the same thing, minus Overview,
  *  which is a single page and has no list to show. The list follows this and

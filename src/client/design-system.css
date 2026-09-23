@@ -41,18 +41,18 @@
     --text-fig-lg: 24px;
     --text-fig-xl: 32px;
 
-    --radius-xs: 4px;
-    --radius-sm: 6px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
-    --radius-xl: 16px;
+    --radius-xs: 2px;
+    --radius-sm: 3px;
+    --radius-md: 4px;
+    --radius-lg: 6px;
+    --radius-xl: 8px;
 
-    --shadow-raised: 0 1px 2px rgba(34, 38, 31, 0.05);
-    --shadow-popover:
-        0 6px 20px -4px rgba(34, 38, 31, 0.14), 0 2px 6px rgba(34, 38, 31, 0.05);
-    --shadow-modal:
-        0 24px 56px -12px rgba(34, 38, 31, 0.26),
-        0 4px 12px rgba(34, 38, 31, 0.07);
+    /* Through a variable, like the colour roles: Tailwind inlines a shadow
+       value into the utility, so a theme that redefines --shadow-* directly
+       would never reach it. */
+    --shadow-raised: var(--hearth-shadow-raised);
+    --shadow-popover: var(--hearth-shadow-popover);
+    --shadow-modal: var(--hearth-shadow-modal);
 
     --ease-out: cubic-bezier(0.2, 0, 0, 1);
     --ease-in-out: cubic-bezier(0.45, 0, 0.2, 1);
@@ -90,6 +90,11 @@
 }
 
 :root {
+    /* Native controls — the select popup, scrollbars, the checkbox — take their
+       palette from this and nothing else, so without it a dark app opens a white
+       dropdown. */
+    color-scheme: light;
+
     --hearth-bg: #fbfaf4;
     --hearth-surface: #fbfaf4;
     --hearth-sunken: #f4f2ea;
@@ -118,12 +123,21 @@
     --hearth-danger-tint: #f8efe5;
     --hearth-ring: #47613f;
     --hearth-overlay: rgba(34, 38, 31, 0.44);
+
+    --hearth-shadow-raised: 0 1px 2px rgba(34, 38, 31, 0.05);
+    --hearth-shadow-popover:
+        0 6px 20px -4px rgba(34, 38, 31, 0.14), 0 2px 6px rgba(34, 38, 31, 0.05);
+    --hearth-shadow-modal:
+        0 24px 56px -12px rgba(34, 38, 31, 0.26),
+        0 4px 12px rgba(34, 38, 31, 0.07);
 }
 
 /* Warm bark, never slate. Two things beyond a straight swap: the rail goes
    darker than the content rather than lighter, and moss lifts to #7FA46F —
    #47613F is only 1.4:1 on bark. */
 [data-mantine-color-scheme="dark"] {
+    color-scheme: dark;
+
     --hearth-bg: #1b1e18;
     --hearth-surface: #22261f;
     --hearth-sunken: #171a15;
@@ -152,9 +166,9 @@
     --hearth-danger-tint: #36291f;
     --hearth-ring: #9dbe8c;
     --hearth-overlay: rgba(9, 11, 8, 0.62);
-    --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.35);
-    --shadow-popover: 0 8px 24px -4px rgba(0, 0, 0, 0.55);
-    --shadow-modal: 0 28px 64px -12px rgba(0, 0, 0, 0.66);
+    --hearth-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --hearth-shadow-popover: 0 8px 24px -4px rgba(0, 0, 0, 0.55);
+    --hearth-shadow-modal: 0 28px 64px -12px rgba(0, 0, 0, 0.66);
 }
 
 /* Preflight is off (see the top of this file), so Mantine's base styles still
@@ -182,6 +196,22 @@
         cursor: pointer;
     }
 
+    /* Checkboxes and radios keep their native rendering: `accent-color` tints
+       them to the palette, which beats redrawing a tick in CSS. */
+    .hearth-ds
+        :is(
+            input:not([type="checkbox"]):not([type="radio"]),
+            select,
+            textarea
+        ) {
+        appearance: none;
+        background: none;
+        border: 0;
+        padding: 0;
+        color: inherit;
+        font: inherit;
+    }
+
     .hearth-ds :is(h1, h2, h3, p) {
         margin: 0;
     }
@@ -197,6 +227,19 @@
     box-shadow:
         0 0 0 2px var(--color-bg),
         0 0 0 4px var(--color-ring);
+}
+
+/* A text field's border lives on the wrapper, so the ring has to as well — drawn
+   on the control it sits inside that border, a couple of pixels off from the box
+   it is meant to be highlighting. The wrapper takes it on `:focus-within`
+   instead. More specific than the rule above, and unlayered like it. */
+.hearth-ds
+    :is(
+        input:not([type="checkbox"]):not([type="radio"]),
+        select,
+        textarea
+    ):focus-visible {
+    box-shadow: none;
 }
 
 .tabular {

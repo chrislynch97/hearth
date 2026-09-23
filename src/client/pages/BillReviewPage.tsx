@@ -157,7 +157,7 @@ export const BillReviewPage = () => {
 
             {!isLoading && rows.length === 0 && (
                 <Text c="dimmed">
-                    No active bills to review yet — add some on the Bills page.
+                    No active bills to review yet — add some on the Plan page.
                 </Text>
             )}
 
