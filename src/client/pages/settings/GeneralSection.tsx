@@ -266,7 +266,9 @@ export const GeneralSection = () => {
                         })}
                     </Text>
                 </Text>
-                <Group grow>
+                {/* Bottom-aligned: only one of the three carries a description, and a
+                    centred row would leave its input half a line below the others. */}
+                <Group grow align="flex-end">
                     <Select
                         label="Joint funding model"
                         description={
