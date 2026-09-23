@@ -56,8 +56,12 @@ export const HistorySection = ({ money }: HistorySectionProps) => {
                         const potName = b.potId
                             ? (potById.get(b.potId)?.name ?? "Unknown pot")
                             : "Mixed";
-                        const { isReversed, isWriteOff, isPartial } =
-                            batchSummary(b);
+                        const {
+                            isReversed,
+                            isWriteOff,
+                            isResidualPayment,
+                            isPartial,
+                        } = batchSummary(b);
                         return (
                             <Group
                                 key={b.id}
@@ -85,7 +89,7 @@ export const HistorySection = ({ money }: HistorySectionProps) => {
                                     >
                                         {potName}
                                     </Text>
-                                    {isWriteOff ? (
+                                    {isWriteOff || isResidualPayment ? (
                                         <Text
                                             size="sm"
                                             c="dimmed"
@@ -95,7 +99,9 @@ export const HistorySection = ({ money }: HistorySectionProps) => {
                                                     : undefined
                                             }
                                         >
-                                            wrote off{" "}
+                                            {isResidualPayment
+                                                ? "paid down "
+                                                : "wrote off "}
                                             {formatMoney(
                                                 Math.abs(b.movedAmount ?? 0),
                                                 money
@@ -119,7 +125,7 @@ export const HistorySection = ({ money }: HistorySectionProps) => {
                                                   )}
                                         </Text>
                                     )}
-                                    {!isWriteOff && (
+                                    {!isWriteOff && !isResidualPayment && (
                                         <Text size="xs" c="dimmed">
                                             {b.transactionCount} txn
                                             {b.transactionCount === 1

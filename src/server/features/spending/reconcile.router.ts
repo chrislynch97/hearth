@@ -9,6 +9,7 @@ import type { ReconciliationBatch } from '../../db/schema'
 import type { DBOrTx } from '../../db/client'
 import { newId } from '../../../shared/ids'
 import { computeBacklog, type BacklogResidual } from './backlog'
+import { PART_PAY_NOTE, WRITE_OFF_NOTE } from '../../../shared/reconcile'
 
 /** A batch's contribution to its pot/payer residual: what was required minus what
  *  actually moved. `movedAmount` null means "moved in full", i.e. no residual. */
@@ -172,7 +173,64 @@ export const reconcileRouter = router({
           totalAmount: 0,
           movedAmount: outstanding,
           transactionCount: 0,
-          note: 'Residual written off',
+          note: WRITE_OFF_NOTE,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning()
+
+      recordAudit(ctx, { entityType: 'reconciliationBatch', entityId: batchId, action: 'create', after: batch })
+      return batch!
+    }),
+
+  /**
+   * Move some of a pot/payer's outstanding residual without there being any
+   * spends left to reconcile. After a part-move the spends are already marked
+   * reconciled, so {@link markPotMoved} has nothing to scope to and refuses —
+   * which left writing the shortfall off as the only way out of a row you fully
+   * intended to keep paying down.
+   *
+   * Recorded like a write-off (no transactions, the amount in `movedAmount`, so
+   * its `0 − movedAmount` contribution cancels that much residual) and told
+   * apart from one by its note. Undo reverses it like any other batch.
+   */
+  payResidual: publicProcedure
+    .input(
+      z.object({
+        potId: z.string(),
+        ownerId: z.string().nullable().optional(),
+        /** Signed, in the same direction as the residual being paid down. */
+        movedAmount: z.number().int(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const ownerId = input.ownerId ?? null
+      if (input.movedAmount === 0) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nothing to move' })
+      }
+
+      const residuals = await outstandingResiduals(ctx)
+      const outstanding = residuals.get(residualKey(input.potId, ownerId)) ?? 0
+      if (outstanding === 0) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'No residual to pay down for this pot' })
+      }
+      if (Math.sign(input.movedAmount) !== Math.sign(outstanding)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'That moves the residual the wrong way' })
+      }
+
+      const now = new Date()
+      const batchId = newId()
+      const [batch] = await ctx.db
+        .insert(reconciliationBatch)
+        .values({
+          id: batchId,
+          householdId: ctx.householdId,
+          potId: input.potId,
+          ownerId,
+          totalAmount: 0,
+          movedAmount: input.movedAmount,
+          transactionCount: 0,
+          note: PART_PAY_NOTE,
           createdAt: now,
           updatedAt: now,
         })

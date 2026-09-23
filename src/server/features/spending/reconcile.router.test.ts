@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { makeTestDb } from '../../db/testdb'
 import { ensureSeed } from '../../db/seed'
 import { appRouter } from '../../trpc/router'
+import { PART_PAY_NOTE } from '../../../shared/reconcile'
 
 describe('reconcile router', () => {
   it('backlog shows the per-pot total for unreconciled spends', async () => {
@@ -225,6 +226,85 @@ describe('reconcile router', () => {
     await expect(caller.reconcile.clearResidual({ potId: pot.id, ownerId: joint.id })).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     })
+  })
+
+  // The bug this fixes: after a part-move the spends are reconciled, so
+  // markPotMoved has nothing to scope to and refuses — which used to leave
+  // writing the shortfall off as the only way out of the row.
+  it('payResidual chips away at what a part-move left behind', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+
+    const members = await caller.members.list()
+    const joint = members.find((m) => m.kind === 'joint')!
+    const pot = await caller.pots.create({ name: 'Bills', ownerId: joint.id })
+
+    await caller.spends.add({ description: 'Council tax', amount: 5000, ownerId: joint.id, potId: pot.id })
+    await caller.reconcile.markPotMoved({ potId: pot.id, ownerId: joint.id, movedAmount: 3000 })
+
+    // markPotMoved can't help any more — there is nothing left to reconcile.
+    await expect(caller.reconcile.markPotMoved({ potId: pot.id, ownerId: joint.id, movedAmount: 1000 })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+
+    const first = await caller.reconcile.payResidual({ potId: pot.id, ownerId: joint.id, movedAmount: 1200 })
+    expect(first.totalAmount).toBe(0)
+    expect(first.transactionCount).toBe(0)
+    expect(first.movedAmount).toBe(1200)
+    expect(first.note).toBe(PART_PAY_NOTE)
+
+    const afterFirst = await caller.reconcile.backlog()
+    expect(afterFirst.perPot.find((p) => p.potId === pot.id)?.residual).toBe(800)
+
+    await caller.reconcile.payResidual({ potId: pot.id, ownerId: joint.id, movedAmount: 800 })
+
+    const afterSecond = await caller.reconcile.backlog()
+    expect(afterSecond.perPot.find((p) => p.potId === pot.id)).toBeUndefined()
+
+    // And nothing left to pay down.
+    await expect(caller.reconcile.payResidual({ potId: pot.id, ownerId: joint.id, movedAmount: 100 })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+  })
+
+  it('payResidual refuses a move that would push the residual the other way', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+
+    const members = await caller.members.list()
+    const joint = members.find((m) => m.kind === 'joint')!
+    const pot = await caller.pots.create({ name: 'Bills', ownerId: joint.id })
+
+    await caller.spends.add({ description: 'Council tax', amount: 5000, ownerId: joint.id, potId: pot.id })
+    await caller.reconcile.markPotMoved({ potId: pot.id, ownerId: joint.id, movedAmount: 3000 })
+
+    await expect(caller.reconcile.payResidual({ potId: pot.id, ownerId: joint.id, movedAmount: -500 })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+    await expect(caller.reconcile.payResidual({ potId: pot.id, ownerId: joint.id, movedAmount: 0 })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+  })
+
+  it('undoing a residual payment puts the shortfall back', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+
+    const members = await caller.members.list()
+    const joint = members.find((m) => m.kind === 'joint')!
+    const pot = await caller.pots.create({ name: 'Bills', ownerId: joint.id })
+
+    await caller.spends.add({ description: 'Council tax', amount: 5000, ownerId: joint.id, potId: pot.id })
+    await caller.reconcile.markPotMoved({ potId: pot.id, ownerId: joint.id, movedAmount: 3000 })
+    const payment = await caller.reconcile.payResidual({ potId: pot.id, ownerId: joint.id, movedAmount: 1200 })
+
+    await caller.reconcile.undoBatch({ batchId: payment.id })
+
+    const backlog = await caller.reconcile.backlog()
+    expect(backlog.perPot.find((p) => p.potId === pot.id)?.residual).toBe(2000)
   })
 
   it('undoing a part-move reverses its residual too', async () => {

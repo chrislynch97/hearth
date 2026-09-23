@@ -1,4 +1,5 @@
 import { toMinor } from "@shared/money";
+import { PART_PAY_NOTE } from "@shared/reconcile";
 
 export interface BacklogSpend {
     id: string;
@@ -70,24 +71,33 @@ export interface HistoryBatch {
     movedAmount: number | null;
     transactionCount: number;
     reversedAt: Date | null;
+    /** What tells a written-off residual from one that was paid down. */
+    note: string | null;
 }
 
 export interface BatchSummary {
     isReversed: boolean;
     /** No spends: a residual written off rather than money moved. */
     isWriteOff: boolean;
+    /** No spends either, but the money really moved — a residual paid down. */
+    isResidualPayment: boolean;
     /** Less (or more) left the account than was required; the gap is the residual it created or cleared. */
     isPartial: boolean;
 }
 
 export const batchSummary = (batch: HistoryBatch): BatchSummary => {
-    const isWriteOff = batch.transactionCount === 0;
+    // Both zero-spend kinds carry the amount in movedAmount against a zero
+    // total, so only the note separates them; anything older has no note and is
+    // a write-off, which is all that existed then.
+    const noSpends = batch.transactionCount === 0;
+    const isResidualPayment = noSpends && batch.note === PART_PAY_NOTE;
 
     return {
         isReversed: batch.reversedAt !== null,
-        isWriteOff,
+        isWriteOff: noSpends && !isResidualPayment,
+        isResidualPayment,
         isPartial:
-            !isWriteOff &&
+            !noSpends &&
             batch.movedAmount !== null &&
             batch.movedAmount !== batch.totalAmount,
     };

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { BacklogPayer, HistoryBatch } from "./model";
 import { batchSummary, isOvershoot, parseMoved, settlement } from "./model";
+import { PART_PAY_NOTE } from "@shared/reconcile";
 
 const payer = (over: Partial<BacklogPayer> = {}): BacklogPayer => ({
     ownerId: "ava",
@@ -120,6 +121,7 @@ const batch = (over: Partial<HistoryBatch> = {}): HistoryBatch => ({
     movedAmount: null,
     transactionCount: 3,
     reversedAt: null,
+    note: null,
     ...over,
 });
 
@@ -129,6 +131,7 @@ describe("batchSummary", () => {
         expect(batchSummary(batch())).toEqual({
             isReversed: false,
             isWriteOff: false,
+            isResidualPayment: false,
             isPartial: false,
         });
     });
@@ -154,6 +157,22 @@ describe("batchSummary", () => {
             batch({ totalAmount: 0, movedAmount: 750, transactionCount: 0 })
         );
         expect(s.isWriteOff).toBe(true);
+        expect(s.isPartial).toBe(false);
+    });
+
+    // Same row shape as a write-off — the note is the only thing separating
+    // "gave up on it" from "moved some of it".
+    it("is a residual payment, not a write-off, when the note says so", () => {
+        const s = batchSummary(
+            batch({
+                totalAmount: 0,
+                movedAmount: 750,
+                transactionCount: 0,
+                note: PART_PAY_NOTE,
+            })
+        );
+        expect(s.isResidualPayment).toBe(true);
+        expect(s.isWriteOff).toBe(false);
         expect(s.isPartial).toBe(false);
     });
 
