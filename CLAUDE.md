@@ -24,21 +24,6 @@ When I send a GitHub issue link, follow this workflow:
    repos**, so say in the PR that the issue needs closing by hand, and close it
    once the PR merges.
 
-## Learning programme
-
-Most of this repo was written by Claude and I'm working through owning it. See
-[`.claude/learning/curriculum.md`](.claude/learning/curriculum.md) — the file
-map, the invariants that matter, and the feature ladder.
-
-Two standing rules:
-
-- **Nothing merges that I can't explain.** Run `/quiz-diff` on a change before
-  its PR merges, mine as much as yours.
-- **On home-portal features I write the implementation.** Offer `/pair` rather
-  than defaulting to building it for me.
-
-Also available: `/quiz <area>` and `/bug-hunt <area>`.
-
 ## Running / testing the app: fake data only, never the real database
 
 This is a real household's live budgeting app. The database is **Postgres**

@@ -5,25 +5,13 @@ reviews client code closely, so match them exactly.
 
 ## Formatting
 
-- Follow the project Prettier config (`.prettierrc.json`: 4-space indent,
-  semicolons, `arrowParens: always`, `es5` trailing commas). Run
-  `npx prettier --write <file>` on any file you touch and leave it clean.
-- Note: many older client files predate this config and don't conform. Don't
-  reformat them wholesale, but any file you create or substantively edit should
-  pass `prettier --check`.
+- Hand-write edits in the surrounding file's style. **Don't run
+  `prettier --write`** — most client files predate `.prettierrc.json` and it
+  rewrites them wholesale, burying the real change.
 
 ## Imports
 
-- Use the path aliases, not deep relative paths:
-    - `@/…` → `src/client/…`
-    - `@shared/…` → `src/shared/…`
-    - e.g. `import { validatePassword } from "@shared/password-policy";`, never
-      `"../shared/password-policy"` or `"../../shared/..."`.
-
-## Functions
-
-- Prefer arrow functions for handlers, callbacks, and other local functions,
-  e.g. `const submit = async () => { … };` — not `function submit() { … }`.
+- `@/…` → `src/client/…`, `@shared/…` → `src/shared/…`. Never deep relative paths.
 
 ## Charts
 
@@ -34,10 +22,10 @@ Two libraries, and the choice is about size, not taste:
   static SVG, no axes, no tooltips. Import per chart
   (`@microcharts/react/sparkline`), never the barrel, and add its stylesheet to
   `main.tsx` if the chart has one.
-- **`@mantine/charts`** (recharts) for a chart that carries its own axes,
-  legend and tooltips — the net-worth trend, income history, payslip history.
-  It's the app's heaviest dependency, so keep it behind a `React.lazy` boundary
-  (see `pages/IncomeTrendChart.tsx`).
+- Existing full charts (axes, legend, tooltips — net-worth trend, income and
+  payslip history) use `@mantine/charts` behind a `React.lazy` boundary (see
+  `pages/IncomeTrendChart.tsx`). It's Mantine, so don't reach for it in new UI;
+  ask before picking a library for a new full chart.
 
 Don't hand-roll a bar or sparkline out of `<Box>` and percentage widths;
 microcharts covers those and describes itself to assistive tech.
