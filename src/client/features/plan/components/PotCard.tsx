@@ -11,6 +11,7 @@ import {
     linePerPeriod,
     sumPerPeriod,
     type PlanPot,
+    type RecurringRow,
 } from "@/features/plan/model";
 import type { Expense, SetAside } from "../../../../server/db/schema";
 
@@ -50,7 +51,7 @@ export const PotCard = ({
 }: PotCardProps) => {
     const { pot, owner, bills, setAsides, perPeriod } = planPot;
 
-    const periodAmount = (row: { amount: number | null; recurrence: string }) =>
+    const periodAmount = (row: RecurringRow) =>
         formatMoney(linePerPeriod(row, frequency), money);
 
     const billMeta = (bill: Expense) =>

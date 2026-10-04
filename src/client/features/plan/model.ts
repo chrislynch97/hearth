@@ -83,7 +83,7 @@ export const groupSlugs = (groups: PlanGroup[]): Map<string, string> => {
 const isActive = (bill: Expense): boolean =>
     bill.active === 1 && bill.archivedAt === null;
 
-type RecurringRow = { amount: number | null; recurrence: string };
+export type RecurringRow = { amount: number | null; recurrence: string };
 
 const perPeriodOf = (
     rows: RecurringRow[],
