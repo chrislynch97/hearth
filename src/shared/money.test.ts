@@ -82,6 +82,29 @@ describe('formatMoney', () => {
       formatMoney(-500, { symbol: 'kr', decimalPlaces: 2, symbolPosition: 'suffix' }),
     ).toBe('-5.00 kr')
   })
+
+  // An unrounded per-period figure used to print as £53.33.33333333333303.
+  it('rounds a fractional amount to a whole minor unit', () => {
+    expect(formatMoney(64000 / 12, { symbol: '£', decimalPlaces: 2 })).toBe('£53.33')
+    expect(formatMoney(533333.3333, { symbol: '£', decimalPlaces: 2 })).toBe('£5,333.33')
+    expect(formatMoney(1234.6, { symbol: '£', decimalPlaces: 0 })).toBe('£1,235')
+  })
+
+  it('rounds a fractional tie away from zero', () => {
+    expect(formatMoney(1250.5, { symbol: '£', decimalPlaces: 2 })).toBe('£12.51')
+    expect(formatMoney(-1250.5, { symbol: '£', decimalPlaces: 2 })).toBe('-£12.51')
+  })
+
+  it('never prints a negative zero', () => {
+    expect(formatMoney(-0.4, { symbol: '£', decimalPlaces: 2 })).toBe('£0.00')
+    expect(formatMoney(-0, { symbol: '£', decimalPlaces: 2 })).toBe('£0.00')
+  })
+
+  it('rounds a fractional amount in the suffix format too', () => {
+    expect(
+      formatMoney(123456.7, { symbol: '€', decimalPlaces: 2, symbolPosition: 'suffix' }),
+    ).toBe('1,234.57 €')
+  })
 })
 
 describe('allocate', () => {

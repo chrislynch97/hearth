@@ -1,9 +1,4 @@
 import { formatMoney } from "@shared/money";
-import {
-    normaliseToPeriod,
-    roundMinor,
-    type Recurrence,
-} from "@shared/recurrence";
 import type { PeriodFrequency } from "@shared/period";
 import type { MoneyFormat } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
@@ -11,7 +6,12 @@ import { OwnerChip } from "@/features/plan/components/OwnerChip";
 import { PlanLineRow } from "@/features/plan/components/PlanLineRow";
 import { PotColumn } from "@/features/plan/components/PotColumn";
 import { StandingOrderChip } from "@/features/plan/components/StandingOrderChip";
-import { fundingOf, type PlanPot } from "@/features/plan/model";
+import {
+    fundingOf,
+    linePerPeriod,
+    sumPerPeriod,
+    type PlanPot,
+} from "@/features/plan/model";
 import type { Expense, SetAside } from "../../../../server/db/schema";
 
 export interface PotCardProps {
@@ -50,20 +50,8 @@ export const PotCard = ({
 }: PotCardProps) => {
     const { pot, owner, bills, setAsides, perPeriod } = planPot;
 
-    const perPeriodOf = (row: { amount: number | null; recurrence: string }) =>
-        normaliseToPeriod(
-            row.amount ?? 0,
-            row.recurrence as Recurrence,
-            frequency
-        );
-
     const periodAmount = (row: { amount: number | null; recurrence: string }) =>
-        formatMoney(perPeriodOf(row), money);
-
-    /** A column's own share of what the pot needs; the two add up to its total. */
-    const periodTotal = (
-        rows: { amount: number | null; recurrence: string }[]
-    ) => roundMinor(rows.reduce((acc, row) => acc + perPeriodOf(row), 0));
+        formatMoney(linePerPeriod(row, frequency), money);
 
     const billMeta = (bill: Expense) =>
         fundingOf(bill) === "pot_auto" ? "auto" : bill.recurrence;
@@ -107,7 +95,10 @@ export const PotCard = ({
                 <PotColumn
                     direction="out"
                     label="Bills out"
-                    subtotal={formatMoney(periodTotal(bills), money)}
+                    subtotal={formatMoney(
+                        sumPerPeriod(bills, frequency),
+                        money
+                    )}
                     empty="No bills yet"
                     addLabel="Add bill"
                     onAdd={onAddBill}
@@ -129,7 +120,10 @@ export const PotCard = ({
                 <PotColumn
                     direction="in"
                     label="Set aside"
-                    subtotal={formatMoney(periodTotal(setAsides), money)}
+                    subtotal={formatMoney(
+                        sumPerPeriod(setAsides, frequency),
+                        money
+                    )}
                     empty="Nothing set aside yet"
                     addLabel="Add set-aside"
                     onAdd={onAddSetAside}

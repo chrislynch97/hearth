@@ -83,8 +83,10 @@ export const groupSlugs = (groups: PlanGroup[]): Map<string, string> => {
 const isActive = (bill: Expense): boolean =>
     bill.active === 1 && bill.archivedAt === null;
 
+type RecurringRow = { amount: number | null; recurrence: string };
+
 const perPeriodOf = (
-    rows: { amount: number | null; recurrence: string }[],
+    rows: RecurringRow[],
     frequency: PeriodFrequency
 ): number =>
     rows.reduce(
@@ -97,6 +99,19 @@ const perPeriodOf = (
             ),
         0
     );
+
+/** One bill or set-aside's share of a budget period, in whole minor units. */
+export const linePerPeriod = (
+    row: RecurringRow,
+    frequency: PeriodFrequency
+): number => roundMinor(perPeriodOf([row], frequency));
+
+/** A list's per-period total, summed at full precision and rounded once — the
+ *  funding plan's rule, so it can sit a penny off the sum of its lines. */
+export const sumPerPeriod = (
+    rows: RecurringRow[],
+    frequency: PeriodFrequency
+): number => roundMinor(perPeriodOf(rows, frequency));
 
 export interface BuildPlanInput {
     categories: Category[];
@@ -172,10 +187,7 @@ export const buildPlan = ({
             owner: memberById.get(pot.ownerId),
             bills: potBills,
             setAsides: potSetAsides,
-            perPeriod: roundMinor(
-                perPeriodOf(potBills, frequency) +
-                    perPeriodOf(potSetAsides, frequency)
-            ),
+            perPeriod: sumPerPeriod([...potBills, ...potSetAsides], frequency),
         };
     };
 
@@ -197,10 +209,9 @@ export const buildPlan = ({
             name,
             pots: groupPots,
             mainBills,
-            perPeriod: roundMinor(
+            perPeriod:
                 groupPots.reduce((acc, p) => acc + p.perPeriod, 0) +
-                    perPeriodOf(mainBills, frequency)
-            ),
+                sumPerPeriod(mainBills, frequency),
         };
     };
 
@@ -228,10 +239,9 @@ export const buildPlan = ({
             name: "Uncategorised",
             pots,
             mainBills,
-            perPeriod: roundMinor(
+            perPeriod:
                 pots.reduce((acc, p) => acc + p.perPeriod, 0) +
-                    perPeriodOf(mainBills, frequency)
-            ),
+                sumPerPeriod(mainBills, frequency),
         });
     }
 

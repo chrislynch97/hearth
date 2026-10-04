@@ -42,8 +42,11 @@ export function formatMoney(
   const decimalSeparator = opts.decimalSeparator ?? '.'
   const symbolPosition = opts.symbolPosition ?? 'prefix'
 
-  const sign = minor < 0 ? '-' : ''
-  const absMinor = Math.abs(minor)
+  // Round to a whole minor unit first: a fractional input would print its tail
+  // after a second decimal point. Sign comes after rounding, so -0.4 is £0.00.
+  const rounded = Math.sign(minor) * Math.round(Math.abs(minor))
+  const sign = rounded < 0 ? '-' : ''
+  const absMinor = Math.abs(rounded)
   const factor = 10 ** opts.decimalPlaces
   const intPart = Math.floor(absMinor / factor)
   const fracPart = absMinor % factor
