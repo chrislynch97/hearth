@@ -10,19 +10,42 @@ Two trackers, deliberately:
   go-live runbook, anything that's a task for me rather than a report from
   someone else. File new work here by default.
 
-## Working from a GitHub issue link
+## Task loop
 
-When I send a GitHub issue link, follow this workflow:
+Feature and fix work runs through the skills in `.claude/skills/`, one fresh
+session per step, each ending by naming the next. A pinned `(Task)` session
+(`/task-manager`) spawns the steps, sets their model and groups them in the
+sidebar. `/workflow` prints the loop; `/workflow <key>` says where a task is.
 
-1. Create a git worktree + branch for it, named to match the issue: the issue
-   number followed by a short kebab-case slug of the title (e.g. issue #65
-   "keep the selected date…" ⇒ `65-keep-spend-date`).
-2. Do the work on that branch.
-3. Open a PR into `main` for me to review — reference the issue in the PR body.
-   For a `hearth` issue that's `Closes #65`. For a planning issue use the full
-   `Closes chrislynch97/hearth-planning#13` — **GitHub won't auto-close across
-   repos**, so say in the PR that the issue needs closing by hand, and close it
-   once the PR merges.
+```
+plan-task → build-task → (I commit) → review-task → fix-task → (I commit) → test-task → ship-task
+```
+
+When I send a GitHub issue link, start it with `/task-manager <link>`.
+
+- **Task key**: `<issue#>-<slug>` for an issue (`65-keep-spend-date`, slug from
+  the title, four words max), else `<slug>`. The branch and the worktree
+  (`.claude/worktrees/<key>`) share the key.
+- **Paperwork** lives in the main checkout's `.claude/tasks/<key>/`
+  (gitignored): `plan.md`, `status.md` (the ledger) and `findings.md`. From any
+  worktree the main checkout is `$(git rev-parse --path-format=absolute --git-common-dir)/..`;
+  always write there, never to a worktree's own `.claude/tasks/`.
+- **Ledger** (`status.md`): one line per step, newest last, appended by the step
+  that ran: `plan: 2026-10-03`, `build: …`, `review: … — 2 findings`,
+  `fix: … — 2 fixed, 0 declined`, `re-review: … — skipped`, `checks: … — pass`,
+  `manual-test: … — 7 pass, 0 fail`, `shipped: … — PR #123`, `done: …`.
+- **Findings** (`findings.md`): checkbox lines under dated headings
+  (`## Review …`, `## Manual test …`, `## Additions …`). Review and test append;
+  fix ticks them.
+- **Build and fix never commit.** They leave the tree for me to read and
+  commit, and report to the manager only once the tree is clean.
+- **Shipping** (`ship-task`) opens the PR and turns on squash auto-merge, so CI
+  (`check`, `e2e`, `image-scan`) is the gate. A `hearth` issue gets `Closes #65`
+  in the body; a planning issue gets `Closes chrislynch97/hearth-planning#13`,
+  which **doesn't auto-close across repos**, so ship-task closes it after the
+  merge.
+- **Models**: skills name the family (Opus) and an effort; the manager sets the
+  newest Opus id from the app's model list. No fast mode.
 
 ## Running / testing the app: fake data only, never the real database
 

@@ -17,3 +17,6 @@ data
 playwright-report/
 test-results/
 
+
+# Task-loop paperwork (plans, ledgers, findings)
+.claude/tasks/
