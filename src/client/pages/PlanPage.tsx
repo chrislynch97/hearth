@@ -92,8 +92,13 @@ export const PlanPage = () => {
     const setAsidesQuery = trpc.setAside.list.useQuery();
     const membersQuery = trpc.members.list.useQuery();
     const alertsQuery = trpc.standingOrders.alerts.useQuery();
+    // Raw field value: empty mid-edit is fine, the query falls back to today.
     const [shouldHoldOn, setShouldHoldOn] = useState(todayIso);
-    const balancesQuery = trpc.plan.potBalances.useQuery({ on: shouldHoldOn });
+    // Keep the last figures up while a new date loads, so open breakdowns stay open.
+    const balancesQuery = trpc.plan.potBalances.useQuery(
+        { on: shouldHoldOn || todayIso() },
+        { placeholderData: (previous) => previous }
+    );
     const ctx = trpc.bootstrap.context.useQuery();
     const utils = trpc.useUtils();
     const acknowledge = trpc.standingOrders.acknowledge.useMutation();
@@ -314,17 +319,13 @@ export const PlanPage = () => {
                                 />
                                 <BillReviewLink />
                             </div>
-                            {/* Cleared means today, not nothing: every pot
-                                card reads off this date. */}
                             <TextField
                                 type="date"
                                 label="Should hold on"
                                 className="w-44"
                                 value={shouldHoldOn}
                                 onChange={(event) =>
-                                    setShouldHoldOn(
-                                        event.currentTarget.value || todayIso()
-                                    )
+                                    setShouldHoldOn(event.currentTarget.value)
                                 }
                             />
                         </PlanHeader>
