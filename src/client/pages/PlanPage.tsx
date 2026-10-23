@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getRouteApi } from "@tanstack/react-router";
+import { todayIso } from "@shared/dates";
 import { periodConfig, periodUnitLabel } from "@shared/period";
 import { trpc } from "@/trpc";
 import { useMediaQuery } from "@/useMediaQuery";
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/PlusIcon";
 import { SelectField } from "@/components/ui/SelectField";
 import { Spinner } from "@/components/ui/Spinner";
+import { TextField } from "@/components/ui/TextField";
 import { BillForm } from "@/features/plan/components/BillForm";
 import { BillReviewLink } from "@/features/plan/components/BillReviewLink";
 import { CategoryForm } from "@/features/plan/components/CategoryForm";
@@ -90,6 +92,8 @@ export const PlanPage = () => {
     const setAsidesQuery = trpc.setAside.list.useQuery();
     const membersQuery = trpc.members.list.useQuery();
     const alertsQuery = trpc.standingOrders.alerts.useQuery();
+    const [shouldHoldOn, setShouldHoldOn] = useState(todayIso);
+    const balancesQuery = trpc.plan.potBalances.useQuery({ on: shouldHoldOn });
     const ctx = trpc.bootstrap.context.useQuery();
     const utils = trpc.useUtils();
     const acknowledge = trpc.standingOrders.acknowledge.useMutation();
@@ -168,6 +172,9 @@ export const PlanPage = () => {
             alert.potId,
             { wasMonthly: alert.wasMonthly },
         ])
+    );
+    const shouldHoldByPot = new Map(
+        (balancesQuery.data ?? []).map((balance) => [balance.potId, balance])
     );
 
     const slugOf = (key: string) => slugs.get(key) ?? key;
@@ -307,6 +314,19 @@ export const PlanPage = () => {
                                 />
                                 <BillReviewLink />
                             </div>
+                            {/* Cleared means today, not nothing: every pot
+                                card reads off this date. */}
+                            <TextField
+                                type="date"
+                                label="Should hold on"
+                                className="w-44"
+                                value={shouldHoldOn}
+                                onChange={(event) =>
+                                    setShouldHoldOn(
+                                        event.currentTarget.value || todayIso()
+                                    )
+                                }
+                            />
                         </PlanHeader>
 
                         {/* Capped, but generously: past ~1120px a pot card only
@@ -337,6 +357,7 @@ export const PlanPage = () => {
                                     frequency={frequency}
                                     unit={unit}
                                     staleByPot={staleByPot}
+                                    shouldHoldByPot={shouldHoldByPot}
                                     acknowledgingPotId={acknowledgingPotId}
                                     onAcknowledge={(potId) =>
                                         void handleAcknowledge(potId)

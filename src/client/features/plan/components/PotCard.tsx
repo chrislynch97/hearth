@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/Button";
 import { OwnerChip } from "@/features/plan/components/OwnerChip";
 import { PlanLineRow } from "@/features/plan/components/PlanLineRow";
 import { PotColumn } from "@/features/plan/components/PotColumn";
+import { ShouldHold } from "@/features/plan/components/ShouldHold";
 import { StandingOrderChip } from "@/features/plan/components/StandingOrderChip";
 import {
     fundingOf,
     linePerPeriod,
     sumPerPeriod,
     type PlanPot,
+    type PotBalance,
     type RecurringRow,
 } from "@/features/plan/model";
 import type { Expense, SetAside } from "../../../../server/db/schema";
@@ -23,6 +25,8 @@ export interface PotCardProps {
     unit: string;
     /** Set when this pot's standing order has gone stale. */
     staleStandingOrder: { wasMonthly: number } | undefined;
+    /** What the pot should hold on the page's chosen day; absent while loading. */
+    shouldHold: PotBalance | undefined;
     acknowledging: boolean;
     onAcknowledge: () => void;
     onEditPot: () => void;
@@ -41,6 +45,7 @@ export const PotCard = ({
     frequency,
     unit,
     staleStandingOrder,
+    shouldHold,
     acknowledging,
     onAcknowledge,
     onEditPot,
@@ -91,6 +96,10 @@ export const PotCard = ({
                     Edit
                 </Button>
             </div>
+
+            {shouldHold && shouldHold.lines.length > 0 && (
+                <ShouldHold balance={shouldHold} money={money} />
+            )}
 
             <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
                 <PotColumn

@@ -114,6 +114,7 @@ export const BillForm = ({
         Promise.all([
             utils.expenses.list.invalidate(),
             utils.plan.funding.invalidate(),
+            utils.plan.potBalances.invalidate(),
             utils.standingOrders.alerts.invalidate(),
         ]);
 
