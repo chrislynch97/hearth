@@ -29,7 +29,7 @@ export const ShouldHold = ({ balance, money }: ShouldHoldProps) => {
                     </span>
                 }
             >
-                <ul className="flex flex-col gap-1.5">
+                <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
                     {balance.lines.map((line) => (
                         <li
                             key={line.expenseId}
