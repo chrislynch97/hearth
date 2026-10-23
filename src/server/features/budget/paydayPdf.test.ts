@@ -2,14 +2,18 @@ import { describe, it, expect } from 'vitest'
 import { makeTestDb } from '../../db/testdb'
 import { seedDemo } from '../../db/demo'
 import { DEFAULT_HOUSEHOLD_ID } from '../../trpc/tenant'
-import { paydayPdfForHousehold, renderPaydayPdf, type PaydayPdfFormat } from './paydayPdf'
+import { currencySymbol, paydayPdfForHousehold, renderPaydayPdf, textRuns, type PaydayPdfFormat } from './paydayPdf'
 import type { PaydaySheet } from './paydaySheet'
 
 const format: PaydayPdfFormat = {
   money: { symbol: '£', decimalPlaces: 2 },
+  currencyCode: 'GBP',
   locale: 'en-GB',
   dateFormat: 'medium',
 }
+
+// formatMoney's no-break space between a code and its amount.
+const NBSP = String.fromCharCode(0xa0)
 
 const pageCount = (pdf: Buffer) => Number(pdf.toString('latin1').match(/\/Type \/Pages\s+\/Count (\d+)/)?.[1])
 
@@ -29,7 +33,55 @@ function sheet(overrides: Partial<PaydaySheet> = {}): PaydaySheet {
   }
 }
 
+describe('textRuns', () => {
+  it('draws latin-ext letters and currency symbols from the subset that has them', () => {
+    expect(textRuns('Łukasz & Zoë')).toEqual([
+      { subset: 'latin-ext', text: 'Ł' },
+      { subset: 'latin', text: 'ukasz & Zoë' },
+    ])
+    expect(textRuns('10 zł · Tiết')).toEqual([
+      { subset: 'latin', text: '10 z' },
+      { subset: 'latin-ext', text: 'ł' },
+      { subset: 'latin', text: ' · Ti' },
+      { subset: 'vietnamese', text: 'ế' },
+      { subset: 'latin', text: 't' },
+    ])
+    expect(textRuns('Gdańsk — £5')).toEqual([
+      { subset: 'latin', text: 'Gda' },
+      { subset: 'latin-ext', text: 'ń' },
+      { subset: 'latin', text: 'sk — £5' },
+    ])
+  })
+})
+
+describe('currencySymbol', () => {
+  it('keeps a symbol the font can draw', () => {
+    expect(currencySymbol(format)).toBe('£')
+    expect(currencySymbol({ money: { symbol: 'zł', decimalPlaces: 2, symbolPosition: 'suffix' }, currencyCode: 'PLN' })).toBe('zł')
+  })
+
+  it('falls back to the currency code for a symbol the font lacks', () => {
+    expect(currencySymbol({ money: { symbol: '₹', decimalPlaces: 2 }, currencyCode: 'INR' })).toBe(`INR${NBSP}`)
+    expect(currencySymbol({ money: { symbol: '₩', decimalPlaces: 0, symbolPosition: 'suffix' }, currencyCode: 'KRW' })).toBe('KRW')
+  })
+})
+
 describe('renderPaydayPdf', () => {
+  it('renders non-latin-1 names and currency, and a name too long for its split', async () => {
+    const pdf = await renderPaydayPdf(
+      sheet({
+        householdName: 'Łukasz & Zoë Wróbel',
+        people: [
+          { name: 'Alexandra-Catherine Montgomery-Smythe of Somewhere', personalPots: 123456, jointContribution: 98765, setAside: 222221 },
+        ],
+        potGroups: [{ ownerName: 'Łukasz', pots: [{ name: 'Wakacje — Gdańsk', amount: 246912 }], total: 246912 }],
+      }),
+      { ...format, money: { symbol: '₹', decimalPlaces: 2 }, currencyCode: 'INR' },
+    )
+
+    expect(pageCount(pdf)).toBe(1)
+  })
+
   it('renders an empty household as a one-page PDF', async () => {
     const pdf = await renderPaydayPdf(sheet(), format)
 
