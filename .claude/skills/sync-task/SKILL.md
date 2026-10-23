@@ -1,15 +1,15 @@
 ---
 name: sync-task
-description: Use when a Hearth task branch has gone stale against main — "/sync-task 42-slug", "merge main in", "bring the branch up to date", "fix the conflicts". Merges origin/main into the branch (never rebase), resolves conflicts, verifies, and pushes if the branch is already on GitHub.
+description: Use when a Hearth task branch has gone stale against main outside the loop — "/sync-task 42-slug", "merge main in", "bring the branch up to date", "fix the conflicts". Merges origin/main into the branch (never rebase), resolves conflicts, verifies, and pushes if the branch is already on GitHub. Build and Ship already sync as part of their phases.
 ---
 
 # Sync a task branch
 
 **Model:** Opus, high effort.
 
-**Session title:** `(Sync) <key>`. Set it first: ToolSearch
-`select:mcp__ccd_session_mgmt__set_session_title`, call with `session_id: "self"`. Skip silently if
-unavailable (and skip it when run as part of `ship-task`).
+**Session title:** run it wherever you are. In a task session keep its title; in a fresh one, set
+`(Sync) <key>` first (ToolSearch `select:mcp__ccd_session_mgmt__set_session_title`,
+`session_id: "self"`; skip silently if unavailable).
 
 Main into the branch, never the reverse and never a rebase: a PR may already be open.
 `<wt>` is the main checkout's `.claude/worktrees/<key>`.
@@ -28,10 +28,7 @@ Main into the branch, never the reverse and never a rebase: a PR may already be 
 6. **Push** with plain `git push` if the branch has an upstream; none means it was never pushed,
    so stop there.
 7. **Status** in three lines: files resolved and how, verification result, pushed or not. Append
-   `sync: <date> — <pushed | not pushed>` to the ledger.
-
-**Report to the manager.** Last action: `send_message` the ledger line to the session id the
-manager named; fallback `list_sessions`, the session titled `(Task) <key>`. No manager, no message.
+   `sync: <date> — <pushed | not pushed>` to the ledger, and the run log line (`step: "sync"`).
 
 ## What not to do
 
@@ -40,3 +37,4 @@ manager named; fallback `list_sessions`, the session titled `(Task) <key>`. No m
 | `git rebase` or `--force` | Loses the PR's history. |
 | Taking one side wholesale | Drops an intent silently. |
 | Hand-merging generated files | Regenerate them. |
+| Stashing or committing Chris's work | A dirty tree is a stop. |

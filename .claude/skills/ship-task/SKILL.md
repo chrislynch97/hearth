@@ -1,69 +1,92 @@
 ---
 name: ship-task
-description: Use when a Hearth task has passed testing and Chris wants it landed — "/ship-task 42-slug", "ship it". Syncs with main, pushes, opens the PR, turns on squash auto-merge so CI is the gate, then on merge closes the issue, removes the worktree and archives the task's sessions. The ask is the authorisation for all of it.
+description: Use when a Hearth task has passed its Check and needs landing — "/ship-task 42-slug", the message the Check session sends when everything passes, "push" after a CI fix was re-checked, or a wake-up from the app on CI or merge. Syncs, pushes, opens the PR, turns on squash auto-merge so CI is the gate, then on merge closes the issue, removes the worktree and archives the task's sessions.
 ---
 
 # Ship a task
 
 **Model:** Opus, medium effort.
 
-**Session title:** `(Ship) <key>`. Set it first: ToolSearch
-`select:mcp__ccd_session_mgmt__set_session_title`, call with `session_id: "self"`. Skip silently if
-unavailable.
+**Session title:** `(Ship) <key> — <state>`, per *State and title* below.
 
-Chris invoking this is the authorisation to push, open the PR, enable auto-merge, close the
-issue, remove the worktree and archive the task's sessions. Don't ask again. `<main>` is the main
-checkout, `<wt>` its `.claude/worktrees/<key>`, `<tasks>` its `.claude/tasks/<key>/`.
+## Overview
 
-## Steps
+Everything after Check passes, in one session that lives until the PR merges: **open the PR**,
+**CI rounds** (repeated), **close-out**. Starting this session is the authorisation to push, open
+the PR, enable auto-merge, close the issue, remove the worktree and archive the task's sessions.
+Don't ask again. CI is the judge here; code fixes go to `(Build)` and come back through `(Check)`.
 
-1. **Preconditions.** Clean tree in `<wt>`. No unticked lines in `findings.md`. The ledger has a
-   `manual-test:` line without `FAILED` (or Chris says he's tested it). Otherwise say what's
-   missing and stop.
-2. **Sync.** Run the `sync-task` steps against `origin/main` (merge, never rebase). If the merge
-   brought changes, re-run `npm run typecheck` and `npm test`.
-3. **Push**: `git push -u origin <key>`.
-4. **PR.** `gh pr create --repo chrislynch97/hearth --base main --title "<outcome>" --body-file <file>`.
-   Title is the user-visible outcome in plain words. Body, terse:
+`<main>` is the main checkout, `<tasks>` its `.claude/tasks/<key>/`, `<wt>` its
+`.claude/worktrees/<key>`.
+
+## Phase 1 — Open the PR
+
+1. **Preconditions.** Clean tree in `<wt>`. No unticked lines in `findings.md`. The latest
+   `auto-test:` and `manual-test:` lines have no `FAILED`. Otherwise say what's missing and stop.
+2. **Sync** if main moved since Build's: per `sync-task`, merge never rebase, re-verify.
+3. **Push**: `git push -u origin <key>`, the first and only time upstream is set.
+4. **PR.** `gh pr create --repo chrislynch97/hearth --base main --title "<type>(<area>): <outcome>"
+   --body-file <file>`. Title matches the repo's squash subjects. Body, terse:
    - **What**: one line.
-   - **Why**: one or two lines, from the plan's goal.
+   - **Why**: one or two lines, from the plan.
    - **Changes**: a few bullets naming the files that carry the decisions.
-   - **Tested**: from the ledger (`checks:`, `manual-test:`, `review:` lines).
+   - **Tested**: from the ledger (`review:`, `checks:`, `auto-test:`, `manual-test:`). Nothing
+     claimed that the ledger doesn't show.
    - The close line: `Closes #<n>` for a `hearth` issue; for a planning issue
      `Closes chrislynch97/hearth-planning#<n>` plus "closed by hand after merge (cross-repo)".
    - The attribution line from the session reminder.
 5. **Hand CI the gate.** ToolSearch
    `select:mcp__ccd_pr__bind_pr,mcp__ccd_pr__get_status,mcp__ccd_pr__set_auto_merge,mcp__ccd_pr__set_monitor`.
-   `bind_pr` the URL, `set_auto_merge` on with `squash`, and `set_monitor` with `auto_fix` on so
-   this session is woken on a CI failure or conflict. Never poll CI yourself.
-6. **Ledger and report.** Append `shipped: <date> — PR #<n>` to `<tasks>/status.md`, report the
-   PR URL to the manager, and wait.
+   `bind_pr` the URL, `set_auto_merge` on with `squash`, `set_monitor` with `auto_fix` on so the
+   app wakes this session on a failure, conflict or merge. Never poll CI.
+6. Append `pr: <date> — <url>`. State: `waiting — CI`. Report the URL and stop.
 
-## When woken
+## Phase 2 — CI rounds
 
-- **CI failed or conflict**: read the failure, say what broke in two lines, report to the manager
-  as `ship: <date> — CI failed: <check>`. The fix goes through `fix-task` in `(Build)`; then
-  Chris commits and this session pushes again on his word. A conflict: run the `sync-task` steps
-  and push.
-- **Merged**:
-  1. Planning issue: `gh issue close <n> --repo chrislynch97/hearth-planning --comment "Shipped in chrislynch97/hearth#<pr>"`.
-  2. `git -C <main> worktree remove <wt>` (left alone, and named, if dirty), `git -C <main> branch -D <key>`,
-     `git -C <main> fetch --prune`, and fast-forward the main checkout if it's on a clean `main`.
-  3. Append `done: <date> — PR #<n> merged` to the ledger and print the whole ledger.
-  4. Archive the group: ToolSearch
-     `select:mcp__ccd_session_mgmt__list_sessions,mcp__ccd_session_mgmt__archive_session,mcp__ccd_sidebar__set_pinned,mcp__ccd_sidebar__move_sessions,mcp__ccd_sidebar__delete_group`.
-     Unpin the `(Task) <key>` session (don't message it — a busy session can't be archived),
-     `archive_session` each session in the `<key>` group except this one with
-     `reason: "<key> shipped"`, then move this session out and `delete_group`. Name any that
-     wouldn't archive; don't retry in a loop.
-  5. Report in three lines (PR, issue, cleanup), then `archive_session` self as the last action.
+- **CI failed**: read the failure, say what broke in two lines. Append it to `findings.md` under
+  `## CI <date>` and `send_message` the `(Build)` session `ci: <check> failed for <key>. Fix from
+  the findings file.` State: `waiting — CI fix in Build`. When Check sends `push <key>` after the
+  re-check: sync if main moved, `git push`, append `sync: <date> — pushed CI fix`, state
+  `waiting — CI`.
+- **Conflict**: run the `sync-task` steps here and push.
+- **Review comments** (rare; a solo repo): same verdicts as Build's fix phase, proposed to Chris
+  first; nothing is fixed here.
+
+## Phase 3 — Close-out
+
+On merge:
+
+1. Planning issue: `gh issue close <n> --repo chrislynch97/hearth-planning --comment "Shipped in chrislynch97/hearth#<pr>"`.
+2. `git -C <main> worktree remove <wt>` (a tree whose only change is `package-lock.json` counts
+   as clean; anything else: leave it and name it), `git -C <main> branch -D <key>`,
+   `git -C <main> fetch --prune`, and fast-forward the main checkout if it's on a clean `main`.
+3. Append `merged: <date> — PR #<n>` and `done: <date>`; state `done`. Print the whole ledger.
+4. **Sessions.** ToolSearch
+   `select:mcp__ccd_session_mgmt__list_sessions,mcp__ccd_session_mgmt__archive_session,mcp__ccd_sidebar__list_groups,mcp__ccd_sidebar__move_sessions,mcp__ccd_sidebar__delete_group`.
+   Archive every other session in the `<key>` group with `reason: "<key> shipped"`, then move this
+   one out and `delete_group`. Name any that wouldn't archive; don't retry in a loop.
+5. Report in three lines (PR, issue, cleanup), append the run log line, then `archive_session`
+   self as the last action.
+
+## State and title
+
+At every transition, rewrite line 1 of `<tasks>/status.md` to `state: <state>`, then set this
+session's title to `(Ship) <key> — <state, shortened>` with `set_session_title`
+(`session_id: "self"`). States: `needs you — <ask>`, `running — <what>`, `waiting — <on what>`,
+`done`.
+
+## Run log
+
+At the end of each phase, append one JSON line to `<main>/.claude/tasks/workflow-log.jsonl` (shape
+in `build-task` → *Run log*, `step: "open-pr" | "ci" | "close-out"`).
 
 ## What not to do
 
 | Mistake | Why |
 |---|---|
 | Shipping with open findings or failed steps | Precondition; say what's missing. |
-| Rebasing or force-pushing | Merge `main` in; history on the PR stays intact. |
-| Polling `gh pr checks` | The app wakes this session; auto-merge does the landing. |
+| Fixing code here | CI judged it; Build fixes, Check re-checks. |
+| Rebasing or force-pushing | Merge main in; the PR's history stays intact. |
+| Polling `gh pr checks` | The app wakes this session; auto-merge lands it. |
 | Merging past red CI with `--admin` | CI is the gate; that's Chris's call, never this session's. |
 | Deleting a dirty worktree | Name it and leave it. |
