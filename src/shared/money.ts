@@ -1,5 +1,7 @@
 /** Money is stored as integer minor units (e.g. pence). These helpers convert at the UI edge. */
 
+import { roundMinor } from './recurrence'
+
 export function toMinor(major: number, decimalPlaces: number): number {
   // Parse via string to avoid IEEE-754 drift (e.g. 1.005 * 100 = 100.49999…).
   // Shift the decimal point in the string representation, then parseInt.
@@ -42,8 +44,10 @@ export function formatMoney(
   const decimalSeparator = opts.decimalSeparator ?? '.'
   const symbolPosition = opts.symbolPosition ?? 'prefix'
 
-  const sign = minor < 0 ? '-' : ''
-  const absMinor = Math.abs(minor)
+  // A fractional input would otherwise print its tail after a second decimal point.
+  const rounded = roundMinor(minor)
+  const sign = rounded < 0 ? '-' : ''
+  const absMinor = Math.abs(rounded)
   const factor = 10 ** opts.decimalPlaces
   const intPart = Math.floor(absMinor / factor)
   const fracPart = absMinor % factor

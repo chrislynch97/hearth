@@ -1,10 +1,10 @@
 import { formatMoney } from "@shared/money";
-import { normaliseToPeriod, type Recurrence } from "@shared/recurrence";
 import type { PeriodFrequency } from "@shared/period";
 import type { MoneyFormat } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/PlusIcon";
 import { PlanLineRow } from "@/features/plan/components/PlanLineRow";
+import { linePerPeriod, sumPerPeriod } from "@/features/plan/model";
 import type { Expense } from "../../../../server/db/schema";
 
 export interface MainAccountCardProps {
@@ -27,16 +27,7 @@ export const MainAccountCard = ({
     onAddBill,
     onEditBill,
 }: MainAccountCardProps) => {
-    const total = bills.reduce(
-        (acc, bill) =>
-            acc +
-            normaliseToPeriod(
-                bill.amount ?? 0,
-                bill.recurrence as Recurrence,
-                frequency
-            ),
-        0
-    );
+    const total = sumPerPeriod(bills, frequency);
 
     return (
         <section className="rounded-md border border-dashed border-border-strong bg-sunken">
@@ -64,11 +55,7 @@ export const MainAccountCard = ({
                         emergencyFund={bill.includeInEmergencyFund !== 0}
                         meta={bill.recurrence}
                         amount={formatMoney(
-                            normaliseToPeriod(
-                                bill.amount ?? 0,
-                                bill.recurrence as Recurrence,
-                                frequency
-                            ),
+                            linePerPeriod(bill, frequency),
                             money
                         )}
                         ariaLabel={`Edit ${bill.name}`}
