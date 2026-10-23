@@ -5,6 +5,7 @@ import { formatMoney } from '../../shared/money'
 import { periodConfig, periodUnitLabel, periodAdverb } from '../../shared/period'
 import { useMoney, type MoneyFormat } from '../useMoney'
 import { StandingOrderAlerts } from './StandingOrderAlerts'
+import { PaydayPdfButton } from './PaydayPdfButton'
 import type { PotFunding } from '../../server/features/budget/funding'
 
 /** The per-person standing orders as plaintext, ready to paste into a bank.
@@ -84,9 +85,12 @@ export function FundingPage() {
       <Group justify="space-between" align="center">
         <Title order={2}>Funding Plan</Title>
         {!isLoading && plan && hasAnything && (
-          <Button variant="default" onClick={() => void handleCopy()}>
-            {copied ? 'Copied ✓' : 'Copy plan'}
-          </Button>
+          <Group gap="sm">
+            <PaydayPdfButton />
+            <Button variant="default" onClick={() => void handleCopy()}>
+              {copied ? 'Copied ✓' : 'Copy plan'}
+            </Button>
+          </Group>
         )}
       </Group>
 

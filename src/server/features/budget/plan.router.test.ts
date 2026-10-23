@@ -57,6 +57,17 @@ describe('plan router', () => {
     expect(plan.unassignedFundingPerPeriod).toBe(0)
   })
 
+  it('paydayPdf returns the sheet as a base64 PDF named for the period', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'viewer' })
+
+    const { filename, base64 } = await caller.plan.paydayPdf()
+
+    expect(filename).toMatch(/^hearth-payday-\d{4}-\d{2}-\d{2}\.pdf$/)
+    expect(Buffer.from(base64, 'base64').subarray(0, 5).toString()).toBe('%PDF-')
+  })
+
   it('archived expenses and pots are excluded from the plan', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)

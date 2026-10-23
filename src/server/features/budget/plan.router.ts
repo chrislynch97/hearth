@@ -2,14 +2,13 @@ import { z } from 'zod'
 import { eq, isNull } from 'drizzle-orm'
 import { router, publicProcedure } from '../../trpc/trpc'
 import { scopeWhere } from '../../trpc/tenant'
-import { billPrice, expense, setAside, household, member, pot } from '../../db/schema'
-import { computeFundingPlan } from './funding'
-import { computeIncomeByMember } from '../income/service'
+import { billPrice, expense, household, pot } from '../../db/schema'
+import { loadFundingPlan } from './fundingLoader'
+import { paydayPdfForHousehold } from './paydayPdf'
 import { projectUpcoming, type UpcomingExpenseInput } from './upcoming'
 import { expectedPotBalances } from './potBalance'
-import { periodConfig } from '../../../shared/period'
-import { addDays, todayIso } from '../../../shared/dates'
-import type { Recurrence } from '../../../shared/recurrence'
+import { addDays, todayIso } from "@shared/dates"
+import { periodConfig } from "@shared/period"
 
 /** Whole days from `from` to `to` (both `YYYY-MM-DD`); negative when `to` is earlier. */
 function daysBetweenIso(from: string, to: string): number {
@@ -19,69 +18,13 @@ function daysBetweenIso(from: string, to: string): number {
 }
 
 export const planRouter = router({
-  funding: publicProcedure.query(async ({ ctx }) => {
-    const pots = await ctx.db
-      .select()
-      .from(pot)
-      .where(scopeWhere(ctx.householdId, pot.householdId, isNull(pot.archivedAt)))
+  funding: publicProcedure.query(async ({ ctx }) => (await loadFundingPlan(ctx.db, ctx.householdId)).plan),
 
-    const expenses = await ctx.db
-      .select()
-      .from(expense)
-      .where(scopeWhere(ctx.householdId, expense.householdId, isNull(expense.archivedAt), eq(expense.active, 1)))
-
-    const members = await ctx.db
-      .select()
-      .from(member)
-      .where(scopeWhere(ctx.householdId, member.householdId, isNull(member.archivedAt)))
-    const incomeByMember = await computeIncomeByMember(ctx.db, ctx.householdId)
-
-    const [householdRow] = await ctx.db.select().from(household).where(eq(household.id, ctx.householdId))
-    const jointContributionBasis = (householdRow?.jointContributionBasis ?? 'equal') as
-      | 'equal'
-      | 'income_proportional'
-      | 'custom'
-    const jointFundingModel = (householdRow?.jointFundingModel ?? 'split') as 'split' | 'pooled'
-
-    const setAsides = await ctx.db
-      .select()
-      .from(setAside)
-      .where(scopeWhere(ctx.householdId, setAside.householdId, isNull(setAside.archivedAt), eq(setAside.active, 1)))
-
-    return computeFundingPlan({
-      pots: pots.map((p) => ({
-        id: p.id,
-        name: p.name,
-        ownerId: p.ownerId,
-      })),
-      bills: expenses.map((e) => ({
-        recurrence: e.recurrence as Recurrence,
-        active: e.active === 1,
-        funding: (e.funding ?? 'pot_manual') as 'pot_manual' | 'pot_auto' | 'main',
-        potId: e.potId,
-        categoryId: e.categoryId,
-        amount: e.amount ?? 0,
-        includeInEmergencyFund: e.includeInEmergencyFund === 1,
-      })),
-      setAsides: setAsides.map((s) => ({
-        recurrence: s.recurrence as Recurrence,
-        active: s.active === 1,
-        potId: s.potId,
-        amount: s.amount,
-        includeInEmergencyFund: s.includeInEmergencyFund === 1,
-      })),
-      members: members.map((m) => ({
-        id: m.id,
-        kind: m.kind as 'person' | 'joint',
-        displayName: m.displayName,
-        jointContributionWeight: m.jointContributionWeight,
-        monthlyIncome: incomeByMember.get(m.id)?.monthlyIncome ?? 0,
-      })),
-      jointContributionBasis,
-      jointFundingModel,
-      frequency: periodConfig(householdRow ?? 1).frequency,
-      emergencyFundMonths: householdRow?.emergencyFundMonths ?? 3,
-    })
+  /** The payday sheet as a PDF (issue #36), base64 so it rides the JSON transport;
+   *  the Funding page turns it into a download. */
+  paydayPdf: publicProcedure.query(async ({ ctx }) => {
+    const { filename, pdf } = await paydayPdfForHousehold(ctx.db, ctx.householdId)
+    return { filename, base64: pdf.toString('base64') }
   }),
 
   /** Projected bill cash-outs over a horizon (spec §5.1), for the Upcoming page. */
