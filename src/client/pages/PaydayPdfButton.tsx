@@ -14,8 +14,7 @@ export const PaydayPdfButton = () => {
         setPending(true);
         setFailed(false);
         try {
-            // staleTime 0: the sheet is stamped with when it was made, so never reuse one.
-            const { filename, base64 } = await utils.plan.paydayPdf.fetch(undefined, { staleTime: 0 });
+            const { filename, base64 } = await utils.client.plan.paydayPdf.query();
             const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
             downloadBlob(filename, new Blob([bytes], { type: "application/pdf" }));
         } catch {
