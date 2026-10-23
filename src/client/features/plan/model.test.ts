@@ -7,7 +7,9 @@ import {
     filterByOwner,
     groupKey,
     groupSlugs,
+    linePerPeriod,
     slugify,
+    sumPerPeriod,
     totalPerPeriod,
     UNCATEGORISED,
 } from "./model";
@@ -366,6 +368,73 @@ describe("totalPerPeriod", () => {
         });
 
         expect(totalPerPeriod(groups)).toBe(4000);
+    });
+});
+
+describe("linePerPeriod", () => {
+    // £640 a year is £53.333… a month; unrounded, it printed with a second
+    // decimal point.
+    it("rounds a line to whole minor units", () => {
+        const line = { amount: 64000, recurrence: "yearly" };
+
+        expect(linePerPeriod(line, "monthly")).toBe(5333);
+    });
+
+    it("normalises onto a weekly budget period", () => {
+        const line = { amount: 1000, recurrence: "monthly" };
+
+        expect(linePerPeriod(line, "weekly")).toBe(231);
+    });
+
+    it("treats a missing amount as nothing", () => {
+        const line = { amount: null, recurrence: "monthly" };
+
+        expect(linePerPeriod(line, "monthly")).toBe(0);
+    });
+});
+
+describe("sumPerPeriod", () => {
+    // 833.33… + 5333.33… is 6166.67; rounding each line first would lose the
+    // penny the standing order still has to cover.
+    it("rounds the unrounded sum, not the rounded lines", () => {
+        const lines = [
+            { amount: 10000, recurrence: "yearly" },
+            { amount: 64000, recurrence: "yearly" },
+        ];
+
+        expect(lines.map((line) => linePerPeriod(line, "monthly"))).toEqual([
+            833, 5333,
+        ]);
+        expect(sumPerPeriod(lines, "monthly")).toBe(6167);
+    });
+
+    it("totals the same lines as a pot does", () => {
+        const [group] = build({
+            categories: [category("c1", "Bills")],
+            pots: [pot({ id: "p1", name: "Annual", categoryId: "c1" })],
+            bills: [
+                bill({
+                    id: "b1",
+                    name: "Insurance",
+                    potId: "p1",
+                    amount: 10000,
+                    recurrence: "yearly",
+                }),
+                bill({
+                    id: "b2",
+                    name: "Licence",
+                    potId: "p1",
+                    amount: 64000,
+                    recurrence: "yearly",
+                }),
+            ],
+        });
+
+        expect(group?.pots[0]?.perPeriod).toBe(6167);
+    });
+
+    it("is zero for an empty list", () => {
+        expect(sumPerPeriod([], "weekly")).toBe(0);
     });
 });
 
