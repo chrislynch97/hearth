@@ -4,7 +4,7 @@ import { addMonths } from '../../../shared/dates'
 
 type ExpenseRecurrence = 'monthly' | 'quarterly' | 'yearly'
 
-const INTERVAL_MONTHS: Record<ExpenseRecurrence, number> = {
+export const INTERVAL_MONTHS: Record<ExpenseRecurrence, number> = {
   monthly: 1,
   quarterly: 3,
   yearly: 12,
@@ -53,6 +53,19 @@ function occurrencesInRange(anchor: string, intervalMonths: number, from: string
     result.push(occ)
   }
   return result
+}
+
+/** The occurrences of `anchor` either side of `on`: `last` ≤ `on` < `next`. */
+export function occurrenceAround(
+  anchor: string,
+  intervalMonths: number,
+  on: string,
+): { last: string; next: string } {
+  const at = (n: number) => addMonths(anchor, n * intervalMonths)
+  let n = 0
+  while (at(n) > on) n -= 1
+  while (at(n + 1) <= on) n += 1
+  return { last: at(n), next: at(n + 1) }
 }
 
 export function projectUpcoming(input: {

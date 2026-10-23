@@ -116,4 +116,27 @@ describe('plan router', () => {
       due.findIndex((d) => d.name === 'Recent'),
     )
   })
+
+  it('potBalances totals what each pot should hold on the day, scoped to the household', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+
+    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
+    const pot = await caller.pots.create({ name: 'Bills', ownerId: joint.id })
+    await caller.expenses.create({
+      name: 'Insurance', recurrence: 'yearly', dueAnchor: '2026-12-15', amount: 12000, funding: 'pot_manual', potId: pot.id,
+    })
+    await caller.expenses.create({
+      name: 'Gym', recurrence: 'monthly', amount: 4000, funding: 'pot_manual', potId: pot.id,
+    })
+
+    const balances = await caller.plan.potBalances({ on: '2026-10-23' })
+    const bills = balances.find((b) => b.potId === pot.id)!
+    expect(bills.total).toBe(10000)
+    expect(bills.lines.find((l) => l.name === 'Gym')).toMatchObject({ lastDue: null, accrued: 0 })
+
+    const other = appRouter.createCaller({ db, householdId: 'other', role: 'owner' })
+    expect(await other.plan.potBalances({ on: '2026-10-23' })).toEqual([])
+  })
 })

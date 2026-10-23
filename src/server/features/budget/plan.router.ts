@@ -2,10 +2,11 @@ import { z } from 'zod'
 import { eq, isNull } from 'drizzle-orm'
 import { router, publicProcedure } from '../../trpc/trpc'
 import { scopeWhere } from '../../trpc/tenant'
-import { expense, setAside, household, member, pot } from '../../db/schema'
+import { billPrice, expense, setAside, household, member, pot } from '../../db/schema'
 import { computeFundingPlan } from './funding'
 import { computeIncomeByMember } from '../income/service'
 import { projectUpcoming, type UpcomingExpenseInput } from './upcoming'
+import { expectedPotBalances } from './potBalance'
 import { periodConfig } from '../../../shared/period'
 import { addDays, todayIso } from '../../../shared/dates'
 import type { Recurrence } from '../../../shared/recurrence'
@@ -165,5 +166,45 @@ export const planRouter = router({
           }
         })
         .sort((a, b) => Math.abs(a.daysUntil) - Math.abs(b.daysUntil) || a.name.localeCompare(b.name))
+    }),
+
+  /** What each pot should hold on a day (default today) to cover its bills when
+   *  they next fall due, with a per-bill breakdown. */
+  potBalances: publicProcedure
+    .input(z.object({ on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD').optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const pots = await ctx.db
+        .select({ id: pot.id })
+        .from(pot)
+        .where(scopeWhere(ctx.householdId, pot.householdId, isNull(pot.archivedAt)))
+
+      const expenses = await ctx.db
+        .select()
+        .from(expense)
+        .where(scopeWhere(ctx.householdId, expense.householdId, isNull(expense.archivedAt)))
+
+      const prices = await ctx.db
+        .select()
+        .from(billPrice)
+        .where(scopeWhere(ctx.householdId, billPrice.householdId))
+
+      const [householdRow] = await ctx.db.select().from(household).where(eq(household.id, ctx.householdId))
+
+      return expectedPotBalances({
+        potIds: pots.map((p) => p.id),
+        bills: expenses.map((e) => ({
+          id: e.id,
+          name: e.name,
+          potId: e.potId,
+          funding: (e.funding ?? 'pot_manual') as 'pot_manual' | 'pot_auto' | 'main',
+          recurrence: e.recurrence as 'monthly' | 'quarterly' | 'yearly',
+          dueAnchor: e.dueAnchor,
+          amount: e.amount ?? 0,
+          active: e.active === 1,
+        })),
+        priceHistory: prices,
+        on: input?.on ?? todayIso(),
+        period: periodConfig(householdRow ?? 1),
+      })
     }),
 })
