@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/PlusIcon";
 import { SelectField } from "@/components/ui/SelectField";
 import { Spinner } from "@/components/ui/Spinner";
-import { TextField } from "@/components/ui/TextField";
 import { BillForm } from "@/features/plan/components/BillForm";
 import { BillReviewLink } from "@/features/plan/components/BillReviewLink";
 import { CategoryForm } from "@/features/plan/components/CategoryForm";
@@ -21,6 +20,7 @@ import { EmptyPlan } from "@/features/plan/components/EmptyPlan";
 import { OwnerFilter } from "@/features/plan/components/OwnerFilter";
 import { PlanHeader } from "@/features/plan/components/PlanHeader";
 import { PotForm } from "@/features/plan/components/PotForm";
+import { ShouldHoldDateChip } from "@/features/plan/components/ShouldHoldDateChip";
 import { SetAsideForm } from "@/features/plan/components/SetAsideForm";
 import {
     ALL,
@@ -312,22 +312,19 @@ export const PlanPage = () => {
                                 </Button>
                             </div>
                             <div className="flex flex-wrap items-center justify-between gap-3">
-                                <OwnerFilter
-                                    members={orderMembers(members)}
-                                    selected={owner}
-                                    onSelect={setOwner}
-                                />
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <OwnerFilter
+                                        members={orderMembers(members)}
+                                        selected={owner}
+                                        onSelect={setOwner}
+                                    />
+                                    <ShouldHoldDateChip
+                                        value={shouldHoldOn}
+                                        onChange={setShouldHoldOn}
+                                    />
+                                </div>
                                 <BillReviewLink />
                             </div>
-                            <TextField
-                                type="date"
-                                label="Should hold on"
-                                className="w-44"
-                                value={shouldHoldOn}
-                                onChange={(event) =>
-                                    setShouldHoldOn(event.currentTarget.value)
-                                }
-                            />
                         </PlanHeader>
 
                         {/* Capped, but generously: past ~1120px a pot card only

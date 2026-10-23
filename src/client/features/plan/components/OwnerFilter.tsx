@@ -1,3 +1,4 @@
+import { chipClass } from "@/features/plan/chipClass";
 import { ALL } from "@/features/plan/model";
 import type { Member } from "../../../../server/db/schema";
 
@@ -7,14 +8,6 @@ export interface OwnerFilterProps {
     selected: string;
     onSelect: (value: string) => void;
 }
-
-const chipClass = (active: boolean) =>
-    [
-        "h-[26px] rounded-full border px-2.5 text-xs transition-colors duration-[140ms] ease-out",
-        active
-            ? "border-primary bg-primary-tint font-semibold text-primary"
-            : "border-border text-text-secondary hover:bg-hover",
-    ].join(" ");
 
 /** Narrows the plan to one person's pots. Main-account bills belong to the
  *  household, so they stay put whoever is selected. */
