@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { asc, eq, isNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../../trpc/trpc'
-import { scopeWhere } from '../../trpc/tenant'
+import { requireMember, scopeWhere } from '../../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../../trpc/concurrency'
 import { recordAudit } from '../../trpc/audit'
 import { expense, category, pot } from '../../db/schema'
@@ -20,7 +20,8 @@ const fundingEnum = z.enum(['pot_manual', 'pot_auto', 'main'])
 
 // A bill is single-pot. `funding` decides the shape:
 //   pot_manual / pot_auto → potId required (auto = the pot self-deducts, no catch-up)
-//   main                  → categoryId required, no pot (paid from the main account)
+//   main                  → categoryId required, no pot (paid from the main account);
+//                           ownerId = whose main account, null for joint
 const billInput = z.object({
   name: z.string().min(1),
   recurrence: recurrenceEnum,
@@ -28,6 +29,7 @@ const billInput = z.object({
   funding: fundingEnum,
   potId: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
+  ownerId: z.string().nullable().optional(),
   note: z.string().optional(),
   dueAnchor: z.string().optional(),
   dueReminderDays: z.number().int().optional(),
@@ -61,16 +63,31 @@ async function validateBill(
   }
 }
 
-/** Normalise the stored fields for a given funding mode (main clears the pot; pot modes clear the category). */
-function fundingFields(input: { funding: 'pot_manual' | 'pot_auto' | 'main'; potId?: string | null; categoryId?: string | null }): {
+/** Resolve a requested main-account owner to what's stored: a live person's id, or
+ *  null for joint (the joint member's id normalises to null, so joint has one form). */
+async function resolveOwner(db: DB, householdId: string, ownerId: string | null): Promise<string | null> {
+  if (ownerId === null) return null
+  const owner = await requireMember(db, householdId, ownerId)
+  if (owner.archivedAt) throw new TRPCError({ code: 'BAD_REQUEST', message: 'ownerId refers to an archived member' })
+  return owner.kind === 'joint' ? null : owner.id
+}
+
+/** Normalise the stored fields for a given funding mode (main clears the pot; pot modes clear the category and owner). */
+function fundingFields(input: {
+  funding: 'pot_manual' | 'pot_auto' | 'main'
+  potId?: string | null
+  categoryId?: string | null
+  ownerId?: string | null
+}): {
   funding: string
   potId: string | null
   categoryId: string | null
+  ownerId: string | null
 } {
   if (input.funding === 'main') {
-    return { funding: 'main', potId: null, categoryId: input.categoryId ?? null }
+    return { funding: 'main', potId: null, categoryId: input.categoryId ?? null, ownerId: input.ownerId ?? null }
   }
-  return { funding: input.funding, potId: input.potId ?? null, categoryId: null }
+  return { funding: input.funding, potId: input.potId ?? null, categoryId: null, ownerId: null }
 }
 
 async function loadExpense(db: DB, householdId: string, id: string): Promise<Expense> {
@@ -92,7 +109,7 @@ export const expensesRouter = router({
     await validateBill(ctx.db, ctx.householdId, input)
     const now = new Date()
     const id = newId()
-    const ff = fundingFields(input)
+    const ff = fundingFields({ ...input, ownerId: await resolveOwner(ctx.db, ctx.householdId, input.ownerId ?? null) })
 
     await ctx.db.insert(expense).values({
       id,
@@ -103,6 +120,7 @@ export const expensesRouter = router({
       funding: ff.funding,
       potId: ff.potId,
       categoryId: ff.categoryId,
+      ownerId: ff.ownerId,
       note: input.note ?? null,
       includeInEmergencyFund: input.includeInEmergencyFund === false ? 0 : 1,
       dueAnchor: input.dueAnchor ?? null,
@@ -127,6 +145,7 @@ export const expensesRouter = router({
         funding: fundingEnum.optional(),
         potId: z.string().nullable().optional(),
         categoryId: z.string().nullable().optional(),
+        ownerId: z.string().nullable().optional(),
         note: z.string().optional(),
         active: z.boolean().optional(),
         includeInEmergencyFund: z.boolean().optional(),
@@ -140,8 +159,19 @@ export const expensesRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, expectedUpdatedAt, active, includeInEmergencyFund, funding, potId, categoryId, priceSource, priceEffectiveDate, ...rest } =
-        input
+      const {
+        id,
+        expectedUpdatedAt,
+        active,
+        includeInEmergencyFund,
+        funding,
+        potId,
+        categoryId,
+        ownerId,
+        priceSource,
+        priceEffectiveDate,
+        ...rest
+      } = input
       const now = new Date()
       const target = await loadExpense(ctx.db, ctx.householdId, id)
 
@@ -149,8 +179,9 @@ export const expensesRouter = router({
       const effectiveFunding = (funding ?? target.funding) as 'pot_manual' | 'pot_auto' | 'main'
       const effectivePot = potId !== undefined ? potId : target.potId
       const effectiveCat = categoryId !== undefined ? categoryId : target.categoryId
+      const effectiveOwner = ownerId !== undefined ? await resolveOwner(ctx.db, ctx.householdId, ownerId) : target.ownerId
 
-      const fundingTouched = funding !== undefined || potId !== undefined || categoryId !== undefined
+      const fundingTouched = funding !== undefined || potId !== undefined || categoryId !== undefined || ownerId !== undefined
       if (fundingTouched) {
         await validateBill(ctx.db, ctx.householdId, { funding: effectiveFunding, potId: effectivePot, categoryId: effectiveCat })
       }
@@ -170,10 +201,11 @@ export const expensesRouter = router({
       if (active !== undefined) setFields['active'] = active ? 1 : 0
       if (includeInEmergencyFund !== undefined) setFields['includeInEmergencyFund'] = includeInEmergencyFund ? 1 : 0
       if (fundingTouched) {
-        const ff = fundingFields({ funding: effectiveFunding, potId: effectivePot, categoryId: effectiveCat })
+        const ff = fundingFields({ funding: effectiveFunding, potId: effectivePot, categoryId: effectiveCat, ownerId: effectiveOwner })
         setFields['funding'] = ff.funding
         setFields['potId'] = ff.potId
         setFields['categoryId'] = ff.categoryId
+        setFields['ownerId'] = ff.ownerId
       }
 
       const [written] = await ctx.db

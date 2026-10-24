@@ -97,6 +97,48 @@ describe('expenses router (bills)', () => {
     expect(updated.categoryId).toBe(category.id)
   })
 
+  it('a main-account bill defaults to joint and stores a person owner', async () => {
+    const { caller, alice, category } = await setup()
+    const joint = await caller.expenses.create({
+      name: 'Water', recurrence: 'monthly', amount: 3000, funding: 'main', categoryId: category.id,
+    })
+    const own = await caller.expenses.create({
+      name: 'Phone', recurrence: 'monthly', amount: 2000, funding: 'main', categoryId: category.id, ownerId: alice.id,
+    })
+    expect(joint.ownerId).toBeNull()
+    expect(own.ownerId).toBe(alice.id)
+  })
+
+  it("the joint member's id is stored as null", async () => {
+    const { caller, joint, category } = await setup()
+    const created = await caller.expenses.create({
+      name: 'Water', recurrence: 'monthly', amount: 3000, funding: 'main', categoryId: category.id, ownerId: joint.id,
+    })
+    expect(created.ownerId).toBeNull()
+  })
+
+  it('a bogus ownerId throws BAD_REQUEST', async () => {
+    const { caller, category } = await setup()
+    await expect(
+      caller.expenses.create({
+        name: 'Bad', recurrence: 'monthly', amount: 1000, funding: 'main', categoryId: category.id, ownerId: 'nope',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('a partial update keeps the owner; moving to a pot clears it', async () => {
+    const { caller, alice, pot, category } = await setup()
+    const created = await caller.expenses.create({
+      name: 'Phone', recurrence: 'monthly', amount: 2000, funding: 'main', categoryId: category.id, ownerId: alice.id,
+    })
+
+    const renamed = await caller.expenses.update({ id: created.id, name: 'Mobile', categoryId: category.id })
+    expect(renamed.ownerId).toBe(alice.id)
+
+    const moved = await caller.expenses.update({ id: created.id, funding: 'pot_manual', potId: pot.id })
+    expect(moved.ownerId).toBeNull()
+  })
+
   it('update can change name, recurrence, active, amount', async () => {
     const { caller, pot } = await setup()
     const created = await caller.expenses.create({
