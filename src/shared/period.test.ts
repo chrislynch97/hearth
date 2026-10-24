@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { periodForDate, shiftPeriod, periodConfig, type PeriodConfig } from './period'
+import { periodForDate, shiftPeriod, periodConfig, paydaysBetween, type PeriodConfig } from './period'
 
 describe('periodForDate', () => {
   it('with startDay 1, a period is a calendar month', () => {
@@ -111,5 +111,20 @@ describe('periodConfig', () => {
     expect(
       periodConfig({ budgetPeriodFrequency: 'weekly', budgetPeriodAnchor: '2026-07-06' }),
     ).toEqual({ frequency: 'weekly', startDay: 1, anchor: '2026-07-06' })
+  })
+})
+
+describe('paydaysBetween', () => {
+  it('counts period starts after the first date, up to and including the second', () => {
+    expect(paydaysBetween('2026-10-20', '2026-10-25', 25)).toBe(1)
+    expect(paydaysBetween('2026-10-25', '2026-11-24', 25)).toBe(0)
+    expect(paydaysBetween('2026-10-24', '2028-06-12', 25)).toBe(20)
+  })
+
+  it('steps a fixed-length cycle from its anchor', () => {
+    const fourWeekly: PeriodConfig = { frequency: 'four_weekly', startDay: 1, anchor: '2026-10-02' }
+    // Paydays land 30 Oct and 27 Nov: six weeks takes in both, the day before 27 Nov only one.
+    expect(paydaysBetween('2026-10-24', '2026-12-05', fourWeekly)).toBe(2)
+    expect(paydaysBetween('2026-10-24', '2026-11-26', fourWeekly)).toBe(1)
   })
 })
