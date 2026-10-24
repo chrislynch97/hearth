@@ -43,7 +43,9 @@ trust; C is A plus a TLS proxy and the configuration a public address needs.
 
 ## Option A — Docker (recommended)
 
-Prerequisites: Docker (`curl -fsSL https://get.docker.com | sh` on Linux).
+Prerequisites: Docker with Compose **v2.24 or newer** (`curl -fsSL https://get.docker.com | sh`
+on Linux; `docker compose version` to check). Older Compose rejects the shipped
+files' optional `.env`.
 
 ```bash
 git clone https://github.com/chrislynch97/hearth.git && cd hearth
@@ -305,9 +307,9 @@ docker compose -f docker-compose.public.yml pull
 docker compose -f docker-compose.public.yml up -d
 ```
 
-Re-copy `docker-compose.public.yml` from the release you've pulled as part of
-that — the pull updates the image only, and a compose file older than the image
-silently drops any `HEARTH_*` added since. See
+Every `HEARTH_*` in `.env` reaches the app, so a setting added in a later release
+needs no compose change. Keep your settings in `.env` and leave
+`docker-compose.public.yml` as shipped; see
 [Updating — three ways](#updating--three-ways).
 
 For **Update now** and scheduled auto-updates from inside the app, install the
@@ -337,18 +339,23 @@ name this file rather than the default one.
 
 ## Configuration reference
 
-Every `HEARTH_*` variable below can be set in a `.env` file next to whichever
-compose file you run — **provided your copy of the compose file is as new as the
-variable**. A `.env` value only reaches the container if the compose file passes
-it through, and updating the image does not update your compose file (see
-[Updating — three ways](#updating--three-ways)). Hearth checks this for you: it
-logs a warning at startup, and shows one in **Settings → System → Updates**,
-naming every setting your compose file doesn't pass in.
+Set any `HEARTH_*` variable below in a `.env` file next to whichever compose file
+you run. The shipped compose files pass the whole of `.env` into the app
+(`env_file`), so a setting added in a later release works without touching the
+compose file. **Customise in `.env`, never in the compose file**: the host updater
+replaces the compose file with each release's copy (see
+[Updating — three ways](#updating--three-ways)). For a structural change — an
+extra volume, a different port mapping — put it in a `compose.override.yml` next
+to the compose file. The host updater applies it automatically; when you run
+`docker compose` by hand with `-f`, add `-f compose.override.yml` too.
 
-Two variables are deliberately not passed through and aren't part of that check:
-`docker-compose.public.yml` ignores `HEARTH_ALLOW_OPEN` entirely (so a value left
-over from a LAN `.env` can't reach a public box) and fixes `HEARTH_PUBLIC=1` /
-`HEARTH_TRUST_PROXY=1`, and `HEARTH_DEPLOY` is set by the file rather than by you.
+Settings in `.env` reach the app; settings only exported in your shell don't, with
+one exception: `HEARTH_ALLOW_OPEN`, so `HEARTH_ALLOW_OPEN=1 docker compose up -d`
+still works on a home LAN. A few values are fixed by the compose file and win over
+`.env`: the database URL and container paths, `HEARTH_DEPLOY`, and on
+`docker-compose.public.yml` also `HEARTH_PUBLIC=1`, `HEARTH_TRUST_PROXY=1` and
+`HEARTH_ALLOW_OPEN=0` (so a value left over from a LAN `.env` can't reach a
+public box).
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -386,6 +393,7 @@ over from a LAN `.env` can't reach a public box) and fixes `HEARTH_PUBLIC=1` /
 | `HEARTH_SMTP_USER` | unset | Relay username. Omit (with `HEARTH_SMTP_PASS`) for an unauthenticated relay. |
 | `HEARTH_SMTP_PASS` | unset | Relay password. Setting a user with an empty password is a startup error — it would authenticate as nobody and fail at the first send. |
 | `HEARTH_DEPLOY` | unset | Set to `image` by the GHCR compose files. Marks this as the prebuilt-image deploy so the in-app update UI shows `pull`-based commands and (with the host updater) one-click / automatic updates. Any other value means build-from-source. See [Updating](#updating--three-ways). |
+| `HEARTH_COMPOSE_VERSION` | set by the compose file | The layout the compose file follows. Hearth compares it with what the image expects and, when it's missing or older, shows a note in **Settings → System → Updates** and logs a warning at startup. Not yours to set. |
 | `HEARTH_COMPOSE_FILE` | inferred | The compose file the in-app update card names in its copy-paste commands. Left unset, Hearth infers it from `HEARTH_DEPLOY` and `DATABASE_URL` (one of the four shipped files). Set it when you run a different one — `docker-compose.public.yml` sets it to itself. The host updater reads the same variable on the host side. |
 | `HEARTH_UPDATE_DIR` | `<data>/updates` | Directory the app and host updater exchange update control files in (request / result / heartbeat). Defaults next to the data dir; override only if you relocate that exchange. |
 | `HEARTH_UPDATE_CHECK` | unset | Set to `off` to stop the release check contacting `api.github.com` at all — the app's only outbound request. Useful on an instance that should make none, and in tests, where a result depending on this repo's release history (or on GitHub being up) isn't deterministic; the e2e suite sets it. Any other value leaves the check on. Switched off it reports exactly what being offline reports, so the update banner stays hidden. |
@@ -813,20 +821,22 @@ update depends on how you deploy:
 
 ### Updating — three ways
 
-> **Updating the image does not update your compose file.** A pull replaces the
-> image and leaves the compose file exactly as you copied it, so any `HEARTH_*`
-> variable added since then exists in the app but is never passed into the
-> container — setting it in `.env` does nothing, silently. Re-copy the compose
-> file from [the release you're running](https://github.com/chrislynch97/hearth/releases)
-> whenever you update, keeping any changes you made to it, then
-> `docker compose … up -d`. Building from source (option 1) does this for you:
-> `git pull` refreshes the compose file alongside the code.
+> **Your compose file is Hearth's, not yours.** The shipped compose files pass
+> all of `.env` into the app, so new settings never need a compose change. For
+> a release that changes the compose file's structure (a new service, volume or
+> port), the host updater (option 3) fetches that release's copy, checks it with
+> `docker compose config`, keeps the old one as `<file>.bak` and swaps it in. If
+> the fetch or the check fails, it keeps your current file and updates anyway.
+> So keep your settings in `.env`, and anything structural in a
+> `compose.override.yml`, which the updater applies too. Don't edit the compose
+> file itself, because the next update replaces it.
 >
-> Hearth won't let this stay invisible — it logs a warning at startup, and shows
-> one in **Settings → System → Updates**, naming every setting your compose file
-> is missing. The updater deliberately doesn't rewrite the file for you: it's
-> yours to edit (ports, volumes, extra services), and silently overwriting an
-> operator's customisations is worse than telling them what to re-copy.
+> Without the updater, re-copy the compose file from
+> [the release you're running](https://github.com/chrislynch97/hearth/releases)
+> when Hearth asks you to: a note in **Settings → System → Updates** (and a
+> startup log warning) appears when your compose file is older than the image
+> expects. Building from source (option 1) does this for you: `git pull`
+> refreshes the compose file alongside the code.
 
 **1. Build from source (the default).** With `docker-compose.yml` /
 `docker-compose.postgres.yml` you build the image locally, so updating is the
@@ -899,6 +909,46 @@ automatically* lets you pick a daily time (or apply as soon as one is found).
 > **GHCR image visibility.** Packages are **private** by default. To pull without
 > authenticating, make the package public once: GitHub → your profile → Packages →
 > `hearth` → Package settings → Change visibility → Public.
+
+#### Install folder
+
+An image install (options 2 and 3) needs only these, in one folder:
+
+- the compose file (`docker-compose.ghcr.yml`, `docker-compose.postgres.ghcr.yml`
+  or `docker-compose.public.yml`), plus `deploy/Caddyfile` for the public one;
+- `.env`, and `compose.override.yml` if you have one;
+- `data/`;
+- for option 3, the updater script you scheduled
+  (`scripts/hearth-updater.sh`, or `scripts/hearth-updater.ps1` and
+  `scripts/hearth-updater-hidden.vbs` on Windows), at the path the timer or task
+  points to.
+
+A git clone works too, but the updater rewrites the compose file in it, so git
+then shows it as modified. Run `git checkout -- <compose file>` before any later
+`git pull`. Keep the folder's name if you tidy it up: Compose names the project,
+and with it the Postgres volume, after the folder.
+
+The updater scripts don't update themselves. When a release notes an updater
+change, copy the new script over the old one.
+
+#### Switching an existing install to the `.env` compose file (one time)
+
+Compose files from before this change list each setting individually, so the
+updater has nothing to keep current until you replace yours once. Hearth shows a
+note in **Settings → System → Updates** until you do.
+
+1. Back up. On Postgres:
+   `docker compose -f <file> exec db pg_dump -U hearth -d hearth > hearth-backup.sql`.
+   On PGlite, copy `./data`.
+2. Check Compose is v2.24 or newer: `docker compose version`.
+3. Compare your compose file with the shipped one. Move every value you
+   changed into `.env` (settings) or `compose.override.yml` (ports, volumes,
+   extra services).
+4. Replace your compose file with the one from the release you're running.
+5. `docker compose -f <file> up -d` (add `-f compose.override.yml` if you made
+   one), then confirm the note in **Settings → System → Updates** has gone.
+6. Copy the release's updater script over yours, so later updates refresh the
+   compose file for you.
 
 ---
 
