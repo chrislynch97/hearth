@@ -9,7 +9,7 @@ import { ShouldHold } from "@/features/plan/components/ShouldHold";
 import { StandingOrderChip } from "@/features/plan/components/StandingOrderChip";
 import {
     fundingOf,
-    perPeriodWhenDifferent,
+    perPeriodLabel,
     sumPerPeriod,
     type PlanPot,
     type PotBalance,
@@ -59,12 +59,8 @@ export const PotCard = ({
     const paidAmount = (row: RecurringRow) =>
         formatMoney(row.amount ?? 0, money);
 
-    const periodShare = (row: RecurringRow) => {
-        const share = perPeriodWhenDifferent(row, frequency);
-        return share === undefined
-            ? undefined
-            : `${formatMoney(share, money)}${unit}`;
-    };
+    const periodShare = (row: RecurringRow) =>
+        perPeriodLabel(row, frequency, money, unit);
 
     const billMeta = (bill: Expense) =>
         fundingOf(bill) === "pot_auto"

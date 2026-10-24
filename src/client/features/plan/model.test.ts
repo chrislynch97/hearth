@@ -9,6 +9,7 @@ import {
     groupSlugs,
     linePerPeriod,
     mainBillOwnerId,
+    perPeriodLabel,
     perPeriodWhenDifferent,
     slugify,
     sumPerPeriod,
@@ -469,6 +470,29 @@ describe("perPeriodWhenDifferent", () => {
         const line = { amount: null, recurrence: "yearly" };
 
         expect(perPeriodWhenDifferent(line, "monthly")).toBeUndefined();
+    });
+});
+
+describe("perPeriodLabel", () => {
+    const money = {
+        symbol: "£",
+        decimalPlaces: 2,
+        locale: "en-GB",
+        symbolPosition: "prefix" as const,
+        groupSeparator: ",",
+        decimalSeparator: ".",
+    };
+
+    it("formats the share with the period suffix", () => {
+        const line = { amount: 64000, recurrence: "yearly" };
+
+        expect(perPeriodLabel(line, "monthly", money, "/mo")).toBe("£53.33/mo");
+    });
+
+    it("says nothing when the share would repeat the amount", () => {
+        const line = { amount: 1000, recurrence: "monthly" };
+
+        expect(perPeriodLabel(line, "monthly", money, "/mo")).toBeUndefined();
     });
 });
 

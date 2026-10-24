@@ -3,7 +3,9 @@ import {
     roundMinor,
     type Recurrence,
 } from "@shared/recurrence";
+import { formatMoney } from "@shared/money";
 import type { PeriodFrequency } from "@shared/period";
+import type { MoneyFormat } from "@/useMoney";
 import type {
     Category,
     Expense,
@@ -117,6 +119,19 @@ export const perPeriodWhenDifferent = (
     row.amount === null || row.recurrence === frequency
         ? undefined
         : linePerPeriod(row, frequency);
+
+/** {@link perPeriodWhenDifferent} with the period suffix: `£53.33/mo`. */
+export const perPeriodLabel = (
+    row: RecurringRow,
+    frequency: PeriodFrequency,
+    money: MoneyFormat,
+    unit: string
+): string | undefined => {
+    const share = perPeriodWhenDifferent(row, frequency);
+    return share === undefined
+        ? undefined
+        : `${formatMoney(share, money)}${unit}`;
+};
 
 /** A list's per-period total, summed at full precision and rounded once — the
  *  funding plan's rule, so it can sit a penny off the sum of its lines. */

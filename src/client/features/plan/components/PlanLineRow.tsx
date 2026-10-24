@@ -4,7 +4,7 @@ export interface PlanLineRowProps {
     name: string;
     /** Marked with a shield — it counts toward the emergency-fund target. */
     emergencyFund: boolean;
-    /** The small tag — a recurrence, or `auto` for a self-deducting pot. */
+    /** The small tag — a recurrence, with `· auto` for a self-deducting pot. */
     meta: string;
     /** Already formatted: the line as it's paid, in the household's currency. */
     amount: string;

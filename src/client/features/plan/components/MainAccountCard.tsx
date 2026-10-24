@@ -6,7 +6,7 @@ import { PlusIcon } from "@/components/ui/PlusIcon";
 import { PlanLineRow } from "@/features/plan/components/PlanLineRow";
 import {
     mainBillOwnerId,
-    perPeriodWhenDifferent,
+    perPeriodLabel,
     sumPerPeriod,
 } from "@/features/plan/model";
 import type { Expense, Member } from "../../../../server/db/schema";
@@ -44,13 +44,6 @@ export const MainAccountCard = ({
             : bill.recurrence;
     };
 
-    const periodShare = (bill: Expense) => {
-        const share = perPeriodWhenDifferent(bill, frequency);
-        return share === undefined
-            ? undefined
-            : `${formatMoney(share, money)}${unit}`;
-    };
-
     return (
         <section className="rounded-md border border-dashed border-border-strong bg-sunken">
             <div className="flex items-center gap-2.5 border-b border-border px-3.5 py-3">
@@ -77,7 +70,7 @@ export const MainAccountCard = ({
                         emergencyFund={bill.includeInEmergencyFund !== 0}
                         meta={metaFor(bill)}
                         amount={formatMoney(bill.amount ?? 0, money)}
-                        perPeriod={periodShare(bill)}
+                        perPeriod={perPeriodLabel(bill, frequency, money, unit)}
                         ariaLabel={`Edit ${bill.name}`}
                         onClick={() => onEditBill(bill)}
                     />
