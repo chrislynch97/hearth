@@ -1,6 +1,5 @@
 import { formatMoney } from "@shared/money";
 import type { MoneyFormat } from "@/useMoney";
-import { Figure } from "@/features/funding/components/Figure";
 import { FigureRow } from "@/features/funding/components/FigureRow";
 import { FundingCard } from "@/features/funding/components/FundingCard";
 import type { FundingPlan } from "@/features/funding/model";
@@ -12,9 +11,9 @@ export interface PersonFundingCardProps {
     unit: string;
 }
 
-/** One person's standing orders. The headline is what leaves their account by
- *  standing order; own-account bills sit apart below it because nothing moves
- *  for them — mixing them into the breakdown is what made the card misread. */
+/** One person's money for the period as a running sum: what moves by standing
+ *  order, then what stays behind for their own bills, then the two together. No
+ *  headline figure — leading with one total made the rows below it misread. */
 export const PersonFundingCard = ({
     person,
     pooled,
@@ -22,38 +21,35 @@ export const PersonFundingCard = ({
     unit,
 }: PersonFundingCardProps) => {
     const amount = (minor: number) => `${formatMoney(minor, money)}${unit}`;
+    const ownAccount = person.personalMainAccount;
 
     return (
-        <FundingCard
-            title={person.displayName}
-            subtitle="Set aside by standing order"
-            figure={
-                <Figure
-                    amount={formatMoney(person.setAside, money)}
-                    unit={unit}
-                    size="lg"
-                />
-            }
-        >
+        <FundingCard title={person.displayName}>
             <FigureRow
-                label="Personal pots"
+                label="To personal pots"
                 amount={amount(person.personalPotFunding)}
             />
             <FigureRow
-                label={pooled ? "Into joint" : "Joint contribution"}
+                label={pooled ? "Into joint" : "To the joint account"}
                 amount={amount(person.jointContribution)}
             />
-            {person.personalMainAccount > 0 && (
-                <div className="mt-3 rounded-sm bg-sunken px-3 py-2">
+            <FigureRow
+                label="By standing order"
+                amount={amount(person.setAside)}
+                total
+            />
+            {ownAccount > 0 && (
+                <>
                     <FigureRow
-                        label="Paid from own account"
-                        amount={amount(person.personalMainAccount)}
+                        label="Stays in own account"
+                        amount={amount(ownAccount)}
                     />
-                    <p className="text-xs text-text-muted">
-                        Bills that already leave {person.displayName}'s account
-                        — not part of the set-aside, nothing to move.
-                    </p>
-                </div>
+                    <FigureRow
+                        label="Total spoken for"
+                        amount={amount(person.setAside + ownAccount)}
+                        total
+                    />
+                </>
             )}
         </FundingCard>
     );

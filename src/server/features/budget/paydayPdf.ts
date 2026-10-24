@@ -209,13 +209,15 @@ export function renderPaydayPdf(sheet: PaydaySheet, format: PaydayPdfFormat): Pr
   }
 
   if (sheet.people.length > 0) {
-    heading('Set aside per person')
+    heading('By standing order, per person')
     for (const person of sheet.people) {
       row(person.name, perPeriod(person.setAside), {
         bold: true,
         detail:
           `${money(person.personalPots)} personal pots + ${money(person.jointContribution)} joint` +
-          (person.ownAccount > 0 ? ` · ${money(person.ownAccount)} more paid from own account` : ''),
+          (person.ownAccount > 0
+            ? ` · ${money(person.ownAccount)} stays in own account, ${money(person.setAside + person.ownAccount)} spoken for`
+            : ''),
       })
     }
   }

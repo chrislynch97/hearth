@@ -150,7 +150,8 @@ describe("buildPlanText", () => {
 
         const text = buildPlanText(plan, money, "/mo");
 
-        expect(text).toContain("→ Set aside  £80.00/mo");
-        expect(text).toContain("plus £8.00/mo paid from own account");
+        expect(text).toContain("→ By standing order  £80.00/mo");
+        expect(text).toContain("Stays in own account  £8.00/mo");
+        expect(text).toContain("→ Total spoken for  £88.00/mo");
     });
 });

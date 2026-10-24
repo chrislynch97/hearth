@@ -90,13 +90,14 @@ export const buildPlanText = (
         }
         if (person.jointContribution > 0) {
             lines.push(
-                `  Joint contribution  ${amount(person.jointContribution)}`
+                `  To the joint account  ${amount(person.jointContribution)}`
             );
         }
-        lines.push(`  → Set aside  ${amount(person.setAside)}`);
+        lines.push(`  → By standing order  ${amount(person.setAside)}`);
         if (person.personalMainAccount > 0) {
             lines.push(
-                `  (plus ${amount(person.personalMainAccount)} paid from own account — nothing to move)`
+                `  Stays in own account  ${amount(person.personalMainAccount)}`,
+                `  → Total spoken for  ${amount(person.setAside + person.personalMainAccount)}`
             );
         }
         lines.push("");
