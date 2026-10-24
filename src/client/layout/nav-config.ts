@@ -173,8 +173,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
                         to: "/planners",
                         label: "Savings planners",
                         icon: "planners",
-                        planned:
-                            "A goal — a wedding, a new kitchen — broken into line items with their own costs and deadlines, funded from pots and ticked off as they're paid for.",
                     },
                 ],
             },

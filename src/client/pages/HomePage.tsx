@@ -18,6 +18,7 @@ import { trpc } from "../trpc";
 import { GettingStarted } from "@/components/GettingStarted";
 import { AllocationCard } from "@/features/home/components/AllocationCard";
 import { NetWorthTile } from "@/features/home/components/NetWorthTile";
+import { SavingsAlerts } from "@/features/home/components/SavingsAlerts";
 import { formatMoney } from "../../shared/money";
 import type { MoneyFormat } from "../useMoney";
 import { useFormatDate, useMoney } from "../useMoney";
@@ -547,6 +548,10 @@ export function HomePage() {
             {summary && (
                 <>
                     <BacklogHeadline backlog={summary.backlog} money={money} />
+                    <SavingsAlerts
+                        alerts={summary.savingsAlerts}
+                        money={money}
+                    />
                     <SnapshotSection
                         perPerson={summary.funding.perPerson}
                         jointPotFundingTotal={

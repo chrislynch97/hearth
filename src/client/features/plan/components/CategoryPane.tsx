@@ -29,6 +29,8 @@ export interface CategoryPaneProps {
     staleByPot: Map<string, { wasMonthly: number }>;
     /** What each pot should hold on the chosen day, by pot id. */
     shouldHoldByPot: Map<string, PotBalance>;
+    /** The savings goal each goal pot backs, by pot id. */
+    goalByPot: Map<string, { id: string; name: string }>;
     acknowledgingPotId: string | null;
     onAcknowledge: (potId: string) => void;
     onEditCategory: () => void;
@@ -48,6 +50,7 @@ export const CategoryPane = ({
     unit,
     staleByPot,
     shouldHoldByPot,
+    goalByPot,
     acknowledgingPotId,
     onAcknowledge,
     onEditCategory,
@@ -127,6 +130,7 @@ export const CategoryPane = ({
                         unit={unit}
                         staleStandingOrder={staleByPot.get(planPot.pot.id)}
                         shouldHold={shouldHoldByPot.get(planPot.pot.id)}
+                        goal={goalByPot.get(planPot.pot.id)}
                         acknowledging={acknowledgingPotId === planPot.pot.id}
                         onAcknowledge={() => onAcknowledge(planPot.pot.id)}
                         onEditPot={() => onEditPot(planPot.pot)}
