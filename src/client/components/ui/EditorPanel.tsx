@@ -63,7 +63,7 @@ const CloseIcon = () => (
     </svg>
 );
 
-/** The one place anything on this page is edited: a native `<dialog>`, which
+/** Where a page edits things: a native `<dialog>`, which
  *  brings the focus trap, the inert page behind it and the top layer with it. */
 export const EditorPanel = ({
     title,
