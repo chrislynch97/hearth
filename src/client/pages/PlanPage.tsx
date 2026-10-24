@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getRouteApi } from "@tanstack/react-router";
+import { todayIso } from "@shared/dates";
 import { periodConfig, periodUnitLabel } from "@shared/period";
 import { trpc } from "@/trpc";
 import { useMediaQuery } from "@/useMediaQuery";
@@ -19,6 +20,7 @@ import { EmptyPlan } from "@/features/plan/components/EmptyPlan";
 import { OwnerFilter } from "@/features/plan/components/OwnerFilter";
 import { PlanHeader } from "@/features/plan/components/PlanHeader";
 import { PotForm } from "@/features/plan/components/PotForm";
+import { ShouldHoldDateChip } from "@/features/plan/components/ShouldHoldDateChip";
 import { SetAsideForm } from "@/features/plan/components/SetAsideForm";
 import {
     ALL,
@@ -90,6 +92,13 @@ export const PlanPage = () => {
     const setAsidesQuery = trpc.setAside.list.useQuery();
     const membersQuery = trpc.members.list.useQuery();
     const alertsQuery = trpc.standingOrders.alerts.useQuery();
+    // Raw field value: empty mid-edit is fine, the query falls back to today.
+    const [shouldHoldOn, setShouldHoldOn] = useState(todayIso);
+    // Keep the last figures up while a new date loads, so open breakdowns stay open.
+    const balancesQuery = trpc.plan.potBalances.useQuery(
+        { on: shouldHoldOn || todayIso() },
+        { placeholderData: (previous) => previous }
+    );
     const ctx = trpc.bootstrap.context.useQuery();
     const utils = trpc.useUtils();
     const acknowledge = trpc.standingOrders.acknowledge.useMutation();
@@ -168,6 +177,9 @@ export const PlanPage = () => {
             alert.potId,
             { wasMonthly: alert.wasMonthly },
         ])
+    );
+    const shouldHoldByPot = new Map(
+        (balancesQuery.data ?? []).map((balance) => [balance.potId, balance])
     );
 
     const slugOf = (key: string) => slugs.get(key) ?? key;
@@ -300,11 +312,17 @@ export const PlanPage = () => {
                                 </Button>
                             </div>
                             <div className="flex flex-wrap items-center justify-between gap-3">
-                                <OwnerFilter
-                                    members={orderMembers(members)}
-                                    selected={owner}
-                                    onSelect={setOwner}
-                                />
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <OwnerFilter
+                                        members={orderMembers(members)}
+                                        selected={owner}
+                                        onSelect={setOwner}
+                                    />
+                                    <ShouldHoldDateChip
+                                        value={shouldHoldOn}
+                                        onChange={setShouldHoldOn}
+                                    />
+                                </div>
                                 <BillReviewLink />
                             </div>
                         </PlanHeader>
@@ -337,6 +355,7 @@ export const PlanPage = () => {
                                     frequency={frequency}
                                     unit={unit}
                                     staleByPot={staleByPot}
+                                    shouldHoldByPot={shouldHoldByPot}
                                     acknowledgingPotId={acknowledgingPotId}
                                     onAcknowledge={(potId) =>
                                         void handleAcknowledge(potId)

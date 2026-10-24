@@ -12,6 +12,8 @@ import type {
     SetAside,
 } from "../../../server/db/schema";
 
+export type { PotBalance } from "../../../server/features/budget/potBalance";
+
 export type Funding = "pot_manual" | "pot_auto" | "main";
 
 /** Every category is a key in the rail, and so is the bucket for things that

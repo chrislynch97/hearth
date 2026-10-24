@@ -10,6 +10,7 @@ import {
     countBills,
     countSetAsides,
     type PlanGroup,
+    type PotBalance,
 } from "@/features/plan/model";
 import type { Expense, Pot, SetAside } from "../../../../server/db/schema";
 
@@ -20,6 +21,8 @@ export interface CategoryPaneProps {
     unit: string;
     /** Stale standing orders, by pot id. */
     staleByPot: Map<string, { wasMonthly: number }>;
+    /** What each pot should hold on the chosen day, by pot id. */
+    shouldHoldByPot: Map<string, PotBalance>;
     acknowledgingPotId: string | null;
     onAcknowledge: (potId: string) => void;
     onEditCategory: () => void;
@@ -37,6 +40,7 @@ export const CategoryPane = ({
     frequency,
     unit,
     staleByPot,
+    shouldHoldByPot,
     acknowledgingPotId,
     onAcknowledge,
     onEditCategory,
@@ -115,6 +119,7 @@ export const CategoryPane = ({
                         frequency={frequency}
                         unit={unit}
                         staleStandingOrder={staleByPot.get(planPot.pot.id)}
+                        shouldHold={shouldHoldByPot.get(planPot.pot.id)}
                         acknowledging={acknowledgingPotId === planPot.pot.id}
                         onAcknowledge={() => onAcknowledge(planPot.pot.id)}
                         onEditPot={() => onEditPot(planPot.pot)}
