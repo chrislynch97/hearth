@@ -15,6 +15,8 @@ export interface FundingBillInput {
   funding: 'pot_manual' | 'pot_auto' | 'main'
   potId: string | null
   categoryId: string | null
+  /** `main` only: the person whose own account pays it; null/undefined = joint (issue #32). */
+  ownerId?: string | null
   amount: number
   /** Whether this bill counts toward the emergency-fund target (issue #118).
    *  Undefined counts as included, matching the column's default. */
@@ -65,6 +67,9 @@ export interface PersonFunding {
    *  their whole leftover income (periodIncome − personalPotFunding) paid into
    *  the joint pool. */
   jointContribution: number
+  /** Bills paid straight from this person's own account (issue #32). Comes off
+   *  the remainder but isn't part of {@link setAside} — no money has to move. */
+  personalMainAccount: number
   setAside: number
   /** Spendable income re-based onto the household's budget period. */
   periodIncome: number
@@ -97,9 +102,11 @@ export interface FundingPlan {
   perPerson: PersonFunding[]
   jointPotFundingTotal: number
   unassignedFundingPerPeriod: number
-  /** Bills paid straight from the main account (funding = 'main'), per period. */
+  /** Bills paid straight from the main account (funding = 'main'), per period —
+   *  joint and personal alike. */
   mainAccountFundingPerPeriod: number
-  mainAccountByCategory: Array<{ categoryId: string | null; fundingPerPeriod: number }>
+  /** One row per category and paying account; `ownerId` null = joint. */
+  mainAccountByCategory: Array<{ categoryId: string | null; ownerId: string | null; fundingPerPeriod: number }>
   emergencyFund: EmergencyFund
   jointFundingModel: 'split' | 'pooled'
   jointPool: JointPool
@@ -138,14 +145,27 @@ export function computeFundingPlan(input: {
   const addToPot = (potId: string | null, perPeriod: number): void => {
     perPeriodByPotId.set(potId, (perPeriodByPotId.get(potId) ?? 0) + perPeriod)
   }
-  const mainByCategory = new Map<string | null, number>()
+  // A main-account bill owned by a listed person is theirs alone; anything else
+  // (no owner, or an owner no longer listed) falls back to joint.
+  const personIds = new Set(members.filter((m) => m.kind === 'person').map((m) => m.id))
+  const mainOwnerOf = (bill: FundingBillInput): string | null =>
+    bill.ownerId && personIds.has(bill.ownerId) ? bill.ownerId : null
+  const mainByCategoryOwner = new Map<string, { categoryId: string | null; ownerId: string | null; perPeriod: number }>()
+  const personalMainByMemberId = new Map<string, number>()
   let mainTotal = 0
+  let mainJointTotal = 0
 
   for (const bill of activeBills) {
     const perPeriod = normaliseToPeriod(bill.amount, bill.recurrence, frequency)
     if (bill.funding === 'main') {
-      mainByCategory.set(bill.categoryId, (mainByCategory.get(bill.categoryId) ?? 0) + perPeriod)
+      const ownerId = mainOwnerOf(bill)
+      const key = `${bill.categoryId ?? ''}|${ownerId ?? ''}`
+      const row = mainByCategoryOwner.get(key) ?? { categoryId: bill.categoryId, ownerId, perPeriod: 0 }
+      row.perPeriod += perPeriod
+      mainByCategoryOwner.set(key, row)
       mainTotal += perPeriod
+      if (ownerId) personalMainByMemberId.set(ownerId, (personalMainByMemberId.get(ownerId) ?? 0) + perPeriod)
+      else mainJointTotal += perPeriod
     } else {
       addToPot(bill.potId, perPeriod)
     }
@@ -163,9 +183,10 @@ export function computeFundingPlan(input: {
 
   const unassignedFundingPerPeriod = roundMinor(perPeriodByPotId.get(null) ?? 0)
   const mainAccountFundingPerPeriod = roundMinor(mainTotal)
-  const mainAccountByCategory = [...mainByCategory.entries()].map(([categoryId, m]) => ({
-    categoryId,
-    fundingPerPeriod: roundMinor(m),
+  const mainAccountByCategory = [...mainByCategoryOwner.values()].map((r) => ({
+    categoryId: r.categoryId,
+    ownerId: r.ownerId,
+    fundingPerPeriod: roundMinor(r.perPeriod),
   }))
 
   const persons = members.filter((m) => m.kind === 'person')
@@ -185,8 +206,9 @@ export function computeFundingPlan(input: {
         .reduce((acc, p) => acc + (potFundingById.get(p.id) ?? 0), 0)
     : 0
 
-  // Main-account bills are a shared household cost, split like joint pot funding.
-  const jointSplitBase = jointPotFundingTotal + mainAccountFundingPerPeriod
+  // Joint main-account bills are a shared household cost, split like joint pot
+  // funding; a person's own main-account bills stay with that person.
+  const jointSplitBase = jointPotFundingTotal + roundMinor(mainJointTotal)
 
   // Determine weights for splitting the joint base across persons.
   let weights: number[]
@@ -213,27 +235,29 @@ export function computeFundingPlan(input: {
 
   const perPerson: PersonFunding[] = persons.map((person, i) => {
     const personalPotFunding = personalPotFundingByMemberId.get(person.id) ?? 0
+    const personalMainAccount = roundMinor(personalMainByMemberId.get(person.id) ?? 0)
     // Set-aside is a per-period figure, so compare against per-period income.
     const periodIncome = roundMinor(monthlyToPeriod(person.monthlyIncome, frequency))
     // Pooled: the whole leftover income flows into joint, so nothing personal
     // remains (any surplus is the pool's). Split: take the assigned joint share.
     const jointContribution =
-      jointFundingModel === 'pooled' ? periodIncome - personalPotFunding : jointShares[i] ?? 0
+      jointFundingModel === 'pooled' ? periodIncome - personalPotFunding - personalMainAccount : jointShares[i] ?? 0
     const setAside = personalPotFunding + jointContribution
     return {
       memberId: person.id,
       displayName: person.displayName,
       personalPotFunding,
       jointContribution,
+      personalMainAccount,
       setAside,
       periodIncome,
-      remainder: jointFundingModel === 'pooled' ? 0 : periodIncome - setAside,
+      remainder: jointFundingModel === 'pooled' ? 0 : periodIncome - setAside - personalMainAccount,
     }
   })
 
   // Emergency fund: monthly commitments attributed to whoever owns the pot each
   // one touches, times the months. Bills (money out) drain a pot — main-account
-  // bills go to the joint member — and set-asides (money in) fill a pot. Both are
+  // bills go to their owner, else joint — and set-asides (money in) fill a pot. Both are
   // recurring monthly demands you'd need cover for, so both count; each item can
   // be excluded via its includeInEmergencyFund flag (issue #118). Bills and
   // set-asides are summed even on the same pot — they're separate commitments.
@@ -244,7 +268,8 @@ export function computeFundingPlan(input: {
   }
   for (const b of activeBills) {
     if (b.includeInEmergencyFund === false) continue
-    const ownerId = b.funding === 'main' ? jointMember?.id : b.potId ? potOwnerById.get(b.potId) : undefined
+    const ownerId =
+      b.funding === 'main' ? mainOwnerOf(b) ?? jointMember?.id : b.potId ? potOwnerById.get(b.potId) : undefined
     addCommitment(ownerId, normaliseToMonthly(b.amount, b.recurrence))
   }
   for (const s of activeSetAsides) {
@@ -273,7 +298,7 @@ export function computeFundingPlan(input: {
   // Couple surplus = Σ(income − personal set-asides) − joint costs. Model-agnostic:
   // in 'split' it equals Σ remainder; in 'pooled' it equals the pool surplus.
   const coupleSurplus = roundMinor(
-    perPerson.reduce((acc, p) => acc + p.periodIncome - p.personalPotFunding, 0) - jointSplitBase,
+    perPerson.reduce((acc, p) => acc + p.periodIncome - p.personalPotFunding - p.personalMainAccount, 0) - jointSplitBase,
   )
   const jointPoolIn = roundMinor(perPerson.reduce((acc, p) => acc + p.jointContribution, 0))
   const jointPool: JointPool = {

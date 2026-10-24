@@ -72,7 +72,7 @@ describe('renderPaydayPdf', () => {
       sheet({
         householdName: 'Łukasz & Zoë Wróbel',
         people: [
-          { name: 'Alexandra-Catherine Montgomery-Smythe of Somewhere', personalPots: 123456, jointContribution: 98765, setAside: 222221 },
+          { name: 'Alexandra-Catherine Montgomery-Smythe of Somewhere', personalPots: 123456, jointContribution: 98765, setAside: 222221, ownAccount: 0 },
         ],
         potGroups: [{ ownerName: 'Łukasz', pots: [{ name: 'Wakacje — Gdańsk', amount: 246912 }], total: 246912 }],
       }),
@@ -92,7 +92,7 @@ describe('renderPaydayPdf', () => {
   it('renders every section, including the pooled joint block and suffix money', async () => {
     const pdf = await renderPaydayPdf(
       sheet({
-        people: [{ name: 'Alice', personalPots: 7000, jointContribution: 1000, setAside: 8000 }],
+        people: [{ name: 'Alice', personalPots: 7000, jointContribution: 1000, setAside: 8000, ownAccount: 0 }],
         potGroups: [{ ownerName: 'Alice', pots: [{ name: 'Phone', amount: 7000 }], total: 7000 }],
         jointPotsTotal: 2000,
         jointPool: { totalIn: 50000, jointCosts: 42000, surplus: -800 },

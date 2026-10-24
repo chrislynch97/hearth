@@ -501,4 +501,75 @@ describe('computeFundingPlan', () => {
     expect(pooled.coupleSurplus).toBe(split.coupleSurplus)
     expect(pooled.jointPool.surplus).toBe(pooled.coupleSurplus)
   })
+
+  describe("a person's own main-account bills (#32)", () => {
+    const members = [
+      { id: 'alice', kind: 'person' as const, displayName: 'Alice', jointContributionWeight: null, monthlyIncome: 300000 },
+      { id: 'bob', kind: 'person' as const, displayName: 'Bob', jointContributionWeight: null, monthlyIncome: 200000 },
+      { id: 'joint', kind: 'joint' as const, displayName: 'Joint', jointContributionWeight: null, monthlyIncome: 0 },
+    ]
+    const main = (amount: number, ownerId: string | null, categoryId = 'c1'): FundingBillInput => ({
+      recurrence: 'monthly',
+      active: true,
+      funding: 'main',
+      potId: null,
+      categoryId,
+      ownerId,
+      amount,
+    })
+
+    it('only joint ones are split; a personal one comes off its owner alone', () => {
+      const bills = [main(10000, null), main(3000, 'alice')]
+      const plan = computeFundingPlan({ pots: [], bills, setAsides: [], members, jointContributionBasis: 'equal' })
+      const alice = plan.perPerson.find((p) => p.memberId === 'alice')!
+      const bob = plan.perPerson.find((p) => p.memberId === 'bob')!
+
+      expect(alice.jointContribution).toBe(5000)
+      expect(bob.jointContribution).toBe(5000)
+      expect(alice.personalMainAccount).toBe(3000)
+      expect(bob.personalMainAccount).toBe(0)
+      // Not moved anywhere, so not set aside — but it still comes off the remainder.
+      expect(alice.setAside).toBe(5000)
+      expect(alice.remainder).toBe(300000 - 5000 - 3000)
+      expect(plan.jointPool.jointCosts).toBe(10000)
+      expect(plan.mainAccountFundingPerPeriod).toBe(13000)
+      expect(plan.coupleSurplus).toBe(alice.remainder + bob.remainder)
+    })
+
+    it('keeps one category row per paying account', () => {
+      const bills = [main(1000, null), main(2000, null), main(500, 'alice')]
+      const plan = computeFundingPlan({ pots: [], bills, setAsides: [], members, jointContributionBasis: 'equal' })
+      expect(plan.mainAccountByCategory).toEqual([
+        { categoryId: 'c1', ownerId: null, fundingPerPeriod: 3000 },
+        { categoryId: 'c1', ownerId: 'alice', fundingPerPeriod: 500 },
+      ])
+    })
+
+    it('treats the joint member, or an owner no longer listed, as joint', () => {
+      const bills = [main(1000, 'joint'), main(2000, 'gone')]
+      const plan = computeFundingPlan({ pots: [], bills, setAsides: [], members, jointContributionBasis: 'equal' })
+      expect(plan.jointPool.jointCosts).toBe(3000)
+      expect(plan.perPerson.every((p) => p.personalMainAccount === 0)).toBe(true)
+      expect(plan.mainAccountByCategory.every((r) => r.ownerId === null)).toBe(true)
+    })
+
+    it('pooled: comes out before the rest goes into joint', () => {
+      const bills = [main(3000, 'alice')]
+      const plan = computeFundingPlan({
+        pots: [], bills, setAsides: [], members, jointContributionBasis: 'equal', jointFundingModel: 'pooled',
+      })
+      const alice = plan.perPerson.find((p) => p.memberId === 'alice')!
+      expect(alice.jointContribution).toBe(297000)
+      expect(alice.remainder).toBe(0)
+      expect(plan.jointPool.surplus).toBe(plan.coupleSurplus)
+    })
+
+    it('counts toward its owner in the emergency fund', () => {
+      const bills = [main(1000, null), main(3000, 'alice')]
+      const plan = computeFundingPlan({ pots: [], bills, setAsides: [], members, jointContributionBasis: 'equal' })
+      const byId = new Map(plan.emergencyFund.perOwner.map((o) => [o.memberId, o.monthlyCommitments]))
+      expect(byId.get('alice')).toBe(3000)
+      expect(byId.get('joint')).toBe(1000)
+    })
+  })
 })

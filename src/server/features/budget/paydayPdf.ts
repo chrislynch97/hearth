@@ -213,7 +213,9 @@ export function renderPaydayPdf(sheet: PaydaySheet, format: PaydayPdfFormat): Pr
     for (const person of sheet.people) {
       row(person.name, perPeriod(person.setAside), {
         bold: true,
-        detail: `${money(person.personalPots)} personal pots + ${money(person.jointContribution)} joint`,
+        detail:
+          `${money(person.personalPots)} personal pots + ${money(person.jointContribution)} joint` +
+          (person.ownAccount > 0 ? ` · ${money(person.ownAccount)} more paid from own account` : ''),
       })
     }
   }

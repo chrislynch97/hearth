@@ -66,6 +66,7 @@ export const reportsRouter = router({
         funding: (e.funding ?? 'pot_manual') as 'pot_manual' | 'pot_auto' | 'main',
         potId: e.potId,
         categoryId: e.categoryId,
+        ownerId: e.ownerId,
         amount: e.amount ?? 0,
       }))
       const setAsideInputs = setAsides.map((s) => ({
@@ -147,10 +148,12 @@ export const reportsRouter = router({
           costs: (() => {
             const potOwner = new Map(pots.map((p) => [p.id, p.ownerId]))
             const jointId = members.find((m) => m.kind === 'joint')?.id
+            const personIds = new Set(members.filter((m) => m.kind === 'person').map((m) => m.id))
+            const mainOwner = (ownerId: string | null) => (ownerId && personIds.has(ownerId) ? ownerId : jointId)
             const costs: Array<{ recurrence: Recurrence; amount: number; ownerId: string }> = []
             for (const b of billInputs) {
-              // Attribute a bill to whoever owns the pot it drains; main-account bills to joint.
-              const ownerId = b.funding === 'main' ? jointId : b.potId ? potOwner.get(b.potId) : undefined
+              // Attribute a bill to whoever owns the pot it drains; main-account bills to their owner, else joint.
+              const ownerId = b.funding === 'main' ? mainOwner(b.ownerId) : b.potId ? potOwner.get(b.potId) : undefined
               if (ownerId) costs.push({ recurrence: b.recurrence, amount: b.amount, ownerId })
             }
             for (const s of setAsides) costs.push({ recurrence: s.recurrence as Recurrence, amount: s.amount, ownerId: s.ownerId })

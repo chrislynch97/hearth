@@ -59,6 +59,7 @@ export async function loadFundingPlan(db: DB, householdId: string): Promise<Load
       funding: (e.funding ?? 'pot_manual') as 'pot_manual' | 'pot_auto' | 'main',
       potId: e.potId,
       categoryId: e.categoryId,
+      ownerId: e.ownerId,
       amount: e.amount ?? 0,
       includeInEmergencyFund: e.includeInEmergencyFund === 1,
     })),

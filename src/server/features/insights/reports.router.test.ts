@@ -63,6 +63,28 @@ describe('reports.overview', () => {
     expect(row).toMatchObject({ planned: 15000, actual: 15000, diff: 0 })
   })
 
+  it("attributes a person's own main-account bill to them, keeping category totals whole (#32)", async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+
+    const alice = await caller.members.addPerson({ displayName: 'Alice' })
+    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
+    const utilities = await caller.categories.create({ name: 'Utilities' })
+    await caller.expenses.create({
+      name: 'Electricity', recurrence: 'monthly', amount: 15000, funding: 'main', categoryId: utilities.id,
+    })
+    await caller.expenses.create({
+      name: 'Phone', recurrence: 'monthly', amount: 2000, funding: 'main', categoryId: utilities.id, ownerId: alice.id,
+    })
+
+    const report = await caller.reports.overview()
+
+    expect(report.perMemberVsJoint.find((r) => r.ownerId === alice.id)?.monthlyCost).toBe(2000)
+    expect(report.perMemberVsJoint.find((r) => r.ownerId === joint.id)?.monthlyCost).toBe(15000)
+    expect(report.spendVsAllocation.find((r) => r.categoryId === utilities.id)?.planned).toBe(17000)
+  })
+
   it('owner filter scopes spend-based reports', async () => {
     const db = await makeTestDb()
     await ensureSeed(db)
