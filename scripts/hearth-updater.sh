@@ -51,10 +51,16 @@ write_result() { # $1=true|false  $2=error-or-empty
 }
 
 REPO="chrislynch97/hearth"
-OVERRIDE="compose.override.yml"
+SWAPPED=0
 
+# Both names Compose would pick up on its own, in its order of preference; -f
+# switches that off, so it's passed explicitly.
 compose_args() { # $1=compose file
-  if [ -f "$OVERRIDE" ]; then echo "-f $1 -f $OVERRIDE"; else echo "-f $1"; fi
+  local o
+  for o in compose.override.yml docker-compose.override.yml; do
+    if [ -f "$o" ]; then echo "-f $1 -f $o"; return; fi
+  done
+  echo "-f $1"
 }
 
 # Swap in the release's compose file so a release that adds a service, volume or
@@ -62,6 +68,12 @@ compose_args() { # $1=compose file
 # the update goes ahead with it.
 refresh_compose() {
   local tag new
+  # A file without the stamp predates the .env pass-through and may carry hand
+  # edits; replacing it would drop them. That needs the one-time manual switch.
+  if ! grep -q 'HEARTH_COMPOSE_VERSION=' "$COMPOSE_FILE"; then
+    log "$COMPOSE_FILE predates .env pass-through — not replacing it; see docs/deployment.md (one-time switch)"
+    return
+  fi
   tag=$(sed -n 's/.*"toVersion": *"\([^"]*\)".*/\1/p' "$REQUEST" | head -n 1)
   # The tag ends up in a URL; accept only what a release tag looks like.
   if ! printf '%s' "$tag" | grep -Eq '^v?[0-9]+(\.[0-9A-Za-z-]+)*$'; then
@@ -85,6 +97,7 @@ refresh_compose() {
     return
   fi
   cp -p "$COMPOSE_FILE" "$COMPOSE_FILE.bak" && mv "$new" "$COMPOSE_FILE" \
+    && SWAPPED=1 \
     && log "replaced $COMPOSE_FILE with the $tag copy (previous kept as $COMPOSE_FILE.bak)"
 }
 
@@ -97,6 +110,10 @@ if docker compose $(compose_args "$COMPOSE_FILE") pull && docker compose $(compo
   write_result true ""
 else
   log "update failed"
+  # Put the compose file back to match the image still running.
+  if [ "$SWAPPED" = 1 ]; then
+    cp -p "$COMPOSE_FILE.bak" "$COMPOSE_FILE" && log "restored $COMPOSE_FILE from $COMPOSE_FILE.bak"
+  fi
   write_result false "docker compose pull/up failed — see the hearth-updater log"
 fi
 

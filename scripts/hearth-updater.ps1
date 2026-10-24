@@ -59,16 +59,27 @@ function Write-Result { # $Ok=bool  $ErrorMessage=string-or-empty
 }
 
 $repo = 'chrislynch97/hearth'
-$override = 'compose.override.yml'
+$script:swapped = $false
 
+# Both names Compose would pick up on its own, in its order of preference; -f
+# switches that off, so it's passed explicitly.
 function Compose-Args { param([string]$File)
-  if (Test-Path $override) { @('-f', $File, '-f', $override) } else { @('-f', $File) }
+  foreach ($o in @('compose.override.yml', 'docker-compose.override.yml')) {
+    if (Test-Path $o) { return @('-f', $File, '-f', $o) }
+  }
+  @('-f', $File)
 }
 
 # Swap in the release's compose file so a release that adds a service, volume or
 # port needs no manual step. Best-effort: any failure keeps the current file and
 # the update goes ahead with it.
 function Update-ComposeFile {
+  # A file without the stamp predates the .env pass-through and may carry hand
+  # edits; replacing it would drop them. That needs the one-time manual switch.
+  if (-not (Select-String -Path $composeFile -Pattern 'HEARTH_COMPOSE_VERSION=' -Quiet)) {
+    Write-Log "$composeFile predates .env pass-through -- not replacing it; see docs/deployment.md (one-time switch)"
+    return
+  }
   $tag = $null
   try { $tag = (Get-Content -Raw $request | ConvertFrom-Json).toVersion } catch {}
   # The tag ends up in a URL; accept only what a release tag looks like.
@@ -77,10 +88,10 @@ function Update-ComposeFile {
     return
   }
   $new = "$composeFile.new"
-  try {
-    Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -OutFile $new `
-      -Uri "https://raw.githubusercontent.com/$repo/$tag/$composeFile"
-  } catch {
+  # curl.exe (Windows 10 1803+), not Invoke-WebRequest: 5.1's never falls back
+  # to IPv4 when IPv6 is broken, so it times out on such a host.
+  curl.exe -fsSL --max-time 30 -o $new "https://raw.githubusercontent.com/$repo/$tag/$composeFile"
+  if ($LASTEXITCODE -ne 0) {
     Write-Log "couldn't fetch $composeFile for $tag -- keeping the current one"
     Remove-Item -Path $new -Force -ErrorAction SilentlyContinue
     return
@@ -99,6 +110,7 @@ function Update-ComposeFile {
   }
   Copy-Item -Path $composeFile -Destination "$composeFile.bak" -Force
   Move-Item -Path $new -Destination $composeFile -Force
+  $script:swapped = $true
   Write-Log "replaced $composeFile with the $tag copy (previous kept as $composeFile.bak)"
 }
 
@@ -114,6 +126,11 @@ if ($LASTEXITCODE -eq 0) {
 }
 else {
   Write-Log 'update failed'
+  # Put the compose file back to match the image still running.
+  if ($script:swapped) {
+    Copy-Item -Path "$composeFile.bak" -Destination $composeFile -Force
+    Write-Log "restored $composeFile from $composeFile.bak"
+  }
   Write-Result $false 'docker compose pull/up failed -- see the hearth-updater log'
 }
 
