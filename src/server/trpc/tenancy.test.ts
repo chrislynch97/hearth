@@ -71,4 +71,30 @@ describe('cross-household isolation', () => {
       h2.spends.add({ description: 'X', amount: 100, ownerId: h2Joint, potId: pot.id }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
+
+  it('gifts are isolated per household', async () => {
+    const { h1, h2 } = await twoHouseholds()
+
+    const xmas = await h1.gifts.createOccasion({ name: 'Christmas' })
+    const mum = await h1.gifts.createRecipient({ occasionId: xmas.id, name: 'Mum' })
+    const scarf = await h1.gifts.createGift({ recipientId: mum.id, name: 'Scarf', amount: 2000, status: 'idea' })
+
+    expect(await h2.gifts.occasions()).toHaveLength(0)
+    await expect(h2.gifts.occasion({ id: xmas.id })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(h2.gifts.createRecipient({ occasionId: xmas.id, name: 'X' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+    await expect(
+      h2.gifts.createGift({ recipientId: mum.id, name: 'X', amount: 1, status: 'idea' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(h2.gifts.updateGift({ id: scarf.id, name: 'hijacked' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+    await expect(h2.gifts.createOccasion({ name: 'X', copyFromId: xmas.id })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+    await expect(h2.gifts.removeOccasion({ id: xmas.id })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+
+    expect((await h1.gifts.occasion({ id: xmas.id })).recipients[0]?.gifts[0]?.name).toBe('Scarf')
+  })
 })

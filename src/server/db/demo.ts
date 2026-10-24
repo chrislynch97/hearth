@@ -903,6 +903,40 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
       }]
     : []
 
+  // -- gifts ---------------------------------------------------------------
+  // Last Christmas, archived and all given; this Christmas copied from it, part
+  // way through: some bought, the rest still ideas. Generated last so the PRNG
+  // sequence feeding everything above is unchanged.
+  type GiftDef = [name: string, price: number, status: 'idea' | 'bought' | 'given']
+  const giftPlan: Array<{ name: string; budget: number | null; last: GiftDef[]; now: GiftDef[] }> = [
+    { name: 'Mum', budget: 80, last: [['Cashmere scarf', 65, 'given']], now: [['Spa voucher', 60, 'bought'], ['Candle set', 18, 'idea']] },
+    { name: 'Dad', budget: 80, last: [['Whisky', 55, 'given']], now: [['Garden tools', 45, 'bought']] },
+    { name: 'Gran', budget: 30, last: [['Slippers', 25, 'given']], now: [['Photo calendar', 22, 'idea']] },
+    { name: 'Leo (nephew)', budget: 40, last: [['Lego set', 35, 'given']], now: [['Lego Technic', 50, 'bought']] },
+    { name: 'Secret Santa', budget: 15, last: [['Hot sauce kit', 15, 'given']], now: [] },
+  ]
+  const giftOccasions: Array<Record<string, unknown>> = []
+  const giftRecipients: Array<Record<string, unknown>> = []
+  const gifts: Array<Record<string, unknown>> = []
+  for (const [year, archived, which] of [[thisMonth.year - 1, true, 'last'], [thisMonth.year, false, 'now']] as const) {
+    const occasionId = id()
+    giftOccasions.push({
+      id: occasionId,
+      name: `Christmas ${year}`,
+      date: ymd(year, 12, 25),
+      budget: cost(300),
+      archivedAt: archived ? now : null,
+      ...ts,
+    })
+    giftPlan.forEach((r, i) => {
+      const recipientId = id()
+      giftRecipients.push({ id: recipientId, occasionId, name: r.name, budget: r.budget === null ? null : cost(r.budget), sortOrder: i, ...ts })
+      for (const [name, price, status] of r[which]) {
+        gifts.push({ id: id(), recipientId, name, amount: cost(price), status, link: null, note: null, ...ts })
+      }
+    })
+  }
+
   return {
     household: households,
     member: members,
@@ -921,6 +955,9 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     raise: raises,
     account: accounts,
     accountBalance: accountBalances,
+    giftOccasion: giftOccasions,
+    giftRecipient: giftRecipients,
+    gift: gifts,
   }
 }
 
