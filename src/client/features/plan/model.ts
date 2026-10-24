@@ -108,6 +108,16 @@ export const linePerPeriod = (
     frequency: PeriodFrequency
 ): number => roundMinor(perPeriodOf([row], frequency));
 
+/** A line's per-period share when it differs from the amount as paid — a
+ *  monthly bill in a monthly household has nothing extra to say. */
+export const perPeriodWhenDifferent = (
+    row: RecurringRow,
+    frequency: PeriodFrequency
+): number | undefined =>
+    row.amount === null || row.recurrence === frequency
+        ? undefined
+        : linePerPeriod(row, frequency);
+
 /** A list's per-period total, summed at full precision and rounded once — the
  *  funding plan's rule, so it can sit a penny off the sum of its lines. */
 export const sumPerPeriod = (

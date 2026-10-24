@@ -9,6 +9,7 @@ import {
     groupSlugs,
     linePerPeriod,
     mainBillOwnerId,
+    perPeriodWhenDifferent,
     slugify,
     sumPerPeriod,
     totalPerPeriod,
@@ -441,6 +442,33 @@ describe("linePerPeriod", () => {
         const line = { amount: null, recurrence: "monthly" };
 
         expect(linePerPeriod(line, "monthly")).toBe(0);
+    });
+});
+
+describe("perPeriodWhenDifferent", () => {
+    it("gives a yearly bill's monthly share", () => {
+        const line = { amount: 64000, recurrence: "yearly" };
+
+        expect(perPeriodWhenDifferent(line, "monthly")).toBe(5333);
+    });
+
+    it("says nothing when the bill recurs every budget period", () => {
+        const line = { amount: 1000, recurrence: "monthly" };
+
+        expect(perPeriodWhenDifferent(line, "monthly")).toBeUndefined();
+    });
+
+    // Thirteen four-week periods a year, so a monthly bill isn't one per period.
+    it("gives a monthly bill's share of a four-weekly period", () => {
+        const line = { amount: 1300, recurrence: "monthly" };
+
+        expect(perPeriodWhenDifferent(line, "four_weekly")).toBe(1200);
+    });
+
+    it("says nothing for a missing amount", () => {
+        const line = { amount: null, recurrence: "yearly" };
+
+        expect(perPeriodWhenDifferent(line, "monthly")).toBeUndefined();
     });
 });
 
