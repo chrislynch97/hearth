@@ -9,7 +9,7 @@ import { ShouldHold } from "@/features/plan/components/ShouldHold";
 import { StandingOrderChip } from "@/features/plan/components/StandingOrderChip";
 import {
     fundingOf,
-    linePerPeriod,
+    perPeriodLabel,
     sumPerPeriod,
     type PlanPot,
     type PotBalance,
@@ -56,11 +56,16 @@ export const PotCard = ({
 }: PotCardProps) => {
     const { pot, owner, bills, setAsides, perPeriod } = planPot;
 
-    const periodAmount = (row: RecurringRow) =>
-        formatMoney(linePerPeriod(row, frequency), money);
+    const paidAmount = (row: RecurringRow) =>
+        formatMoney(row.amount ?? 0, money);
+
+    const periodShare = (row: RecurringRow) =>
+        perPeriodLabel(row, frequency, money, unit);
 
     const billMeta = (bill: Expense) =>
-        fundingOf(bill) === "pot_auto" ? "auto" : bill.recurrence;
+        fundingOf(bill) === "pot_auto"
+            ? `${bill.recurrence} · auto`
+            : bill.recurrence;
 
     // A single unnamed contribution is stored under the pot's own name; showing
     // "Rent — Rent" would be nonsense.
@@ -120,7 +125,8 @@ export const PotCard = ({
                             name={bill.name}
                             emergencyFund={bill.includeInEmergencyFund !== 0}
                             meta={billMeta(bill)}
-                            amount={periodAmount(bill)}
+                            amount={paidAmount(bill)}
+                            perPeriod={periodShare(bill)}
                             ariaLabel={`Edit ${bill.name}`}
                             onClick={() => onEditBill(bill)}
                         />
@@ -145,7 +151,8 @@ export const PotCard = ({
                             name={setAsideLabel(row)}
                             emergencyFund={row.includeInEmergencyFund !== 0}
                             meta={row.recurrence}
-                            amount={periodAmount(row)}
+                            amount={paidAmount(row)}
+                            perPeriod={periodShare(row)}
                             ariaLabel={`Edit ${setAsideLabel(row)}`}
                             onClick={() => onEditSetAside(row)}
                         />

@@ -4,10 +4,13 @@ export interface PlanLineRowProps {
     name: string;
     /** Marked with a shield — it counts toward the emergency-fund target. */
     emergencyFund: boolean;
-    /** The small tag — a recurrence, or `auto` for a self-deducting pot. */
+    /** The small tag — a recurrence, with `· auto` for a self-deducting pot. */
     meta: string;
-    /** Already formatted, in the household's currency and budget period. */
+    /** Already formatted: the line as it's paid, in the household's currency. */
     amount: string;
+    /** The per-period share under the amount, e.g. `£53.33/mo`; omitted when it
+     *  would only repeat the amount. */
+    perPeriod?: string;
     ariaLabel: string;
     onClick: () => void;
 }
@@ -19,13 +22,14 @@ export const PlanLineRow = ({
     emergencyFund,
     meta,
     amount,
+    perPeriod,
     ariaLabel,
     onClick,
 }: PlanLineRowProps) => (
     <button
         onClick={onClick}
         aria-label={ariaLabel}
-        className="flex h-7 w-full items-center gap-2 rounded-xs px-1 text-left transition-colors duration-[140ms] ease-out hover:bg-hover"
+        className="flex min-h-7 w-full items-center gap-2 rounded-xs px-1 text-left transition-colors duration-[140ms] ease-out hover:bg-hover"
     >
         {/* Leading, and held open whether or not there is a shield in it.
             Tucked beside the name it sat in a different place on every row, and
@@ -49,8 +53,11 @@ export const PlanLineRow = ({
             {meta}
         </span>
         {/* A column of its own, so the tags beside it line up down the card. */}
-        <span className="tabular min-w-[4.25rem] shrink-0 text-right text-sm text-text">
+        <span className="tabular flex min-w-[4.25rem] shrink-0 flex-col items-end py-0.5 text-sm text-text">
             {amount}
+            {perPeriod && (
+                <span className="text-xs text-text-faint">{perPeriod}</span>
+            )}
         </span>
     </button>
 );

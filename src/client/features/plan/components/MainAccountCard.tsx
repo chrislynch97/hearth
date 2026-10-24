@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/PlusIcon";
 import { PlanLineRow } from "@/features/plan/components/PlanLineRow";
 import {
-    linePerPeriod,
     mainBillOwnerId,
+    perPeriodLabel,
     sumPerPeriod,
 } from "@/features/plan/model";
 import type { Expense, Member } from "../../../../server/db/schema";
@@ -69,10 +69,8 @@ export const MainAccountCard = ({
                         name={bill.name}
                         emergencyFund={bill.includeInEmergencyFund !== 0}
                         meta={metaFor(bill)}
-                        amount={formatMoney(
-                            linePerPeriod(bill, frequency),
-                            money
-                        )}
+                        amount={formatMoney(bill.amount ?? 0, money)}
+                        perPeriod={perPeriodLabel(bill, frequency, money, unit)}
                         ariaLabel={`Edit ${bill.name}`}
                         onClick={() => onEditBill(bill)}
                     />
