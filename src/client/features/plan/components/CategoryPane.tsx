@@ -12,10 +12,16 @@ import {
     type PlanGroup,
     type PotBalance,
 } from "@/features/plan/model";
-import type { Expense, Pot, SetAside } from "../../../../server/db/schema";
+import type {
+    Expense,
+    Member,
+    Pot,
+    SetAside,
+} from "../../../../server/db/schema";
 
 export interface CategoryPaneProps {
     group: PlanGroup;
+    members: Member[];
     money: MoneyFormat;
     frequency: PeriodFrequency;
     unit: string;
@@ -36,6 +42,7 @@ export interface CategoryPaneProps {
 
 export const CategoryPane = ({
     group,
+    members,
     money,
     frequency,
     unit,
@@ -135,6 +142,7 @@ export const CategoryPane = ({
                 {group.mainBills.length > 0 && (
                     <MainAccountCard
                         bills={group.mainBills}
+                        members={members}
                         money={money}
                         frequency={frequency}
                         unit={unit}

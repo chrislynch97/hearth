@@ -11,7 +11,8 @@ export interface PaydaySheet {
   /** Per-period suffix, e.g. `/mo`. */
   unit: string
   generatedAt: Date
-  people: Array<{ name: string; personalPots: number; jointContribution: number; setAside: number }>
+  /** `ownAccount` = bills paid straight from that person's own account; not part of `setAside`. */
+  people: Array<{ name: string; personalPots: number; jointContribution: number; setAside: number; ownAccount: number }>
   /** Pots with something to move, grouped by owner: people first, then joint. */
   potGroups: Array<{ ownerName: string; pots: Array<{ name: string; amount: number }>; total: number }>
   jointPotsTotal: number
@@ -58,11 +59,13 @@ export function buildPaydaySheet(input: PaydaySheetInput): PaydaySheet {
   }
   const ownerIds = [...ownerOrder.filter((id) => potsByOwner.has(id)), ...[...potsByOwner.keys()].filter((id) => !ownerOrder.includes(id))]
 
+  // A person's own-account rows carry their name; joint rows stay as the category.
   const mainRows = plan.mainAccountByCategory
-    .map((r) => ({
-      name: (r.categoryId && categoryName.get(r.categoryId)) || 'Uncategorised',
-      amount: roundMinor(r.fundingPerPeriod),
-    }))
+    .map((r) => {
+      const category = (r.categoryId && categoryName.get(r.categoryId)) || 'Uncategorised'
+      const owner = r.ownerId ? ownerName.get(r.ownerId) ?? 'Former member' : null
+      return { name: owner ? `${category} · ${owner}` : category, amount: roundMinor(r.fundingPerPeriod) }
+    })
     .filter((r) => r.amount !== 0)
 
   return {
@@ -75,6 +78,7 @@ export function buildPaydaySheet(input: PaydaySheetInput): PaydaySheet {
       personalPots: roundMinor(p.personalPotFunding),
       jointContribution: roundMinor(p.jointContribution),
       setAside: roundMinor(p.setAside),
+      ownAccount: roundMinor(p.personalMainAccount),
     })),
     potGroups: ownerIds.map((id) => {
       const pots = (potsByOwner.get(id) ?? []).sort((a, b) => a.name.localeCompare(b.name))

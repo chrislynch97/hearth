@@ -39,6 +39,7 @@ export type Pot = typeof pot.$inferSelect
 //   'pot_manual' — potId set; money moved out of the pot manually → shows on catch-up
 //   'pot_auto'   — potId set; the pot auto-deducts (e.g. Monzo) → no catch-up
 //   'main'       — potId null; paid from the main account under categoryId → no catch-up
+// A 'main' bill's ownerId says whose main account pays it; null = joint (issue #32).
 // (The legacy per-owner `expense_share` model was retired; see the 001x migration.)
 export const expense = pgTable('expense', {
   id: text('id').primaryKey(),
@@ -49,6 +50,7 @@ export const expense = pgTable('expense', {
   funding: text('funding').notNull().default('pot_manual'), // 'pot_manual' | 'pot_auto' | 'main'
   potId: text('pot_id').references(() => pot.id),           // the pot it drains; null when funding = 'main'
   categoryId: text('category_id').references(() => category.id), // required when funding = 'main'
+  ownerId: text('owner_id').references(() => member.id),     // 'main' only: a person's own account; null = joint
   note: text('note'),
   active: integer('active').notNull().default(1),
   // 0/1: counts toward the emergency-fund target (issue #118). Default 1 — every

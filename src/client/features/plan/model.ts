@@ -250,20 +250,38 @@ export const buildPlan = ({
     return groups;
 };
 
-/** The same group with everything owned by somebody else taken out. A
- *  main-account bill has no owner, so it survives every owner filter — it is the
- *  household's, not a person's. */
+/** Whose account a main-account bill comes out of: its owner while they are a
+ *  listed person, else the joint member — the funding plan's rule. */
+export const mainBillOwnerId = (
+    bill: Expense,
+    members: Member[]
+): string | undefined =>
+    members.find(
+        (member) => member.id === bill.ownerId && member.kind === "person"
+    )?.id ?? members.find((member) => member.kind === "joint")?.id;
+
+/** The same group with everything owned by somebody else taken out — pots by
+ *  their owner, main-account bills by whose account pays them. */
 export const filterByOwner = (
     group: PlanGroup,
-    ownerId: string | typeof ALL
+    ownerId: string | typeof ALL,
+    members: Member[],
+    frequency: PeriodFrequency
 ): PlanGroup => {
     if (ownerId === ALL) return group;
     const pots = group.pots.filter((p) => p.pot.ownerId === ownerId);
+    const mainBills = group.mainBills.filter(
+        (bill) => mainBillOwnerId(bill, members) === ownerId
+    );
 
     return {
         ...group,
         pots,
-        perPeriod: roundMinor(pots.reduce((acc, p) => acc + p.perPeriod, 0)),
+        mainBills,
+        perPeriod: roundMinor(
+            pots.reduce((acc, p) => acc + p.perPeriod, 0) +
+                sumPerPeriod(mainBills, frequency)
+        ),
     };
 };
 

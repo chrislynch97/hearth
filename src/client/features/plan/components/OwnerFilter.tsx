@@ -9,8 +9,8 @@ export interface OwnerFilterProps {
     onSelect: (value: string) => void;
 }
 
-/** Narrows the plan to one person's pots. Main-account bills belong to the
- *  household, so they stay put whoever is selected. */
+/** Narrows the plan to one owner's pots and the main-account bills paid from
+ *  their account. */
 export const OwnerFilter = ({
     members,
     selected,

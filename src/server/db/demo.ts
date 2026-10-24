@@ -399,6 +399,8 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     funding: 'pot_manual' | 'pot_auto' | 'main'
     pot?: string
     category?: string
+    /** 'main' only: paid from this person's own account rather than joint. */
+    owner?: Person
   }
   const billDefs: BillDef[] = [
     { name: 'Rent', recurrence: 'monthly', dueDay: 1, reminderDays: 3, amount: cost(spec.rent ?? 1500), funding: 'pot_manual', pot: 'rent' },
@@ -414,6 +416,13 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     // Paid straight from the main joint account (can't be put on a pot) — categorised, no catch-up.
     { name: 'Spotify', recurrence: 'monthly', dueDay: 6, amount: cost(12), funding: 'main', category: 'subs' },
   ]
+  // One person pays a subscription from their own account — it counts against them alone.
+  const firstPerson = people[0]
+  if (firstPerson) {
+    billDefs.push({
+      name: `${firstPerson.name} Audiobooks`, recurrence: 'monthly', dueDay: 14, amount: cost(8), funding: 'main', category: 'subs', owner: firstPerson,
+    })
+  }
   for (const p of people) {
     billDefs.push({ name: `${p.name} Gym`, recurrence: 'monthly', dueDay: 2, amount: cost(30), funding: 'pot_manual', pot: `${p.key}_gym` })
     if (p.commute === 'rail') {
@@ -428,6 +437,7 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     funding: def.funding,
     potId: def.pot ? potId[def.pot]! : null,
     categoryId: def.category ? catId[def.category]! : null,
+    ownerId: def.owner ? mine(def.owner) : null,
     note: null,
     active: 1,
     dueAnchor: anchorDay(def.dueDay),

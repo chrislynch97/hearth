@@ -133,6 +133,7 @@ interface SnapshotPerson {
     periodIncome: number;
     personalPotFunding: number;
     jointContribution: number;
+    personalMainAccount: number;
     setAside: number;
     remainder: number;
 }
@@ -188,6 +189,16 @@ function SnapshotSection({
                                 {formatMoney(p.periodIncome, money)}
                             </Text>
                         </Group>
+                        {p.personalMainAccount > 0 && (
+                            <Group justify="space-between">
+                                <Text size="sm" c="dimmed">
+                                    Paid from own account
+                                </Text>
+                                <Text size="sm">
+                                    {formatMoney(p.personalMainAccount, money)}
+                                </Text>
+                            </Group>
+                        )}
                         {pooled ? (
                             <>
                                 <Group justify="space-between">

@@ -80,6 +80,7 @@ export const dashboardRouter = router({
           funding: (e.funding ?? 'pot_manual') as 'pot_manual' | 'pot_auto' | 'main',
           potId: e.potId,
           categoryId: e.categoryId,
+          ownerId: e.ownerId,
           amount: e.amount ?? 0,
         })),
         setAsides: setAsides.map((s) => ({

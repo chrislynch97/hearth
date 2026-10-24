@@ -1,0 +1,2 @@
+ALTER TABLE "expense" ADD COLUMN "owner_id" text;--> statement-breakpoint
+ALTER TABLE "expense" ADD CONSTRAINT "expense_owner_id_member_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."member"("id") ON DELETE no action ON UPDATE no action;

@@ -4,11 +4,16 @@ import type { MoneyFormat } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/PlusIcon";
 import { PlanLineRow } from "@/features/plan/components/PlanLineRow";
-import { linePerPeriod, sumPerPeriod } from "@/features/plan/model";
-import type { Expense } from "../../../../server/db/schema";
+import {
+    linePerPeriod,
+    mainBillOwnerId,
+    sumPerPeriod,
+} from "@/features/plan/model";
+import type { Expense, Member } from "../../../../server/db/schema";
 
 export interface MainAccountCardProps {
     bills: Expense[];
+    members: Member[];
     money: MoneyFormat;
     frequency: PeriodFrequency;
     unit: string;
@@ -21,6 +26,7 @@ export interface MainAccountCardProps {
  *  they can't be left off the page either. */
 export const MainAccountCard = ({
     bills,
+    members,
     money,
     frequency,
     unit,
@@ -28,6 +34,15 @@ export const MainAccountCard = ({
     onEditBill,
 }: MainAccountCardProps) => {
     const total = sumPerPeriod(bills, frequency);
+    const memberById = new Map(members.map((member) => [member.id, member]));
+
+    // Joint is the default account, so only a person's own bills say whose.
+    const metaFor = (bill: Expense) => {
+        const owner = memberById.get(mainBillOwnerId(bill, members) ?? "");
+        return owner?.kind === "person"
+            ? `${bill.recurrence} · ${owner.displayName}'s account`
+            : bill.recurrence;
+    };
 
     return (
         <section className="rounded-md border border-dashed border-border-strong bg-sunken">
@@ -53,7 +68,7 @@ export const MainAccountCard = ({
                         key={bill.id}
                         name={bill.name}
                         emergencyFund={bill.includeInEmergencyFund !== 0}
-                        meta={bill.recurrence}
+                        meta={metaFor(bill)}
                         amount={formatMoney(
                             linePerPeriod(bill, frequency),
                             money

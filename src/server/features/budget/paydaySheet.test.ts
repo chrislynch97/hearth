@@ -30,6 +30,7 @@ function person(memberId: string, displayName: string, personalPotFunding: numbe
     displayName,
     personalPotFunding,
     jointContribution,
+    personalMainAccount: 0,
     setAside: personalPotFunding + jointContribution,
     periodIncome: 0,
     remainder: 0,
@@ -93,8 +94,8 @@ describe('buildPaydaySheet', () => {
       { ownerName: 'Joint', pots: [{ name: 'Holidays', amount: 2000 }], total: 2000 },
     ])
     expect(sheet.people).toEqual([
-      { name: 'Alice', personalPots: 7000, jointContribution: 1000, setAside: 8000 },
-      { name: 'Bob', personalPots: 0, jointContribution: 1000, setAside: 1000 },
+      { name: 'Alice', personalPots: 7000, jointContribution: 1000, setAside: 8000, ownAccount: 0 },
+      { name: 'Bob', personalPots: 0, jointContribution: 1000, setAside: 1000, ownAccount: 0 },
     ])
     expect(sheet.jointPotsTotal).toBe(2000)
   })
@@ -123,9 +124,9 @@ describe('buildPaydaySheet', () => {
     const plan = makePlan({
       mainAccountFundingPerPeriod: 15000,
       mainAccountByCategory: [
-        { categoryId: 'cat-home', fundingPerPeriod: 12000 },
-        { categoryId: null, fundingPerPeriod: 2000 },
-        { categoryId: 'cat-archived', fundingPerPeriod: 1000 },
+        { categoryId: 'cat-home', ownerId: null, fundingPerPeriod: 12000 },
+        { categoryId: null, ownerId: null, fundingPerPeriod: 2000 },
+        { categoryId: 'cat-archived', ownerId: null, fundingPerPeriod: 1000 },
       ],
     })
 
@@ -141,6 +142,25 @@ describe('buildPaydaySheet', () => {
     })
   })
 
+  it("names a person's own-account rows and carries their own-account total (#32)", () => {
+    const plan = makePlan({
+      perPerson: [{ ...person('alice', 'Alice', 0, 500), personalMainAccount: 2000 }],
+      mainAccountFundingPerPeriod: 3000,
+      mainAccountByCategory: [
+        { categoryId: 'cat-home', ownerId: null, fundingPerPeriod: 1000 },
+        { categoryId: 'cat-home', ownerId: 'alice', fundingPerPeriod: 2000 },
+      ],
+    })
+
+    const sheet = buildPaydaySheet(input(plan))
+
+    expect(sheet.people[0]?.ownAccount).toBe(2000)
+    expect(sheet.mainAccount.rows).toEqual([
+      { name: 'Home', amount: 1000 },
+      { name: 'Home · Alice', amount: 2000 },
+    ])
+  })
+
   it('rounds every amount to whole minor units', () => {
     const plan = makePlan({
       perPerson: [person('alice', 'Alice', 1234.5, 99.4999)],
@@ -148,12 +168,12 @@ describe('buildPaydaySheet', () => {
       jointPotFundingTotal: 0.4,
       unassignedFundingPerPeriod: 10.6,
       mainAccountFundingPerPeriod: 333.333,
-      mainAccountByCategory: [{ categoryId: 'cat-home', fundingPerPeriod: 333.333 }],
+      mainAccountByCategory: [{ categoryId: 'cat-home', ownerId: null, fundingPerPeriod: 333.333 }],
     })
 
     const sheet = buildPaydaySheet(input(plan))
 
-    expect(sheet.people[0]).toEqual({ name: 'Alice', personalPots: 1235, jointContribution: 99, setAside: 1334 })
+    expect(sheet.people[0]).toEqual({ name: 'Alice', personalPots: 1235, jointContribution: 99, setAside: 1334, ownAccount: 0 })
     expect(sheet.potGroups[0]?.pots[0]?.amount).toBe(1235)
     expect(sheet.jointPotsTotal).toBe(0)
     expect(sheet.unassigned).toBe(11)

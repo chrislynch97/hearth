@@ -57,6 +57,8 @@ interface BillFormValues {
     funding: Funding;
     potId: string;
     categoryId: string;
+    /** Main-account bills only; "" = the joint account. */
+    ownerId: string;
     dueAnchor: string;
     note: string;
     includeInEmergencyFund: boolean;
@@ -76,6 +78,14 @@ export const BillForm = ({
     const create = trpc.expenses.create.useMutation();
     const update = trpc.expenses.update.useMutation();
     const archive = trpc.expenses.archive.useMutation();
+
+    // An owner who has since been archived reads as joint, as the funding plan
+    // already treats them.
+    const people = orderMembers(members).filter(
+        (member) => member.kind === "person" && member.archivedAt === null
+    );
+    const liveOwnerId =
+        people.find((person) => person.id === bill?.ownerId)?.id ?? "";
 
     const {
         register,
@@ -97,6 +107,7 @@ export const BillForm = ({
                   : "main",
             potId: bill?.potId ?? defaultPotId ?? "",
             categoryId: bill?.categoryId ?? defaultCategoryId ?? "",
+            ownerId: liveOwnerId,
             dueAnchor: bill?.dueAnchor ?? "",
             note: bill?.note ?? "",
             includeInEmergencyFund: bill
@@ -127,6 +138,7 @@ export const BillForm = ({
             funding: values.funding,
             potId: isMain ? null : values.potId,
             categoryId: isMain ? values.categoryId : null,
+            ownerId: isMain ? values.ownerId || null : null,
             note: values.note.trim() || undefined,
             dueAnchor: values.dueAnchor || undefined,
             includeInEmergencyFund: values.includeInEmergencyFund,
@@ -178,6 +190,13 @@ export const BillForm = ({
         value: category.id,
         label: category.name,
     }));
+    const accountOptions = [
+        { value: "", label: "Joint" },
+        ...people.map((person) => ({
+            value: person.id,
+            label: person.displayName,
+        })),
+    ];
 
     return (
         <form onSubmit={submit}>
@@ -219,18 +238,27 @@ export const BillForm = ({
                     {...register("funding")}
                 />
                 {isMain ? (
-                    <SelectField
-                        label="Category"
-                        placeholder="Pick a category"
-                        options={categoryOptions}
-                        error={errors.categoryId?.message}
-                        {...register("categoryId", {
-                            validate: (value) =>
-                                !isMain ||
-                                value.length > 0 ||
-                                "A main-account bill needs a category.",
-                        })}
-                    />
+                    <div className="flex gap-2">
+                        <SelectField
+                            label="Category"
+                            placeholder="Pick a category"
+                            options={categoryOptions}
+                            className="flex-1"
+                            error={errors.categoryId?.message}
+                            {...register("categoryId", {
+                                validate: (value) =>
+                                    !isMain ||
+                                    value.length > 0 ||
+                                    "A main-account bill needs a category.",
+                            })}
+                        />
+                        <SelectField
+                            label="Paid from"
+                            options={accountOptions}
+                            className="flex-1"
+                            {...register("ownerId")}
+                        />
+                    </div>
                 ) : (
                     <SelectField
                         label="Pot"
