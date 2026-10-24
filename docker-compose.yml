@@ -2,7 +2,8 @@ services:
   hearth:
     build: .
     ports:
-      - "8787:8787"
+      # Host port: set HEARTH_PORT in .env to move it. Container side stays 8787.
+      - "${HEARTH_PORT:-8787}:8787"
     volumes:
       - ./data:/data
     # Every HEARTH_* setting in .env reaches the app, including ones added in

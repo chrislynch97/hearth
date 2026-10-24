@@ -344,9 +344,11 @@ you run. The shipped compose files pass the whole of `.env` into the app
 (`env_file`), so a setting added in a later release works without touching the
 compose file. **Customise in `.env`, never in the compose file**: the host updater
 replaces the compose file with each release's copy (see
-[Updating — three ways](#updating--three-ways)). For a structural change — an
-extra volume, a different port mapping — put it in a `compose.override.yml` next
-to the compose file. The host updater applies it automatically; when you run
+[Updating — three ways](#updating--three-ways)). The host port is `HEARTH_PORT`
+in `.env` too, except on `docker-compose.public.yml`, where Caddy owns the public
+ports. For a structural change — an extra volume, another service — put it in a
+`compose.override.yml` next to the compose file. Lists such as `ports` and
+`volumes` are added to the base file's, not swapped for them. The host updater applies it automatically; when you run
 `docker compose` by hand with `-f`, add `-f compose.override.yml` too.
 
 Settings in `.env` reach the app; settings only exported in your shell don't, with
@@ -942,8 +944,8 @@ note in **Settings → System → Updates** until you do.
    On PGlite, copy `./data`.
 2. Check Compose is v2.24 or newer: `docker compose version`.
 3. Compare your compose file with the shipped one. Move every value you
-   changed into `.env` (settings) or `compose.override.yml` (ports, volumes,
-   extra services).
+   changed into `.env` (settings, and the host port as `HEARTH_PORT`) or
+   `compose.override.yml` (extra volumes or services).
 4. Replace your compose file with the one from the release you're running.
 5. `docker compose -f <file> up -d` (add `-f compose.override.yml` if you made
    one), then confirm the note in **Settings → System → Updates** has gone.

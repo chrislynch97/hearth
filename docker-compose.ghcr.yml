@@ -16,7 +16,8 @@ services:
   hearth:
     image: ghcr.io/chrislynch97/hearth:latest
     ports:
-      - "8787:8787"
+      # Host port: set HEARTH_PORT in .env to move it. Container side stays 8787.
+      - "${HEARTH_PORT:-8787}:8787"
     volumes:
       # Also the exchange point for the host updater's control files (./data/updates).
       - ./data:/data
