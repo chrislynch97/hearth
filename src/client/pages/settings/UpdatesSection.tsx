@@ -15,7 +15,7 @@ import {
 } from "@mantine/core";
 import { TimeInput } from "@mantine/dates";
 import { trpc } from "@/trpc";
-import { ComposeDriftAlert } from "./ComposeDriftAlert";
+import { ComposeOutdatedNotice } from "./ComposeOutdatedNotice";
 
 /** Where the Updating docs live — linked when the host updater isn't installed. */
 const DOCS_UPDATING_URL =
@@ -83,7 +83,7 @@ export const UpdatesSection = () => {
             </Group>
 
             {settings && (
-                <ComposeDriftAlert settings={settings.missingSettings} />
+                <ComposeOutdatedNotice outdated={settings.composeOutdated} />
             )}
 
             {settings?.deployMode === "image" && !settings.updaterOnline && (
