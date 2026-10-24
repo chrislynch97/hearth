@@ -97,4 +97,42 @@ describe('cross-household isolation', () => {
 
     expect((await h1.gifts.occasion({ id: xmas.id })).recipients[0]?.gifts[0]?.name).toBe('Scarf')
   })
+
+  it('savings goals are isolated per household, pots included', async () => {
+    const { h1, h2, h1Joint, h2Joint } = await twoHouseholds()
+
+    const h1Pot = await h1.pots.create({ name: 'Kitchen', ownerId: h1Joint.id })
+    const wedding = await h1.savings.createGoal({
+      name: 'Wedding',
+      targetAmount: 100_000,
+      targetDate: '2028-06-12',
+      pot: { name: 'Wedding', ownerId: h1Joint.id },
+    })
+    const cake = await h1.savings.createItem({ goalId: wedding.id, name: 'Cake', amount: 50_000 })
+    const balance = await h1.savings.recordBalance({ goalId: wedding.id, asOfDate: '2026-10-01', amount: 10_000 })
+
+    expect(await h2.savings.goals()).toHaveLength(0)
+    expect(await h2.savings.eligiblePots()).toHaveLength(0)
+    await expect(h2.savings.goal({ id: wedding.id })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(
+      h2.savings.createGoal({ name: 'X', targetAmount: 1, targetDate: '2028-01-01', pot: { id: h1Pot.id } }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    await expect(
+      h2.savings.createGoal({ name: 'X', targetAmount: 1, targetDate: '2028-01-01', pot: { name: 'X', ownerId: h1Joint.id } }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    await expect(h2.savings.createItem({ goalId: wedding.id, name: 'X', amount: 1 })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(h2.savings.setPaid({ id: cake.id, paidOn: '2026-10-01', reduceTarget: true })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+    await expect(h2.savings.removeBalance({ id: balance.id })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(h2.savings.applyContribution({ goalId: wedding.id, perPeriod: 1 })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(h2.savings.removeGoal({ id: wedding.id })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+
+    // h2 can still make its own goal on its own pot.
+    await h2.savings.createGoal({ name: 'Mine', targetAmount: 1, targetDate: '2028-01-01', pot: { name: 'Mine', ownerId: h2Joint } })
+
+    const mine = await h1.savings.goal({ id: wedding.id })
+    expect(mine.goal.targetAmount).toBe(100_000)
+    expect(mine.items[0]?.paidOn).toBeNull()
+  })
 })

@@ -7,6 +7,7 @@ import { computeFundingPlan } from '../budget/funding'
 import { computeIncomeByMember, loadPayslipSummaries } from '../income/service'
 import { allocationByCategory, monthlyNetTrend } from './summary'
 import { projectUpcoming, type UpcomingExpenseInput } from '../budget/upcoming'
+import { savingsAlerts } from '../savings/savings'
 import { periodConfig } from '../../../shared/period'
 import { addDays, todayIso } from '../../../shared/dates'
 import { monthlyToPeriod, roundMinor, type Recurrence } from '../../../shared/recurrence'
@@ -169,6 +170,9 @@ export const dashboardRouter = router({
       }))
       const upcoming = projectUpcoming({ expenses: upcomingExpenses, from: today, to: addDays(today, UPCOMING_HORIZON_DAYS) })
 
+      // Savings-goal items that won't be paid for in time (hearth-planning#15).
+      const savings = await savingsAlerts(ctx.db, ctx.householdId, today)
+
       // Re-base household income onto the budget period so it lines up with the
       // per-period allocation and surplus figures below.
       const householdMonthly = [...incomeByMember.values()].reduce((acc, i) => acc + i.monthlyIncome, 0)
@@ -184,6 +188,7 @@ export const dashboardRouter = router({
         incomeTrend,
         recentActivity,
         upcoming,
+        savingsAlerts: savings,
         householdPeriodIncome,
         coupleSurplus,
       }

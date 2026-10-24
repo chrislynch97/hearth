@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { makeTestDb } from './testdb'
 import { buildDemoData, seedDemo, hasHousehold } from './demo'
+import { loadGoalPlans } from '../features/savings/savings'
 import {
   household,
   member,
@@ -146,6 +147,25 @@ describe('demo data generator', () => {
     expect(people.length).toBeGreaterThan(3)
     const statuses = new Set((await db.select().from(gift)).map((g) => g.status))
     expect(statuses).toEqual(new Set(['idea', 'bought', 'given']))
+  })
+
+  it('builds a wedding goal running ahead and a garden goal with an item at risk', async () => {
+    const db = await makeTestDb()
+    await seedDemo(db, { now: NOW })
+
+    const plans = await loadGoalPlans(db, 'household', '2026-06-15')
+    expect(plans.map((p) => p.goal.name).sort()).toEqual(['Garden', 'Wedding'])
+
+    const wedding = plans.find((p) => p.goal.name === 'Wedding')!
+    expect(wedding.contribution).toBeGreaterThan(0)
+    expect(wedding.balances.length).toBeGreaterThan(5)
+    expect(wedding.items.some((i) => i.paidOn)).toBe(true)
+    expect(wedding.plan.outcome.short).toEqual([])
+    expect(wedding.plan.outcome.difference).toBeGreaterThan(0)
+
+    const garden = plans.find((p) => p.goal.name === 'Garden')!
+    const fence = garden.items.find((i) => i.name === 'Fence panels')!
+    expect(garden.plan.flags[fence.id]?.kind).toBe('at_risk')
   })
 
   it('re-seeding is idempotent (wipes, no duplicate rows)', async () => {

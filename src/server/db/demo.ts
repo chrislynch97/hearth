@@ -23,6 +23,7 @@ import { ALL_TABLES } from './tables'
 import { household } from './schema'
 import { ensureSeed } from './seed'
 import { DEFAULT_HOUSEHOLD_ID } from '../trpc/tenant'
+import { addDays } from '@shared/dates'
 
 // --- deterministic randomness ---------------------------------------------
 
@@ -937,6 +938,67 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     })
   }
 
+  // -- savings goals -------------------------------------------------------
+  // A wedding running a little ahead on its set-aside, with lump sums and a
+  // paid deposit taken off the target; and a garden goal with nothing going in,
+  // so one item is at risk. Generated after gifts for the same PRNG reason.
+  const today = ymd(now.getFullYear(), now.getMonth() + 1, now.getDate())
+  const on = (monthsFromNow: number, day: number): string => {
+    const a = shiftMonth(thisMonth, monthsFromNow)
+    return ymd(a.year, a.month, day)
+  }
+  const savingsGoals: Array<Record<string, unknown>> = []
+  const savingsItems: Array<Record<string, unknown>> = []
+  const savingsBalances: Array<Record<string, unknown>> = []
+  const goalPot = (name: string): string => {
+    const pid = id()
+    pots.push({ id: pid, name, categoryId: catId['savings']!, ownerId: joint, sortOrder: pots.length, note: null, archivedAt: null, ...ts })
+    return pid
+  }
+
+  const weddingPot = goalPot('Wedding')
+  setAsides.push({
+    id: id(), name: 'Wedding', groupLabel: null, ownerId: joint, potId: weddingPot, amount: cost(450),
+    recurrence: 'monthly', note: null, active: 1, sortOrder: setAsides.length, archivedAt: null, ...ts,
+  })
+  const wedding = id()
+  savingsGoals.push({ id: wedding, potId: weddingPot, name: 'Wedding', targetAmount: cost(15000), targetDate: on(20, 12), archivedAt: null, ...ts })
+  const weddingItems: Array<[name: string, price: number, due: string | null, paidOn: string | null]> = [
+    ['Venue deposit', 1000, on(-2, 15), on(-2, 10)],
+    ['Photographer deposit', 300, on(1, 15), null],
+    ['Dress', 1100, on(16, 1), null],
+    ['Venue balance', 4000, on(17, 12), null],
+    ['Rings', 900, on(18, 1), null],
+    ['Catering', 3750, on(19, 28), null],
+    ['Cake', 250, on(19, 28), null],
+    ['Photographer balance', 1000, null, null],
+  ]
+  weddingItems.forEach(([name, price, dueDate, paidOn], i) => {
+    savingsItems.push({ id: id(), goalId: wedding, name, amount: cost(price), dueDate, paidOn, sortOrder: i, ...ts })
+  })
+  const weddingBalances: Array<[date: string, amount: number, note: string | null]> = [
+    [on(-6, 1), 1000, 'Opened the pot'],
+    [on(-5, 1), 1450, null],
+    [on(-4, 1), 1900, null],
+    [on(-4, 15), 3400, '£1,500 from the bonus'],
+    [on(-3, 1), 3850, null],
+    [on(-2, 1), 4300, null],
+    [on(-1, 1), 3750, 'After the venue deposit'],
+    [on(-1, 20), 5750, '£2,000 from family'],
+  ]
+  for (const [asOfDate, amount, note] of weddingBalances) {
+    savingsBalances.push({ id: id(), goalId: wedding, asOfDate, amount: cost(amount), note, ...ts })
+  }
+
+  const gardenPot = goalPot('Garden')
+  const garden = id()
+  savingsGoals.push({ id: garden, potId: gardenPot, name: 'Garden', targetAmount: cost(1200), targetDate: addDays(today, 60), archivedAt: null, ...ts })
+  savingsItems.push(
+    { id: id(), goalId: garden, name: 'Fence panels', amount: cost(800), dueDate: addDays(today, 9), paidOn: null, sortOrder: 0, ...ts },
+    { id: id(), goalId: garden, name: 'Paving slabs', amount: cost(400), dueDate: null, paidOn: null, sortOrder: 1, ...ts },
+  )
+  savingsBalances.push({ id: id(), goalId: garden, asOfDate: addDays(today, -3), amount: cost(300), note: null, ...ts })
+
   return {
     household: households,
     member: members,
@@ -958,6 +1020,9 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     giftOccasion: giftOccasions,
     giftRecipient: giftRecipients,
     gift: gifts,
+    savingsGoal: savingsGoals,
+    savingsItem: savingsItems,
+    savingsBalance: savingsBalances,
   }
 }
 
