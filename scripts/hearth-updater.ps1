@@ -5,8 +5,11 @@
 # container. It is the only thing with Docker access; the Hearth app has none.
 #
 # Each tick it touches a heartbeat (so the app knows managed updates are live)
-# and, if the app has written an update-request file, pulls the new image and
-# recreates the container, then writes a result file the app can read back.
+# and, if the app has written an update-request file, replaces the compose file
+# with the target release's copy (keeping the old one as <file>.bak), pulls the
+# new image and recreates the container, then writes a result file the app can
+# read back. A compose.override.yml next to the compose file is applied too, so
+# customise there or in .env -- never in the compose file itself.
 #
 # Config via env:
 #   HEARTH_PROJECT_DIR   dir holding the compose file + .\data   (default: $PWD)
@@ -55,9 +58,56 @@ function Write-Result { # $Ok=bool  $ErrorMessage=string-or-empty
   Move-Item -Path $tmp -Destination $result -Force
 }
 
+$repo = 'chrislynch97/hearth'
+$override = 'compose.override.yml'
+
+function Compose-Args { param([string]$File)
+  if (Test-Path $override) { @('-f', $File, '-f', $override) } else { @('-f', $File) }
+}
+
+# Swap in the release's compose file so a release that adds a service, volume or
+# port needs no manual step. Best-effort: any failure keeps the current file and
+# the update goes ahead with it.
+function Update-ComposeFile {
+  $tag = $null
+  try { $tag = (Get-Content -Raw $request | ConvertFrom-Json).toVersion } catch {}
+  # The tag ends up in a URL; accept only what a release tag looks like.
+  if (-not ($tag -is [string] -and $tag -match '^v?[0-9]+(\.[0-9A-Za-z-]+)*$')) {
+    Write-Log "no release tag in the request -- keeping $composeFile"
+    return
+  }
+  $new = "$composeFile.new"
+  try {
+    Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -OutFile $new `
+      -Uri "https://raw.githubusercontent.com/$repo/$tag/$composeFile"
+  } catch {
+    Write-Log "couldn't fetch $composeFile for $tag -- keeping the current one"
+    Remove-Item -Path $new -Force -ErrorAction SilentlyContinue
+    return
+  }
+  # Validated in place, so .env and relative paths resolve as they will for real.
+  $compose = Compose-Args $new
+  docker compose @compose config -q
+  if ($LASTEXITCODE -ne 0) {
+    Write-Log "$composeFile for $tag doesn't validate here -- keeping the current one"
+    Remove-Item -Path $new -Force -ErrorAction SilentlyContinue
+    return
+  }
+  if ((Get-FileHash $new).Hash -eq (Get-FileHash $composeFile).Hash) {
+    Remove-Item -Path $new -Force
+    return
+  }
+  Copy-Item -Path $composeFile -Destination "$composeFile.bak" -Force
+  Move-Item -Path $new -Destination $composeFile -Force
+  Write-Log "replaced $composeFile with the $tag copy (previous kept as $composeFile.bak)"
+}
+
+Update-ComposeFile
+
 Write-Log "update requested -- pulling ($composeFile)"
-docker compose -f $composeFile pull
-if ($LASTEXITCODE -eq 0) { docker compose -f $composeFile up -d }
+$compose = Compose-Args $composeFile
+docker compose @compose pull
+if ($LASTEXITCODE -eq 0) { docker compose @compose up -d }
 if ($LASTEXITCODE -eq 0) {
   Write-Log 'update applied'
   Write-Result $true
