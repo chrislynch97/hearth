@@ -14,7 +14,7 @@ import { isInstanceLocked, startSessionPurgeScheduler } from './auth/session'
 import { allowedOrigins, openGuardConfig } from './auth/gate'
 import { registerTrpcScope } from './httpGate'
 import { startupSafetyProblems } from './auth/startup'
-import { composeDriftWarning, missingComposeSettings } from './composeEnv'
+import { composeOutdated, composeOutdatedWarning } from './composeEnv'
 import { getInstanceSettings } from './db/instanceSettings'
 import { parseTrustProxy } from './auth/trustProxy'
 import { redactUrl } from './logRedact'
@@ -212,13 +212,12 @@ async function main() {
 }
 
 /** Warn when the compose file this container was started with is older than the
- *  image, so settings the operator put in `.env` never arrive (#241). A warning
- *  rather than a refusal to boot: the missing settings are all optional
- *  features, and an instance that won't start is worse than one running without
- *  off-site backups it never had. Settings → System says the same thing. */
+ *  image's expected layout (#241). A warning rather than a refusal to boot: an
+ *  instance that won't start is worse than one missing an optional setting.
+ *  Settings → System says the same thing. */
 function reportComposeDrift(): void {
-  const warning = composeDriftWarning(missingComposeSettings())
-  if (warning) console.error(`[hearth] WARNING: ${warning}`)
+  const warning = composeOutdatedWarning(composeOutdated())
+  if (warning) console.warn(`[hearth] WARNING: ${warning}`)
 }
 
 /** Check the boot-time config for states that are unsafe on a public instance,

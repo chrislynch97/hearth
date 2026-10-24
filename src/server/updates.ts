@@ -61,6 +61,11 @@ const declaredComposeFile = (): string | null => {
     return file ? file : null;
 };
 
+/** Compose only merges an override file by itself when no `-f` is given, so a
+ *  command that names its file needs this reminder. A comment, so it's harmless
+ *  pasted into any shell. */
+const OVERRIDE_NOTE = "# Have a compose.override.yml? Add -f compose.override.yml after the -f above.";
+
 /** The exact host-side update commands for the running deployment. An image
  *  deploy pulls the new image; a source deploy rebuilds. PGlite and Postgres use
  *  different compose files; pick the one that matches. */
@@ -76,11 +81,11 @@ export const updateCommands = (): string => {
                 ? "docker-compose.postgres.ghcr.yml"
                 : "docker-compose.ghcr.yml");
         const flag = ` -f ${file}`;
-        return `docker compose${flag} pull\ndocker compose${flag} up -d`;
+        return `docker compose${flag} pull\ndocker compose${flag} up -d\n${OVERRIDE_NOTE}`;
     }
     const file = declared ?? (isPg ? "docker-compose.postgres.yml" : null);
-    const flag = file ? ` -f ${file}` : "";
-    return `git pull\ndocker compose${flag} up -d --build`;
+    if (!file) return "git pull\ndocker compose up -d --build";
+    return `git pull\ndocker compose -f ${file} up -d --build\n${OVERRIDE_NOTE}`;
 };
 
 interface GithubRelease {

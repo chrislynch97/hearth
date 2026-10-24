@@ -5,8 +5,11 @@
 # It is the only thing with Docker access; the Hearth app has none.
 #
 # Each run it touches a heartbeat (so the app knows managed updates are live) and,
-# if the app has written an update-request file, pulls the new image and recreates
-# the container, then writes a result file the app can read back.
+# if the app has written an update-request file, replaces the compose file with
+# the target release's copy (keeping the old one as <file>.bak), pulls the new
+# image and recreates the container, then writes a result file the app can read
+# back. A compose.override.yml next to the compose file is applied too, so
+# customise there or in .env — never in the compose file itself.
 #
 # Config via env:
 #   HEARTH_PROJECT_DIR   dir holding the compose file + ./data   (default: $PWD)
@@ -47,12 +50,70 @@ write_result() { # $1=true|false  $2=error-or-empty
     > "$RESULT.tmp" && mv "$RESULT.tmp" "$RESULT"
 }
 
+REPO="chrislynch97/hearth"
+SWAPPED=0
+
+# Both names Compose would pick up on its own, in its order of preference; -f
+# switches that off, so it's passed explicitly.
+compose_args() { # $1=compose file
+  local o
+  for o in compose.override.yml docker-compose.override.yml; do
+    if [ -f "$o" ]; then echo "-f $1 -f $o"; return; fi
+  done
+  echo "-f $1"
+}
+
+# Swap in the release's compose file so a release that adds a service, volume or
+# port needs no manual step. Best-effort: any failure keeps the current file and
+# the update goes ahead with it.
+refresh_compose() {
+  local tag new
+  # A file without the stamp predates the .env pass-through and may carry hand
+  # edits; replacing it would drop them. That needs the one-time manual switch.
+  if ! grep -q 'HEARTH_COMPOSE_VERSION=' "$COMPOSE_FILE"; then
+    log "$COMPOSE_FILE predates .env pass-through — not replacing it; see docs/deployment.md (one-time switch)"
+    return
+  fi
+  tag=$(sed -n 's/.*"toVersion": *"\([^"]*\)".*/\1/p' "$REQUEST" | head -n 1)
+  # The tag ends up in a URL; accept only what a release tag looks like.
+  if ! printf '%s' "$tag" | grep -Eq '^v?[0-9]+(\.[0-9A-Za-z-]+)*$'; then
+    log "no release tag in the request — keeping $COMPOSE_FILE"
+    return
+  fi
+  new="$COMPOSE_FILE.new"
+  if ! curl -fsSL --max-time 30 -o "$new" "https://raw.githubusercontent.com/$REPO/$tag/$COMPOSE_FILE"; then
+    log "couldn't fetch $COMPOSE_FILE for $tag — keeping the current one"
+    rm -f "$new"
+    return
+  fi
+  # Validated in place, so .env and relative paths resolve as they will for real.
+  if ! docker compose $(compose_args "$new") config -q; then
+    log "$COMPOSE_FILE for $tag doesn't validate here — keeping the current one"
+    rm -f "$new"
+    return
+  fi
+  if cmp -s "$new" "$COMPOSE_FILE"; then
+    rm -f "$new"
+    return
+  fi
+  cp -p "$COMPOSE_FILE" "$COMPOSE_FILE.bak" && mv "$new" "$COMPOSE_FILE" \
+    && SWAPPED=1 \
+    && log "replaced $COMPOSE_FILE with the $tag copy (previous kept as $COMPOSE_FILE.bak)"
+}
+
+refresh_compose
+
 log "update requested — pulling ($COMPOSE_FILE)"
-if docker compose -f "$COMPOSE_FILE" pull && docker compose -f "$COMPOSE_FILE" up -d; then
+# shellcheck disable=SC2046 # compose_args is deliberately word-split into flags
+if docker compose $(compose_args "$COMPOSE_FILE") pull && docker compose $(compose_args "$COMPOSE_FILE") up -d; then
   log "update applied"
   write_result true ""
 else
   log "update failed"
+  # Put the compose file back to match the image still running.
+  if [ "$SWAPPED" = 1 ]; then
+    cp -p "$COMPOSE_FILE.bak" "$COMPOSE_FILE" && log "restored $COMPOSE_FILE from $COMPOSE_FILE.bak"
+  fi
   write_result false "docker compose pull/up failed — see the hearth-updater log"
 fi
 
