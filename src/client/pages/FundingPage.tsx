@@ -4,6 +4,7 @@ import { periodAdverb, periodConfig, periodUnitLabel } from "@shared/period";
 import { trpc } from "@/trpc";
 import { useMoney } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
+import { Callout } from "@/components/ui/Callout";
 import { Spinner } from "@/components/ui/Spinner";
 import { EmergencyFundCard } from "@/features/funding/components/EmergencyFundCard";
 import { JointCard } from "@/features/funding/components/JointCard";
@@ -86,16 +87,13 @@ export const FundingPage = () => {
                     <StandingOrderAlerts />
 
                     {plan.unassignedFundingPerPeriod > 0 && (
-                        <p
-                            role="status"
-                            className="rounded-md bg-attention-tint px-4 py-3 text-sm text-attention-fg"
-                        >
+                        <Callout tone="attention">
                             {formatMoney(
                                 plan.unassignedFundingPerPeriod,
                                 money
                             )}{" "}
                             of outgoings isn't assigned to a pot.
-                        </p>
+                        </Callout>
                     )}
 
                     {/* Stacked on a phone: side by side, each person's figures get

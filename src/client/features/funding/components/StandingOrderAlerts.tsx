@@ -2,6 +2,7 @@ import { formatMoney } from "@shared/money";
 import { trpc } from "@/trpc";
 import { useMoney, type MoneyFormat } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
+import { Callout } from "@/components/ui/Callout";
 import type { StandingOrderContributor } from "../../../../server/features/budget/standingOrders";
 
 /** A signed monthly delta as plain text, e.g. `+£2/mo` or `−£5/mo`. */
@@ -35,15 +36,12 @@ export const StandingOrderAlerts = () => {
     return (
         <div className="flex flex-col gap-2">
             {alerts.map((a) => (
-                <section
+                <Callout
                     key={a.potId}
-                    role="status"
-                    className="rounded-md bg-attention-tint px-4 py-3 text-attention-fg"
+                    tone="attention"
+                    title={`${a.potName} — standing order needs updating`}
                 >
-                    <h2 className="text-sm font-semibold">
-                        {a.potName} — standing order needs updating
-                    </h2>
-                    <p className="mt-1 text-sm">
+                    <p className="text-sm">
                         was {formatMoney(a.wasMonthly, money)}/mo → now{" "}
                         {formatMoney(a.nowMonthly, money)}/mo{" "}
                         <span
@@ -58,7 +56,7 @@ export const StandingOrderAlerts = () => {
                         </span>
                     </p>
                     {a.contributors.length > 0 && (
-                        <p className="mt-1 text-xs opacity-80">
+                        <p className="mt-1 text-xs text-text-muted">
                             {a.contributors
                                 .map((c) => contributorLabel(c, money))
                                 .join(", ")}
@@ -72,7 +70,7 @@ export const StandingOrderAlerts = () => {
                     >
                         Done, I've updated the bank
                     </Button>
-                </section>
+                </Callout>
             ))}
         </div>
     );
