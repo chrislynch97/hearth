@@ -135,6 +135,9 @@ describe('deployMode', () => {
   })
 })
 
+// Every command that names its file with -f also carries the override reminder.
+const NOTE = '\n# Have a compose.override.yml? Add -f compose.override.yml after the -f above.'
+
 describe('updateCommands', () => {
   it('source + PGlite: git pull then rebuild with the default compose file', () => {
     delete process.env.HEARTH_DEPLOY
@@ -145,14 +148,14 @@ describe('updateCommands', () => {
   it('source + Postgres: uses the postgres compose file', () => {
     delete process.env.HEARTH_DEPLOY
     process.env.DATABASE_URL = 'postgres://u:p@db:5432/hearth'
-    expect(updateCommands()).toBe('git pull\ndocker compose -f docker-compose.postgres.yml up -d --build')
+    expect(updateCommands()).toBe('git pull\ndocker compose -f docker-compose.postgres.yml up -d --build' + NOTE)
   })
 
   it('image + PGlite: pulls the ghcr image instead of rebuilding', () => {
     process.env.HEARTH_DEPLOY = 'image'
     delete process.env.DATABASE_URL
     expect(updateCommands()).toBe(
-      'docker compose -f docker-compose.ghcr.yml pull\ndocker compose -f docker-compose.ghcr.yml up -d',
+      'docker compose -f docker-compose.ghcr.yml pull\ndocker compose -f docker-compose.ghcr.yml up -d' + NOTE,
     )
   })
 
@@ -160,7 +163,7 @@ describe('updateCommands', () => {
     process.env.HEARTH_DEPLOY = 'image'
     process.env.DATABASE_URL = 'postgres://u:p@db:5432/hearth'
     expect(updateCommands()).toBe(
-      'docker compose -f docker-compose.postgres.ghcr.yml pull\ndocker compose -f docker-compose.postgres.ghcr.yml up -d',
+      'docker compose -f docker-compose.postgres.ghcr.yml pull\ndocker compose -f docker-compose.postgres.ghcr.yml up -d' + NOTE,
     )
   })
 
@@ -169,7 +172,7 @@ describe('updateCommands', () => {
     delete process.env.DATABASE_URL
     process.env.HEARTH_COMPOSE_FILE = 'docker-compose.public.yml'
     expect(updateCommands()).toBe(
-      'docker compose -f docker-compose.public.yml pull\ndocker compose -f docker-compose.public.yml up -d',
+      'docker compose -f docker-compose.public.yml pull\ndocker compose -f docker-compose.public.yml up -d' + NOTE,
     )
   })
 
@@ -178,7 +181,7 @@ describe('updateCommands', () => {
     delete process.env.DATABASE_URL
     process.env.HEARTH_COMPOSE_FILE = 'docker-compose.mine.yml'
     expect(updateCommands()).toBe(
-      'git pull\ndocker compose -f docker-compose.mine.yml up -d --build',
+      'git pull\ndocker compose -f docker-compose.mine.yml up -d --build' + NOTE,
     )
   })
 
@@ -187,7 +190,7 @@ describe('updateCommands', () => {
     delete process.env.DATABASE_URL
     process.env.HEARTH_COMPOSE_FILE = '  '
     expect(updateCommands()).toBe(
-      'docker compose -f docker-compose.ghcr.yml pull\ndocker compose -f docker-compose.ghcr.yml up -d',
+      'docker compose -f docker-compose.ghcr.yml pull\ndocker compose -f docker-compose.ghcr.yml up -d' + NOTE,
     )
   })
 })
