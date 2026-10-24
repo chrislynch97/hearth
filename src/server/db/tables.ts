@@ -23,6 +23,9 @@ import {
   raise,
   account,
   accountBalance,
+  giftOccasion,
+  giftRecipient,
+  gift,
   auditLog,
   emailToken,
   instanceSettings,
@@ -55,6 +58,9 @@ export const ALL_TABLES: ReadonlyArray<readonly [string, PgTable]> = [
   ['raise', raise],
   ['account', account],
   ['accountBalance', accountBalance],
+  ['giftOccasion', giftOccasion],
+  ['giftRecipient', giftRecipient],
+  ['gift', gift],
 ] as const
 
 /** Tables deliberately kept OUT of the snapshot, each with the reason. Exists so
@@ -90,6 +96,7 @@ export const MONEY_FIELD_NAMES: ReadonlySet<string> = new Set([
   'newSalary',
   'bonus',
   'value',
+  'budget',
 ])
 
 /** (table, column) pairs holding money in minor units, derived from the schema:

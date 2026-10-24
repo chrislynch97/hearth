@@ -3,7 +3,7 @@ import { trpc } from "@/trpc";
 import { notifySuccess } from "@/notify";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
-import { ArchiveAction } from "@/features/plan/components/ArchiveAction";
+import { ArchiveAction } from "@/components/ui/ArchiveAction";
 import type { Category } from "../../../../server/db/schema";
 
 export interface CategoryFormProps {

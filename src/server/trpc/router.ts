@@ -25,6 +25,7 @@ import { payslipsRouter } from '../features/income/payslips.router'
 import { raisesRouter } from '../features/income/raises.router'
 
 import { accountsRouter } from '../features/networth/accounts.router'
+import { giftsRouter } from '../features/gifts/gifts.router'
 
 import { dashboardRouter } from '../features/insights/dashboard.router'
 import { reportsRouter } from '../features/insights/reports.router'
@@ -65,6 +66,7 @@ export const appRouter = router({
   data: dataRouter,
   auth: authRouter,
   accounts: accountsRouter,
+  gifts: giftsRouter,
   imports: importsRouter,
   users: usersRouter,
   sessions: sessionsRouter,

@@ -64,6 +64,9 @@ const NAV_ICONS: Record<IconName, ReactElement> = {
     wishlists: (
         <path d="M12 20.5 4.5 13a4.5 4.5 0 0 1 7.5-4.8A4.5 4.5 0 0 1 19.5 13z" />
     ),
+    gifts: (
+        <path d="M4 11h16v10H4zM3 7h18v4H3zM12 7v14M12 7S10.5 3 8 3.5 7 7 12 7zM12 7s1.5-4 4-3.5S17 7 12 7z" />
+    ),
     meals: (
         <path d="M6 3v8a2 2 0 0 0 4 0V3M8 11v10M17 3c-1.5 2-2 4-2 6h4c0-2-.5-4-2-6zM17 9v12" />
     ),

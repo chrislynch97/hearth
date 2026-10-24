@@ -12,6 +12,9 @@ import {
   accountBalance,
   payslip,
   payslipLine,
+  giftOccasion,
+  giftRecipient,
+  gift,
 } from './schema'
 
 // A fixed reference date keeps the deterministic dataset stable across CI clocks.
@@ -127,6 +130,22 @@ describe('demo data generator', () => {
     const first = byDate.get(dates[0]!)!
     const last = byDate.get(dates[dates.length - 1]!)!
     expect(last).toBeGreaterThan(first) // net worth grew over the window
+  })
+
+  it('builds an archived last Christmas and a part-bought current one', async () => {
+    const db = await makeTestDb()
+    await seedDemo(db, { now: NOW })
+
+    const occasions = await db.select().from(giftOccasion).orderBy(giftOccasion.name)
+    expect(occasions.map((o) => [o.name, o.archivedAt === null])).toEqual([
+      ['Christmas 2025', false],
+      ['Christmas 2026', true],
+    ])
+    const current = occasions.find((o) => o.archivedAt === null)!
+    const people = await db.select().from(giftRecipient).where(eq(giftRecipient.occasionId, current.id))
+    expect(people.length).toBeGreaterThan(3)
+    const statuses = new Set((await db.select().from(gift)).map((g) => g.status))
+    expect(statuses).toEqual(new Set(['idea', 'bought', 'given']))
   })
 
   it('re-seeding is idempotent (wipes, no duplicate rows)', async () => {
