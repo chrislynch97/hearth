@@ -3,7 +3,7 @@ import { eq, gte, isNull } from 'drizzle-orm'
 import { router, publicProcedure } from '../../trpc/trpc'
 import { scopeWhere } from '../../trpc/tenant'
 import { category, expense, setAside, household, member, pot, spendTransaction } from '../../db/schema'
-import { computeFundingPlan } from '../budget/funding'
+import { computeFundingPlan, mainBillOwnerId } from '../budget/funding'
 import { computeIncomeByMember } from '../income/service'
 import { allocationByCategory } from './summary'
 import { categoryBreakdown, monthlyTotals, monthOverMonth, perMemberVsJoint, spendVsAllocation } from './reports'
@@ -149,11 +149,11 @@ export const reportsRouter = router({
             const potOwner = new Map(pots.map((p) => [p.id, p.ownerId]))
             const jointId = members.find((m) => m.kind === 'joint')?.id
             const personIds = new Set(members.filter((m) => m.kind === 'person').map((m) => m.id))
-            const mainOwner = (ownerId: string | null) => (ownerId && personIds.has(ownerId) ? ownerId : jointId)
             const costs: Array<{ recurrence: Recurrence; amount: number; ownerId: string }> = []
             for (const b of billInputs) {
               // Attribute a bill to whoever owns the pot it drains; main-account bills to their owner, else joint.
-              const ownerId = b.funding === 'main' ? mainOwner(b.ownerId) : b.potId ? potOwner.get(b.potId) : undefined
+              const ownerId =
+                b.funding === 'main' ? mainBillOwnerId(b.ownerId, personIds) ?? jointId : b.potId ? potOwner.get(b.potId) : undefined
               if (ownerId) costs.push({ recurrence: b.recurrence, amount: b.amount, ownerId })
             }
             for (const s of setAsides) costs.push({ recurrence: s.recurrence as Recurrence, amount: s.amount, ownerId: s.ownerId })

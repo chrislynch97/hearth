@@ -115,6 +115,12 @@ export interface FundingPlan {
   coupleSurplus: number
 }
 
+/** Whose account pays a main-account bill: its owner while they're one of the
+ *  listed people, else null — joint, including an owner since archived (issue #32). */
+export function mainBillOwnerId(ownerId: string | null | undefined, personIds: ReadonlySet<string>): string | null {
+  return ownerId && personIds.has(ownerId) ? ownerId : null
+}
+
 export function computeFundingPlan(input: {
   pots: FundingPotInput[]
   bills: FundingBillInput[]
@@ -145,11 +151,8 @@ export function computeFundingPlan(input: {
   const addToPot = (potId: string | null, perPeriod: number): void => {
     perPeriodByPotId.set(potId, (perPeriodByPotId.get(potId) ?? 0) + perPeriod)
   }
-  // A main-account bill owned by a listed person is theirs alone; anything else
-  // (no owner, or an owner no longer listed) falls back to joint.
   const personIds = new Set(members.filter((m) => m.kind === 'person').map((m) => m.id))
-  const mainOwnerOf = (bill: FundingBillInput): string | null =>
-    bill.ownerId && personIds.has(bill.ownerId) ? bill.ownerId : null
+  const mainOwnerOf = (bill: FundingBillInput): string | null => mainBillOwnerId(bill.ownerId, personIds)
   const mainByCategoryOwner = new Map<string, { categoryId: string | null; ownerId: string | null; perPeriod: number }>()
   const personalMainByMemberId = new Map<string, number>()
   let mainTotal = 0

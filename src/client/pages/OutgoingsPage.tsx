@@ -26,6 +26,7 @@ import { normaliseToMonthly, roundMinor, type Recurrence } from '../../shared/re
 import { addMonths, todayIso } from '../../shared/dates'
 import { useMoney, useFormatDate, type MoneyFormat } from '../useMoney'
 import { groupedPotOptions, orderMembers } from '../potOptions'
+import { mainBillOwnerId } from '@/features/plan/model'
 
 type ExpenseRecurrence = 'monthly' | 'quarterly' | 'yearly'
 type Funding = 'pot_manual' | 'pot_auto' | 'main'
@@ -357,8 +358,11 @@ export function OutgoingsPage() {
     roundMinor(bills.reduce((acc, e) => acc + normaliseToMonthly(e.amount ?? 0, e.recurrence as Recurrence), 0))
 
   const isMainBill = (e: Expense) => (e.funding ?? 'pot_manual') === 'main' || !e.potId
-  const personIds = new Set(members.filter((m) => m.kind === 'person').map((m) => m.id))
-  const mainOwnerKey = (e: Expense) => (e.ownerId && personIds.has(e.ownerId) ? e.ownerId : 'main')
+  const jointId = members.find((m) => m.kind === 'joint')?.id
+  const mainOwnerKey = (e: Expense) => {
+    const ownerId = mainBillOwnerId(e, members)
+    return ownerId && ownerId !== jointId ? ownerId : 'main'
+  }
   const billOwnerKey = (e: Expense) => (isMainBill(e) ? mainOwnerKey(e) : potById.get(e.potId!)?.ownerId ?? 'main')
   const billCategoryId = (e: Expense) => (isMainBill(e) ? e.categoryId : potById.get(e.potId!)?.categoryId ?? null)
 
