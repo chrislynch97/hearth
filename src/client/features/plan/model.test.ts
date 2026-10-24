@@ -8,6 +8,7 @@ import {
     groupKey,
     groupSlugs,
     linePerPeriod,
+    mainBillOwnerId,
     slugify,
     sumPerPeriod,
     totalPerPeriod,
@@ -16,11 +17,33 @@ import {
 import type {
     Category,
     Expense,
+    Member,
     Pot,
     SetAside,
 } from "../../../server/db/schema";
 
 const now = new Date("2026-09-20");
+
+const member = (id: string, kind: "person" | "joint"): Member => ({
+    id,
+    householdId: "household",
+    userId: null,
+    kind,
+    displayName: id,
+    shortLabel: null,
+    color: null,
+    jointContributionWeight: null,
+    sortOrder: 0,
+    archivedAt: null,
+    createdAt: now,
+    updatedAt: now,
+});
+
+const members = [
+    member("ava", "person"),
+    member("ben", "person"),
+    member("joint", "joint"),
+];
 
 const category = (id: string, name: string): Category => ({
     id,
@@ -53,6 +76,7 @@ const bill = (
     funding: "pot_manual",
     potId: null,
     categoryId: null,
+    ownerId: null,
     note: null,
     active: 1,
     includeInEmergencyFund: 1,
@@ -328,28 +352,55 @@ describe("filterByOwner", () => {
                     categoryId: "c1",
                     amount: 500,
                 }),
+                bill({
+                    id: "b4",
+                    name: "Ava's own",
+                    funding: "main",
+                    categoryId: "c1",
+                    ownerId: "ava",
+                    amount: 300,
+                }),
             ],
         });
+    const filter = (ownerId: string) =>
+        filterByOwner(groups()[0]!, ownerId, members, "monthly");
 
     it("is a no-op for everyone", () => {
-        const group = filterByOwner(groups()[0]!, ALL);
+        const group = filter(ALL);
 
         expect(group.pots).toHaveLength(2);
-        expect(group.perPeriod).toBe(3500);
+        expect(group.mainBills).toHaveLength(2);
+        expect(group.perPeriod).toBe(3800);
     });
 
-    it("keeps only that person's pots, and retotals", () => {
-        const group = filterByOwner(groups()[0]!, "ava");
+    it("keeps only that person's pots and own-account bills, and retotals", () => {
+        const group = filter("ava");
 
         expect(group.pots.map((p) => p.pot.id)).toEqual(["p1"]);
-        expect(group.perPeriod).toBe(1000);
+        expect(group.mainBills.map((b) => b.id)).toEqual(["b4"]);
+        expect(group.perPeriod).toBe(1300);
     });
 
-    // A main-account bill belongs to the household, not to a person, so there is
-    // no owner it could be filtered out by.
-    it("leaves main-account bills in whoever is selected", () => {
-        expect(filterByOwner(groups()[0]!, "ava").mainBills).toHaveLength(1);
-        expect(filterByOwner(groups()[0]!, "ben").mainBills).toHaveLength(1);
+    it("puts joint main-account bills under joint", () => {
+        const group = filter("joint");
+
+        expect(group.pots).toHaveLength(0);
+        expect(group.mainBills.map((b) => b.id)).toEqual(["b3"]);
+        expect(group.perPeriod).toBe(500);
+    });
+});
+
+describe("mainBillOwnerId", () => {
+    const main = (ownerId: string | null) =>
+        bill({ id: "b", name: "B", funding: "main", ownerId });
+
+    it("is the owner while they are a listed person", () => {
+        expect(mainBillOwnerId(main("ben"), members)).toBe("ben");
+    });
+
+    it("falls back to joint for no owner or one no longer listed", () => {
+        expect(mainBillOwnerId(main(null), members)).toBe("joint");
+        expect(mainBillOwnerId(main("gone"), members)).toBe("joint");
     });
 });
 

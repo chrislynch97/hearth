@@ -150,7 +150,9 @@ export const PlanPage = () => {
 
     // Filter by owner first, so the rail and the page total agree with the cards:
     // picking Ben should retotal the categories, not just thin them out.
-    const ownerGroups = groups.map((group) => filterByOwner(group, owner));
+    const ownerGroups = groups.map((group) =>
+        filterByOwner(group, owner, members, frequency)
+    );
     // The URL carries a slug; everything internal keys off the id. An id still
     // resolves, so links from before the slugs keep working, and a slug that no
     // longer matches anything (a renamed or archived category) falls back to
@@ -351,6 +353,7 @@ export const PlanPage = () => {
                                 <CategoryPane
                                     key={groupKey(group)}
                                     group={group}
+                                    members={members}
                                     money={money}
                                     frequency={frequency}
                                     unit={unit}

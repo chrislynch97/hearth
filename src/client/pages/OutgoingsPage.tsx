@@ -346,7 +346,8 @@ export function OutgoingsPage() {
   const isLoading = expensesQuery.isLoading || potsQuery.isLoading || membersQuery.isLoading || categoriesQuery.isLoading
 
   // Group bills by the account they draw from — one card per owner (whoever owns
-  // the pot), plus a Main account card — and within each, sub-sections per
+  // the pot, or the person whose own account pays a main-account bill), plus a
+  // Main account card for joint ones — and within each, sub-sections per
   // category. A bill's category is its pot's category (or, for a main-account
   // bill, its own category).
   const potById = new Map(pots.map((p) => [p.id, p]))
@@ -356,7 +357,9 @@ export function OutgoingsPage() {
     roundMinor(bills.reduce((acc, e) => acc + normaliseToMonthly(e.amount ?? 0, e.recurrence as Recurrence), 0))
 
   const isMainBill = (e: Expense) => (e.funding ?? 'pot_manual') === 'main' || !e.potId
-  const billOwnerKey = (e: Expense) => (isMainBill(e) ? 'main' : potById.get(e.potId!)?.ownerId ?? 'main')
+  const personIds = new Set(members.filter((m) => m.kind === 'person').map((m) => m.id))
+  const mainOwnerKey = (e: Expense) => (e.ownerId && personIds.has(e.ownerId) ? e.ownerId : 'main')
+  const billOwnerKey = (e: Expense) => (isMainBill(e) ? mainOwnerKey(e) : potById.get(e.potId!)?.ownerId ?? 'main')
   const billCategoryId = (e: Expense) => (isMainBill(e) ? e.categoryId : potById.get(e.potId!)?.categoryId ?? null)
 
   interface BillSection { catId: string | null; name: string; bills: Expense[] }

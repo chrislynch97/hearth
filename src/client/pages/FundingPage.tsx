@@ -145,6 +145,15 @@ export function FundingPage() {
                       {formatMoney(person.setAside, money)}
                     </Text>
                   </Group>
+                  {/* Already in their own account, so nothing to move — not part of Set aside. */}
+                  {person.personalMainAccount > 0 && (
+                    <Group justify="space-between">
+                      <Text size="sm" c="dimmed">
+                        Paid from own account
+                      </Text>
+                      <Text size="sm">{formatMoney(person.personalMainAccount, money)}</Text>
+                    </Group>
+                  )}
                 </Stack>
               </Card>
             ))}
