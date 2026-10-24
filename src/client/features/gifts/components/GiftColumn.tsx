@@ -12,7 +12,7 @@ import {
 
 export interface GiftColumnProps {
     column: GiftColumnData;
-    pendingGiftId: string | null;
+    pendingGiftIds: ReadonlySet<string>;
     onEditGift: (item: GiftWithRecipient) => void;
     onAdvanceGift: (item: GiftWithRecipient, status: GiftStatus) => void;
     /** A gift card dropped here, by id. */
@@ -29,7 +29,7 @@ const EMPTY: Record<GiftStatus, string> = {
 
 export const GiftColumn = ({
     column,
-    pendingGiftId,
+    pendingGiftIds,
     onEditGift,
     onAdvanceGift,
     onDropGift,
@@ -83,7 +83,7 @@ export const GiftColumn = ({
                         <GiftTile
                             key={item.gift.id}
                             item={item}
-                            pending={pendingGiftId === item.gift.id}
+                            pending={pendingGiftIds.has(item.gift.id)}
                             onEdit={() => onEditGift(item)}
                             onAdvance={(status) => onAdvanceGift(item, status)}
                         />

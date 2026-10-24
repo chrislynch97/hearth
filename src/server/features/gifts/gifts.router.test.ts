@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
+import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../../db/testdb'
 import { ensureSeed } from '../../db/seed'
 import { appRouter } from '../../trpc/router'
+import { auditLog } from '../../db/schema'
 
 async function setup(role: 'owner' | 'viewer' = 'owner') {
   const db = await makeTestDb()
@@ -75,6 +77,19 @@ describe('gifts router', () => {
 
     const next = await caller.gifts.createOccasion({ name: 'Next birthday', budget: 5000, copyFromId: open.id })
     expect(next).toMatchObject({ budget: 9000, raisedOccasionBudget: 9000 })
+  })
+
+  it('audits a copied occasion as one create carrying the raised budget', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+    const last = await caller.gifts.createOccasion({ name: 'Last year' })
+    await caller.gifts.createRecipient({ occasionId: last.id, name: 'Sam', budget: 9000 })
+
+    const next = await caller.gifts.createOccasion({ name: 'This year', budget: 5000, copyFromId: last.id })
+    const entries = await db.select().from(auditLog).where(eq(auditLog.entityId, next.id))
+    expect(entries.map((e) => e.action)).toEqual(['create'])
+    expect(next.raisedOccasionBudget).toBe(9000)
   })
 
   it('moves a gift only between people on the same occasion', async () => {

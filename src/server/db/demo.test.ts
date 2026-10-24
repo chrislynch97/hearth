@@ -136,7 +136,7 @@ describe('demo data generator', () => {
     const db = await makeTestDb()
     await seedDemo(db, { now: NOW })
 
-    const occasions = await db.select().from(giftOccasion)
+    const occasions = await db.select().from(giftOccasion).orderBy(giftOccasion.name)
     expect(occasions.map((o) => [o.name, o.archivedAt === null])).toEqual([
       ['Christmas 2025', false],
       ['Christmas 2026', true],

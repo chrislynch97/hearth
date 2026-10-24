@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
     budgetSegments,
+    giftLink,
     giftsByStatus,
     moneyInput,
     nextStatus,
@@ -26,22 +27,61 @@ const occasion = (id: string, archived = false): OccasionSummary => ({
 });
 
 describe("pickOccasion", () => {
+    const dated = (id: string, date: string | null, archived = false) => ({
+        ...occasion(id, archived),
+        date,
+    });
+    const TODAY = "2026-10-24";
+
     it("shows the one asked for, archived or not", () => {
         const list = [occasion("a"), occasion("b", true)];
-        expect(pickOccasion(list, "b")?.id).toBe("b");
+        expect(pickOccasion(list, "b", TODAY)?.id).toBe("b");
     });
 
-    it("falls back to the first live occasion", () => {
-        const list = [occasion("old", true), occasion("now")];
-        expect(pickOccasion(list, "gone")?.id).toBe("now");
-        expect(pickOccasion(list, undefined)?.id).toBe("now");
+    it("prefers the next one coming up over a past one left unarchived", () => {
+        const list = [
+            dated("birthday", "2026-03-02"),
+            dated("xmas", "2026-12-25"),
+            dated("easter", "2027-04-04"),
+        ];
+        expect(pickOccasion(list, undefined, TODAY)?.id).toBe("xmas");
+        expect(pickOccasion(list, "gone", "2026-12-25")?.id).toBe("xmas");
     });
 
-    it("shows an archived one when that's all there is", () => {
-        expect(pickOccasion([occasion("old", true)], undefined)?.id).toBe(
-            "old"
-        );
-        expect(pickOccasion([], undefined)).toBeUndefined();
+    it("falls back to undated, then the latest past one, then archived", () => {
+        expect(
+            pickOccasion(
+                [dated("past", "2026-01-01"), dated("open", null)],
+                undefined,
+                TODAY
+            )?.id
+        ).toBe("open");
+        expect(
+            pickOccasion(
+                [dated("older", "2025-12-25"), dated("newer", "2026-03-02")],
+                undefined,
+                TODAY
+            )?.id
+        ).toBe("newer");
+        expect(
+            pickOccasion([occasion("old", true)], undefined, TODAY)?.id
+        ).toBe("old");
+        expect(pickOccasion([], undefined, TODAY)).toBeUndefined();
+    });
+});
+
+describe("giftLink", () => {
+    it("links a web address, labelled by its site", () => {
+        expect(giftLink("https://www.lego.com/en-gb/product/1")).toEqual({
+            href: "https://www.lego.com/en-gb/product/1",
+            label: "lego.com",
+        });
+    });
+
+    it("leaves shop names and other schemes as text", () => {
+        expect(giftLink("Smyths")).toBeNull();
+        expect(giftLink("javascript:alert(1)")).toBeNull();
+        expect(giftLink(null)).toBeNull();
     });
 });
 

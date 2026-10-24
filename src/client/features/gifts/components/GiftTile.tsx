@@ -4,6 +4,7 @@ import { useMoney } from "@/useMoney";
 import {
     GIFT_DRAG_TYPE,
     STATUS_LABEL,
+    giftLink,
     nextStatus,
     type GiftStatus,
     type GiftWithRecipient,
@@ -31,6 +32,7 @@ export const GiftTile = ({
     const { gift, recipient } = item;
     const status = gift.status as GiftStatus;
     const next = nextStatus(status);
+    const link = giftLink(gift.link);
 
     return (
         <li
@@ -63,7 +65,20 @@ export const GiftTile = ({
             </button>
             <span className="truncate text-xs text-text-muted">
                 For {recipient.name}
-                {gift.link && ` · ${gift.link}`}
+                {gift.link && " · "}
+                {link ? (
+                    <a
+                        href={link.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        draggable={false}
+                        className="text-primary underline-offset-2 hover:underline"
+                    >
+                        {link.label}
+                    </a>
+                ) : (
+                    gift.link
+                )}
             </span>
             {next && (
                 <button

@@ -55,6 +55,17 @@ export interface OccasionDetail extends OccasionSummary {
   recipients: RecipientWithGifts[]
 }
 
+function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
+  const groups = new Map<string, T[]>()
+  for (const row of rows) {
+    const k = key(row)
+    const group = groups.get(k)
+    if (group) group.push(row)
+    else groups.set(k, [row])
+  }
+  return groups
+}
+
 /** Raise an occasion's budget to cover its people's budgets once they go past
  *  it. Returns the new budget, or null when nothing needed raising. */
 async function coverPeopleBudgets(
@@ -95,13 +106,12 @@ export const giftsRouter = router({
       .select({ occasionId: giftRecipient.occasionId, budget: giftRecipient.budget })
       .from(giftRecipient)
       .where(scopeWhere(ctx.householdId, giftRecipient.householdId))
+    const giftsBy = groupBy(rows, (r) => r.occasionId)
+    const peopleBy = groupBy(people, (p) => p.occasionId)
     return occasions.map((o) => ({
       ...o,
-      totals: giftTotals(
-        o.budget,
-        rows.filter((r) => r.occasionId === o.id),
-      ),
-      allocated: allocatedBudget(people.filter((p) => p.occasionId === o.id)),
+      totals: giftTotals(o.budget, giftsBy.get(o.id) ?? []),
+      allocated: allocatedBudget(peopleBy.get(o.id) ?? []),
     }))
   }),
 
@@ -151,15 +161,19 @@ export const giftsRouter = router({
           .from(giftRecipient)
           .where(scopeWhere(ctx.householdId, giftRecipient.householdId, eq(giftRecipient.occasionId, input.copyFromId)))
       }
+      // Copied budgets that go past the new budget raise it before it's written,
+      // so the create is the one audit entry and already carries the raise.
+      const asked = input.budget ?? null
+      const budget = budgetCovering(asked, allocatedBudget(source))
       const now = new Date()
       const id = newId()
-      const raisedOccasionBudget = await ctx.db.transaction(async (tx) => {
+      await ctx.db.transaction(async (tx) => {
         await tx.insert(giftOccasion).values({
           id,
           householdId: ctx.householdId,
           name: input.name,
           date: input.date ?? null,
-          budget: input.budget ?? null,
+          budget,
           createdAt: now,
           updatedAt: now,
         })
@@ -177,11 +191,10 @@ export const giftsRouter = router({
             })),
           )
         }
-        return coverPeopleBudgets(tx, ctx, id)
       })
       const created = await getOccasion(ctx.db, ctx.householdId, id)
       recordAudit(ctx, { entityType: 'giftOccasion', entityId: id, action: 'create', after: created })
-      return { ...created, raisedOccasionBudget }
+      return { ...created, raisedOccasionBudget: budget === asked ? null : budget }
     }),
 
   updateOccasion: publicProcedure

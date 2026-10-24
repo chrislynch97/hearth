@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getRouteApi } from "@tanstack/react-router";
+import { todayIso } from "@shared/dates";
 import { trpc } from "@/trpc";
 import { useMediaQuery } from "@/useMediaQuery";
 import { Button } from "@/components/ui/Button";
@@ -69,10 +70,13 @@ export const GiftsPage = () => {
 
     const [editor, setEditor] = useState<Editor | null>(null);
     const [exiting, setExiting] = useState(false);
-    const [pendingGiftId, setPendingGiftId] = useState<string | null>(null);
+    // Several moves can be in flight at once; each card waits only on its own.
+    const [pendingGiftIds, setPendingGiftIds] = useState<ReadonlySet<string>>(
+        () => new Set()
+    );
 
     const occasions = occasionsQuery.data ?? [];
-    const selected = pickOccasion(occasions, requested);
+    const selected = pickOccasion(occasions, requested, todayIso());
     const detailQuery = trpc.gifts.occasion.useQuery(
         { id: selected?.id ?? "" },
         { enabled: selected !== undefined }
@@ -84,9 +88,9 @@ export const GiftsPage = () => {
     /** Button or drop: the card moves at once, then the save and a refetch
      *  bring the totals in. A failed save's refetch puts the card back. */
     const moveGift = async (gift: Gift, status: GiftStatus) => {
-        if (!selected || gift.status === status || pendingGiftId === gift.id)
+        if (!selected || gift.status === status || pendingGiftIds.has(gift.id))
             return;
-        setPendingGiftId(gift.id);
+        setPendingGiftIds((ids) => new Set(ids).add(gift.id));
         const key = { id: selected.id };
         await utils.gifts.occasion.cancel(key);
         utils.gifts.occasion.setData(key, (current) =>
@@ -113,7 +117,11 @@ export const GiftsPage = () => {
             // surfaced by the global error handler
             await utils.gifts.invalidate();
         } finally {
-            setPendingGiftId(null);
+            setPendingGiftIds((ids) => {
+                const next = new Set(ids);
+                next.delete(gift.id);
+                return next;
+            });
         }
     };
 
@@ -131,7 +139,7 @@ export const GiftsPage = () => {
     };
 
     return (
-        <div className="hearth-ds mx-auto flex max-w-[900px] flex-col gap-5 text-base">
+        <div className="hearth-ds mx-auto flex max-w-[1120px] flex-col gap-5 text-base">
             <header className="border-b border-border-strong pb-5">
                 <h1 className="font-display text-h1 font-medium leading-tight">
                     Gifts
@@ -217,7 +225,7 @@ export const GiftsPage = () => {
                                         <GiftColumn
                                             key={column.status}
                                             column={column}
-                                            pendingGiftId={pendingGiftId}
+                                            pendingGiftIds={pendingGiftIds}
                                             onEditGift={({ gift }) =>
                                                 setEditor({
                                                     kind: "gift",
@@ -270,7 +278,11 @@ export const GiftsPage = () => {
             {editor && (
                 <EditorPanel
                     title={editorTitle(editor)}
-                    subtitle={selected?.name}
+                    subtitle={
+                        editor.kind === "occasion" && !editor.occasion
+                            ? undefined
+                            : selected?.name
+                    }
                     mode={compact ? "sheet" : "modal"}
                     exiting={exiting}
                     onExited={finishClose}

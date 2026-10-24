@@ -112,15 +112,41 @@ export const budgetSegments = (totals: GiftTotals): BudgetSegment[] => {
     return segments.filter((segment) => segment.value > 0);
 };
 
-/** The occasion to show: the one asked for if it exists, else the first
- *  unarchived one (the server sends them soonest-dated first), else the first. */
+/** The occasion to show: the one asked for if it exists, else the next one
+ *  coming up (today counts), else an undated one, else the latest past one
+ *  not yet archived, else anything. `occasions` arrive soonest-dated first. */
 export const pickOccasion = (
     occasions: OccasionSummary[],
-    requested: string | undefined
-): OccasionSummary | undefined =>
-    occasions.find((occasion) => occasion.id === requested) ??
-    occasions.find((occasion) => occasion.archivedAt === null) ??
-    occasions[0];
+    requested: string | undefined,
+    today: string
+): OccasionSummary | undefined => {
+    const live = occasions.filter((occasion) => occasion.archivedAt === null);
+
+    return (
+        occasions.find((occasion) => occasion.id === requested) ??
+        live.find(
+            (occasion) => occasion.date !== null && occasion.date >= today
+        ) ??
+        live.find((occasion) => occasion.date === null) ??
+        live.at(-1) ??
+        occasions[0]
+    );
+};
+
+/** A gift's "where from" as a link, when it is a web address. Anything else
+ *  (a shop name, a javascript: URL) stays plain text. */
+export const giftLink = (
+    text: string | null
+): { href: string; label: string } | null => {
+    if (!text) return null;
+    try {
+        const url = new URL(text.trim());
+        if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+        return { href: url.href, label: url.hostname.replace(/^www./, "") };
+    } catch {
+        return null;
+    }
+};
 
 /** The occasion budget saving this person's budget would raise it to, or
  *  null when it still fits (or the occasion has no budget). `allocated` is
