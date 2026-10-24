@@ -1,303 +1,147 @@
-import { useState } from 'react'
-import { Alert, Button, Card, Center, Group, Loader, SimpleGrid, Stack, Text, Title } from '@mantine/core'
-import { trpc } from '../trpc'
-import { formatMoney } from '../../shared/money'
-import { periodConfig, periodUnitLabel, periodAdverb } from '../../shared/period'
-import { useMoney, type MoneyFormat } from '../useMoney'
-import { StandingOrderAlerts } from './StandingOrderAlerts'
-import { PaydayPdfButton } from './PaydayPdfButton'
-import type { PotFunding } from '../../server/features/budget/funding'
+import { useState } from "react";
+import { formatMoney } from "@shared/money";
+import { periodAdverb, periodConfig, periodUnitLabel } from "@shared/period";
+import { trpc } from "@/trpc";
+import { useMoney } from "@/useMoney";
+import { Button } from "@/components/ui/Button";
+import { Spinner } from "@/components/ui/Spinner";
+import { EmergencyFundCard } from "@/features/funding/components/EmergencyFundCard";
+import { JointCard } from "@/features/funding/components/JointCard";
+import { MainAccountsCard } from "@/features/funding/components/MainAccountsCard";
+import { PersonFundingCard } from "@/features/funding/components/PersonFundingCard";
+import { StandingOrderAlerts } from "@/features/funding/components/StandingOrderAlerts";
+import { StandingOrdersCard } from "@/features/funding/components/StandingOrdersCard";
+import {
+    buildPlanText,
+    mainAccountGroups,
+    potsByOwner,
+} from "@/features/funding/model";
+import { PaydayPdfButton } from "@/pages/PaydayPdfButton";
 
-/** The per-person standing orders as plaintext, ready to paste into a bank.
- *  `unit` is the household's per-period suffix (e.g. `/mo`, `/4 wks`). */
-function buildPlanText(
-  perPerson: Array<{
-    memberId: string
-    displayName: string
-    jointContribution: number
-    setAside: number
-  }>,
-  potsByOwner: Map<string, PotFunding[]>,
-  jointTotal: number,
-  money: MoneyFormat,
-  unit: string,
-): string {
-  const lines: string[] = ['Hearth — funding plan', '']
-  for (const person of perPerson) {
-    lines.push(`${person.displayName}:`)
-    for (const p of potsByOwner.get(person.memberId) ?? []) {
-      lines.push(`  ${p.name}  ${formatMoney(p.fundingPerPeriod, money)}${unit}`)
-    }
-    if (person.jointContribution > 0) {
-      lines.push(`  Joint contribution  ${formatMoney(person.jointContribution, money)}${unit}`)
-    }
-    lines.push(`  → Set aside  ${formatMoney(person.setAside, money)}${unit}`)
-    lines.push('')
-  }
-  lines.push(`Joint pots total: ${formatMoney(jointTotal, money)}${unit}`)
-  return lines.join('\n')
-}
+export const FundingPage = () => {
+    const fundingQuery = trpc.plan.funding.useQuery();
+    const membersQuery = trpc.members.list.useQuery();
+    const categoriesQuery = trpc.categories.list.useQuery();
+    const ctx = trpc.bootstrap.context.useQuery();
+    const [copied, setCopied] = useState(false);
 
-export function FundingPage() {
-  const fundingQuery = trpc.plan.funding.useQuery()
-  const membersQuery = trpc.members.list.useQuery()
-  const categoriesQuery = trpc.categories.list.useQuery()
-  const ctx = trpc.bootstrap.context.useQuery()
+    const money = useMoney();
+    const frequency = periodConfig(ctx.data?.household ?? 1).frequency;
+    const unit = periodUnitLabel(frequency);
 
-  const money = useMoney()
-  const frequency = periodConfig(ctx.data?.household ?? 1).frequency
-  const unit = periodUnitLabel(frequency)
+    const isLoading = fundingQuery.isLoading || membersQuery.isLoading;
+    const plan = fundingQuery.data;
+    const members = membersQuery.data ?? [];
+    const hasAnything = plan
+        ? plan.perPerson.length > 0 || plan.pots.length > 0
+        : false;
 
-  const isLoading = fundingQuery.isLoading || membersQuery.isLoading
-  const plan = fundingQuery.data
-  const members = membersQuery.data ?? []
-  const memberById = new Map(members.map((m) => [m.id, m]))
-  const categoryById = new Map((categoriesQuery.data ?? []).map((c) => [c.id, c]))
+    const copyPlan = async () => {
+        if (!plan) return;
+        try {
+            await navigator.clipboard.writeText(
+                buildPlanText(plan, money, unit)
+            );
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            // Clipboard blocked (e.g. insecure context); the plan is still on screen.
+        }
+    };
 
-  const hasAnything = plan ? plan.perPerson.length > 0 || plan.pots.length > 0 : false
-  const pooled = plan?.jointFundingModel === 'pooled'
-
-  const potsByOwner = new Map<string, PotFunding[]>()
-  if (plan) {
-    for (const p of plan.pots) {
-      if (p.fundingPerPeriod === 0) continue
-      const list = potsByOwner.get(p.ownerId) ?? []
-      list.push(p)
-      potsByOwner.set(p.ownerId, list)
-    }
-  }
-
-  const [copied, setCopied] = useState(false)
-  async function handleCopy() {
-    if (!plan) return
-    const text = buildPlanText(plan.perPerson, potsByOwner, plan.jointPotFundingTotal, money, unit)
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Clipboard blocked (e.g. insecure context) — no-op; the plan is still on screen.
-    }
-  }
-
-  return (
-    <Stack gap="lg" maw={900} mx="auto">
-      <Group justify="space-between" align="center">
-        <Title order={2}>Funding Plan</Title>
-        {!isLoading && plan && hasAnything && (
-          <Group gap="sm">
-            <PaydayPdfButton />
-            <Button variant="default" onClick={() => void handleCopy()}>
-              {copied ? 'Copied ✓' : 'Copy plan'}
-            </Button>
-          </Group>
-        )}
-      </Group>
-
-      {isLoading && (
-        <Center>
-          <Loader size="sm" />
-        </Center>
-      )}
-
-      {!isLoading && (!plan || !hasAnything) && (
-        <Text c="dimmed">Add outgoings to see your funding plan.</Text>
-      )}
-
-      {!isLoading && plan && hasAnything && (
-        <>
-          <StandingOrderAlerts />
-
-          <Text size="sm" c="dimmed">
-            This is what to set up as standing orders in Monzo (or your bank) {periodAdverb(frequency)}.
-          </Text>
-
-          {plan.unassignedFundingPerPeriod > 0 && (
-            <Alert color="apricot" title="Unassigned outgoings">
-              {formatMoney(plan.unassignedFundingPerPeriod, money)} of outgoings isn't assigned to a pot.
-            </Alert>
-          )}
-
-          {/* Stacked on a phone: side-by-side puts each person's figures in a
-              column too narrow for the amounts, which then wrap mid-number. */}
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-            {plan.perPerson.map((person) => (
-              <Card key={person.memberId} withBorder padding="md">
-                <Stack gap={6}>
-                  <Title order={4}>{person.displayName}</Title>
-                  <Group justify="space-between">
-                    <Text size="sm" c="dimmed">
-                      Personal pots
-                    </Text>
-                    <Text size="sm">{formatMoney(person.personalPotFunding, money)}</Text>
-                  </Group>
-                  <Group justify="space-between">
-                    <Text size="sm" c="dimmed">
-                      Joint contribution
-                    </Text>
-                    <Text size="sm">{formatMoney(person.jointContribution, money)}</Text>
-                  </Group>
-                  <Group justify="space-between">
-                    <Text size="sm" fw={700}>
-                      Set aside
-                    </Text>
-                    <Text size="sm" fw={700}>
-                      {formatMoney(person.setAside, money)}
-                    </Text>
-                  </Group>
-                  {/* Already in their own account, so nothing to move — not part of Set aside. */}
-                  {person.personalMainAccount > 0 && (
-                    <Group justify="space-between">
-                      <Text size="sm" c="dimmed">
-                        Paid from own account
-                      </Text>
-                      <Text size="sm">{formatMoney(person.personalMainAccount, money)}</Text>
-                    </Group>
-                  )}
-                </Stack>
-              </Card>
-            ))}
-          </SimpleGrid>
-
-          {pooled ? (
-            <Card withBorder padding="md">
-              <Stack gap="sm">
-                <div>
-                  <Title order={4}>Joint pool</Title>
-                  <Text size="xs" c="dimmed">
-                    Everyone's contribution flows into joint, which covers the joint costs. The leftover is the surplus.
-                  </Text>
+    return (
+        <div className="mx-auto flex max-w-[900px] flex-col gap-5">
+            <header className="flex flex-wrap items-end justify-between gap-3 border-b border-border-strong pb-5">
+                <div className="min-w-0">
+                    <h1 className="font-display text-h1 font-medium leading-tight">
+                        Funding Plan
+                    </h1>
+                    {plan && hasAnything && (
+                        <p className="mt-1 text-sm text-text-muted">
+                            What to set up as standing orders in Monzo (or your
+                            bank) {periodAdverb(frequency)}.
+                        </p>
+                    )}
                 </div>
-                <Group justify="space-between" px="xs">
-                  <Text size="sm" c="dimmed">
-                    Total in
-                  </Text>
-                  <Text size="sm">
-                    {formatMoney(plan.jointPool.totalIn, money)}
-                    {unit}
-                  </Text>
-                </Group>
-                <Group justify="space-between" px="xs">
-                  <Text size="sm" c="dimmed">
-                    Joint costs
-                  </Text>
-                  <Text size="sm">
-                    {formatMoney(plan.jointPool.jointCosts, money)}
-                    {unit}
-                  </Text>
-                </Group>
-                <Group
-                  justify="space-between"
-                  px="xs"
-                  pt={4}
-                  style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}
-                >
-                  <Text fw={600}>Surplus</Text>
-                  <Text fw={600} c={plan.jointPool.surplus < 0 ? 'red' : undefined}>
-                    {formatMoney(plan.jointPool.surplus, money)}
-                    {unit}
-                  </Text>
-                </Group>
-              </Stack>
-            </Card>
-          ) : (
-            <Card withBorder padding="md">
-              <Group justify="space-between">
-                <Text fw={600}>Joint pots total</Text>
-                <Text fw={600}>{formatMoney(plan.jointPotFundingTotal, money)}</Text>
-              </Group>
-            </Card>
-          )}
+                {plan && hasAnything && (
+                    <div className="flex items-center gap-2">
+                        <PaydayPdfButton />
+                        <Button variant="ghost" onClick={() => void copyPlan()}>
+                            {copied ? "Copied ✓" : "Copy plan"}
+                        </Button>
+                    </div>
+                )}
+            </header>
 
-          {plan.mainAccountFundingPerPeriod > 0 && (
-            <Card withBorder padding="md">
-              <Stack gap="sm">
-                <div>
-                  <Title order={4}>Paid from the main account</Title>
-                  <Text size="xs" c="dimmed">
-                    Bills with no pot — leave this much in the main account {periodAdverb(frequency)} to cover them.
-                  </Text>
-                </div>
-                <Stack gap={2}>
-                  {plan.mainAccountByCategory.map((row) => (
-                    <Group key={row.categoryId ?? 'none'} justify="space-between" px="xs" py={4}>
-                      <Text size="sm">{row.categoryId ? categoryById.get(row.categoryId)?.name ?? 'Uncategorised' : 'Uncategorised'}</Text>
-                      <Text size="sm">{formatMoney(row.fundingPerPeriod, money)}{unit}</Text>
-                    </Group>
-                  ))}
-                </Stack>
-                <Group justify="space-between" pt={4} style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
-                  <Text fw={600}>Main account total</Text>
-                  <Text fw={600}>{formatMoney(plan.mainAccountFundingPerPeriod, money)}{unit}</Text>
-                </Group>
-              </Stack>
-            </Card>
-          )}
+            {isLoading && <Spinner label="Loading the funding plan" />}
 
-          {plan.emergencyFund.total > 0 && (
-            <Card withBorder padding="md">
-              <Stack gap="sm">
-                <div>
-                  <Title order={4}>Emergency fund</Title>
-                  <Text size="xs" c="dimmed">
-                    A cushion of {plan.emergencyFund.months} month{plan.emergencyFund.months === 1 ? '' : 's'} of essential outgoings to
-                    hold in easy-access savings. Covers bills and set-asides; exclude any from its own settings. Set the months in
-                    Settings.
-                  </Text>
-                </div>
-                <Stack gap={2}>
-                  {plan.emergencyFund.perOwner
-                    .filter((o) => o.target > 0)
-                    .map((o) => (
-                      <Group key={o.memberId} justify="space-between" px="xs" py={4}>
-                        <Text size="sm">{o.displayName}</Text>
-                        <Group gap={12}>
-                          <Text size="xs" c="dimmed">
-                            {formatMoney(o.monthlyCommitments, money)}/mo
-                          </Text>
-                          <Text size="sm">{formatMoney(o.target, money)}</Text>
-                        </Group>
-                      </Group>
-                    ))}
-                </Stack>
-                <Group justify="space-between" pt={4} style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
-                  <Text fw={600}>Total target</Text>
-                  <Text fw={600}>{formatMoney(plan.emergencyFund.total, money)}</Text>
-                </Group>
-              </Stack>
-            </Card>
-          )}
+            {!isLoading && (!plan || !hasAnything) && (
+                <p className="text-sm text-text-muted">
+                    Add outgoings to see your funding plan.
+                </p>
+            )}
 
-          <Card withBorder padding="md">
-            <Stack gap="sm">
-              <Title order={4}>Standing orders</Title>
-              {[...potsByOwner.entries()].map(([ownerId, pots]) => {
-                const owner = memberById.get(ownerId)
-                return (
-                  <Stack key={ownerId} gap={4}>
-                    <Text size="xs" fw={700} c="dimmed" tt="uppercase">
-                      {owner?.displayName ?? ownerId}
-                    </Text>
-                    <Stack gap={2}>
-                      {pots.map((p) => (
-                        <Group key={p.potId} justify="space-between" px="xs" py={4}>
-                          <Text size="sm">{p.name}</Text>
-                          <Text size="sm">{formatMoney(p.fundingPerPeriod, money)}{unit}</Text>
-                        </Group>
-                      ))}
-                    </Stack>
-                  </Stack>
-                )
-              })}
-              {potsByOwner.size === 0 && (
-                <Text size="sm" c="dimmed">
-                  No standing orders needed yet.
-                </Text>
-              )}
-            </Stack>
-          </Card>
-        </>
-      )}
-    </Stack>
-  )
-}
+            {!isLoading && plan && hasAnything && (
+                <>
+                    <StandingOrderAlerts />
+
+                    {plan.unassignedFundingPerPeriod > 0 && (
+                        <p
+                            role="status"
+                            className="rounded-md bg-attention-tint px-4 py-3 text-sm text-attention-fg"
+                        >
+                            {formatMoney(
+                                plan.unassignedFundingPerPeriod,
+                                money
+                            )}{" "}
+                            of outgoings isn't assigned to a pot.
+                        </p>
+                    )}
+
+                    {/* Stacked on a phone: side by side, each person's figures get
+                        a column too narrow for the amounts. */}
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {plan.perPerson.map((person) => (
+                            <PersonFundingCard
+                                key={person.memberId}
+                                person={person}
+                                pooled={plan.jointFundingModel === "pooled"}
+                                money={money}
+                                unit={unit}
+                            />
+                        ))}
+                    </div>
+
+                    <JointCard plan={plan} money={money} unit={unit} />
+
+                    {plan.mainAccountFundingPerPeriod > 0 && (
+                        <MainAccountsCard
+                            groups={mainAccountGroups(
+                                plan,
+                                members,
+                                categoriesQuery.data ?? []
+                            )}
+                            money={money}
+                            unit={unit}
+                            adverb={periodAdverb(frequency)}
+                        />
+                    )}
+
+                    {plan.emergencyFund.total > 0 && (
+                        <EmergencyFundCard
+                            emergencyFund={plan.emergencyFund}
+                            money={money}
+                        />
+                    )}
+
+                    <StandingOrdersCard
+                        potsByOwner={potsByOwner(plan)}
+                        members={members}
+                        money={money}
+                        unit={unit}
+                    />
+                </>
+            )}
+        </div>
+    );
+};
