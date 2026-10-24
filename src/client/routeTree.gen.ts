@@ -16,6 +16,7 @@ import { Route as CategoriesRouteImport } from "./routes/categories";
 import { Route as ChoresRouteImport } from "./routes/chores";
 import { Route as DiyRouteImport } from "./routes/diy";
 import { Route as FundingRouteImport } from "./routes/funding";
+import { Route as GiftsRouteImport } from "./routes/gifts";
 import { Route as ImportRouteImport } from "./routes/import";
 import { Route as IncomeRouteImport } from "./routes/income";
 import { Route as InventoryRouteImport } from "./routes/inventory";
@@ -78,6 +79,11 @@ const DiyRoute = DiyRouteImport.update({
 const FundingRoute = FundingRouteImport.update({
   id: "/funding",
   path: "/funding",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const GiftsRoute = GiftsRouteImport.update({
+  id: "/gifts",
+  path: "/gifts",
   getParentRoute: () => rootRouteImport,
 } as any);
 const ImportRoute = ImportRouteImport.update({
@@ -229,6 +235,7 @@ export interface FileRoutesByFullPath {
   "/chores": typeof ChoresRoute;
   "/diy": typeof DiyRoute;
   "/funding": typeof FundingRoute;
+  "/gifts": typeof GiftsRoute;
   "/import": typeof ImportRoute;
   "/income": typeof IncomeRoute;
   "/inventory": typeof InventoryRoute;
@@ -266,6 +273,7 @@ export interface FileRoutesByTo {
   "/chores": typeof ChoresRoute;
   "/diy": typeof DiyRoute;
   "/funding": typeof FundingRoute;
+  "/gifts": typeof GiftsRoute;
   "/import": typeof ImportRoute;
   "/income": typeof IncomeRoute;
   "/inventory": typeof InventoryRoute;
@@ -303,6 +311,7 @@ export interface FileRoutesById {
   "/chores": typeof ChoresRoute;
   "/diy": typeof DiyRoute;
   "/funding": typeof FundingRoute;
+  "/gifts": typeof GiftsRoute;
   "/import": typeof ImportRoute;
   "/income": typeof IncomeRoute;
   "/inventory": typeof InventoryRoute;
@@ -342,6 +351,7 @@ export interface FileRouteTypes {
     | "/chores"
     | "/diy"
     | "/funding"
+    | "/gifts"
     | "/import"
     | "/income"
     | "/inventory"
@@ -379,6 +389,7 @@ export interface FileRouteTypes {
     | "/chores"
     | "/diy"
     | "/funding"
+    | "/gifts"
     | "/import"
     | "/income"
     | "/inventory"
@@ -415,6 +426,7 @@ export interface FileRouteTypes {
     | "/chores"
     | "/diy"
     | "/funding"
+    | "/gifts"
     | "/import"
     | "/income"
     | "/inventory"
@@ -453,6 +465,7 @@ export interface RootRouteChildren {
   ChoresRoute: typeof ChoresRoute;
   DiyRoute: typeof DiyRoute;
   FundingRoute: typeof FundingRoute;
+  GiftsRoute: typeof GiftsRoute;
   ImportRoute: typeof ImportRoute;
   IncomeRoute: typeof IncomeRoute;
   InventoryRoute: typeof InventoryRoute;
@@ -528,6 +541,13 @@ declare module "@tanstack/react-router" {
       path: "/funding";
       fullPath: "/funding";
       preLoaderRoute: typeof FundingRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/gifts": {
+      id: "/gifts";
+      path: "/gifts";
+      fullPath: "/gifts";
+      preLoaderRoute: typeof GiftsRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/import": {
@@ -755,6 +775,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChoresRoute: ChoresRoute,
   DiyRoute: DiyRoute,
   FundingRoute: FundingRoute,
+  GiftsRoute: GiftsRoute,
   ImportRoute: ImportRoute,
   IncomeRoute: IncomeRoute,
   InventoryRoute: InventoryRoute,
