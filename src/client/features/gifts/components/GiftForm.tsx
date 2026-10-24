@@ -5,7 +5,7 @@ import { useMoney } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextField } from "@/components/ui/TextField";
-import { ArchiveAction } from "@/features/plan/components/ArchiveAction";
+import { ArchiveAction } from "@/components/ui/ArchiveAction";
 import {
     STATUS_OPTIONS,
     moneyInput,

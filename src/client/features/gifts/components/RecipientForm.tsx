@@ -6,7 +6,7 @@ import { useMoney } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
 import { Callout } from "@/components/ui/Callout";
 import { TextField } from "@/components/ui/TextField";
-import { ArchiveAction } from "@/features/plan/components/ArchiveAction";
+import { ArchiveAction } from "@/components/ui/ArchiveAction";
 import {
     moneyInput,
     parseOptionalMoney,
