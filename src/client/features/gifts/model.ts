@@ -142,7 +142,7 @@ export const giftLink = (
     try {
         const url = new URL(text.trim());
         if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-        return { href: url.href, label: url.hostname.replace(/^www./, "") };
+        return { href: url.href, label: url.hostname.replace(/^www\./, "") };
     } catch {
         return null;
     }

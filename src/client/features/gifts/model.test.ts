@@ -78,6 +78,10 @@ describe("giftLink", () => {
         });
     });
 
+    it("strips only a real www. prefix", () => {
+        expect(giftLink("https://wwwlego.com/")?.label).toBe("wwwlego.com");
+    });
+
     it("leaves shop names and other schemes as text", () => {
         expect(giftLink("Smyths")).toBeNull();
         expect(giftLink("javascript:alert(1)")).toBeNull();
