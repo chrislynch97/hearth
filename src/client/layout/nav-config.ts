@@ -28,6 +28,7 @@ export type IconName =
     | "todos"
     | "chores"
     | "wishlists"
+    | "gifts"
     | "meals";
 
 // The app's route paths, kept in step with the route tree in `router.tsx`. Typed
@@ -64,6 +65,7 @@ export type AppRoutePath =
     | "/todos"
     | "/chores"
     | "/wishlists"
+    | "/gifts"
     | "/meals";
 
 export interface NavItem {
@@ -287,6 +289,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
                         planned:
                             "Things we want to buy — link, price, who wants it, how badly.",
                     },
+                    { to: "/gifts", label: "Gifts", icon: "gifts" },
                     {
                         to: "/meals",
                         label: "Meal planning",

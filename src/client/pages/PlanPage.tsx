@@ -15,7 +15,7 @@ import { BillReviewLink } from "@/features/plan/components/BillReviewLink";
 import { CategoryForm } from "@/features/plan/components/CategoryForm";
 import { CategoryPane } from "@/features/plan/components/CategoryPane";
 import { CategoryRail } from "@/features/plan/components/CategoryRail";
-import { EditorPanel } from "@/features/plan/components/EditorPanel";
+import { EditorPanel } from "@/components/ui/EditorPanel";
 import { EmptyPlan } from "@/features/plan/components/EmptyPlan";
 import { OwnerFilter } from "@/features/plan/components/OwnerFilter";
 import { PlanHeader } from "@/features/plan/components/PlanHeader";

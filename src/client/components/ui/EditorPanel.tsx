@@ -63,7 +63,7 @@ const CloseIcon = () => (
     </svg>
 );
 
-/** The one place anything on this page is edited: a native `<dialog>`, which
+/** Where a page edits things: a native `<dialog>`, which
  *  brings the focus trap, the inert page behind it and the top layer with it. */
 export const EditorPanel = ({
     title,
@@ -75,6 +75,7 @@ export const EditorPanel = ({
     children,
 }: EditorPanelProps) => {
     const dialog = useRef<HTMLDialogElement>(null);
+    const body = useRef<HTMLDivElement>(null);
     const exit = useRef(onExited);
     const requestClose = useRef(onClose);
 
@@ -87,7 +88,14 @@ export const EditorPanel = ({
         const element = dialog.current;
         if (!element) return;
 
-        if (!element.open) element.showModal();
+        if (!element.open) {
+            element.showModal();
+            // showModal focuses the first focusable thing, the Close button,
+            // over the form's autoFocus. Open ready to type instead.
+            body.current
+                ?.querySelector<HTMLElement>("input, select, textarea")
+                ?.focus();
+        }
 
         // Escape would close the dialog on the spot, skipping the exit. Send it
         // down the same path as every other way out.
@@ -164,7 +172,9 @@ export const EditorPanel = ({
                     <CloseIcon />
                 </button>
             </div>
-            <div className="mt-4">{children}</div>
+            <div ref={body} className="mt-4">
+                {children}
+            </div>
         </dialog>
     );
 };

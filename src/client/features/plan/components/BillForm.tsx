@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextField } from "@/components/ui/TextField";
-import { ArchiveAction } from "@/features/plan/components/ArchiveAction";
+import { ArchiveAction } from "@/components/ui/ArchiveAction";
 import { fundingOf, type Funding } from "@/features/plan/model";
 import type {
     Category,
