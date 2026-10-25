@@ -10,7 +10,7 @@ test('savings planners list the goals and open one to answer a what-if', async (
   await expect(page).toHaveURL(/\/planners\/[0-9a-z]{6}-wedding$/)
   await expect(page.getByRole('heading', { name: 'Wedding' })).toBeVisible()
   await expect(page.getByText(/puts you £[\d,.]+ over/)).toBeVisible()
-  await expect(page.locator('.recharts-surface')).toBeVisible()
+  await expect(page.getByRole('group', { name: /Savings chart/ })).toBeVisible()
 
   // A much smaller amount can't make it, and the sentence says so.
   await page.getByLabel('What if we put in').fill('50')
