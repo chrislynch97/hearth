@@ -142,6 +142,17 @@ describe("verdict", () => {
         expect(v.needed).toBe(125_000);
     });
 
+    it("says on target, not £0.00 over, when the day is met exactly", () => {
+        // £11,500 + 20 paydays at £900 = £29,500, the target exactly.
+        const d = detail(90_000, {
+            goal: goalRow({ targetAmount: 2_950_000 }),
+            items: [item("Deposit", 1_400_000, "2026-11-25")],
+        });
+        expect(verdict(d, money, formatDate).lead).toBe(
+            "£900.00/mo leaves you on target on 2028-06-12 but late for 2026-11-25"
+        );
+    });
+
     it("names an item no payday can reach and offers nothing for it", () => {
         const d = detail(90_000, {
             items: [item("Fence", 1_500_000, "2026-10-24")],

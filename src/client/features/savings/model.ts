@@ -80,7 +80,7 @@ const shortfall = (
 ): string =>
     outcome.difference < 0
         ? `${formatMoney(-outcome.difference, money)} short on ${formatDate(targetDate)}`
-        : `${formatMoney(outcome.difference, money)} over on ${formatDate(targetDate)} but late for ${formatDate(outcome.short[0]!.due)}`;
+        : `${outcome.difference === 0 ? "on target" : `${formatMoney(outcome.difference, money)} over`} on ${formatDate(targetDate)} but late for ${formatDate(outcome.short[0]!.due)}`;
 
 /** The lines no payday can reach any more, as a sentence of their own. */
 const strandedNote = (

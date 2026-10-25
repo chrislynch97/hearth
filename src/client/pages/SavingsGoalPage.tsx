@@ -92,11 +92,19 @@ export const SavingsGoalPage = () => {
     // Per goal, so switching goals doesn't carry one goal's what-if to another.
     const [whatIf, setWhatIf] = useState<{ goalId: string; amount: number } | null>(null);
 
+    // The goal this page has been showing. A rename changes the slug under
+    // the URL, so the page follows the goal by id rather than losing it.
+    const [shownId, setShownId] = useState<string | null>(null);
+
     const goals = goalsQuery.data ?? [];
-    const selected = findGoal(goals, key);
+    const selected =
+        findGoal(goals, key) ?? goals.find(({ goal }) => goal.id === shownId);
+    if (selected && selected.goal.id !== shownId) setShownId(selected.goal.id);
 
     useEffect(() => {
-        if (selected && key === selected.goal.id)
+        // An id (just after a create) or an old slug (just after a rename)
+        // becomes the goal's current slug.
+        if (selected && key !== selected.slug)
             void navigate({
                 to: "/planners/$goal",
                 params: { goal: selected.slug },
