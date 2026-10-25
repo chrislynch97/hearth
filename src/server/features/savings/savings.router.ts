@@ -12,7 +12,7 @@ import { newId } from '@shared/ids'
 import { todayIso } from '@shared/dates'
 import { monthlySetAsideFor } from '@shared/savings'
 import { insertContributionLines } from '../budget/setAside.router'
-import { contributionLines, loadGoalPlans, loadPeriod, type GoalPlan } from './savings'
+import { contributionLines, loadGoalPlans, loadPeriod } from './savings'
 
 const MONEY = z.number().int().nonnegative()
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -55,21 +55,18 @@ async function eligiblePots(db: DB | Tx, householdId: string): Promise<Pot[]> {
   return rows.filter((p) => !billedIds.has(p.id))
 }
 
-async function loadOne(db: DB, householdId: string, id: string): Promise<GoalPlan> {
-  await getGoal(db, householdId, id)
-  const [plan] = await loadGoalPlans(db, householdId, todayIso(), [id])
-  return plan!
-}
-
 export const savingsRouter = router({
   /** Every goal, archived included, soonest first, each with its plan. */
-  goals: publicProcedure.query(({ ctx }) => loadGoalPlans(ctx.db, ctx.householdId, todayIso())),
+  goals: publicProcedure.query(async ({ ctx }) => (await loadGoalPlans(ctx.db, ctx.householdId, todayIso())).plans),
 
   /** One goal with its items, balances, contribution, cycle and plan. The
    *  period and today travel with it so the client can redraw a what-if. */
   goal: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    const [loaded, period] = await Promise.all([loadOne(ctx.db, ctx.householdId, input.id), loadPeriod(ctx.db, ctx.householdId)])
-    return { ...loaded, period, today: todayIso() }
+    const today = todayIso()
+    const { period, plans } = await loadGoalPlans(ctx.db, ctx.householdId, today, { goalIds: [input.id] })
+    const [loaded] = plans
+    if (!loaded) throw new TRPCError({ code: 'NOT_FOUND', message: 'Savings goal not found' })
+    return { ...loaded, period, today }
   }),
 
   eligiblePots: publicProcedure.query(({ ctx }) => eligiblePots(ctx.db, ctx.householdId)),
@@ -291,6 +288,37 @@ export const savingsRouter = router({
         .returning()
       recordAudit(ctx, { entityType: 'savingsBalance', entityId: id, action: 'create', after: created })
       return created!
+    }),
+
+  /** Correct a recorded balance — its amount, note, or the day it was read. */
+  updateBalance: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        expectedUpdatedAt: expectedUpdatedAtInput,
+        asOfDate: DATE.optional(),
+        amount: MONEY.optional(),
+        note: z.string().trim().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, expectedUpdatedAt, note, ...rest } = input
+      const before = await getBalance(ctx.db, ctx.householdId, id)
+      if (rest.asOfDate && rest.asOfDate !== before.asOfDate) {
+        const [clash] = await ctx.db
+          .select({ id: savingsBalance.id })
+          .from(savingsBalance)
+          .where(scopeWhere(ctx.householdId, savingsBalance.householdId, eq(savingsBalance.goalId, before.goalId), eq(savingsBalance.asOfDate, rest.asOfDate)))
+        if (clash) throw new TRPCError({ code: 'BAD_REQUEST', message: 'There is already a balance on that day. Edit that one instead.' })
+      }
+      const [written] = await ctx.db
+        .update(savingsBalance)
+        .set({ ...rest, ...(note !== undefined ? { note: note || null } : {}), updatedAt: new Date() })
+        .where(scopeWhere(ctx.householdId, savingsBalance.householdId, eq(savingsBalance.id, id), versionGuard(savingsBalance.updatedAt, expectedUpdatedAt)))
+        .returning()
+      if (!written) throwStaleWrite('Balance', true)
+      recordAudit(ctx, { entityType: 'savingsBalance', entityId: id, action: 'update', before, after: written })
+      return written
     }),
 
   removeBalance: publicProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {

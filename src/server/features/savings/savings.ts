@@ -6,6 +6,7 @@ import type { DBOrTx } from '../../db/client'
 import { periodConfig, type PeriodConfig } from '@shared/period'
 import { normaliseToPeriod, roundMinor, type Recurrence } from '@shared/recurrence'
 import { savingsPlan, type SavingsPlan, type SavingsPlanInput } from '@shared/savings'
+import { uniqueSlugs } from '@shared/slug'
 
 export async function loadPeriod(db: DBOrTx, householdId: string): Promise<PeriodConfig> {
   const [row] = await db.select().from(household).where(eq(household.id, householdId))
@@ -53,6 +54,8 @@ export function planInput(
 
 export interface GoalPlan {
   goal: SavingsGoal
+  /** The goal's name as it appears in the planner's URL. */
+  slug: string
   potName: string
   items: SavingsItem[]
   balances: SavingsBalance[]
@@ -62,20 +65,40 @@ export interface GoalPlan {
   plan: SavingsPlan
 }
 
-/** Every goal's plan, archived included, from four reads however many goals there are. */
-export async function loadGoalPlans(db: DBOrTx, householdId: string, today: string, goalIds?: string[]): Promise<GoalPlan[]> {
-  const only = goalIds ? inArray(savingsGoal.id, goalIds) : undefined
-  const goals = await db
-    .select({ goal: savingsGoal, potName: pot.name })
-    .from(savingsGoal)
-    .innerJoin(pot, eq(savingsGoal.potId, pot.id))
-    .where(scopeWhere(householdId, savingsGoal.householdId, only))
-    .orderBy(asc(savingsGoal.targetDate), asc(savingsGoal.name))
-  if (goals.length === 0) return []
+export interface GoalFilter {
+  goalIds?: string[]
+  /** Leave out archived goals. */
+  live?: boolean
+}
+
+export interface LoadedGoalPlans {
+  period: PeriodConfig
+  plans: GoalPlan[]
+}
+
+/** Goals' plans, soonest first, from five reads however many goals there are.
+ *  Slugs are worked out across every goal in the household, oldest first, so a
+ *  filter never renumbers one and a new namesake never takes an old one's. */
+export async function loadGoalPlans(db: DBOrTx, householdId: string, today: string, filter: GoalFilter = {}): Promise<LoadedGoalPlans> {
+  const [all, period] = await Promise.all([
+    db
+      .select({ goal: savingsGoal, potName: pot.name })
+      .from(savingsGoal)
+      .innerJoin(pot, eq(savingsGoal.potId, pot.id))
+      .where(scopeWhere(householdId, savingsGoal.householdId))
+      .orderBy(asc(savingsGoal.createdAt), asc(savingsGoal.id)),
+    loadPeriod(db, householdId),
+  ])
+  const slugs = uniqueSlugs(all.map(({ goal }) => goal.name), 'goal')
+  const slugById = new Map(all.map(({ goal }, i) => [goal.id, slugs[i]!]))
+  const goals = all
+    .filter(({ goal }) => (!filter.goalIds || filter.goalIds.includes(goal.id)) && (!filter.live || goal.archivedAt === null))
+    .sort((a, b) => a.goal.targetDate.localeCompare(b.goal.targetDate) || a.goal.name.localeCompare(b.goal.name))
+  if (goals.length === 0) return { period, plans: [] }
 
   const ids = goals.map((g) => g.goal.id)
   const potIds = goals.map((g) => g.goal.potId)
-  const [items, balances, lines, period] = await Promise.all([
+  const [items, balances, lines] = await Promise.all([
     db.select().from(savingsItem).where(scopeWhere(householdId, savingsItem.householdId, inArray(savingsItem.goalId, ids))),
     db
       .select()
@@ -86,16 +109,16 @@ export async function loadGoalPlans(db: DBOrTx, householdId: string, today: stri
       .select()
       .from(setAside)
       .where(scopeWhere(householdId, setAside.householdId, and(inArray(setAside.potId, potIds), eq(setAside.active, 1), isNull(setAside.archivedAt)))),
-    loadPeriod(db, householdId),
   ])
 
-  return goals.map(({ goal, potName }) => {
+  const plans = goals.map(({ goal, potName }) => {
     const own = sortItems(items.filter((i) => i.goalId === goal.id), goal.targetDate)
     const ownBalances = balances.filter((b) => b.goalId === goal.id)
     const ownLines = lines.filter((l) => l.potId === goal.potId)
     const contribution = contributionPerPeriod(ownLines, period)
     return {
       goal,
+      slug: slugById.get(goal.id)!,
       potName,
       items: own,
       balances: ownBalances,
@@ -104,10 +127,12 @@ export async function loadGoalPlans(db: DBOrTx, householdId: string, today: stri
       plan: savingsPlan(planInput(goal, own, ownBalances, contribution, today, period)),
     }
   })
+  return { period, plans }
 }
 
 export interface SavingsAlert {
   goalId: string
+  goalSlug: string
   goalName: string
   itemId: string
   itemName: string
@@ -119,15 +144,15 @@ export interface SavingsAlert {
 
 /** Unpaid items on live goals that won't be covered in time — for the Overview. */
 export async function savingsAlerts(db: DBOrTx, householdId: string, today: string): Promise<SavingsAlert[]> {
-  const plans = await loadGoalPlans(db, householdId, today)
+  const { plans } = await loadGoalPlans(db, householdId, today, { live: true })
   return plans
-    .filter((p) => !p.goal.archivedAt)
     .flatMap((p) =>
       p.items.flatMap((item) => {
         const flag = p.plan.flags[item.id]
         if (!flag) return []
         return [{
           goalId: p.goal.id,
+          goalSlug: p.slug,
           goalName: p.goal.name,
           itemId: item.id,
           itemName: item.name,

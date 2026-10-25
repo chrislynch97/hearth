@@ -133,6 +133,48 @@ describe('neededPerPeriod', () => {
   })
 })
 
+describe('outcomeFor — what the goal date needs', () => {
+  const overItemised = (contribution: number): SavingsPlanInput => ({
+    targetAmount: 100_000,
+    targetDate: '2027-04-25',
+    items: [item('early', 60_000, '2026-11-25'), item('late', 70_000, null)],
+    balances: [{ asOfDate: '2026-10-20', amount: 10_000 }],
+    contribution,
+    today: '2026-10-24',
+    period: monthly25,
+  })
+
+  it('measures against the unpaid items when they cost more than the target', () => {
+    // £100 + seven paydays (25 Oct to 25 Apr) at £300 = £2,200, against £1,300 of items.
+    const outcome = outcomeFor(overItemised(30_000), 30_000)
+    expect(outcome.required).toBe(130_000)
+    expect(outcome.difference).toBe(220_000 - 130_000)
+  })
+
+  it('can be short on an early item while still over on the day', () => {
+    // At £200: £500 by 25 Nov misses the £600 due then, but £1,500 by April clears £1,300.
+    const outcome = outcomeFor(overItemised(20_000), 20_000)
+    expect(outcome.short.map((line) => line.itemId)).toEqual(['early'])
+    expect(outcome.difference).toBe(20_000)
+  })
+
+  it('marks a short line with no payday left as stranded', () => {
+    const input: SavingsPlanInput = {
+      targetAmount: 120_000,
+      targetDate: '2027-04-25',
+      items: [item('fence', 80_000, '2026-10-24'), item('paving', 40_000, null)],
+      balances: [{ asOfDate: '2026-10-24', amount: 30_000 }],
+      contribution: 0,
+      today: '2026-10-24',
+      period: monthly25,
+    }
+    const outcome = outcomeFor(input, neededPerPeriod(input))
+    expect(outcome.stranded.map((line) => line.itemId)).toEqual(['fence'])
+    // The figure covers everything a payday can still reach.
+    expect(outcome.short.map((line) => line.itemId)).toEqual(['fence'])
+  })
+})
+
 describe('balanceNow', () => {
   it('adds paydays since the last balance and takes off items paid since', () => {
     const input: SavingsPlanInput = {
@@ -155,12 +197,13 @@ describe('balanceNow', () => {
 })
 
 describe('projection and neededSteps', () => {
-  it('projects one point per payday from today to the goal date', () => {
+  it('projects one point per payday, running on to the goal date', () => {
     const points = projection(wedding(90_000), 90_000)
     expect(points[0]).toEqual({ date: '2026-10-24', amount: 1_150_000 })
     expect(points[1]).toEqual({ date: '2026-10-25', amount: 1_240_000 })
-    expect(points).toHaveLength(21)
-    expect(points.at(-1)).toEqual({ date: '2028-05-25', amount: 2_950_000 })
+    expect(points).toHaveLength(22)
+    expect(points.at(-2)).toEqual({ date: '2028-05-25', amount: 2_950_000 })
+    expect(points.at(-1)).toEqual({ date: '2028-06-12', amount: 2_950_000 })
   })
 
   it('steps up at each later deadline and ends at the target', () => {

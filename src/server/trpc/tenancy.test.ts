@@ -125,6 +125,7 @@ describe('cross-household isolation', () => {
       code: 'NOT_FOUND',
     })
     await expect(h2.savings.removeBalance({ id: balance.id })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(h2.savings.updateBalance({ id: balance.id, amount: 1 })).rejects.toMatchObject({ code: 'NOT_FOUND' })
     await expect(h2.savings.applyContribution({ goalId: wedding.id, perPeriod: 1 })).rejects.toMatchObject({ code: 'NOT_FOUND' })
     await expect(h2.savings.removeGoal({ id: wedding.id })).rejects.toMatchObject({ code: 'NOT_FOUND' })
 

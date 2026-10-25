@@ -61,12 +61,16 @@ export interface PlanPoint {
 export interface SavingsOutcome {
   /** Put by on the goal date at this contribution. */
   final: number
-  /** `final − target`: positive is over, negative short. */
+  /** What the goal date needs: the target, or the unpaid items when they cost more. */
+  required: number
+  /** `final − required`: positive is over, negative short. */
   difference: number
-  /** The first payday the target is met, today if it already is; null if not by the goal date. */
+  /** The first payday `required` is met, today if it already is; null if not by the goal date. */
   reachedOn: string | null
   /** Plan lines the money won't cover by their deadlines, earliest first. */
   short: PlanLine[]
+  /** The short lines with no payday left before their deadline: no contribution reaches them. */
+  stranded: PlanLine[]
 }
 
 export interface SavingsPlan {
@@ -109,6 +113,8 @@ export function latestBalance(balances: SavingsPlanBalance[], today: string): Sa
     .reduce<SavingsPlanBalance | null>((latest, b) => (!latest || b.asOfDate > latest.asOfDate ? b : latest), null)
 }
 
+/** An item paid on the day of a recorded balance counts as already out of it —
+ *  you read the balance after paying. Only items paid later come off. */
 export function balanceNow(input: SavingsPlanInput): number {
   const anchor = latestBalance(input.balances, input.today)
   if (!anchor) return 0
@@ -125,7 +131,8 @@ const cumulativeDue = (lines: PlanLine[], on: string): number =>
 const projectedOn = (input: SavingsPlanInput, now: number, contribution: number, on: string): number =>
   now + contribution * paydaysBetween(input.today, on, input.period)
 
-/** Every payday from today to the goal date at `contribution`, opening on today. */
+/** Every payday from today to the goal date at `contribution`, opening on today
+ *  and closing on the goal date itself, so the line runs the whole way. */
 export function projection(input: SavingsPlanInput, contribution: number): PlanPoint[] {
   const now = balanceNow(input)
   const points: PlanPoint[] = [{ date: input.today, amount: now }]
@@ -134,6 +141,7 @@ export function projection(input: SavingsPlanInput, contribution: number): PlanP
     paid += contribution
     points.push({ date: p.start, amount: paid })
   }
+  if (points.at(-1)!.date < input.targetDate) points.push({ date: input.targetDate, amount: paid })
   return points
 }
 
@@ -152,14 +160,20 @@ export function outcomeFor(input: SavingsPlanInput, contribution: number): Savin
   const now = balanceNow(input)
   const lines = planLines(input)
   const final = projectedOn(input, now, contribution, input.targetDate)
-  const reachedOn = now >= input.targetAmount
+  // Unpaid items costing more than the target leave no headroom line, so the
+  // goal date needs their total, not the target.
+  const required = Math.max(input.targetAmount, cumulativeDue(lines, input.targetDate))
+  const reachedOn = now >= required
     ? input.today
-    : projection(input, contribution).find((point) => point.amount >= input.targetAmount)?.date ?? null
+    : projection(input, contribution).find((point) => point.amount >= required)?.date ?? null
+  const short = lines.filter((line) => projectedOn(input, now, contribution, line.due) < cumulativeDue(lines, line.due))
   return {
     final,
-    difference: final - input.targetAmount,
+    required,
+    difference: final - required,
     reachedOn,
-    short: lines.filter((line) => projectedOn(input, now, contribution, line.due) < cumulativeDue(lines, line.due)),
+    short,
+    stranded: short.filter((line) => paydaysBetween(input.today, line.due, input.period) === 0),
   }
 }
 

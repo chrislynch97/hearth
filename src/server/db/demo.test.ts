@@ -153,7 +153,7 @@ describe('demo data generator', () => {
     const db = await makeTestDb()
     await seedDemo(db, { now: NOW })
 
-    const plans = await loadGoalPlans(db, 'household', '2026-06-15')
+    const { plans } = await loadGoalPlans(db, 'household', '2026-06-15')
     expect(plans.map((p) => p.goal.name).sort()).toEqual(['Garden', 'Wedding'])
 
     const wedding = plans.find((p) => p.goal.name === 'Wedding')!

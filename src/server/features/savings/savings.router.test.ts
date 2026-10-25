@@ -67,6 +67,35 @@ describe('savings router', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
 
+  it("refuses a bill on a live goal's pot, on create and on a move", async () => {
+    const { caller, jointId } = await setup()
+    const goal = await caller.savings.createGoal({ name: 'Wedding', targetAmount: 1, targetDate: inAYear(), pot: { name: 'Wedding', ownerId: jointId } })
+    const other = await caller.pots.create({ name: 'Bills', ownerId: jointId })
+
+    await expect(
+      caller.expenses.create({ name: 'Venue', recurrence: 'monthly', amount: 1_000, funding: 'pot_manual', potId: goal.potId }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('saving for Wedding') })
+    const bill = await caller.expenses.create({ name: 'Gym', recurrence: 'monthly', amount: 1_000, funding: 'pot_manual', potId: other.id })
+    await expect(caller.expenses.update({ id: bill.id, potId: goal.potId })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+
+    // Once the goal is archived, the pot is free for bills again.
+    await caller.savings.setArchived({ id: goal.id, archived: true })
+    await caller.expenses.update({ id: bill.id, potId: goal.potId })
+  })
+
+  it('gives each goal a slug, numbering namesakes oldest first', async () => {
+    const { caller, jointId } = await setup()
+    const first = await caller.savings.createGoal({ name: 'Car', targetAmount: 1, targetDate: inAYear(), pot: { name: 'Car', ownerId: jointId } })
+    const second = await caller.savings.createGoal({ name: 'Car!', targetAmount: 1, targetDate: addMonths(todayIso(), 6), pot: { name: 'Car 2', ownerId: jointId } })
+
+    const goals = await caller.savings.goals()
+    expect(goals.map((g) => [g.goal.id, g.slug])).toEqual([
+      [second.id, 'car-2'],
+      [first.id, 'car'],
+    ])
+    expect((await caller.savings.goal({ id: second.id })).slug).toBe('car-2')
+  })
+
   it("won't rewrite a pot that has several contribution lines", async () => {
     const { caller, jointId } = await setup()
     const p = await caller.pots.create({ name: 'Holiday', ownerId: jointId })
@@ -118,6 +147,27 @@ describe('savings router', () => {
 
     await caller.savings.removeBalance({ id: replaced.id })
     expect((await caller.savings.goal({ id: goal.id })).balances).toHaveLength(1)
+  })
+
+  it('corrects a recorded balance, moving it to a free day only', async () => {
+    const { caller, jointId } = await setup()
+    const goal = await caller.savings.createGoal({ name: 'Car', targetAmount: 500_000, targetDate: inAYear(), pot: { name: 'Car', ownerId: jointId } })
+    const today = todayIso()
+    const older = await caller.savings.recordBalance({ goalId: goal.id, asOfDate: addDays(today, -10), amount: 100_000 })
+    await caller.savings.recordBalance({ goalId: goal.id, asOfDate: today, amount: 120_000 })
+
+    const moved = await caller.savings.updateBalance({
+      id: older.id,
+      expectedUpdatedAt: older.updatedAt,
+      asOfDate: addDays(today, -12),
+      amount: 95_000,
+      note: 'Typo',
+    })
+    expect(moved).toMatchObject({ asOfDate: addDays(today, -12), amount: 95_000, note: 'Typo' })
+    await expect(caller.savings.updateBalance({ id: older.id, asOfDate: today })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    await expect(
+      caller.savings.updateBalance({ id: older.id, expectedUpdatedAt: older.updatedAt, amount: 1 }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
   })
 
   it('surfaces an unpaid item past its deadline on the Overview, until the goal is archived', async () => {
