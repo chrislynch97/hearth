@@ -150,10 +150,10 @@ export const SavingsPlannersPage = () => {
                             goal={editor.kind === "edit" ? editor.plan : undefined}
                             pots={potsQuery.data ?? []}
                             members={membersQuery.data ?? []}
-                            onCreated={(id) =>
+                            onCreated={(path) =>
                                 void navigate({
                                     to: "/planners/$goal",
-                                    params: { goal: id },
+                                    params: { goal: path },
                                 })
                             }
                             onDone={close}

@@ -950,6 +950,8 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
   const savingsGoals: Array<Record<string, unknown>> = []
   const savingsItems: Array<Record<string, unknown>> = []
   const savingsBalances: Array<Record<string, unknown>> = []
+  const shortId = (): string =>
+    Array.from({ length: 6 }, () => '0123456789abcdefghijklmnopqrstuvwxyz'[Math.floor(rnd() * 36)]).join('')
   const goalPot = (name: string): string => {
     const pid = id()
     pots.push({ id: pid, name, categoryId: catId['savings']!, ownerId: joint, sortOrder: pots.length, note: null, archivedAt: null, ...ts })
@@ -962,7 +964,7 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     recurrence: 'monthly', note: null, active: 1, sortOrder: setAsides.length, archivedAt: null, ...ts,
   })
   const wedding = id()
-  savingsGoals.push({ id: wedding, potId: weddingPot, name: 'Wedding', targetAmount: cost(15000), targetDate: on(20, 12), archivedAt: null, ...ts })
+  savingsGoals.push({ id: wedding, potId: weddingPot, shortId: shortId(), name: 'Wedding', targetAmount: cost(15000), targetDate: on(20, 12), archivedAt: null, ...ts })
   const weddingItems: Array<[name: string, price: number, due: string | null, paidOn: string | null]> = [
     ['Venue deposit', 1000, on(-2, 15), on(-2, 10)],
     ['Photographer deposit', 300, on(1, 15), null],
@@ -992,7 +994,7 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
 
   const gardenPot = goalPot('Garden')
   const garden = id()
-  savingsGoals.push({ id: garden, potId: gardenPot, name: 'Garden', targetAmount: cost(1200), targetDate: addDays(today, 60), archivedAt: null, ...ts })
+  savingsGoals.push({ id: garden, potId: gardenPot, shortId: shortId(), name: 'Garden', targetAmount: cost(1200), targetDate: addDays(today, 60), archivedAt: null, ...ts })
   savingsItems.push(
     { id: id(), goalId: garden, name: 'Fence panels', amount: cost(800), dueDate: addDays(today, 9), paidOn: null, sortOrder: 0, ...ts },
     { id: id(), goalId: garden, name: 'Paving slabs', amount: cost(400), dueDate: null, paidOn: null, sortOrder: 1, ...ts },

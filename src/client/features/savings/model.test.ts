@@ -33,6 +33,7 @@ const goalRow = (over: Partial<SavingsGoal> = {}): SavingsGoal => ({
     id: "wedding",
     householdId: "household",
     potId: "pot",
+    shortId: "k3x9p2",
     name: "Wedding",
     targetAmount: 2_800_000,
     targetDate: "2028-06-12",
@@ -73,7 +74,7 @@ const detail = (
 ): GoalDetail => {
     const base = {
         goal: goalRow(),
-        slug: "wedding",
+        slug: "k3x9p2-wedding",
         potName: "Wedding",
         items: [item("Catering", 750_000, "2028-05-29"), item("Photographer", 200_000, null)],
         balances: [balance],
@@ -88,22 +89,25 @@ const detail = (
 };
 
 describe("findGoal", () => {
-    const live = { goal: goalRow({ id: "a" }), slug: "kitchen" } as GoalDetail;
-    const archived = {
-        goal: goalRow({ id: "b", archivedAt: now }),
-        slug: "wedding",
+    const kitchen = {
+        goal: goalRow({ id: "a", shortId: "aaaaaa", name: "Kitchen" }),
+    } as GoalDetail;
+    const wedding = {
+        goal: goalRow({ id: "b", shortId: "k3x9p2", archivedAt: now }),
     } as GoalDetail;
 
-    it("finds a goal by slug, archived or not", () => {
-        expect(findGoal([live, archived], "wedding")).toBe(archived);
+    it("finds a goal by its short id, archived or not", () => {
+        expect(findGoal([kitchen, wedding], "k3x9p2-wedding")).toBe(wedding);
     });
 
-    it("still finds a goal by id, as it is just after a create", () => {
-        expect(findGoal([live, archived], "b")).toBe(archived);
+    it("ignores the name after the short id, so old links still land", () => {
+        expect(findGoal([kitchen, wedding], "k3x9p2-our-old-name")).toBe(wedding);
+        expect(findGoal([kitchen, wedding], "k3x9p2")).toBe(wedding);
     });
 
-    it("finds nothing for an unknown key, rather than another goal", () => {
-        expect(findGoal([live, archived], "gone")).toBeUndefined();
+    it("finds nothing without a known short id, rather than another goal", () => {
+        expect(findGoal([kitchen, wedding], "wedding")).toBeUndefined();
+        expect(findGoal([kitchen, wedding], "zzzzzz-wedding")).toBeUndefined();
     });
 });
 

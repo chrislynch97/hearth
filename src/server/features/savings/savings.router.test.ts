@@ -83,17 +83,25 @@ describe('savings router', () => {
     await caller.expenses.update({ id: bill.id, potId: goal.potId })
   })
 
-  it('gives each goal a slug, numbering namesakes oldest first', async () => {
+  it('gives each goal a fixed short id in front of its name', async () => {
     const { caller, jointId } = await setup()
-    const first = await caller.savings.createGoal({ name: 'Car', targetAmount: 1, targetDate: inAYear(), pot: { name: 'Car', ownerId: jointId } })
-    const second = await caller.savings.createGoal({ name: 'Car!', targetAmount: 1, targetDate: addMonths(todayIso(), 6), pot: { name: 'Car 2', ownerId: jointId } })
+    const goal = await caller.savings.createGoal({ name: 'Our Wedding', targetAmount: 1, targetDate: inAYear(), pot: { name: 'Wedding', ownerId: jointId } })
 
+    expect(goal.shortId).toMatch(/^[0-9a-z]{6}$/)
+    expect((await caller.savings.goal({ id: goal.id })).slug).toBe(`${goal.shortId}-our-wedding`)
+  })
+
+  it('keeps two same-named goals on their own URLs when one is renamed', async () => {
+    const { caller, jointId } = await setup()
+    const first = await caller.savings.createGoal({ name: 'Garden', targetAmount: 1, targetDate: inAYear(), pot: { name: 'Garden', ownerId: jointId } })
+    const second = await caller.savings.createGoal({ name: 'Garden', targetAmount: 1, targetDate: inAYear(), pot: { name: 'Garden 2', ownerId: jointId } })
+    expect(first.shortId).not.toBe(second.shortId)
+    const before = (await caller.savings.goal({ id: second.id })).slug
+
+    await caller.savings.updateGoal({ id: first.id, name: 'Patio' })
     const goals = await caller.savings.goals()
-    expect(goals.map((g) => [g.goal.id, g.slug])).toEqual([
-      [second.id, 'car-2'],
-      [first.id, 'car'],
-    ])
-    expect((await caller.savings.goal({ id: second.id })).slug).toBe('car-2')
+    expect(goals.find((g) => g.goal.id === first.id)?.slug).toBe(`${first.shortId}-patio`)
+    expect(goals.find((g) => g.goal.id === second.id)?.slug).toBe(before)
   })
 
   it("won't rewrite a pot that has several contribution lines", async () => {

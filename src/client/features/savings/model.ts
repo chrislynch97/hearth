@@ -3,6 +3,7 @@ import { formatMoney } from "@shared/money";
 import { periodUnitLabel, type PeriodConfig } from "@shared/period";
 import {
     outcomeFor,
+    shortIdOf,
     type ItemFlag,
     type PlanLine,
     type SavingsOutcome,
@@ -25,13 +26,17 @@ export interface GoalDetail extends GoalPlan {
     today: string;
 }
 
-/** The goal a URL names: by slug, or by id just after a create. */
+/** The goal a URL names, by the short id at its front. The name after it is
+ *  only for reading, so a renamed goal or an old link still lands. */
 export const findGoal = (
     goals: GoalPlan[],
-    key: string
-): GoalPlan | undefined =>
-    goals.find(({ slug }) => slug === key) ??
-    goals.find(({ goal }) => goal.id === key);
+    path: string
+): GoalPlan | undefined => {
+    const shortId = shortIdOf(path);
+    return shortId === null
+        ? undefined
+        : goals.find(({ goal }) => goal.shortId === shortId);
+};
 
 /** The planner's input, rebuilt from the goal query so the client can rerun it. */
 export const plannerInput = (detail: GoalDetail): SavingsPlanInput => ({

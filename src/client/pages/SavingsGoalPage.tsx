@@ -82,8 +82,7 @@ export const SavingsGoalPage = () => {
 
     const compact = !useMediaQuery(MODAL_FITS);
 
-    // The goal's slug; a create hands over its id, which the effect below swaps
-    // for the slug once the list knows the new goal.
+    // The goal's URL segment, `<shortId>-<name>`.
     const key = route.useParams().goal;
     const navigate = route.useNavigate();
 
@@ -92,18 +91,12 @@ export const SavingsGoalPage = () => {
     // Per goal, so switching goals doesn't carry one goal's what-if to another.
     const [whatIf, setWhatIf] = useState<{ goalId: string; amount: number } | null>(null);
 
-    // The goal this page has been showing. A rename changes the slug under
-    // the URL, so the page follows the goal by id rather than losing it.
-    const [shownId, setShownId] = useState<string | null>(null);
-
     const goals = goalsQuery.data ?? [];
-    const selected =
-        findGoal(goals, key) ?? goals.find(({ goal }) => goal.id === shownId);
-    if (selected && selected.goal.id !== shownId) setShownId(selected.goal.id);
+    const selected = findGoal(goals, key);
 
     useEffect(() => {
-        // An id (just after a create) or an old slug (just after a rename)
-        // becomes the goal's current slug.
+        // A stale name after the short id (a rename, an old link) becomes the
+        // goal's current one.
         if (selected && key !== selected.slug)
             void navigate({
                 to: "/planners/$goal",
@@ -156,8 +149,6 @@ export const SavingsGoalPage = () => {
 
     return (
         <div className="hearth-ds mx-auto flex max-w-[1040px] flex-col gap-4 text-base">
-            {/* Fetching covers the moment after a create, before the list
-                knows the new goal. */}
             {!selected && (goalsQuery.isLoading || goalsQuery.isFetching) && (
                 <Spinner label="Loading the goal" />
             )}

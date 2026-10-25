@@ -8,6 +8,8 @@ import {
   neededSteps,
   planLines,
   monthlySetAsideFor,
+  goalPath,
+  shortIdOf,
   type SavingsPlanInput,
   type SavingsPlanItem,
 } from './savings'
@@ -222,5 +224,24 @@ describe('monthlySetAsideFor', () => {
   it('converts a shorter cycle up to a whole monthly amount', () => {
     expect(monthlySetAsideFor(90_000, fourWeekly)).toBe(97_500)
     expect(monthlySetAsideFor(10_000, { frequency: 'weekly', startDay: 1, anchor: '2026-10-05' })).toBe(43_334)
+  })
+})
+
+describe('goalPath and shortIdOf', () => {
+  it('puts the fixed short id in front of a readable slug', () => {
+    expect(goalPath('k3x9p2', 'Our Wedding!')).toBe('k3x9p2-our-wedding')
+    expect(goalPath('k3x9p2', '£££')).toBe('k3x9p2')
+  })
+
+  it('reads the short id back, whatever the slug says', () => {
+    expect(shortIdOf('k3x9p2-our-wedding')).toBe('k3x9p2')
+    expect(shortIdOf('k3x9p2-an-old-name')).toBe('k3x9p2')
+    expect(shortIdOf('k3x9p2')).toBe('k3x9p2')
+  })
+
+  it('finds no short id in an old-style or malformed segment', () => {
+    expect(shortIdOf('wedding')).toBeNull()
+    expect(shortIdOf('k3x9p2x-wedding')).toBeNull()
+    expect(shortIdOf('K3X9P2-wedding')).toBeNull()
   })
 })

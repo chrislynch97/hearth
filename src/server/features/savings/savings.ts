@@ -5,8 +5,20 @@ import type { SavingsBalance, SavingsGoal, SavingsItem, SetAside } from '../../d
 import type { DBOrTx } from '../../db/client'
 import { periodConfig, type PeriodConfig } from '@shared/period'
 import { normaliseToPeriod, roundMinor, type Recurrence } from '@shared/recurrence'
-import { savingsPlan, type SavingsPlan, type SavingsPlanInput } from '@shared/savings'
-import { uniqueSlugs } from '@shared/slug'
+import { goalPath, savingsPlan, type SavingsPlan, type SavingsPlanInput } from '@shared/savings'
+
+const BASE36 = '0123456789abcdefghijklmnopqrstuvwxyz'
+
+/** A fresh goal short id: six random base36 chars not already in `taken`. */
+export function newShortId(taken: ReadonlySet<string>): string {
+  for (;;) {
+    const bytes = crypto.getRandomValues(new Uint8Array(6))
+    // 252 = 36 × 7: drop the top bytes so every character is equally likely.
+    if (bytes.some((b) => b >= 252)) continue
+    const id = [...bytes].map((b) => BASE36[b % 36]).join('')
+    if (!taken.has(id)) return id
+  }
+}
 
 export async function loadPeriod(db: DBOrTx, householdId: string): Promise<PeriodConfig> {
   const [row] = await db.select().from(household).where(eq(household.id, householdId))
@@ -54,7 +66,7 @@ export function planInput(
 
 export interface GoalPlan {
   goal: SavingsGoal
-  /** The goal's name as it appears in the planner's URL. */
+  /** The goal's URL segment, `<shortId>-<name>`; only the short id is looked up. */
   slug: string
   potName: string
   items: SavingsItem[]
@@ -76,24 +88,24 @@ export interface LoadedGoalPlans {
   plans: GoalPlan[]
 }
 
-/** Goals' plans, soonest first, from five reads however many goals there are.
- *  Slugs are worked out across every goal in the household, oldest first, so a
- *  filter never renumbers one and a new namesake never takes an old one's. */
+/** Goals' plans, soonest first, from five reads however many goals there are. */
 export async function loadGoalPlans(db: DBOrTx, householdId: string, today: string, filter: GoalFilter = {}): Promise<LoadedGoalPlans> {
-  const [all, period] = await Promise.all([
+  const [goals, period] = await Promise.all([
     db
       .select({ goal: savingsGoal, potName: pot.name })
       .from(savingsGoal)
       .innerJoin(pot, eq(savingsGoal.potId, pot.id))
-      .where(scopeWhere(householdId, savingsGoal.householdId))
-      .orderBy(asc(savingsGoal.createdAt), asc(savingsGoal.id)),
+      .where(
+        scopeWhere(
+          householdId,
+          savingsGoal.householdId,
+          filter.goalIds ? inArray(savingsGoal.id, filter.goalIds) : undefined,
+          filter.live ? isNull(savingsGoal.archivedAt) : undefined,
+        ),
+      )
+      .orderBy(asc(savingsGoal.targetDate), asc(savingsGoal.name)),
     loadPeriod(db, householdId),
   ])
-  const slugs = uniqueSlugs(all.map(({ goal }) => goal.name), 'goal')
-  const slugById = new Map(all.map(({ goal }, i) => [goal.id, slugs[i]!]))
-  const goals = all
-    .filter(({ goal }) => (!filter.goalIds || filter.goalIds.includes(goal.id)) && (!filter.live || goal.archivedAt === null))
-    .sort((a, b) => a.goal.targetDate.localeCompare(b.goal.targetDate) || a.goal.name.localeCompare(b.goal.name))
   if (goals.length === 0) return { period, plans: [] }
 
   const ids = goals.map((g) => g.goal.id)
@@ -118,7 +130,7 @@ export async function loadGoalPlans(db: DBOrTx, householdId: string, today: stri
     const contribution = contributionPerPeriod(ownLines, period)
     return {
       goal,
-      slug: slugById.get(goal.id)!,
+      slug: goalPath(goal.shortId, goal.name),
       potName,
       items: own,
       balances: ownBalances,

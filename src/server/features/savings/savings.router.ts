@@ -12,7 +12,7 @@ import { newId } from '@shared/ids'
 import { todayIso } from '@shared/dates'
 import { monthlySetAsideFor } from '@shared/savings'
 import { insertContributionLines } from '../budget/setAside.router'
-import { contributionLines, loadGoalPlans, loadPeriod } from './savings'
+import { contributionLines, loadGoalPlans, loadPeriod, newShortId } from './savings'
 
 const MONEY = z.number().int().nonnegative()
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -112,10 +112,15 @@ export const savingsRouter = router({
           recordAudit(ctx, { entityType: 'pot', entityId: created!.id, action: 'create', after: created })
           potId = created!.id
         }
+        const taken = await tx
+          .select({ shortId: savingsGoal.shortId })
+          .from(savingsGoal)
+          .where(eq(savingsGoal.householdId, ctx.householdId))
         await tx.insert(savingsGoal).values({
           id,
           householdId: ctx.householdId,
           potId,
+          shortId: newShortId(new Set(taken.map((t) => t.shortId))),
           name: input.name,
           targetAmount: input.targetAmount,
           targetDate: input.targetDate,

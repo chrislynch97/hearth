@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SavingsGoalPage } from "@/pages/SavingsGoalPage";
 
-/** One goal, by its slug: `/planners/wedding`. Just after a create the param
- *  is the new goal's id, which the page swaps for its slug. */
+/** One goal: `/planners/k3x9p2-wedding`. The short id at the front finds it;
+ *  the name after it is for reading and follows renames. */
 export const Route = createFileRoute("/planners/$goal")({
     component: SavingsGoalPage,
 });

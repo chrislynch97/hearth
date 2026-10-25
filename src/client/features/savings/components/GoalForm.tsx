@@ -1,4 +1,5 @@
 import { useForm, useWatch } from "react-hook-form";
+import { goalPath } from "@shared/savings";
 import { trpc } from "@/trpc";
 import { notifySuccess } from "@/notify";
 import { orderMembers } from "@/potOptions";
@@ -20,7 +21,8 @@ export interface GoalFormProps {
     /** Adding only: pots a new goal can sit on (no goal yet, no bills). */
     pots?: Pot[];
     members?: Member[];
-    onCreated?: (id: string) => void;
+    /** After adding, with the new goal's URL segment. */
+    onCreated?: (path: string) => void;
     onDone: () => void;
 }
 
@@ -65,6 +67,7 @@ export const GoalForm = ({
     const potId = useWatch({ control, name: "potId" });
 
     const submit = handleSubmit(async (values) => {
+        let createdPath: string | null = null;
         const name = values.name.trim();
         const fields = {
             name,
@@ -86,14 +89,16 @@ export const GoalForm = ({
                             ? { name, ownerId: values.ownerId }
                             : { id: values.potId },
                 });
-                onCreated?.(created.id);
+                createdPath = goalPath(created.shortId, created.name);
             }
         } catch {
             return; // surfaced by the global error handler; keep the form open
         }
-        // A new pot shows on Plan and Funding too.
+        // A new pot shows on Plan and Funding too. Refreshed before moving to
+        // a new goal, so its page finds it straight away.
         await Promise.all([utils.savings.invalidate(), utils.pots.invalidate()]);
         notifySuccess(goal ? `Saved ${name}.` : `Added ${name}.`);
+        if (createdPath) onCreated?.(createdPath);
         onDone();
     });
 

@@ -14,6 +14,9 @@ export const savingsGoal = pgTable('savings_goal', {
   id: text('id').primaryKey(),
   householdId: text('household_id').notNull().references(() => household.id, { onDelete: 'cascade' }),
   potId: text('pot_id').notNull().references(() => pot.id),
+  // 6 lowercase base36 chars, set on create and never changed: the stable part
+  // of the goal's URL (`/planners/k3x9p2-wedding`), so a rename can't break links.
+  shortId: text('short_id').notNull(),
   name: text('name').notNull(),
   targetAmount: integer('target_amount').notNull(), // minor units; what the pot should hold by the date
   targetDate: text('target_date').notNull(),        // YYYY-MM-DD
@@ -22,6 +25,7 @@ export const savingsGoal = pgTable('savings_goal', {
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
 }, (t) => ({
   uniqPot: uniqueIndex('savings_goal_pot').on(t.householdId, t.potId),
+  uniqShortId: uniqueIndex('savings_goal_short_id').on(t.householdId, t.shortId),
   householdIdx: index('savings_goal_household_id_idx').on(t.householdId),
 }))
 
