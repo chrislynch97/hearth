@@ -50,12 +50,25 @@ export const GoalChartReadout = ({
             </span>
         );
 
+    // Announced on each move instead of the whole panel, which hovering would re-read endlessly.
+    const verdict =
+        moment.needed === 0
+            ? ""
+            : moment.pot >= moment.needed
+              ? ", covered"
+              : `, ${formatMoney(moment.needed - moment.pot, money)} short`;
+    const summary = isToday
+        ? `Today: ${formatMoney(moment.pot, money)} in the pot${verdict}.`
+        : `${title}: needs ${formatMoney(moment.needed, money)}, the pot will hold ${formatMoney(moment.pot, money)}${verdict}.`;
+
     return (
         <section
             id={id}
-            aria-live="polite"
             className="mx-auto flex w-full max-w-md flex-col gap-2 rounded-md border border-border bg-bg px-2.5 py-2"
         >
+            <p aria-live="polite" aria-atomic="true" className="sr-only">
+                {summary}
+            </p>
             <div className="flex items-center gap-1">
                 <Button
                     variant="ghost"

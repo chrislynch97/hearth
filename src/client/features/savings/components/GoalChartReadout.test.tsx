@@ -56,6 +56,15 @@ describe("GoalChartReadout", () => {
         expect(within(whatIf).getByText("£200.00 short")).toBeInTheDocument();
     });
 
+    it("announces a move in one line, not the whole panel", () => {
+        const { container } = renderReadout(units);
+
+        expect(container.querySelectorAll("[aria-live]")).toHaveLength(1);
+        expect(
+            screen.getByText("2026-11-30 · in 5 weeks: needs £600.00, the pot will hold £900.00, covered.")
+        ).toHaveAttribute("aria-live", "polite");
+    });
+
     it("reads today as what's in the pot now, with nothing to compare", () => {
         renderReadout(
             { date: "2026-10-24", kind: "today", due: [], needed: 0, pot: 10_000, whatIf: 10_000 },

@@ -202,10 +202,16 @@ export const axisTicks = (
     return { ticks: kept.sort((a, b) => a - b), tier };
 };
 
-/** Labels for {@link axisTicks}: "Today", then each date at the tier's grain.
- *  A month carries its year whenever the year turns from the label before, so
- *  "Jul … Apr" can't hide a year going by — and never as "Dec 26", a day. */
-export const tickLabels = (ticks: number[], tier: TickTier, today: number): string[] =>
+/** Labels for {@link axisTicks}: "Today", then each date at the tier's grain,
+ *  in the household's locale. A month carries its year whenever the year turns
+ *  from the label before, so "Jul … Apr" can't hide a year going by — and
+ *  never as "Dec 26", a day. */
+export const tickLabels = (
+    ticks: number[],
+    tier: TickTier,
+    today: number,
+    locale: string
+): string[] =>
     ticks.map((t, i) => {
         if (t === today) return "Today";
         const year = new Date(t).getUTCFullYear();
@@ -219,7 +225,7 @@ export const tickLabels = (ticks: number[], tier: TickTier, today: number): stri
                     ? { month: "short" }
                     : { month: "short", year: "numeric" };
 
-        return new Date(t).toLocaleDateString(undefined, {
+        return new Date(t).toLocaleDateString(locale, {
             ...options,
             timeZone: "UTC",
         });

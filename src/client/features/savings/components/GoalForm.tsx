@@ -76,11 +76,14 @@ export const GoalForm = ({
     const [shape, setShape] = useState<Shape>(
         goal && isItemByItem(goal.goal) ? "items" : "target"
     );
+    // The rate typed for a new pot, kept while an existing pot's own is shown.
+    const [newPotRate, setNewPotRate] = useState("");
 
     const ordered = orderMembers(members);
     const {
         register,
         control,
+        getValues,
         setValue,
         handleSubmit,
         formState: { errors, isSubmitting },
@@ -164,7 +167,7 @@ export const GoalForm = ({
                     label="Name"
                     placeholder="e.g. Wedding"
                     error={errors.name?.message}
-                    autoFocus={!focusRate}
+                    autoFocus
                     {...register("name", {
                         validate: (value) =>
                             value.trim().length > 0 || "Enter a name.",
@@ -227,15 +230,15 @@ export const GoalForm = ({
                         description="The money goes in through this pot's set-aside, so Plan and Funding see it."
                         options={potOptions}
                         {...register("potId", {
-                            // An existing pot brings its rate with it.
-                            onChange: (event: { target: { value: string } }) =>
+                            // An existing pot brings its rate; going back to a new one brings back what was typed.
+                            onChange: (event: { target: { value: string } }) => {
+                                if (potId === NEW_POT) setNewPotRate(getValues("rate"));
+                                const picked = pots.find((pot) => pot.id === event.target.value);
                                 setValue(
                                     "rate",
-                                    rateInput(
-                                        pots.find((pot) => pot.id === event.target.value)
-                                            ?.interestRateBp ?? null
-                                    )
-                                ),
+                                    picked ? rateInput(picked.interestRateBp) : newPotRate
+                                );
+                            },
                         })}
                     />
                 )}
@@ -252,7 +255,7 @@ export const GoalForm = ({
                     description="What the pot earns, if anything. It's the pot's rate, so Plan shows it too."
                     placeholder="Optional"
                     inputMode="decimal"
-                    autoFocus={focusRate}
+                    data-autofocus={focusRate || undefined}
                     error={errors.rate?.message}
                     {...register("rate", { validate: validRate })}
                 />

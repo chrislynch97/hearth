@@ -71,7 +71,7 @@ export const GoalChart = ({
     const missed = moments.some((m) => m.kind === "deadline" && m.pot < m.needed);
 
     return (
-        <div ref={ref} className="flex flex-col gap-2">
+        <div ref={ref} className="@container flex flex-col gap-2">
             <GoalChartLegend
                 balanceNow={balanceNow}
                 required={outcome.required}
@@ -122,7 +122,8 @@ export const GoalChart = ({
                     describedBy={readoutId}
                 />
             ) : (
-                <div className="h-[260px]" />
+                // Holds the plot's height until the column is measured: 200px below 480px wide, as it draws.
+                <div className="h-[200px] @min-[480px]:h-[260px]" />
             )}
             {selected && (
                 <GoalChartReadout

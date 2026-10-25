@@ -68,7 +68,7 @@ export const GoalChartPlot = ({
     const yTicks = niceTicks(Math.max(0, ...values));
     const yMax = yTicks.at(-1)!;
     const { ticks, tier } = axisTicks(start, end, today, plotWidth);
-    const labels = tickLabels(ticks, tier, today);
+    const labels = tickLabels(ticks, tier, today, money.locale);
 
     const x = (t: number) =>
         MARGIN.left + ((t - start) / (end - start || 1)) * plotWidth;

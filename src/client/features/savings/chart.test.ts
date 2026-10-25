@@ -177,17 +177,20 @@ describe("axisTicks", () => {
     });
 
     it("names Today, and gives a month its year whenever the year turns", () => {
-        const labels = tickLabels(
-            [utc("2026-04-01"), utc("2026-07-01"), today, utc("2027-07-01"), utc("2028-04-01")],
-            "month",
-            today
-        );
-        expect(labels[0]).toMatch(/2026/);
-        expect(labels[1]).not.toMatch(/\d/);
-        expect(labels[2]).toBe("Today");
-        expect(labels[3]).toMatch(/2027/);
-        expect(labels[4]).toMatch(/2028/);
-        expect(tickLabels([utc("2028-01-01")], "year", today)).toEqual(["2028"]);
+        expect(
+            tickLabels(
+                [utc("2026-04-01"), utc("2026-07-01"), today, utc("2027-07-01"), utc("2028-04-01")],
+                "month",
+                today,
+                "en-GB"
+            )
+        ).toEqual(["Apr 2026", "Jul", "Today", "Jul 2027", "Apr 2028"]);
+        expect(tickLabels([utc("2028-01-01")], "year", today, "en-GB")).toEqual(["2028"]);
+    });
+
+    it("writes dates the household's way, not the browser's", () => {
+        expect(tickLabels([utc("2026-11-03")], "week", today, "en-GB")).toEqual(["3 Nov"]);
+        expect(tickLabels([utc("2026-11-03")], "week", today, "en-US")).toEqual(["Nov 3"]);
     });
 });
 
