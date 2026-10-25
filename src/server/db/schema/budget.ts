@@ -23,6 +23,9 @@ export const pot = pgTable('pot', {
     .references(() => member.id),
   sortOrder: integer('sort_order').notNull().default(0),
   note: text('note'),
+  // AER in hundredths of a percent (450 = 4.50%); null earns nothing. Only a
+  // savings planner uses it — elsewhere it's for reference (hearth-planning#41).
+  interestRateBp: integer('interest_rate_bp'),
   archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'date' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),

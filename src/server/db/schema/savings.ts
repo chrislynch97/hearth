@@ -18,8 +18,10 @@ export const savingsGoal = pgTable('savings_goal', {
   // of the goal's URL (`/planners/k3x9p2-wedding`), so a rename can't break links.
   shortId: text('short_id').notNull(),
   name: text('name').notNull(),
-  targetAmount: integer('target_amount').notNull(), // minor units; what the pot should hold by the date
-  targetDate: text('target_date').notNull(),        // YYYY-MM-DD
+  // Both set, or both null for an item-by-item goal: no overall total or date,
+  // each item due by its own date (hearth-planning#41).
+  targetAmount: integer('target_amount'), // minor units; what the pot should hold by the date
+  targetDate: text('target_date'),        // YYYY-MM-DD
   archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'date' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),

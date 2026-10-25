@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { and, asc, eq, isNull, max, notInArray } from 'drizzle-orm'
+import { and, asc, eq, isNull, max, ne, notInArray } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../../trpc/trpc'
 import { assertMember, scopeWhere } from '../../trpc/tenant'
@@ -10,12 +10,21 @@ import type { Pot, SavingsBalance, SavingsGoal, SavingsItem } from '../../db/sch
 import type { DB, Tx } from '../../db/client'
 import { newId } from '@shared/ids'
 import { todayIso } from '@shared/dates'
-import { monthlySetAsideFor } from '@shared/savings'
+import { monthlySetAsideFor, raisedTarget, unpaidTotal, type GoalTarget } from '@shared/savings'
+import { interestRateInput } from '../budget/pots.router'
 import { insertContributionLines } from '../budget/setAside.router'
 import { contributionLines, loadGoalPlans, loadPeriod, newShortId } from './savings'
 
 const MONEY = z.number().int().nonnegative()
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+
+type AuditCtx = Parameters<typeof recordAudit>[0] & { householdId: string }
+
+function assertTargetPair(target: GoalTarget): void {
+  if ((target.targetAmount === null) !== (target.targetDate === null)) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'A goal has both a target and a date, or neither.' })
+  }
+}
 
 async function getGoal(db: DB | Tx, householdId: string, id: string): Promise<SavingsGoal> {
   const [row] = await db.select().from(savingsGoal).where(scopeWhere(householdId, savingsGoal.householdId, eq(savingsGoal.id, id)))
@@ -55,6 +64,40 @@ async function eligiblePots(db: DB | Tx, householdId: string): Promise<Pot[]> {
   return rows.filter((p) => !billedIds.has(p.id))
 }
 
+/** Set a pot's rate, leaving the pot and its version alone when it already has it. */
+async function setPotRate(tx: Tx, ctx: AuditCtx, potId: string, interestRateBp: number | null): Promise<void> {
+  const [before] = await tx.select().from(pot).where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, potId)))
+  if (!before || before.interestRateBp === interestRateBp) return
+  const [after] = await tx
+    .update(pot)
+    .set({ interestRateBp, updatedAt: new Date() })
+    .where(scopeWhere(ctx.householdId, pot.householdId, eq(pot.id, potId)))
+    .returning()
+  recordAudit(ctx, { entityType: 'pot', entityId: potId, action: 'update', before, after })
+}
+
+/** Raise the goal's target to its unpaid items once `item` takes them past it,
+ *  as a person's gift budget raises the occasion's. The new target, or null. */
+async function coverItems(tx: Tx, ctx: AuditCtx, item: SavingsItem): Promise<number | null> {
+  const before = await getGoal(tx, ctx.householdId, item.goalId)
+  if (before.targetAmount === null) return null
+  const others = await tx
+    .select({ amount: savingsItem.amount, paidOn: savingsItem.paidOn })
+    .from(savingsItem)
+    .where(scopeWhere(ctx.householdId, savingsItem.householdId, eq(savingsItem.goalId, item.goalId), ne(savingsItem.id, item.id)))
+  const raised = raisedTarget(before.targetAmount, unpaidTotal(others), item.paidOn ? 0 : item.amount)
+  if (raised === null) return null
+  const [after] = await tx
+    .update(savingsGoal)
+    .set({ targetAmount: raised, updatedAt: new Date() })
+    .where(scopeWhere(ctx.householdId, savingsGoal.householdId, eq(savingsGoal.id, item.goalId)))
+    .returning()
+  recordAudit(ctx, { entityType: 'savingsGoal', entityId: item.goalId, action: 'update', before, after })
+  return raised
+}
+
+const NEEDS_A_DATE = 'Give it a date: this goal saves for each item by its own.'
+
 export const savingsRouter = router({
   /** Every goal, archived included, soonest first, each with its plan. */
   goals: publicProcedure.query(async ({ ctx }) => (await loadGoalPlans(ctx.db, ctx.householdId, todayIso())).plans),
@@ -75,13 +118,17 @@ export const savingsRouter = router({
     .input(
       z.object({
         name: z.string().trim().min(1),
-        targetAmount: MONEY,
-        targetDate: DATE,
+        /** Both null for an item-by-item goal. */
+        targetAmount: MONEY.nullable(),
+        targetDate: DATE.nullable(),
         /** An existing pot, or a new one made with the goal. */
         pot: z.union([z.object({ id: z.string() }), z.object({ name: z.string().trim().min(1), ownerId: z.string() })]),
+        /** The pot's rate; left as it is when absent. */
+        interestRateBp: interestRateInput.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      assertTargetPair(input)
       if ('ownerId' in input.pot) await assertMember(ctx.db, ctx.householdId, input.pot.ownerId)
       const now = new Date()
       const id = newId()
@@ -93,6 +140,7 @@ export const savingsRouter = router({
             throw new TRPCError({ code: 'BAD_REQUEST', message: 'That pot already has a goal or pays bills' })
           }
           potId = input.pot.id
+          if (input.interestRateBp !== undefined) await setPotRate(tx, ctx, potId, input.interestRateBp)
         } else {
           const [result] = await tx.select({ maxOrder: max(pot.sortOrder) }).from(pot).where(scopeWhere(ctx.householdId, pot.householdId))
           const [created] = await tx
@@ -105,6 +153,7 @@ export const savingsRouter = router({
               ownerId: input.pot.ownerId,
               sortOrder: (result?.maxOrder ?? 0) + 1,
               note: null,
+              interestRateBp: input.interestRateBp ?? null,
               createdAt: now,
               updatedAt: now,
             })
@@ -139,19 +188,43 @@ export const savingsRouter = router({
         id: z.string(),
         expectedUpdatedAt: expectedUpdatedAtInput,
         name: z.string().trim().min(1).optional(),
-        targetAmount: MONEY.optional(),
-        targetDate: DATE.optional(),
+        /** Both null turns the goal item by item. */
+        targetAmount: MONEY.nullable().optional(),
+        targetDate: DATE.nullable().optional(),
+        /** The goal's pot's rate; left as it is when absent. */
+        interestRateBp: interestRateInput.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, expectedUpdatedAt, ...rest } = input
+      const { id, expectedUpdatedAt, interestRateBp, ...rest } = input
       const before = await getGoal(ctx.db, ctx.householdId, id)
-      const [written] = await ctx.db
-        .update(savingsGoal)
-        .set({ ...rest, updatedAt: new Date() })
-        .where(scopeWhere(ctx.householdId, savingsGoal.householdId, eq(savingsGoal.id, id), versionGuard(savingsGoal.updatedAt, expectedUpdatedAt)))
-        .returning()
-      if (!written) throwStaleWrite('Savings goal', true)
+      assertTargetPair({ ...before, ...rest })
+      const now = new Date()
+      const written = await ctx.db.transaction(async (tx) => {
+        const [written] = await tx
+          .update(savingsGoal)
+          .set({ ...rest, updatedAt: now })
+          .where(scopeWhere(ctx.householdId, savingsGoal.householdId, eq(savingsGoal.id, id), versionGuard(savingsGoal.updatedAt, expectedUpdatedAt)))
+          .returning()
+        if (!written) throwStaleWrite('Savings goal', true)
+        // Going item by item drops the goal date, so an item due on it keeps that date as its own.
+        if (before.targetDate !== null && written.targetDate === null) {
+          const undated = await tx
+            .select()
+            .from(savingsItem)
+            .where(scopeWhere(ctx.householdId, savingsItem.householdId, eq(savingsItem.goalId, id), isNull(savingsItem.dueDate)))
+          for (const item of undated) {
+            const [after] = await tx
+              .update(savingsItem)
+              .set({ dueDate: before.targetDate, updatedAt: now })
+              .where(scopeWhere(ctx.householdId, savingsItem.householdId, eq(savingsItem.id, item.id)))
+              .returning()
+            recordAudit(ctx, { entityType: 'savingsItem', entityId: item.id, action: 'update', before: item, after })
+          }
+        }
+        if (interestRateBp !== undefined) await setPotRate(tx, ctx, before.potId, interestRateBp)
+        return written
+      })
       recordAudit(ctx, { entityType: 'savingsGoal', entityId: id, action: 'update', before, after: written })
       return written
     }),
@@ -183,28 +256,34 @@ export const savingsRouter = router({
   createItem: publicProcedure
     .input(z.object({ goalId: z.string(), name: z.string().trim().min(1), amount: MONEY, dueDate: DATE.nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
-      await getGoal(ctx.db, ctx.householdId, input.goalId)
+      const goal = await getGoal(ctx.db, ctx.householdId, input.goalId)
+      if (goal.targetDate === null && !input.dueDate) throw new TRPCError({ code: 'BAD_REQUEST', message: NEEDS_A_DATE })
       const [result] = await ctx.db
         .select({ maxOrder: max(savingsItem.sortOrder) })
         .from(savingsItem)
         .where(scopeWhere(ctx.householdId, savingsItem.householdId, eq(savingsItem.goalId, input.goalId)))
       const now = new Date()
       const id = newId()
-      await ctx.db.insert(savingsItem).values({
-        id,
-        householdId: ctx.householdId,
-        goalId: input.goalId,
-        name: input.name,
-        amount: input.amount,
-        dueDate: input.dueDate ?? null,
-        paidOn: null,
-        sortOrder: (result?.maxOrder ?? 0) + 1,
-        createdAt: now,
-        updatedAt: now,
+      const { created, raised } = await ctx.db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(savingsItem)
+          .values({
+            id,
+            householdId: ctx.householdId,
+            goalId: input.goalId,
+            name: input.name,
+            amount: input.amount,
+            dueDate: input.dueDate ?? null,
+            paidOn: null,
+            sortOrder: (result?.maxOrder ?? 0) + 1,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .returning()
+        return { created: created!, raised: await coverItems(tx, ctx, created!) }
       })
-      const created = await getItem(ctx.db, ctx.householdId, id)
       recordAudit(ctx, { entityType: 'savingsItem', entityId: id, action: 'create', after: created })
-      return created
+      return { ...created, raisedTarget: raised }
     }),
 
   updateItem: publicProcedure
@@ -220,14 +299,19 @@ export const savingsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, expectedUpdatedAt, ...rest } = input
       const before = await getItem(ctx.db, ctx.householdId, id)
-      const [written] = await ctx.db
-        .update(savingsItem)
-        .set({ ...rest, updatedAt: new Date() })
-        .where(scopeWhere(ctx.householdId, savingsItem.householdId, eq(savingsItem.id, id), versionGuard(savingsItem.updatedAt, expectedUpdatedAt)))
-        .returning()
-      if (!written) throwStaleWrite('Item', true)
+      const goal = await getGoal(ctx.db, ctx.householdId, before.goalId)
+      if (goal.targetDate === null && rest.dueDate === null) throw new TRPCError({ code: 'BAD_REQUEST', message: NEEDS_A_DATE })
+      const { written, raised } = await ctx.db.transaction(async (tx) => {
+        const [written] = await tx
+          .update(savingsItem)
+          .set({ ...rest, updatedAt: new Date() })
+          .where(scopeWhere(ctx.householdId, savingsItem.householdId, eq(savingsItem.id, id), versionGuard(savingsItem.updatedAt, expectedUpdatedAt)))
+          .returning()
+        if (!written) throwStaleWrite('Item', true)
+        return { written, raised: await coverItems(tx, ctx, written) }
+      })
       recordAudit(ctx, { entityType: 'savingsItem', entityId: id, action: 'update', before, after: written })
-      return written
+      return { ...written, raisedTarget: raised }
     }),
 
   removeItem: publicProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
@@ -237,7 +321,8 @@ export const savingsRouter = router({
   }),
 
   /** Tick an item paid (or untick it). `reduceTarget` takes its cost off the
-   *  goal's target in the same write — the household's answer to "take it off?". */
+   *  goal's target in the same write — the household's answer to "take it off?".
+   *  An item-by-item goal has no target to take it off. */
   setPaid: publicProcedure
     .input(z.object({ id: z.string(), paidOn: DATE.nullable(), reduceTarget: z.boolean().default(false) }))
     .mutation(async ({ ctx, input }) => {
@@ -254,6 +339,7 @@ export const savingsRouter = router({
         if (!reduce) return { item: item!, targetAmount: null }
 
         const goalBefore = await getGoal(tx, ctx.householdId, before.goalId)
+        if (goalBefore.targetAmount === null) return { item: item!, targetAmount: null }
         const [goal] = await tx
           .update(savingsGoal)
           .set({ targetAmount: Math.max(0, goalBefore.targetAmount - before.amount), updatedAt: now })

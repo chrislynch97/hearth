@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import type { PeriodConfig } from './period'
+import { addDays, diffDays } from './dates'
+import { paydaysBetween, type PeriodConfig } from './period'
 import {
   savingsPlan,
   outcomeFor,
@@ -7,6 +8,12 @@ import {
   projection,
   neededSteps,
   planLines,
+  planTarget,
+  latestBalance,
+  balanceNow,
+  projectedAt,
+  raisedTarget,
+  unpaidTotal,
   monthlySetAsideFor,
   goalPath,
   shortIdOf,
@@ -213,6 +220,195 @@ describe('projection and neededSteps', () => {
     expect(steps[0]).toEqual({ date: '2026-10-24', amount: 0 })
     expect(steps.map((s) => s.date)).toEqual(['2026-10-24', '2026-11-30', '2028-02-01', '2028-03-12', '2028-04-01', '2028-05-29', '2028-06-12'])
     expect(steps.at(-1)?.amount).toBe(2_800_000)
+  })
+})
+
+// The planner before interest, kept as the reference the no-rate path must match.
+const closedFormBalance = (input: SavingsPlanInput): number => {
+  const anchor = latestBalance(input.balances, input.today)
+  if (!anchor) return 0
+  const paidSince = input.items
+    .filter((i) => i.paidOn && i.paidOn > anchor.asOfDate && i.paidOn <= input.today)
+    .reduce((sum, i) => sum + i.amount, 0)
+  return anchor.amount + input.contribution * paydaysBetween(anchor.asOfDate, input.today, input.period) - paidSince
+}
+
+const closedFormNeeded = (input: SavingsPlanInput): number => {
+  const now = closedFormBalance(input)
+  const lines = planLines(input)
+  let needed = 0
+  for (const line of lines) {
+    const gap = lines.filter((l) => l.due <= line.due).reduce((sum, l) => sum + l.amount, 0) - now
+    const paydays = paydaysBetween(input.today, line.due, input.period)
+    if (gap > 0 && paydays > 0) needed = Math.max(needed, gap / paydays)
+  }
+  return Math.max(0, Math.ceil(needed - 1e-9))
+}
+
+/** Plans from a fixed seed, so the sweep is the same every run, across every cycle. */
+const sweep = (count: number): SavingsPlanInput[] => {
+  let seed = 41
+  const next = () => (seed = (seed * 16_807) % 2_147_483_647) / 2_147_483_647
+  const upTo = (n: number) => Math.floor(next() * n)
+  const today = '2026-10-24'
+  const periods: PeriodConfig[] = [
+    monthly25,
+    fourWeekly,
+    { frequency: 'fortnightly', startDay: 1, anchor: '2026-10-09' },
+    { frequency: 'weekly', startDay: 1, anchor: '2026-10-05' },
+  ]
+  return Array.from({ length: count }, (_, n) => {
+    const targetDate = addDays(today, 20 + upTo(1_200))
+    const span = diffDays(today, targetDate)
+    return {
+      targetAmount: upTo(2_000_000),
+      targetDate,
+      items: Array.from({ length: upTo(7) }, (_, i) =>
+        item(`item-${i}`, 1 + upTo(600_000), next() < 0.25 ? null : addDays(today, upTo(span + 30) - 20), next() < 0.15 ? addDays(today, -upTo(60)) : null),
+      ),
+      balances: next() < 0.2 ? [] : [{ asOfDate: addDays(today, -upTo(120)), amount: upTo(900_000) }],
+      contribution: upTo(150_000),
+      today,
+      period: periods[n % periods.length]!,
+    }
+  })
+}
+
+describe('neededPerPeriod — the search', () => {
+  const plans = sweep(240)
+
+  it('matches the old closed form to the minor unit with no rate, balance and all', () => {
+    expect(plans.filter((input) => closedFormNeeded(input) > 0).length).toBeGreaterThan(120)
+    for (const input of plans) {
+      expect(balanceNow(input)).toBe(closedFormBalance(input))
+      expect(neededPerPeriod(input)).toBe(closedFormNeeded(input))
+    }
+  })
+
+  it('at 4.5% covers every line a payday reaches, and one minor unit less does not', () => {
+    for (const plan of plans) {
+      const input = { ...plan, interestRateBp: 450 }
+      const reachableShort = (contribution: number) => {
+        const { short, stranded } = outcomeFor(input, contribution)
+        return short.length - stranded.length
+      }
+      const needed = neededPerPeriod(input)
+      expect(reachableShort(needed)).toBe(0)
+      if (needed > 0) expect(reachableShort(needed - 1)).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe('interest', () => {
+  // £10,000 recorded on `asOfDate`, nothing going in, a goal a year from today.
+  const tenThousand = (asOfDate: string, interestRateBp: number | null): SavingsPlanInput => ({
+    targetAmount: 1_500_000,
+    targetDate: '2027-10-24',
+    items: [],
+    balances: [{ asOfDate, amount: 1_000_000 }],
+    contribution: 0,
+    interestRateBp,
+    today: '2026-10-24',
+    period: monthly25,
+  })
+
+  it('grows the last recorded balance on to today', () => {
+    expect(balanceNow(tenThousand('2025-10-24', 500))).toBe(1_050_000)
+    expect(balanceNow(tenThousand('2025-10-24', null))).toBe(1_000_000)
+  })
+
+  it('stops an item earning from the day it was paid', () => {
+    const input = { ...tenThousand('2025-10-24', 500), items: [item('deposit', 500_000, null, '2026-04-24')] }
+    // 182 days on £10,000, then 183 on what's left.
+    expect(balanceNow(input)).toBe(Math.round((1_000_000 * 1.05 ** (182 / 365) - 500_000) * 1.05 ** (183 / 365)))
+  })
+
+  it('compounds payday to payday back to one rate over the whole span', () => {
+    const input = tenThousand('2026-10-24', 500)
+    expect(projection(input, 0).at(-1)).toEqual({ date: '2027-10-24', amount: 1_050_000 })
+    expect(outcomeFor(input, 0).interest).toBe(50_000)
+  })
+
+  it('says how much of the end figure is interest, and none without a rate', () => {
+    expect(outcomeFor(wedding(90_000), 90_000).interest).toBe(0)
+    const earning = { ...wedding(90_000), interestRateBp: 450 }
+    const outcome = outcomeFor(earning, 90_000)
+    // Twenty paydays from 25 Oct 2026 to 25 May 2028.
+    expect(outcome.final).toBe(balanceNow(earning) + 20 * 90_000 + outcome.interest)
+    expect(outcome.interest).toBeGreaterThan(0)
+  })
+
+  it('asks for less each period when the pot earns', () => {
+    expect(neededPerPeriod({ ...wedding(90_000), interestRateBp: 450 })).toBeLessThan(82_500)
+  })
+})
+
+describe('projectedAt', () => {
+  it('reads the pot on any date, today and past dates holding what it has now', () => {
+    // 25 Oct and 25 Nov paydays by 30 Nov.
+    expect(projectedAt(wedding(90_000), 90_000, ['2026-10-01', '2026-10-24', '2026-11-30', '2028-06-12'])).toEqual([
+      1_150_000, 1_150_000, 1_330_000, 2_950_000,
+    ])
+  })
+
+  it('agrees with the outcome on the goal date, interest and all', () => {
+    const earning = { ...wedding(90_000), interestRateBp: 450 }
+    expect(projectedAt(earning, 90_000, [earning.targetDate])).toEqual([outcomeFor(earning, 90_000).final])
+  })
+})
+
+describe('unpaidTotal and raisedTarget', () => {
+  it('counts only the unpaid items', () => {
+    expect(unpaidTotal([item('a', 10_000, null), item('b', 5_000, null, '2026-10-01')])).toBe(10_000)
+  })
+
+  it('raises the target only when the items would go past it', () => {
+    expect(raisedTarget(100_000, 60_000, 30_000)).toBeNull()
+    expect(raisedTarget(100_000, 60_000, 40_000)).toBeNull()
+    expect(raisedTarget(100_000, 60_000, 50_000)).toBe(110_000)
+  })
+})
+
+describe('planTarget — item by item', () => {
+  const hens = [
+    item('my-away', 60_000, '2027-03-14'),
+    item('my-home', 15_000, '2027-04-10'),
+    item('friends-away', 45_000, '2027-06-20'),
+    item('friends-home', 10_000, '2027-07-04'),
+  ]
+  const itemByItem = { targetAmount: null, targetDate: null }
+
+  it("keeps a one-target goal's own figures", () => {
+    expect(planTarget({ targetAmount: 500_000, targetDate: '2027-01-01' }, hens, '2026-10-24')).toEqual({
+      targetAmount: 500_000,
+      targetDate: '2027-01-01',
+    })
+  })
+
+  it('plans the unpaid items, by the last one', () => {
+    const paidFirst = [{ ...hens[0]!, paidOn: '2026-10-01' }, ...hens.slice(1)]
+    expect(planTarget(itemByItem, paidFirst, '2026-10-24')).toEqual({ targetAmount: 70_000, targetDate: '2027-07-04' })
+  })
+
+  it("falls back to the last item's date once everything's paid, then to today", () => {
+    const allPaid = hens.map((hen) => ({ ...hen, paidOn: '2026-10-01' }))
+    expect(planTarget(itemByItem, allPaid, '2026-10-24')).toEqual({ targetAmount: 0, targetDate: '2027-07-04' })
+    expect(planTarget(itemByItem, [], '2026-10-24')).toEqual({ targetAmount: 0, targetDate: '2026-10-24' })
+  })
+
+  it('needs what covers each item by its own date, with nothing left unitemised', () => {
+    const input: SavingsPlanInput = {
+      ...planTarget(itemByItem, hens, '2026-10-24'),
+      items: hens,
+      balances: [],
+      contribution: 0,
+      today: '2026-10-24',
+      period: monthly25,
+    }
+    expect(planLines(input).map((line) => line.itemId)).toEqual(['my-away', 'my-home', 'friends-away', 'friends-home'])
+    // £1,200 due by 20 Jun over eight paydays beats £600 by 14 Mar over five.
+    expect(neededPerPeriod(input)).toBe(15_000)
+    expect(outcomeFor(input, 15_000).short).toEqual([])
   })
 })
 

@@ -149,23 +149,30 @@ describe('demo data generator', () => {
     expect(statuses).toEqual(new Set(['idea', 'bought', 'given']))
   })
 
-  it('builds a wedding goal running ahead and a garden goal with an item at risk', async () => {
+  it('builds a wedding goal running ahead, a garden goal with an item at risk and item-by-item hen dos', async () => {
     const db = await makeTestDb()
     await seedDemo(db, { now: NOW })
 
     const { plans } = await loadGoalPlans(db, 'household', '2026-06-15')
-    expect(plans.map((p) => p.goal.name).sort()).toEqual(['Garden', 'Wedding'])
+    expect(plans.map((p) => p.goal.name).sort()).toEqual(['Garden', 'Hen dos', 'Wedding'])
 
     const wedding = plans.find((p) => p.goal.name === 'Wedding')!
     expect(wedding.contribution).toBeGreaterThan(0)
+    expect(wedding.interestRateBp).toBe(425)
     expect(wedding.balances.length).toBeGreaterThan(5)
     expect(wedding.items.some((i) => i.paidOn)).toBe(true)
     expect(wedding.plan.outcome.short).toEqual([])
     expect(wedding.plan.outcome.difference).toBeGreaterThan(0)
+    expect(wedding.plan.outcome.interest).toBeGreaterThan(0)
 
     const garden = plans.find((p) => p.goal.name === 'Garden')!
     const fence = garden.items.find((i) => i.name === 'Fence panels')!
     expect(garden.plan.flags[fence.id]?.kind).toBe('at_risk')
+
+    const hens = plans.find((p) => p.goal.name === 'Hen dos')!
+    expect(hens.goal.targetAmount).toBeNull()
+    expect(hens.items).toHaveLength(4)
+    expect(hens.plan.outcome.short).toEqual([])
   })
 
   it('re-seeding is idempotent (wipes, no duplicate rows)', async () => {
