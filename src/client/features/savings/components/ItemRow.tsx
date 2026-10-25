@@ -1,7 +1,6 @@
 import { formatMoney } from "@shared/money";
 import type { ItemFlag } from "@shared/savings";
 import { useFormatDate, type MoneyFormat } from "@/useMoney";
-import { PaidPrompt } from "@/features/savings/components/PaidPrompt";
 import { FLAG_LABEL } from "@/features/savings/model";
 import type { SavingsItem } from "../../../../server/db/schema";
 
@@ -11,34 +10,29 @@ export interface ItemRowProps {
     targetDate: string;
     flag: ItemFlag | undefined;
     money: MoneyFormat;
-    /** Set while the "take it off the target?" step is open for this row. */
-    prompt: { target: number; pending: boolean } | null;
+    /** While an untick is saving. */
+    pending: boolean;
+    /** Opens the "mark paid" step; the box ticks once that's saved. */
     onTick: () => void;
     onUntick: () => void;
-    onReduce: () => void;
-    onKeep: () => void;
-    onCancel: () => void;
     onEdit: () => void;
 }
 
-/** One line item. Ticked by hand when it's paid; nothing ticks itself. */
+/** One line item. Ticked by hand when it's paid; nothing ticks itself, and the
+ *  box shows only what's saved. */
 export const ItemRow = ({
     item,
     targetDate,
     flag,
     money,
-    prompt,
+    pending,
     onTick,
     onUntick,
-    onReduce,
-    onKeep,
-    onCancel,
     onEdit,
 }: ItemRowProps) => {
     const formatDate = useFormatDate();
 
     const paid = item.paidOn !== null;
-    const checked = paid || prompt !== null;
     const when = item.paidOn
         ? `Paid ${formatDate(item.paidOn)}`
         : item.dueDate
@@ -49,8 +43,8 @@ export const ItemRow = ({
         <li className="grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0.5 border-t border-border px-3.5 py-2.5 first:border-t-0">
             <input
                 type="checkbox"
-                checked={checked}
-                disabled={prompt?.pending}
+                checked={paid}
+                disabled={pending}
                 aria-label={`${item.name} paid`}
                 onChange={() => (paid ? onUntick() : onTick())}
                 className="accent-primary h-4 w-4 cursor-pointer"
@@ -85,17 +79,6 @@ export const ItemRow = ({
             <span className="tabular text-right font-semibold">
                 {formatMoney(item.amount, money)}
             </span>
-            {prompt && (
-                <PaidPrompt
-                    amount={item.amount}
-                    target={prompt.target}
-                    money={money}
-                    pending={prompt.pending}
-                    onReduce={onReduce}
-                    onKeep={onKeep}
-                    onCancel={onCancel}
-                />
-            )}
         </li>
     );
 };

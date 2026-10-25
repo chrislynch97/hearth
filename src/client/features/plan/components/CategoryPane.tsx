@@ -30,7 +30,7 @@ export interface CategoryPaneProps {
     /** What each pot should hold on the chosen day, by pot id. */
     shouldHoldByPot: Map<string, PotBalance>;
     /** The savings goal each goal pot backs, by pot id. */
-    goalByPot: Map<string, { id: string; name: string }>;
+    goalByPot: Map<string, { slug: string; name: string }>;
     acknowledgingPotId: string | null;
     onAcknowledge: (potId: string) => void;
     onEditCategory: () => void;

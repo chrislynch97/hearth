@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { Link, getRouteApi } from "@tanstack/react-router";
 import { formatMoney } from "@shared/money";
 import { periodUnitLabel } from "@shared/period";
@@ -13,18 +13,21 @@ import { PlusIcon } from "@/components/ui/PlusIcon";
 import { Spinner } from "@/components/ui/Spinner";
 import { BalanceForm } from "@/features/savings/components/BalanceForm";
 import { BalanceList } from "@/features/savings/components/BalanceList";
-import { GoalBar } from "@/features/savings/components/GoalBar";
+import { DeleteGoalConfirm } from "@/features/savings/components/DeleteGoalConfirm";
 import { GoalFigures } from "@/features/savings/components/GoalFigures";
 import { GoalForm } from "@/features/savings/components/GoalForm";
+import { GoalHeader } from "@/features/savings/components/GoalHeader";
 import { GoalVerdict } from "@/features/savings/components/GoalVerdict";
 import { ItemForm } from "@/features/savings/components/ItemForm";
 import { ItemRow } from "@/features/savings/components/ItemRow";
+import { PaidForm } from "@/features/savings/components/PaidForm";
 import { WhatIf } from "@/features/savings/components/WhatIf";
 import {
-    pickGoal,
+    findGoal,
     plannerInput,
     type GoalPlan,
 } from "@/features/savings/model";
+import { useGoalActions } from "@/features/savings/useGoalActions";
 import type { SavingsBalance, SavingsItem } from "../../server/db/schema";
 
 // Lazy so recharts stays out of this page's chunk until the chart is drawn.
@@ -35,60 +38,71 @@ const GoalChart = lazy(() =>
 );
 
 type Editor =
-    | { kind: "goal"; goal: GoalPlan | undefined }
+    | { kind: "goal"; goal: GoalPlan }
+    | { kind: "delete"; goal: GoalPlan }
     | { kind: "item"; item: SavingsItem | undefined }
-    | { kind: "balance" };
+    | { kind: "paid"; item: SavingsItem }
+    | { kind: "balance"; balance: SavingsBalance | undefined };
 
 const editorTitle = (editor: Editor): string => {
-    if (editor.kind === "goal") return editor.goal ? "Edit goal" : "New goal";
+    if (editor.kind === "goal") return "Edit goal";
+    if (editor.kind === "delete") return `Delete ${editor.goal.goal.name}?`;
     if (editor.kind === "item") return editor.item ? "Edit item" : "New item";
+    if (editor.kind === "paid") return `Mark ${editor.item.name} paid`;
 
-    return "Record balance";
+    return editor.balance ? "Edit balance" : "Record balance";
 };
 
 /** The form keeps its defaults from mount, so opening a different row has to
  *  remount it rather than reuse the one already on screen. */
 const editorKey = (editor: Editor): string => {
-    if (editor.kind === "goal") return `goal:${editor.goal?.goal.id ?? "new"}`;
+    if (editor.kind === "goal") return `goal:${editor.goal.goal.id}`;
+    if (editor.kind === "delete") return `delete:${editor.goal.goal.id}`;
     if (editor.kind === "item") return `item:${editor.item?.id ?? "new"}`;
+    if (editor.kind === "paid") return `paid:${editor.item.id}`;
 
-    return "balance";
+    return `balance:${editor.balance?.id ?? "new"}`;
 };
 
-const route = getRouteApi("/planners");
+const route = getRouteApi("/planners/$goal");
 
 /** Below this the editor is a sheet rather than a modal. */
 const MODAL_FITS = "(min-width: 640px)";
 
 /** A savings goal on top of one pot: what's in it, what each deadline needs,
  *  where the current set-aside gets you, and what a different one would. */
-export const SavingsPlannersPage = () => {
+export const SavingsGoalPage = () => {
     const goalsQuery = trpc.savings.goals.useQuery();
-    const potsQuery = trpc.savings.eligiblePots.useQuery();
-    const membersQuery = trpc.members.list.useQuery();
     const utils = trpc.useUtils();
     const apply = trpc.savings.applyContribution.useMutation();
     const setPaid = trpc.savings.setPaid.useMutation();
-    const removeBalance = trpc.savings.removeBalance.useMutation();
+    const { toggleArchived, removeGoal, removing } = useGoalActions();
     const money = useMoney();
     const formatDate = useFormatDate();
 
     const compact = !useMediaQuery(MODAL_FITS);
 
-    // URL state, so a refresh, a shared link or an Overview alert lands on the goal.
-    const requested = route.useSearch().goal;
+    // The goal's slug; a create hands over its id, which the effect below swaps
+    // for the slug once the list knows the new goal.
+    const key = route.useParams().goal;
     const navigate = route.useNavigate();
-    const selectGoal = (id: string) =>
-        void navigate({ search: { goal: id }, replace: true });
 
     const [editor, setEditor] = useState<Editor | null>(null);
     const [exiting, setExiting] = useState(false);
     // Per goal, so switching goals doesn't carry one goal's what-if to another.
     const [whatIf, setWhatIf] = useState<{ goalId: string; amount: number } | null>(null);
-    const [promptItemId, setPromptItemId] = useState<string | null>(null);
 
     const goals = goalsQuery.data ?? [];
-    const selected = pickGoal(goals, requested);
+    const selected = findGoal(goals, key);
+
+    useEffect(() => {
+        if (selected && key === selected.goal.id)
+            void navigate({
+                to: "/planners/$goal",
+                params: { goal: selected.slug },
+                replace: true,
+            });
+    }, [selected, key, navigate]);
     const detailQuery = trpc.savings.goal.useQuery(
         { id: selected?.goal.id ?? "" },
         { enabled: selected !== undefined }
@@ -116,43 +130,14 @@ export const SavingsPlannersPage = () => {
         );
     };
 
-    const markPaid = async (item: SavingsItem, reduceTarget: boolean) => {
-        if (!detail) return;
-        try {
-            await setPaid.mutateAsync({
-                id: item.id,
-                paidOn: detail.today,
-                reduceTarget,
-            });
-        } catch {
-            return;
-        }
-        await utils.savings.invalidate();
-        setPromptItemId(null);
-        notifySuccess(
-            reduceTarget
-                ? `Marked ${item.name} paid and took ${formatMoney(item.amount, money)} off the target.`
-                : `Marked ${item.name} paid.`
-        );
-    };
-
     const markUnpaid = async (item: SavingsItem) => {
         try {
             await setPaid.mutateAsync({ id: item.id, paidOn: null });
         } catch {
-            return;
+            return; // surfaced by the global error handler
         }
         await utils.savings.invalidate();
-    };
-
-    const dropBalance = async (balance: SavingsBalance) => {
-        try {
-            await removeBalance.mutateAsync({ id: balance.id });
-        } catch {
-            return;
-        }
-        await utils.savings.invalidate();
-        notifySuccess(`Removed the ${formatDate(balance.asOfDate)} balance.`);
+        notifySuccess(`Marked ${item.name} not paid. The target is unchanged.`);
     };
 
     const close = () => setExiting(true);
@@ -163,43 +148,39 @@ export const SavingsPlannersPage = () => {
 
     return (
         <div className="hearth-ds mx-auto flex max-w-[1040px] flex-col gap-4 text-base">
-            <header className="border-b border-border-strong pb-5">
-                <h1 className="font-display text-h1 font-medium leading-tight">
-                    Savings planners
-                </h1>
-                <p className="mt-1 text-sm text-text-muted">
-                    A goal on top of a pot: what each deadline needs, and
-                    whether what's going in gets you there.
-                </p>
-            </header>
+            {/* Fetching covers the moment after a create, before the list
+                knows the new goal. */}
+            {!selected && (goalsQuery.isLoading || goalsQuery.isFetching) && (
+                <Spinner label="Loading the goal" />
+            )}
 
-            {goalsQuery.isLoading && <Spinner label="Loading goals" />}
-
-            {!goalsQuery.isLoading && !selected && (
+            {!selected && !goalsQuery.isLoading && !goalsQuery.isFetching && (
                 <div className="flex flex-col items-start gap-3 rounded-md border border-dashed border-border-strong p-5">
                     <p className="text-sm text-text-muted">
-                        Start with a goal, like a wedding or a new kitchen, and
-                        the pot it's saved in. Then add what it'll cost and
-                        when.
+                        There's no savings goal at this address. It may have
+                        been renamed or deleted.
                     </p>
-                    <Button
-                        icon={<PlusIcon />}
-                        onClick={() => setEditor({ kind: "goal", goal: undefined })}
+                    <Link
+                        to="/planners"
+                        className="text-sm font-semibold text-primary"
                     >
-                        New goal
-                    </Button>
+                        ← All savings planners
+                    </Link>
                 </div>
             )}
 
             {selected && (
                 <>
-                    <GoalBar
-                        goals={goals}
-                        selected={selected}
-                        onSelect={selectGoal}
+                    <GoalHeader
+                        plan={selected}
                         onEdit={() => setEditor({ kind: "goal", goal: selected })}
-                        onRecordBalance={() => setEditor({ kind: "balance" })}
-                        onAdd={() => setEditor({ kind: "goal", goal: undefined })}
+                        onToggleArchived={() => void toggleArchived(selected)}
+                        onDelete={() =>
+                            setEditor({ kind: "delete", goal: selected })
+                        }
+                        onRecordBalance={() =>
+                            setEditor({ kind: "balance", balance: undefined })
+                        }
                     />
 
                     {!detail || !input ? (
@@ -300,19 +281,14 @@ export const SavingsPlannersPage = () => {
                                                 targetDate={detail.goal.targetDate}
                                                 flag={detail.plan.flags[item.id]}
                                                 money={money}
-                                                prompt={
-                                                    promptItemId === item.id
-                                                        ? {
-                                                              target: detail.goal.targetAmount,
-                                                              pending: setPaid.isPending,
-                                                          }
-                                                        : null
+                                                pending={
+                                                    setPaid.isPending &&
+                                                    setPaid.variables?.id === item.id
                                                 }
-                                                onTick={() => setPromptItemId(item.id)}
+                                                onTick={() =>
+                                                    setEditor({ kind: "paid", item })
+                                                }
                                                 onUntick={() => void markUnpaid(item)}
-                                                onReduce={() => void markPaid(item, true)}
-                                                onKeep={() => void markPaid(item, false)}
-                                                onCancel={() => setPromptItemId(null)}
                                                 onEdit={() =>
                                                     setEditor({ kind: "item", item })
                                                 }
@@ -332,7 +308,12 @@ export const SavingsPlannersPage = () => {
                                         variant="dashed"
                                         compact
                                         icon={<PlusIcon />}
-                                        onClick={() => setEditor({ kind: "balance" })}
+                                        onClick={() =>
+                                            setEditor({
+                                                kind: "balance",
+                                                balance: undefined,
+                                            })
+                                        }
                                     >
                                         Record
                                     </Button>
@@ -340,12 +321,9 @@ export const SavingsPlannersPage = () => {
                                 <BalanceList
                                     balances={detail.balances}
                                     money={money}
-                                    removingId={
-                                        removeBalance.isPending
-                                            ? (removeBalance.variables?.id ?? null)
-                                            : null
+                                    onEdit={(balance) =>
+                                        setEditor({ kind: "balance", balance })
                                     }
-                                    onRemove={(balance) => void dropBalance(balance)}
                                 />
                             </section>
                         </>
@@ -356,23 +334,29 @@ export const SavingsPlannersPage = () => {
             {editor && (
                 <EditorPanel
                     title={editorTitle(editor)}
-                    subtitle={
-                        editor.kind === "goal" && !editor.goal
-                            ? undefined
-                            : selected?.goal.name
-                    }
+                    subtitle={selected?.goal.name}
                     mode={compact ? "sheet" : "modal"}
                     exiting={exiting}
                     onExited={finishClose}
                     onClose={close}
                 >
+                    {editor.kind === "delete" && (
+                        <DeleteGoalConfirm
+                            key={editorKey(editor)}
+                            plan={editor.goal}
+                            pending={removing}
+                            onConfirm={() =>
+                                void removeGoal(editor.goal).then((done) => {
+                                    if (done) void navigate({ to: "/planners" });
+                                })
+                            }
+                            onCancel={close}
+                        />
+                    )}
                     {editor.kind === "goal" && (
                         <GoalForm
                             key={editorKey(editor)}
                             goal={editor.goal}
-                            pots={potsQuery.data ?? []}
-                            members={membersQuery.data ?? []}
-                            onCreated={selectGoal}
                             onDone={close}
                         />
                     )}
@@ -384,12 +368,23 @@ export const SavingsPlannersPage = () => {
                             onDone={close}
                         />
                     )}
+                    {editor.kind === "paid" && detail && (
+                        <PaidForm
+                            key={editorKey(editor)}
+                            item={editor.item}
+                            target={detail.goal.targetAmount}
+                            anchor={detail.plan.anchor}
+                            today={detail.today}
+                            onDone={close}
+                        />
+                    )}
                     {editor.kind === "balance" && detail && (
                         <BalanceForm
                             key={editorKey(editor)}
                             goalId={detail.goal.id}
                             potName={detail.potName}
                             today={detail.today}
+                            balance={editor.balance}
                             expected={detail.plan.balanceNow}
                             onDone={close}
                         />

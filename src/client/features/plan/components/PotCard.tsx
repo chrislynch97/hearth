@@ -29,7 +29,7 @@ export interface PotCardProps {
     /** What the pot should hold on the page's chosen day; absent while loading. */
     shouldHold: PotBalance | undefined;
     /** The savings goal this pot backs, if any. */
-    goal?: { id: string; name: string };
+    goal?: { slug: string; name: string };
     acknowledging: boolean;
     onAcknowledge: () => void;
     onEditPot: () => void;
@@ -108,8 +108,8 @@ export const PotCard = ({
 
             {goal && (
                 <Link
-                    to="/planners"
-                    search={{ goal: goal.id }}
+                    to="/planners/$goal"
+                    params={{ goal: goal.slug }}
                     className="flex items-center gap-2 border-b border-border px-3.5 py-2 text-sm font-semibold text-primary hover:bg-hover"
                 >
                     Savings goal: {goal.name} →

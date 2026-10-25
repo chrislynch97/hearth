@@ -3,6 +3,7 @@ import {
     CartesianGrid,
     ComposedChart,
     Line,
+    ReferenceDot,
     ReferenceLine,
     ResponsiveContainer,
     Scatter,
@@ -14,6 +15,7 @@ import { formatMoney } from "@shared/money";
 import { periodUnitLabel } from "@shared/period";
 import {
     neededSteps,
+    outcomeFor,
     planLines,
     projection,
     type SavingsPlanBalance,
@@ -41,8 +43,8 @@ interface Row {
 const time = (iso: string): number => Date.parse(`${iso}T00:00:00Z`);
 
 const SERIES_LABEL: Record<string, string> = {
-    balance: "Pot balance",
-    projected: "Projected",
+    balance: "In the pot",
+    projected: "At what's going in",
     whatIf: "What if",
     needed: "Needed by then",
 };
@@ -75,7 +77,6 @@ export const GoalChart = ({
     if (whatIf !== null)
         for (const p of projection(input, whatIf)) at(p.date).whatIf = p.amount;
     for (const step of neededSteps(input)) at(step.date).needed = step.amount;
-    at(input.targetDate).needed = input.targetAmount;
 
     const data = [...rows.values()].sort((a, b) => a.t - b.t);
     // Ticks on each January and July: the data's own dates bunch up around today.
@@ -85,16 +86,25 @@ export const GoalChart = ({
     const ticks = Array.from({ length: years * 2 }, (_, i) =>
         Date.UTC(first + Math.floor(i / 2), (i % 2) * 6, 1)
     ).filter((t) => t >= data[0]!.t && t <= last);
+    const projectedEnd = projection(input, input.contribution).at(-1)!.amount;
+    const whatIfEnd =
+        whatIf === null ? null : projection(input, whatIf).at(-1)!.amount;
+    const { required, short } = outcomeFor(input, input.contribution);
+    const missed = new Set(short.map((line) => line.due));
+    // A deadline the current amount misses is drawn in the warning colour.
     const deadlines = [...new Set(planLines(input).map((l) => l.due))]
         .filter((due) => due >= input.today)
         .map((due) => ({
             t: time(due),
             y: 0,
+            missed: missed.has(due),
             names: planLines(input)
                 .filter((l) => l.due === due)
                 .map((l) => l.name)
                 .join(", "),
         }));
+    const unit = periodUnitLabel(input.period.frequency);
+    const by = formatDate(input.targetDate);
     // Axis labels in whole units: £15,000, not £15,000.00.
     const whole = (minor: number) =>
         formatMoney(Math.round(minor / 10 ** money.decimalPlaces), {
@@ -110,27 +120,57 @@ export const GoalChart = ({
 
     return (
         <div className="flex flex-col gap-1.5">
-            <ul className="m-0 flex list-none flex-wrap gap-x-3.5 gap-y-1 p-0 text-xs text-text-secondary">
-                <li className="inline-flex items-center gap-1.5">
-                    <i className="inline-block w-[18px] border-t-2 border-primary" />
-                    Pot balance
+            <ul className="m-0 grid list-none grid-cols-1 gap-x-5 gap-y-1 p-0 text-xs text-text-secondary sm:grid-cols-2">
+                <li className="flex items-center gap-2">
+                    <i className="inline-block w-[18px] shrink-0 border-t-2 border-primary" />
+                    <span>
+                        In the pot{" "}
+                        <strong className="tabular font-semibold text-text">
+                            {formatMoney(balanceNow, money)}
+                        </strong>{" "}
+                        now
+                    </span>
                 </li>
-                <li className="inline-flex items-center gap-1.5">
-                    <i className="inline-block w-[18px] border-t-2 border-dashed border-primary" />
-                    Projected at what's going in
+                <li className="flex items-center gap-2">
+                    <i className="inline-block h-2.5 w-[18px] shrink-0 border-t-[1.5px] border-text-faint bg-text-faint/15" />
+                    <span>
+                        Needs{" "}
+                        <strong className="tabular font-semibold text-text">
+                            {formatMoney(required, money)}
+                        </strong>{" "}
+                        by {by}, stepping up at each deadline
+                    </span>
                 </li>
-                {whatIf !== null && (
-                    <li className="inline-flex items-center gap-1.5">
-                        <i className="inline-block w-[18px] border-t-2 border-dashed border-savings-fg" />
-                        What if {formatMoney(whatIf, money)}
-                        {periodUnitLabel(input.period.frequency)}
+                <li className="flex items-center gap-2">
+                    <i className="inline-block w-[18px] shrink-0 border-t-2 border-dashed border-primary" />
+                    <span>
+                        At {formatMoney(input.contribution, money)}
+                        {unit}:{" "}
+                        <strong className="tabular font-semibold text-text">
+                            {formatMoney(projectedEnd, money)}
+                        </strong>{" "}
+                        by {by}
+                    </span>
+                </li>
+                {whatIf !== null && whatIfEnd !== null && (
+                    <li className="flex items-center gap-2">
+                        <i className="inline-block w-[18px] shrink-0 border-t-2 border-dashed border-savings-fg" />
+                        <span>
+                            What if {formatMoney(whatIf, money)}
+                            {unit}:{" "}
+                            <strong className="tabular font-semibold text-text">
+                                {formatMoney(whatIfEnd, money)}
+                            </strong>{" "}
+                            by {by}
+                        </span>
                     </li>
                 )}
-                <li className="inline-flex items-center gap-1.5">
-                    <i className="inline-block h-2.5 w-[18px] border-t-[1.5px] border-text-faint bg-sunken" />
-                    Needed by each deadline
-                </li>
             </ul>
+            <p className="text-xs text-text-muted">
+                On track while a dotted line stays above the shaded steps.
+                {missed.size > 0 &&
+                    " Orange markers are deadlines the current amount misses."}
+            </p>
             <ResponsiveContainer width="100%" height={280}>
                 <ComposedChart
                     data={data}
@@ -180,28 +220,16 @@ export const GoalChart = ({
                         connectNulls
                         stroke="var(--color-text-faint)"
                         strokeWidth={1.5}
-                        fill="var(--color-sunken)"
-                        fillOpacity={1}
+                        fill="var(--color-text-faint)"
+                        fillOpacity={0.14}
                         isAnimationActive={false}
-                    />
-                    <ReferenceLine
-                        y={input.targetAmount}
-                        ifOverflow="extendDomain"
-                        stroke="var(--color-text-muted)"
-                        strokeDasharray="2 3"
-                        label={{
-                            value: `Target ${whole(input.targetAmount)}`,
-                            position: "insideTopLeft",
-                            fill: "var(--color-text-muted)",
-                            fontSize: 11,
-                        }}
                     />
                     <ReferenceLine
                         x={time(input.today)}
                         stroke="var(--color-border-strong)"
                         label={{
                             value: "Today",
-                            position: "insideTopRight",
+                            position: "insideBottomRight",
                             fill: "var(--color-text-muted)",
                             fontSize: 11,
                         }}
@@ -228,6 +256,23 @@ export const GoalChart = ({
                         dot={false}
                         isAnimationActive={false}
                     />
+                    {/* Where each dotted line ends up; the legend gives the figure. */}
+                    <ReferenceDot
+                        x={time(input.targetDate)}
+                        y={projectedEnd}
+                        r={3.5}
+                        fill="var(--color-primary)"
+                        stroke="none"
+                    />
+                    {whatIfEnd !== null && (
+                        <ReferenceDot
+                            x={time(input.targetDate)}
+                            y={whatIfEnd}
+                            r={3.5}
+                            fill="var(--color-savings-fg)"
+                            stroke="none"
+                        />
+                    )}
                     <Line
                         dataKey="balance"
                         connectNulls
@@ -237,11 +282,20 @@ export const GoalChart = ({
                         isAnimationActive={false}
                     />
                     <Scatter
-                        data={deadlines}
+                        data={deadlines.filter((d) => !d.missed)}
                         dataKey="y"
                         name="Deadline"
                         shape="diamond"
-                        fill="var(--color-savings-fg)"
+                        fill="var(--color-text-faint)"
+                        legendType="none"
+                        isAnimationActive={false}
+                    />
+                    <Scatter
+                        data={deadlines.filter((d) => d.missed)}
+                        dataKey="y"
+                        name="Deadline"
+                        shape="diamond"
+                        fill="var(--color-attention)"
                         legendType="none"
                         isAnimationActive={false}
                     />

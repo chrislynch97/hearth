@@ -95,25 +95,21 @@ export const ItemForm = ({ goal, item, onDone }: ItemFormProps) => {
                             value.trim().length > 0 || "Enter a name.",
                     })}
                 />
-                <div className="flex gap-2">
-                    <TextField
-                        label="Cost"
-                        inputMode="decimal"
-                        prefix={money.symbol}
-                        className="flex-1"
-                        error={errors.amount?.message}
-                        {...register("amount", {
-                            validate: (value) => validMoney(value, true),
-                        })}
-                    />
-                    <TextField
-                        label="Due"
-                        type="date"
-                        description={`Leave empty for the day itself, ${formatDate(goal.targetDate)}.`}
-                        className="flex-1"
-                        {...register("dueDate")}
-                    />
-                </div>
+                <TextField
+                    label="Cost"
+                    inputMode="decimal"
+                    prefix={money.symbol}
+                    error={errors.amount?.message}
+                    {...register("amount", {
+                        validate: (value) => validMoney(value, true),
+                    })}
+                />
+                <TextField
+                    label="Due"
+                    type="date"
+                    description={`Leave empty for the day itself, ${formatDate(goal.targetDate)}.`}
+                    {...register("dueDate")}
+                />
             </div>
 
             <div className="mt-5 flex justify-end gap-2">

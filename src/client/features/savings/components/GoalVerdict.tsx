@@ -50,7 +50,7 @@ export const GoalVerdict = ({
                     {periodUnitLabel(detail.period.frequency)}
                 </Button>
             )}
-            {short && !canApply && (
+            {short && needed !== null && !canApply && (
                 <Link to="/plan" className="text-sm font-semibold text-primary">
                     Change the {detail.potName} pot's lines on Plan →
                 </Link>

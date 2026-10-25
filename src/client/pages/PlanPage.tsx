@@ -187,7 +187,7 @@ export const PlanPage = () => {
     const goalByPot = new Map(
         (goalsQuery.data ?? [])
             .filter(({ goal }) => goal.archivedAt === null)
-            .map(({ goal }) => [goal.potId, { id: goal.id, name: goal.name }])
+            .map(({ goal, slug }) => [goal.potId, { slug, name: goal.name }])
     );
 
     const slugOf = (key: string) => slugs.get(key) ?? key;

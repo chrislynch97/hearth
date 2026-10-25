@@ -41,6 +41,8 @@ import { Route as UpcomingRouteImport } from "./routes/upcoming";
 import { Route as VehiclesRouteImport } from "./routes/vehicles";
 import { Route as WarrantiesRouteImport } from "./routes/warranties";
 import { Route as WishlistsRouteImport } from "./routes/wishlists";
+import { Route as PlannersIndexRouteImport } from "./routes/planners.index";
+import { Route as PlannersGoalRouteImport } from "./routes/planners.$goal";
 import { Route as SettingsIndexRouteImport } from "./routes/settings.index";
 import { Route as SettingsAccountRouteImport } from "./routes/settings.account";
 import { Route as SettingsHouseholdRouteImport } from "./routes/settings.household";
@@ -206,6 +208,16 @@ const WishlistsRoute = WishlistsRouteImport.update({
   path: "/wishlists",
   getParentRoute: () => rootRouteImport,
 } as any);
+const PlannersIndexRoute = PlannersIndexRouteImport.update({
+  id: "/",
+  path: "/",
+  getParentRoute: () => PlannersRoute,
+} as any);
+const PlannersGoalRoute = PlannersGoalRouteImport.update({
+  id: "/$goal",
+  path: "/$goal",
+  getParentRoute: () => PlannersRoute,
+} as any);
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
   id: "/",
   path: "/",
@@ -244,7 +256,7 @@ export interface FileRoutesByFullPath {
   "/outgoings": typeof OutgoingsRoute;
   "/payslips": typeof PayslipsRoute;
   "/plan": typeof PlanRoute;
-  "/planners": typeof PlannersRoute;
+  "/planners": typeof PlannersRouteWithChildren;
   "/pots": typeof PotsRoute;
   "/quotes": typeof QuotesRoute;
   "/raises": typeof RaisesRoute;
@@ -260,9 +272,11 @@ export interface FileRoutesByFullPath {
   "/vehicles": typeof VehiclesRoute;
   "/warranties": typeof WarrantiesRoute;
   "/wishlists": typeof WishlistsRoute;
+  "/planners/$goal": typeof PlannersGoalRoute;
   "/settings/account": typeof SettingsAccountRoute;
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
+  "/planners/": typeof PlannersIndexRoute;
   "/settings/": typeof SettingsIndexRoute;
 }
 export interface FileRoutesByTo {
@@ -282,7 +296,6 @@ export interface FileRoutesByTo {
   "/outgoings": typeof OutgoingsRoute;
   "/payslips": typeof PayslipsRoute;
   "/plan": typeof PlanRoute;
-  "/planners": typeof PlannersRoute;
   "/pots": typeof PotsRoute;
   "/quotes": typeof QuotesRoute;
   "/raises": typeof RaisesRoute;
@@ -297,9 +310,11 @@ export interface FileRoutesByTo {
   "/vehicles": typeof VehiclesRoute;
   "/warranties": typeof WarrantiesRoute;
   "/wishlists": typeof WishlistsRoute;
+  "/planners/$goal": typeof PlannersGoalRoute;
   "/settings/account": typeof SettingsAccountRoute;
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
+  "/planners": typeof PlannersIndexRoute;
   "/settings": typeof SettingsIndexRoute;
 }
 export interface FileRoutesById {
@@ -320,7 +335,7 @@ export interface FileRoutesById {
   "/outgoings": typeof OutgoingsRoute;
   "/payslips": typeof PayslipsRoute;
   "/plan": typeof PlanRoute;
-  "/planners": typeof PlannersRoute;
+  "/planners": typeof PlannersRouteWithChildren;
   "/pots": typeof PotsRoute;
   "/quotes": typeof QuotesRoute;
   "/raises": typeof RaisesRoute;
@@ -336,9 +351,11 @@ export interface FileRoutesById {
   "/vehicles": typeof VehiclesRoute;
   "/warranties": typeof WarrantiesRoute;
   "/wishlists": typeof WishlistsRoute;
+  "/planners/$goal": typeof PlannersGoalRoute;
   "/settings/account": typeof SettingsAccountRoute;
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
+  "/planners/": typeof PlannersIndexRoute;
   "/settings/": typeof SettingsIndexRoute;
 }
 export interface FileRouteTypes {
@@ -376,9 +393,11 @@ export interface FileRouteTypes {
     | "/vehicles"
     | "/warranties"
     | "/wishlists"
+    | "/planners/$goal"
     | "/settings/account"
     | "/settings/household"
     | "/settings/system"
+    | "/planners/"
     | "/settings/";
   fileRoutesByTo: FileRoutesByTo;
   to:
@@ -398,7 +417,6 @@ export interface FileRouteTypes {
     | "/outgoings"
     | "/payslips"
     | "/plan"
-    | "/planners"
     | "/pots"
     | "/quotes"
     | "/raises"
@@ -413,9 +431,11 @@ export interface FileRouteTypes {
     | "/vehicles"
     | "/warranties"
     | "/wishlists"
+    | "/planners/$goal"
     | "/settings/account"
     | "/settings/household"
     | "/settings/system"
+    | "/planners"
     | "/settings";
   id:
     | "__root__"
@@ -451,9 +471,11 @@ export interface FileRouteTypes {
     | "/vehicles"
     | "/warranties"
     | "/wishlists"
+    | "/planners/$goal"
     | "/settings/account"
     | "/settings/household"
     | "/settings/system"
+    | "/planners/"
     | "/settings/";
   fileRoutesById: FileRoutesById;
 }
@@ -474,7 +496,7 @@ export interface RootRouteChildren {
   OutgoingsRoute: typeof OutgoingsRoute;
   PayslipsRoute: typeof PayslipsRoute;
   PlanRoute: typeof PlanRoute;
-  PlannersRoute: typeof PlannersRoute;
+  PlannersRoute: typeof PlannersRouteWithChildren;
   PotsRoute: typeof PotsRoute;
   QuotesRoute: typeof QuotesRoute;
   RaisesRoute: typeof RaisesRoute;
@@ -718,6 +740,20 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof WishlistsRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    "/planners/": {
+      id: "/planners/";
+      path: "/";
+      fullPath: "/planners/";
+      preLoaderRoute: typeof PlannersIndexRouteImport;
+      parentRoute: typeof PlannersRoute;
+    };
+    "/planners/$goal": {
+      id: "/planners/$goal";
+      path: "/$goal";
+      fullPath: "/planners/$goal";
+      preLoaderRoute: typeof PlannersGoalRouteImport;
+      parentRoute: typeof PlannersRoute;
+    };
     "/settings/": {
       id: "/settings/";
       path: "/";
@@ -748,6 +784,20 @@ declare module "@tanstack/react-router" {
     };
   }
 }
+
+interface PlannersRouteChildren {
+  PlannersGoalRoute: typeof PlannersGoalRoute;
+  PlannersIndexRoute: typeof PlannersIndexRoute;
+}
+
+const PlannersRouteChildren: PlannersRouteChildren = {
+  PlannersGoalRoute: PlannersGoalRoute,
+  PlannersIndexRoute: PlannersIndexRoute,
+};
+
+const PlannersRouteWithChildren = PlannersRoute._addFileChildren(
+  PlannersRouteChildren,
+);
 
 interface SettingsRouteChildren {
   SettingsAccountRoute: typeof SettingsAccountRoute;
@@ -784,7 +834,7 @@ const rootRouteChildren: RootRouteChildren = {
   OutgoingsRoute: OutgoingsRoute,
   PayslipsRoute: PayslipsRoute,
   PlanRoute: PlanRoute,
-  PlannersRoute: PlannersRoute,
+  PlannersRoute: PlannersRouteWithChildren,
   PotsRoute: PotsRoute,
   QuotesRoute: QuotesRoute,
   RaisesRoute: RaisesRoute,

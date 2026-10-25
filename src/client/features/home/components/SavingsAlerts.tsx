@@ -28,8 +28,8 @@ export const SavingsAlerts = ({ alerts, money }: SavingsAlertsProps) => {
                     · {alert.goalName}. The pot is{" "}
                     {formatMoney(alert.shortBy, money)} short for it.{" "}
                     <Link
-                        to="/planners"
-                        search={{ goal: alert.goalId }}
+                        to="/planners/$goal"
+                        params={{ goal: alert.goalSlug }}
                         className="whitespace-nowrap font-semibold text-attention-fg"
                     >
                         Open planner →

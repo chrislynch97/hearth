@@ -3,7 +3,6 @@ import { trpc } from "@/trpc";
 import { notifySuccess } from "@/notify";
 import { orderMembers } from "@/potOptions";
 import { useMoney } from "@/useMoney";
-import { ArchiveAction } from "@/components/ui/ArchiveAction";
 import { Button } from "@/components/ui/Button";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextField } from "@/components/ui/TextField";
@@ -18,10 +17,10 @@ import type { Member, Pot } from "../../../../server/db/schema";
 export interface GoalFormProps {
     /** Absent when adding. */
     goal: GoalPlan | undefined;
-    /** Pots a new goal can sit on: no goal yet, no bills. */
-    pots: Pot[];
-    members: Member[];
-    onCreated: (id: string) => void;
+    /** Adding only: pots a new goal can sit on (no goal yet, no bills). */
+    pots?: Pot[];
+    members?: Member[];
+    onCreated?: (id: string) => void;
     onDone: () => void;
 }
 
@@ -38,16 +37,14 @@ const NEW_POT = "new";
 
 export const GoalForm = ({
     goal,
-    pots,
-    members,
+    pots = [],
+    members = [],
     onCreated,
     onDone,
 }: GoalFormProps) => {
     const utils = trpc.useUtils();
     const create = trpc.savings.createGoal.useMutation();
     const update = trpc.savings.updateGoal.useMutation();
-    const setArchived = trpc.savings.setArchived.useMutation();
-    const remove = trpc.savings.removeGoal.useMutation();
     const money = useMoney();
 
     const ordered = orderMembers(members);
@@ -89,7 +86,7 @@ export const GoalForm = ({
                             ? { name, ownerId: values.ownerId }
                             : { id: values.potId },
                 });
-                onCreated(created.id);
+                onCreated?.(created.id);
             }
         } catch {
             return; // surfaced by the global error handler; keep the form open
@@ -99,35 +96,6 @@ export const GoalForm = ({
         notifySuccess(goal ? `Saved ${name}.` : `Added ${name}.`);
         onDone();
     });
-
-    const toggleArchived = async () => {
-        if (!goal) return;
-        const archived = goal.goal.archivedAt === null;
-        try {
-            await setArchived.mutateAsync({ id: goal.goal.id, archived });
-        } catch {
-            return;
-        }
-        await utils.savings.invalidate();
-        notifySuccess(
-            archived ? `Archived ${goal.goal.name}.` : `Restored ${goal.goal.name}.`
-        );
-        onDone();
-    };
-
-    const handleRemove = async () => {
-        if (!goal) return;
-        try {
-            await remove.mutateAsync({ id: goal.goal.id });
-        } catch {
-            return;
-        }
-        // Just the list: the page moves off the deleted goal rather than
-        // refetching it and getting a not-found.
-        await utils.savings.goals.invalidate();
-        notifySuccess(`Deleted ${goal.goal.name}. The ${goal.potName} pot is still on Plan.`);
-        onDone();
-    };
 
     const potOptions = [
         { value: NEW_POT, label: "A new pot" },
@@ -151,28 +119,24 @@ export const GoalForm = ({
                             value.trim().length > 0 || "Enter a name.",
                     })}
                 />
-                <div className="flex gap-2">
-                    <TextField
-                        label="Target"
-                        description="What the pot should hold by the date."
-                        inputMode="decimal"
-                        prefix={money.symbol}
-                        className="flex-1"
-                        error={errors.target?.message}
-                        {...register("target", {
-                            validate: (value) => validMoney(value, true),
-                        })}
-                    />
-                    <TextField
-                        label="Date"
-                        type="date"
-                        className="flex-1"
-                        error={errors.date?.message}
-                        {...register("date", {
-                            validate: (value) => value !== "" || "Pick a date.",
-                        })}
-                    />
-                </div>
+                <TextField
+                    label="Target"
+                    description="What the pot should hold by the date."
+                    inputMode="decimal"
+                    prefix={money.symbol}
+                    error={errors.target?.message}
+                    {...register("target", {
+                        validate: (value) => validMoney(value, true),
+                    })}
+                />
+                <TextField
+                    label="Date"
+                    type="date"
+                    error={errors.date?.message}
+                    {...register("date", {
+                        validate: (value) => value !== "" || "Pick a date.",
+                    })}
+                />
                 {!goal && (
                     <SelectField
                         label="Pot"
@@ -199,35 +163,6 @@ export const GoalForm = ({
                     {goal ? "Save changes" : "Add goal"}
                 </Button>
             </div>
-
-            {goal && (
-                <>
-                    <div className="mt-4 border-t border-border pt-3.5">
-                        <Button
-                            variant="ghost"
-                            compact
-                            className="px-0"
-                            disabled={setArchived.isPending}
-                            onClick={() => void toggleArchived()}
-                        >
-                            {goal.goal.archivedAt === null
-                                ? "Archive goal"
-                                : "Restore goal"}
-                        </Button>
-                        <p className="mt-1.5 text-xs leading-snug text-text-muted">
-                            {goal.goal.archivedAt === null
-                                ? `Moves it under Archived once it's done. The ${goal.potName} pot and its set-aside stay as they are.`
-                                : "Puts it back with the live goals."}
-                        </p>
-                    </div>
-                    <ArchiveAction
-                        label="Delete goal"
-                        consequence={`Deletes it with its items and recorded balances. The ${goal.potName} pot stays. This can't be undone.`}
-                        pending={remove.isPending}
-                        onArchive={() => void handleRemove()}
-                    />
-                </>
-            )}
         </form>
     );
 };

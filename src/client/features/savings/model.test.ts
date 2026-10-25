@@ -3,7 +3,7 @@ import { savingsPlan } from "@shared/savings";
 import type { PeriodConfig } from "@shared/period";
 import type { MoneyFormat } from "@/useMoney";
 import {
-    pickGoal,
+    findGoal,
     plannerInput,
     verdict,
     whatIfSentence,
@@ -67,9 +67,13 @@ const balance: SavingsBalance = {
 };
 
 /** The sample wedding at a given contribution, planned as the server would. */
-const detail = (contribution: number): GoalDetail => {
+const detail = (
+    contribution: number,
+    over: Partial<Omit<GoalDetail, "plan">> = {}
+): GoalDetail => {
     const base = {
         goal: goalRow(),
+        slug: "wedding",
         potName: "Wedding",
         items: [item("Catering", 750_000, "2028-05-29"), item("Photographer", 200_000, null)],
         balances: [balance],
@@ -77,22 +81,29 @@ const detail = (contribution: number): GoalDetail => {
         contributionLineCount: 1,
         period,
         today: "2026-10-24",
+        ...over,
     };
     const plan = savingsPlan(plannerInput({ ...base, plan: undefined as never }));
     return { ...base, plan };
 };
 
-describe("pickGoal", () => {
-    const live = { goal: goalRow({ id: "a" }) } as GoalDetail;
-    const archived = { goal: goalRow({ id: "b", archivedAt: now }) } as GoalDetail;
+describe("findGoal", () => {
+    const live = { goal: goalRow({ id: "a" }), slug: "kitchen" } as GoalDetail;
+    const archived = {
+        goal: goalRow({ id: "b", archivedAt: now }),
+        slug: "wedding",
+    } as GoalDetail;
 
-    it("takes the requested goal, archived or not", () => {
-        expect(pickGoal([live, archived], "b")).toBe(archived);
+    it("finds a goal by slug, archived or not", () => {
+        expect(findGoal([live, archived], "wedding")).toBe(archived);
     });
 
-    it("falls back to the first live goal", () => {
-        expect(pickGoal([archived, live], "gone")).toBe(live);
-        expect(pickGoal([archived], undefined)).toBe(archived);
+    it("still finds a goal by id, as it is just after a create", () => {
+        expect(findGoal([live, archived], "b")).toBe(archived);
+    });
+
+    it("finds nothing for an unknown key, rather than another goal", () => {
+        expect(findGoal([live, archived], "gone")).toBeUndefined();
     });
 });
 
@@ -110,8 +121,36 @@ describe("verdict", () => {
     it("when short, gives the figure that covers every item", () => {
         const v = verdict(detail(60_000), money, formatDate);
         expect(v.tone).toBe("short");
-        expect(v.lead).toBe("£600.00/mo leaves you £4,500.00 short");
+        expect(v.lead).toBe(
+            "£600.00/mo leaves you £4,500.00 short on 2028-06-12"
+        );
+        expect(v.rest).toBe(". Needs £825.00/mo to cover every item on time.");
         expect(v.needed).toBe(82_500);
+    });
+
+    it("never calls a missed early deadline over", () => {
+        // A £14,000 deposit due 25 Nov: £11,500 + two paydays can't reach it,
+        // though the day itself ends over.
+        const d = detail(90_000, {
+            items: [item("Deposit", 1_400_000, "2026-11-25")],
+        });
+        const v = verdict(d, money, formatDate);
+        expect(v.tone).toBe("short");
+        expect(v.lead).toBe(
+            "£900.00/mo leaves you £1,500.00 over on 2028-06-12 but late for 2026-11-25"
+        );
+        expect(v.needed).toBe(125_000);
+    });
+
+    it("names an item no payday can reach and offers nothing for it", () => {
+        const d = detail(90_000, {
+            items: [item("Fence", 1_500_000, "2026-10-24")],
+        });
+        const v = verdict(d, money, formatDate);
+        expect(v.rest).toBe(
+            ". Fence can't be covered by 2026-10-24: there's no payday before then. Record a top-up, or move the date."
+        );
+        expect(v.needed).toBeNull();
     });
 });
 
