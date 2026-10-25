@@ -5,6 +5,7 @@ import {
 } from "@shared/recurrence";
 import { formatMoney } from "@shared/money";
 import type { PeriodFrequency } from "@shared/period";
+import { slugify } from "@shared/slug";
 import type { MoneyFormat } from "@/useMoney";
 import type {
     Category,
@@ -52,16 +53,7 @@ export interface PlanGroup {
 export const groupKey = (group: PlanGroup): string =>
     group.categoryId ?? UNCATEGORISED;
 
-/** A category name as a URL slug: `Food & Drink` becomes `food-drink`. Ids are
- *  what everything internal keys off, but they have no business in a URL a
- *  person reads. */
-export const slugify = (name: string): string =>
-    name
-        .normalize("NFKD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
+export { slugify };
 
 /** One slug per group, unique across the list. Two categories whose names
  *  slugify the same (`Food & Drink` and `Food and Drink`) would otherwise both

@@ -3,7 +3,7 @@
  *  last one. Money is assumed to land once per budget period, on its start day,
  *  so the figure steps up each payday rather than creeping daily. Pure: dates
  *  are `YYYY-MM-DD`, amounts integer minor units. */
-import { periodForDate, shiftPeriod, type PeriodConfig } from "@shared/period"
+import { paydaysBetween, type PeriodConfig } from "@shared/period"
 import { roundMinor } from "@shared/recurrence"
 import { INTERVAL_MONTHS, occurrenceAround } from './upcoming'
 
@@ -44,15 +44,6 @@ export interface PotBalance {
   potId: string
   total: number
   lines: PotBalanceLine[]
-}
-
-/** Budget-period starts in (after, upTo]. */
-function paydaysBetween(after: string, upTo: string, period: PeriodConfig): number {
-  let count = 0
-  for (let p = shiftPeriod(periodForDate(after, period), 1, period); p.start <= upTo; p = shiftPeriod(p, 1, period)) {
-    count += 1
-  }
-  return count
 }
 
 /** The latest price effective on or before `on`. History that only starts later

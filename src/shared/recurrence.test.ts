@@ -4,6 +4,7 @@ import {
   normaliseToMonthly,
   normaliseToPeriod,
   monthlyToPeriod,
+  periodToMonthly,
   roundMinor,
   fundingPerMonth,
 } from './recurrence'
@@ -70,6 +71,16 @@ describe('monthlyToPeriod', () => {
     // £2500/mo of income = £30000/yr. Four-weekly = ÷13, weekly = ÷52.
     expect(monthlyToPeriod(250000, 'four_weekly')).toBeCloseTo((250000 * 12) / 13, 4)
     expect(monthlyToPeriod(250000, 'weekly')).toBeCloseTo((250000 * 12) / 52, 4)
+  })
+})
+
+describe('periodToMonthly', () => {
+  it('is a no-op for a monthly period', () => {
+    expect(periodToMonthly(90000, 'monthly')).toBe(90000)
+  })
+  it('undoes monthlyToPeriod', () => {
+    expect(periodToMonthly(monthlyToPeriod(250000, 'four_weekly'), 'four_weekly')).toBeCloseTo(250000, 6)
+    expect(periodToMonthly(10000, 'weekly')).toBeCloseTo((10000 * 52) / 12, 6)
   })
 })
 

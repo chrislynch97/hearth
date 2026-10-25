@@ -64,6 +64,12 @@ export function monthlyToPeriod(monthlyMinor: number, frequency: PeriodFrequency
   return (monthlyMinor * PERIODS_PER_YEAR.monthly) / PERIODS_PER_YEAR[frequency]
 }
 
+/** The monthly equivalent of a per-budget-period amount — the inverse of
+ *  {@link monthlyToPeriod}. Unrounded; callers choose the rounding. */
+export function periodToMonthly(periodMinor: number, frequency: PeriodFrequency): number {
+  return (periodMinor * PERIODS_PER_YEAR[frequency]) / PERIODS_PER_YEAR.monthly
+}
+
 /** Round half away from zero to the nearest integer minor unit. */
 export function roundMinor(value: number): number {
   const result = Math.sign(value) * Math.round(Math.abs(value))

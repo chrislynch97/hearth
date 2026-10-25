@@ -92,6 +92,7 @@ export const PlanPage = () => {
     const setAsidesQuery = trpc.setAside.list.useQuery();
     const membersQuery = trpc.members.list.useQuery();
     const alertsQuery = trpc.standingOrders.alerts.useQuery();
+    const goalsQuery = trpc.savings.goals.useQuery();
     // Raw field value: empty mid-edit is fine, the query falls back to today.
     const [shouldHoldOn, setShouldHoldOn] = useState(todayIso);
     // Keep the last figures up while a new date loads, so open breakdowns stay open.
@@ -182,6 +183,11 @@ export const PlanPage = () => {
     );
     const shouldHoldByPot = new Map(
         (balancesQuery.data ?? []).map((balance) => [balance.potId, balance])
+    );
+    const goalByPot = new Map(
+        (goalsQuery.data ?? [])
+            .filter(({ goal }) => goal.archivedAt === null)
+            .map(({ goal, slug }) => [goal.potId, { slug, name: goal.name }])
     );
 
     const slugOf = (key: string) => slugs.get(key) ?? key;
@@ -359,6 +365,7 @@ export const PlanPage = () => {
                                     unit={unit}
                                     staleByPot={staleByPot}
                                     shouldHoldByPot={shouldHoldByPot}
+                                    goalByPot={goalByPot}
                                     acknowledgingPotId={acknowledgingPotId}
                                     onAcknowledge={(potId) =>
                                         void handleAcknowledge(potId)

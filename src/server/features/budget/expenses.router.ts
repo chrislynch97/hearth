@@ -5,7 +5,7 @@ import { router, publicProcedure } from '../../trpc/trpc'
 import { requireMember, scopeWhere } from '../../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../../trpc/concurrency'
 import { recordAudit } from '../../trpc/audit'
-import { expense, category, pot } from '../../db/schema'
+import { expense, category, pot, savingsGoal } from '../../db/schema'
 import type { Expense } from '../../db/schema'
 import { newId } from '../../../shared/ids'
 import { todayIso } from '../../../shared/dates'
@@ -53,6 +53,18 @@ async function validateBill(
   if (input.potId) {
     const [p] = await db.select().from(pot).where(scopeWhere(householdId, pot.householdId, eq(pot.id, input.potId)))
     if (!p) throw new TRPCError({ code: 'BAD_REQUEST', message: 'potId does not refer to an existing pot' })
+    // A goal's planner counts everything paid into its pot as savings, so a bill
+    // draining the same pot would make the plan quietly wrong.
+    const [goal] = await db
+      .select({ name: savingsGoal.name })
+      .from(savingsGoal)
+      .where(scopeWhere(householdId, savingsGoal.householdId, eq(savingsGoal.potId, input.potId), isNull(savingsGoal.archivedAt)))
+    if (goal) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `The ${p.name} pot is saving for ${goal.name}, so it can't pay bills. Pick another pot.`,
+      })
+    }
   }
   if (input.categoryId) {
     const [c] = await db

@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { formatMoney } from "@shared/money";
 import type { PeriodFrequency } from "@shared/period";
 import type { MoneyFormat } from "@/useMoney";
@@ -27,6 +28,8 @@ export interface PotCardProps {
     staleStandingOrder: { wasMonthly: number } | undefined;
     /** What the pot should hold on the page's chosen day; absent while loading. */
     shouldHold: PotBalance | undefined;
+    /** The savings goal this pot backs, if any. */
+    goal?: { slug: string; name: string };
     acknowledging: boolean;
     onAcknowledge: () => void;
     onEditPot: () => void;
@@ -46,6 +49,7 @@ export const PotCard = ({
     unit,
     staleStandingOrder,
     shouldHold,
+    goal,
     acknowledging,
     onAcknowledge,
     onEditPot,
@@ -101,6 +105,16 @@ export const PotCard = ({
                     Edit
                 </Button>
             </div>
+
+            {goal && (
+                <Link
+                    to="/planners/$goal"
+                    params={{ goal: goal.slug }}
+                    className="flex items-center gap-2 border-b border-border px-3.5 py-2 text-sm font-semibold text-primary hover:bg-hover"
+                >
+                    Savings goal: {goal.name} →
+                </Link>
+            )}
 
             {shouldHold && shouldHold.lines.length > 0 && (
                 <ShouldHold balance={shouldHold} money={money} />

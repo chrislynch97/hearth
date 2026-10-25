@@ -26,6 +26,7 @@ import { raisesRouter } from '../features/income/raises.router'
 
 import { accountsRouter } from '../features/networth/accounts.router'
 import { giftsRouter } from '../features/gifts/gifts.router'
+import { savingsRouter } from '../features/savings/savings.router'
 
 import { dashboardRouter } from '../features/insights/dashboard.router'
 import { reportsRouter } from '../features/insights/reports.router'
@@ -67,6 +68,7 @@ export const appRouter = router({
   auth: authRouter,
   accounts: accountsRouter,
   gifts: giftsRouter,
+  savings: savingsRouter,
   imports: importsRouter,
   users: usersRouter,
   sessions: sessionsRouter,

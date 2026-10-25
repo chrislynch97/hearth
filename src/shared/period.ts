@@ -136,6 +136,16 @@ export function periodAdverb(frequency: PeriodFrequency): string {
   }
 }
 
+/** Budget-period starts in (after, upTo] — the paydays between two dates, on the
+ *  rule that money lands once per period on its start day. */
+export function paydaysBetween(after: string, upTo: string, config: PeriodConfig | number): number {
+  let count = 0
+  for (let p = shiftPeriod(periodForDate(after, config), 1, config); p.start <= upTo; p = shiftPeriod(p, 1, config)) {
+    count += 1
+  }
+  return count
+}
+
 /** Move a period forward (`delta > 0`) or back by whole periods. */
 export function shiftPeriod(period: Period, delta: number, config: PeriodConfig | number): Period {
   const cfg = resolveConfig(config)
