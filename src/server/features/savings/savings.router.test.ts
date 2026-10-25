@@ -141,6 +141,110 @@ describe('savings router', () => {
     expect(after.items.find((i) => i.id === deposit.id)?.paidOn).toBeNull()
   })
 
+  it('raises the target when a new item takes the items past it, and says so', async () => {
+    const { db, caller, jointId } = await setup()
+    const goal = await caller.savings.createGoal({ name: 'Kitchen', targetAmount: 500_000, targetDate: inAYear(), pot: { name: 'Kitchen', ownerId: jointId } })
+    const units = await caller.savings.createItem({ goalId: goal.id, name: 'Units', amount: 300_000 })
+    expect(units.raisedTarget).toBeNull()
+
+    const worktops = await caller.savings.createItem({ goalId: goal.id, name: 'Worktops', amount: 250_000 })
+    expect(worktops.raisedTarget).toBe(550_000)
+    expect((await caller.savings.goal({ id: goal.id })).goal.targetAmount).toBe(550_000)
+    const entries = await db.select().from(auditLog).where(eq(auditLog.entityId, goal.id))
+    expect(entries.map((e) => e.action)).toEqual(['create', 'update'])
+  })
+
+  it('raises it on an edit too, but never for a paid item', async () => {
+    const { caller, jointId } = await setup()
+    const goal = await caller.savings.createGoal({ name: 'Kitchen', targetAmount: 500_000, targetDate: inAYear(), pot: { name: 'Kitchen', ownerId: jointId } })
+    const units = await caller.savings.createItem({ goalId: goal.id, name: 'Units', amount: 300_000 })
+    const tap = await caller.savings.createItem({ goalId: goal.id, name: 'Tap', amount: 20_000 })
+    await caller.savings.setPaid({ id: tap.id, paidOn: todayIso() })
+
+    // A paid item's cost has left the pot, so it allocates nothing.
+    expect((await caller.savings.updateItem({ id: tap.id, amount: 400_000 })).raisedTarget).toBeNull()
+    expect((await caller.savings.updateItem({ id: units.id, amount: 520_000 })).raisedTarget).toBe(520_000)
+  })
+
+  it("sets the pot's rate from the goal, and plans with it", async () => {
+    const { caller, jointId } = await setup()
+    const goal = await caller.savings.createGoal({
+      name: 'House',
+      targetAmount: 2_000_000,
+      targetDate: addMonths(todayIso(), 36),
+      pot: { name: 'House', ownerId: jointId },
+      interestRateBp: 400,
+    })
+    expect((await caller.pots.list()).find((p) => p.id === goal.potId)?.interestRateBp).toBe(400)
+    await caller.savings.recordBalance({ goalId: goal.id, asOfDate: todayIso(), amount: 500_000 })
+    const earning = await caller.savings.goal({ id: goal.id })
+    expect(earning.interestRateBp).toBe(400)
+
+    await caller.savings.updateGoal({ id: goal.id, interestRateBp: null })
+    const flat = await caller.savings.goal({ id: goal.id })
+    expect(flat.interestRateBp).toBeNull()
+    expect(earning.plan.neededPerPeriod).toBeLessThan(flat.plan.neededPerPeriod)
+  })
+
+  it("leaves the pot's version alone when the rate hasn't changed", async () => {
+    const { caller, jointId } = await setup()
+    const p = await caller.pots.create({ name: 'Car', ownerId: jointId, interestRateBp: 300 })
+    const goal = await caller.savings.createGoal({ name: 'Car', targetAmount: 500_000, targetDate: inAYear(), pot: { id: p.id }, interestRateBp: 300 })
+    await caller.savings.updateGoal({ id: goal.id, name: 'New car', interestRateBp: 300 })
+
+    // Plan's pot form still holds the version it opened with, so its save goes through.
+    await caller.pots.update({ id: p.id, expectedUpdatedAt: p.updatedAt, name: 'Car fund' })
+  })
+
+  it('plans an item-by-item goal on its unpaid items, by the last date', async () => {
+    const { caller, jointId } = await setup()
+    const hens = await caller.savings.createGoal({ name: 'Hen dos', targetAmount: null, targetDate: null, pot: { name: 'Hen dos', ownerId: jointId } })
+    const later = await caller.savings.createGoal({ name: 'Car', targetAmount: 500_000, targetDate: inAYear(), pot: { name: 'Car', ownerId: jointId } })
+    await expect(caller.savings.createItem({ goalId: hens.id, name: 'Undated', amount: 10_000 })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    const away = await caller.savings.createItem({ goalId: hens.id, name: 'My away hen', amount: 60_000, dueDate: addMonths(todayIso(), 5) })
+    await caller.savings.createItem({ goalId: hens.id, name: 'Friends home hen', amount: 10_000, dueDate: addMonths(todayIso(), 9) })
+    expect(away.raisedTarget).toBeNull()
+
+    const detail = await caller.savings.goal({ id: hens.id })
+    expect(detail.goal.targetAmount).toBeNull()
+    expect(detail.target).toEqual({ targetAmount: 70_000, targetDate: addMonths(todayIso(), 9) })
+    expect(detail.plan.lines.map((line) => line.itemId)).not.toContain(null)
+    // Soonest first, by the date it's planned to.
+    expect((await caller.savings.goals()).map((g) => g.goal.id)).toEqual([hens.id, later.id])
+    await expect(caller.savings.updateItem({ id: away.id, dueDate: null })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+
+    // Paying one has no target to come off; it just leaves the plan.
+    expect((await caller.savings.setPaid({ id: away.id, paidOn: todayIso(), reduceTarget: true })).targetAmount).toBeNull()
+    expect((await caller.savings.goal({ id: hens.id })).target.targetAmount).toBe(10_000)
+  })
+
+  it('keeps a target and its date together', async () => {
+    const { caller, jointId } = await setup()
+    await expect(
+      caller.savings.createGoal({ name: 'X', targetAmount: 100_000, targetDate: null, pot: { name: 'X', ownerId: jointId } }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    const goal = await caller.savings.createGoal({ name: 'Y', targetAmount: 100_000, targetDate: inAYear(), pot: { name: 'Y', ownerId: jointId } })
+    await expect(caller.savings.updateGoal({ id: goal.id, targetDate: null })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('gives undated items the old goal date when a goal goes item by item, and back again', async () => {
+    const { caller, jointId } = await setup()
+    const date = inAYear()
+    const goal = await caller.savings.createGoal({ name: 'Wedding', targetAmount: 1_000_000, targetDate: date, pot: { name: 'Wedding', ownerId: jointId } })
+    const cake = await caller.savings.createItem({ goalId: goal.id, name: 'Cake', amount: 50_000 })
+    const dress = await caller.savings.createItem({ goalId: goal.id, name: 'Dress', amount: 200_000, dueDate: addMonths(todayIso(), 6) })
+
+    await caller.savings.updateGoal({ id: goal.id, targetAmount: null, targetDate: null })
+    const { items } = await caller.savings.goal({ id: goal.id })
+    expect(items.find((i) => i.id === cake.id)?.dueDate).toBe(date)
+    expect(items.find((i) => i.id === dress.id)?.dueDate).toBe(addMonths(todayIso(), 6))
+
+    expect(await caller.savings.updateGoal({ id: goal.id, targetAmount: 250_000, targetDate: date })).toMatchObject({
+      targetAmount: 250_000,
+      targetDate: date,
+    })
+  })
+
   it('keeps one balance per day and builds the plan on the latest', async () => {
     const { caller, jointId } = await setup()
     const goal = await caller.savings.createGoal({ name: 'Car', targetAmount: 500_000, targetDate: inAYear(), pot: { name: 'Car', ownerId: jointId } })

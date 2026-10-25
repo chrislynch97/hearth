@@ -1,12 +1,15 @@
 import { Link } from "@tanstack/react-router";
+import { formatAer } from "@/interestRate";
 import { useFormatDate } from "@/useMoney";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import { Button } from "@/components/ui/Button";
-import type { GoalPlan } from "@/features/savings/model";
+import { nextDueLabel, type GoalPlan } from "@/features/savings/model";
 
 export interface GoalHeaderProps {
     plan: GoalPlan;
     onEdit: () => void;
+    /** Opens Edit goal on the interest rate. */
+    onEditRate: () => void;
     onToggleArchived: () => void;
     onDelete: () => void;
     onRecordBalance: () => void;
@@ -16,13 +19,14 @@ export interface GoalHeaderProps {
 export const GoalHeader = ({
     plan,
     onEdit,
+    onEditRate,
     onToggleArchived,
     onDelete,
     onRecordBalance,
 }: GoalHeaderProps) => {
     const formatDate = useFormatDate();
 
-    const { goal, potName } = plan;
+    const { goal, potName, interestRateBp } = plan;
 
     return (
         <header className="flex flex-col gap-2 border-b border-border-strong pb-5">
@@ -38,7 +42,17 @@ export const GoalHeader = ({
                         {goal.name}
                     </h1>
                     <p className="mt-1 text-sm text-text-muted">
-                        {formatDate(goal.targetDate)} · {potName} pot
+                        {goal.targetDate === null
+                            ? nextDueLabel(plan, formatDate)
+                            : formatDate(goal.targetDate)}{" "}
+                        · {potName} pot ·{" "}
+                        <button
+                            type="button"
+                            onClick={onEditRate}
+                            className="font-semibold text-primary hover:underline"
+                        >
+                            {interestRateBp ? formatAer(interestRateBp) : "Add interest rate"}
+                        </button>
                         {goal.archivedAt !== null && " · Archived"}
                     </p>
                 </div>

@@ -5,7 +5,7 @@ import type { SavingsBalance, SavingsGoal, SavingsItem, SetAside } from '../../d
 import type { DBOrTx } from '../../db/client'
 import { periodConfig, type PeriodConfig } from '@shared/period'
 import { normaliseToPeriod, roundMinor, type Recurrence } from '@shared/recurrence'
-import { goalPath, savingsPlan, type SavingsPlan, type SavingsPlanInput } from '@shared/savings'
+import { goalPath, planTarget, savingsPlan, type PlanTarget, type SavingsPlan, type SavingsPlanInput } from '@shared/savings'
 
 const BASE36 = '0123456789abcdefghijklmnopqrstuvwxyz'
 
@@ -46,19 +46,20 @@ export function sortItems(items: SavingsItem[], targetDate: string): SavingsItem
 }
 
 export function planInput(
-  goal: SavingsGoal,
+  target: PlanTarget,
   items: SavingsItem[],
   balances: SavingsBalance[],
   contribution: number,
+  interestRateBp: number | null,
   today: string,
   period: PeriodConfig,
 ): SavingsPlanInput {
   return {
-    targetAmount: goal.targetAmount,
-    targetDate: goal.targetDate,
+    ...target,
     items: items.map((i) => ({ id: i.id, name: i.name, amount: i.amount, dueDate: i.dueDate, paidOn: i.paidOn })),
     balances: balances.map((b) => ({ asOfDate: b.asOfDate, amount: b.amount })),
     contribution,
+    interestRateBp,
     today,
     period,
   }
@@ -69,6 +70,11 @@ export interface GoalPlan {
   /** The goal's URL segment, `<shortId>-<name>`; only the short id is looked up. */
   slug: string
   potName: string
+  /** The pot's AER in hundredths of a percent, or null. */
+  interestRateBp: number | null
+  /** What the plan runs against: the goal's own target and date, or for an
+   *  item-by-item goal its unpaid items by the last one's date. */
+  target: PlanTarget
   items: SavingsItem[]
   balances: SavingsBalance[]
   contribution: number
@@ -92,7 +98,7 @@ export interface LoadedGoalPlans {
 export async function loadGoalPlans(db: DBOrTx, householdId: string, today: string, filter: GoalFilter = {}): Promise<LoadedGoalPlans> {
   const [goals, period] = await Promise.all([
     db
-      .select({ goal: savingsGoal, potName: pot.name })
+      .select({ goal: savingsGoal, potName: pot.name, interestRateBp: pot.interestRateBp })
       .from(savingsGoal)
       .innerJoin(pot, eq(savingsGoal.potId, pot.id))
       .where(
@@ -103,7 +109,7 @@ export async function loadGoalPlans(db: DBOrTx, householdId: string, today: stri
           filter.live ? isNull(savingsGoal.archivedAt) : undefined,
         ),
       )
-      .orderBy(asc(savingsGoal.targetDate), asc(savingsGoal.name)),
+      .orderBy(asc(savingsGoal.name)),
     loadPeriod(db, householdId),
   ])
   if (goals.length === 0) return { period, plans: [] }
@@ -123,8 +129,10 @@ export async function loadGoalPlans(db: DBOrTx, householdId: string, today: stri
       .where(scopeWhere(householdId, setAside.householdId, and(inArray(setAside.potId, potIds), eq(setAside.active, 1), isNull(setAside.archivedAt)))),
   ])
 
-  const plans = goals.map(({ goal, potName }) => {
-    const own = sortItems(items.filter((i) => i.goalId === goal.id), goal.targetDate)
+  const plans = goals.map(({ goal, potName, interestRateBp }) => {
+    const mine = items.filter((i) => i.goalId === goal.id)
+    const target = planTarget(goal, mine, today)
+    const own = sortItems(mine, target.targetDate)
     const ownBalances = balances.filter((b) => b.goalId === goal.id)
     const ownLines = lines.filter((l) => l.potId === goal.potId)
     const contribution = contributionPerPeriod(ownLines, period)
@@ -132,13 +140,17 @@ export async function loadGoalPlans(db: DBOrTx, householdId: string, today: stri
       goal,
       slug: goalPath(goal.shortId, goal.name),
       potName,
+      interestRateBp,
+      target,
       items: own,
       balances: ownBalances,
       contribution,
       contributionLineCount: ownLines.length,
-      plan: savingsPlan(planInput(goal, own, ownBalances, contribution, today, period)),
+      plan: savingsPlan(planInput(target, own, ownBalances, contribution, interestRateBp, today, period)),
     }
   })
+  // An item-by-item goal's date comes from its items, so soonest-first is sorted here, not in SQL.
+  plans.sort((a, b) => a.target.targetDate.localeCompare(b.target.targetDate))
   return { period, plans }
 }
 
@@ -169,7 +181,7 @@ export async function savingsAlerts(db: DBOrTx, householdId: string, today: stri
           itemId: item.id,
           itemName: item.name,
           amount: item.amount,
-          due: item.dueDate ?? p.goal.targetDate,
+          due: item.dueDate ?? p.target.targetDate,
           kind: flag.kind,
           shortBy: flag.shortBy,
         }]

@@ -9,6 +9,9 @@ import { pot, expense, setAside, spendTransaction, reconciliationBatch } from '.
 import { newId } from '../../../shared/ids'
 import { contributionLineInput, insertContributionLines } from './setAside.router'
 
+/** AER in hundredths of a percent, 0–100%; null for none. */
+export const interestRateInput = z.number().int().min(0).max(10_000).nullable()
+
 export const potsRouter = router({
   list: publicProcedure.query(async ({ ctx }) => {
     return ctx.db
@@ -53,6 +56,7 @@ export const potsRouter = router({
         categoryId: z.string().nullable().optional(),
         ownerId: z.string(),
         note: z.string().optional(),
+        interestRateBp: interestRateInput.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -78,6 +82,7 @@ export const potsRouter = router({
           ownerId: input.ownerId,
           sortOrder: nextOrder,
           note: input.note ?? null,
+          interestRateBp: input.interestRateBp ?? null,
           createdAt: now,
           updatedAt: now,
         })
@@ -145,6 +150,7 @@ export const potsRouter = router({
         ownerId: z.string().optional(),
         note: z.string().optional(),
         sortOrder: z.number().int().optional(),
+        interestRateBp: interestRateInput.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

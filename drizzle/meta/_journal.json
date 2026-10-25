@@ -148,6 +148,13 @@
       "when": 1792940633359,
       "tag": "0020_savings_short_id",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792952939626,
+      "tag": "0021_savings_followups",
+      "breakpoints": true
     }
   ]
 }

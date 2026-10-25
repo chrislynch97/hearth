@@ -10,7 +10,8 @@ import type { SavingsItem } from "../../../../server/db/schema";
 
 export interface PaidFormProps {
     item: SavingsItem;
-    target: number;
+    /** Null for an item-by-item goal: there's no target to take it off. */
+    target: number | null;
     /** The balance the plan builds on, to explain a payment on the same day. */
     anchor: SavingsPlanBalance | null;
     today: string;
@@ -22,7 +23,8 @@ interface PaidFormValues {
 }
 
 /** Marking an item paid is one decision: when, and whether its cost comes off
- *  the target. Nothing is saved, or shown ticked, until one is picked. */
+ *  the target. Nothing is saved, or shown ticked, until one is picked. An
+ *  item-by-item goal has no target, so it only asks when. */
 export const PaidForm = ({
     item,
     target,
@@ -63,8 +65,6 @@ export const PaidForm = ({
             onDone();
         });
 
-    const reduced = formatMoney(Math.max(0, target - item.amount), money);
-
     return (
         <form onSubmit={(event) => void save(false)(event)}>
             <div className="flex flex-col gap-3.5">
@@ -88,34 +88,49 @@ export const PaidForm = ({
                         again after paying.
                     </p>
                 )}
-                <p className="text-base">
-                    Take {formatMoney(item.amount, money)} off the target?{" "}
-                    <span className="tabular text-text-secondary">
-                        {formatMoney(target, money)} → {reduced}
-                    </span>
-                </p>
-                <p className="text-xs leading-snug text-text-muted">
-                    Keeping the target leaves the money in the plan as headroom.
-                </p>
+                {target !== null && (
+                    <>
+                        <p className="text-base">
+                            Take {formatMoney(item.amount, money)} off the
+                            target?{" "}
+                            <span className="tabular text-text-secondary">
+                                {formatMoney(target, money)} →{" "}
+                                {formatMoney(Math.max(0, target - item.amount), money)}
+                            </span>
+                        </p>
+                        <p className="text-xs leading-snug text-text-muted">
+                            Keeping the target leaves the money in the plan as
+                            headroom.
+                        </p>
+                    </>
+                )}
             </div>
 
             <div className="mt-5 flex flex-wrap justify-end gap-2">
                 <Button variant="ghost" onClick={onDone}>
                     Cancel
                 </Button>
-                <Button
-                    disabled={isSubmitting}
-                    onClick={() => void save(false)()}
-                >
-                    Keep {formatMoney(target, money)}
-                </Button>
-                <Button
-                    variant="solid"
-                    disabled={isSubmitting}
-                    onClick={() => void save(true)()}
-                >
-                    Take it off
-                </Button>
+                {target === null ? (
+                    <Button variant="solid" type="submit" disabled={isSubmitting}>
+                        Mark paid
+                    </Button>
+                ) : (
+                    <>
+                        <Button
+                            disabled={isSubmitting}
+                            onClick={() => void save(false)()}
+                        >
+                            Keep {formatMoney(target, money)}
+                        </Button>
+                        <Button
+                            variant="solid"
+                            disabled={isSubmitting}
+                            onClick={() => void save(true)()}
+                        >
+                            Take it off
+                        </Button>
+                    </>
+                )}
             </div>
         </form>
     );

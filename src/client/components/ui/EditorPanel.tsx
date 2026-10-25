@@ -91,10 +91,12 @@ export const EditorPanel = ({
         if (!element.open) {
             element.showModal();
             // showModal focuses the first focusable thing, the Close button,
-            // over the form's autoFocus. Open ready to type instead.
-            body.current
-                ?.querySelector<HTMLElement>("input, select, textarea")
-                ?.focus();
+            // over the form's autoFocus. Open ready to type instead: in the
+            // field a form marks `data-autofocus`, else its first.
+            (
+                body.current?.querySelector<HTMLElement>("[data-autofocus]") ??
+                body.current?.querySelector<HTMLElement>("input, select, textarea")
+            )?.focus();
         }
 
         // Escape would close the dialog on the spot, skipping the exit. Send it

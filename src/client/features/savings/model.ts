@@ -40,8 +40,7 @@ export const findGoal = (
 
 /** The planner's input, rebuilt from the goal query so the client can rerun it. */
 export const plannerInput = (detail: GoalDetail): SavingsPlanInput => ({
-    targetAmount: detail.goal.targetAmount,
-    targetDate: detail.goal.targetDate,
+    ...detail.target,
     items: detail.items.map((item) => ({
         id: item.id,
         name: item.name,
@@ -54,6 +53,7 @@ export const plannerInput = (detail: GoalDetail): SavingsPlanInput => ({
         amount: b.amount,
     })),
     contribution: detail.contribution,
+    interestRateBp: detail.interestRateBp,
     today: detail.today,
     period: detail.period,
 });
@@ -117,7 +117,7 @@ export const verdict = (
     money: MoneyFormat,
     formatDate: (iso: string) => string
 ): Verdict => {
-    const { plan, contribution, goal } = detail;
+    const { plan, contribution, target } = detail;
     const { outcome } = plan;
     const unit = periodUnitLabel(detail.period.frequency);
     const at = `${formatMoney(contribution, money)}${unit}`;
@@ -134,7 +134,7 @@ export const verdict = (
                 outcome.difference > 0
                     ? `${at} puts you ${formatMoney(outcome.difference, money)} over`
                     : `${at} hits ${required} exactly`,
-            rest: ` by ${formatDate(goal.targetDate)}.${lower}`,
+            rest: ` by ${formatDate(target.targetDate)}.${lower}`,
             needed: null,
         };
     }
@@ -148,7 +148,7 @@ export const verdict = (
         : "";
     return {
         tone: "short",
-        lead: `${at} leaves you ${shortfall(outcome, money, formatDate, goal.targetDate)}`,
+        lead: `${at} leaves you ${shortfall(outcome, money, formatDate, target.targetDate)}`,
         rest: `.${fix}${strandedNote(outcome, money, formatDate)}`,
         needed: helps ? plan.neededPerPeriod : null,
     };
@@ -185,4 +185,17 @@ export const whatIfSentence = (
         lead,
         rest: ` you're ${shortfall(outcome, money, formatDate, input.targetDate)}. The ${lineNames(outcome.short, money)} ${verb} short, first on ${formatDate(outcome.short[0]!.due)}.`,
     };
+};
+
+/** An item-by-item goal's date line: what's due next, in place of a goal date. */
+export const nextDueLabel = (
+    plan: GoalPlan,
+    formatDate: (iso: string) => string
+): string => {
+    if (plan.items.length === 0) return "No items yet";
+    // Items come in plan order, so the first unpaid one is next.
+    const next = plan.items.find((item) => item.paidOn === null);
+    return next
+        ? `Next: ${next.name}, ${formatDate(next.dueDate ?? plan.target.targetDate)}`
+        : "All paid";
 };

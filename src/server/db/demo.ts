@@ -380,7 +380,7 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
   const pots = potDefs.map(([key, name, catKey, ownerId], i) => {
     const pid = id()
     potId[key] = pid
-    return { id: pid, name, categoryId: catId[catKey]!, ownerId, sortOrder: i, note: null, archivedAt: null, ...ts }
+    return { id: pid, name, categoryId: catId[catKey]!, ownerId, sortOrder: i, note: null, interestRateBp: null as number | null, archivedAt: null, ...ts }
   })
 
   // -- expenses + shares (the funding plan) --------------------------------
@@ -939,9 +939,10 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
   }
 
   // -- savings goals -------------------------------------------------------
-  // A wedding running a little ahead on its set-aside, with lump sums and a
-  // paid deposit taken off the target; and a garden goal with nothing going in,
-  // so one item is at risk. Generated after gifts for the same PRNG reason.
+  // A wedding running a little ahead on its set-aside in a pot earning 4.25%,
+  // with lump sums and a paid deposit taken off the target; a garden goal with
+  // nothing going in, so one item is at risk; and hen dos planned item by item.
+  // Generated after gifts for the same PRNG reason.
   const today = ymd(now.getFullYear(), now.getMonth() + 1, now.getDate())
   const on = (monthsFromNow: number, day: number): string => {
     const a = shiftMonth(thisMonth, monthsFromNow)
@@ -952,13 +953,13 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
   const savingsBalances: Array<Record<string, unknown>> = []
   const shortId = (): string =>
     Array.from({ length: 6 }, () => '0123456789abcdefghijklmnopqrstuvwxyz'[Math.floor(rnd() * 36)]).join('')
-  const goalPot = (name: string): string => {
+  const goalPot = (name: string, interestRateBp: number | null = null): string => {
     const pid = id()
-    pots.push({ id: pid, name, categoryId: catId['savings']!, ownerId: joint, sortOrder: pots.length, note: null, archivedAt: null, ...ts })
+    pots.push({ id: pid, name, categoryId: catId['savings']!, ownerId: joint, sortOrder: pots.length, note: null, interestRateBp, archivedAt: null, ...ts })
     return pid
   }
 
-  const weddingPot = goalPot('Wedding')
+  const weddingPot = goalPot('Wedding', 425)
   setAsides.push({
     id: id(), name: 'Wedding', groupLabel: null, ownerId: joint, potId: weddingPot, amount: cost(450),
     recurrence: 'monthly', note: null, active: 1, sortOrder: setAsides.length, archivedAt: null, ...ts,
@@ -1000,6 +1001,24 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     { id: id(), goalId: garden, name: 'Paving slabs', amount: cost(400), dueDate: null, paidOn: null, sortOrder: 1, ...ts },
   )
   savingsBalances.push({ id: id(), goalId: garden, asOfDate: addDays(today, -3), amount: cost(300), note: null, ...ts })
+
+  const hensPot = goalPot('Hen dos')
+  setAsides.push({
+    id: id(), name: 'Hen dos', groupLabel: null, ownerId: joint, potId: hensPot, amount: cost(175),
+    recurrence: 'monthly', note: null, active: 1, sortOrder: setAsides.length, archivedAt: null, ...ts,
+  })
+  const hens = id()
+  savingsGoals.push({ id: hens, potId: hensPot, shortId: shortId(), name: 'Hen dos', targetAmount: null, targetDate: null, archivedAt: null, ...ts })
+  const henItems: Array<[name: string, price: number, due: string]> = [
+    ['My away hen', 650, on(3, 13)],
+    ['My home hen', 120, on(4, 10)],
+    ["Friends' away hen", 480, on(6, 19)],
+    ["Friends' home hen", 90, on(7, 4)],
+  ]
+  henItems.forEach(([name, price, dueDate], i) => {
+    savingsItems.push({ id: id(), goalId: hens, name, amount: cost(price), dueDate, paidOn: null, sortOrder: i, ...ts })
+  })
+  savingsBalances.push({ id: id(), goalId: hens, asOfDate: addDays(today, -10), amount: cost(250), note: null, ...ts })
 
   return {
     household: households,

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, getRouteApi } from "@tanstack/react-router";
 import { formatMoney } from "@shared/money";
 import { periodUnitLabel } from "@shared/period";
@@ -14,12 +14,14 @@ import { Spinner } from "@/components/ui/Spinner";
 import { BalanceForm } from "@/features/savings/components/BalanceForm";
 import { BalanceList } from "@/features/savings/components/BalanceList";
 import { DeleteGoalConfirm } from "@/features/savings/components/DeleteGoalConfirm";
+import { GoalChart } from "@/features/savings/components/GoalChart";
 import { GoalFigures } from "@/features/savings/components/GoalFigures";
 import { GoalForm } from "@/features/savings/components/GoalForm";
 import { GoalHeader } from "@/features/savings/components/GoalHeader";
 import { GoalVerdict } from "@/features/savings/components/GoalVerdict";
 import { ItemForm } from "@/features/savings/components/ItemForm";
 import { ItemRow } from "@/features/savings/components/ItemRow";
+import { ItemsFooter } from "@/features/savings/components/ItemsFooter";
 import { PaidForm } from "@/features/savings/components/PaidForm";
 import { WhatIf } from "@/features/savings/components/WhatIf";
 import {
@@ -30,15 +32,8 @@ import {
 import { useGoalActions } from "@/features/savings/useGoalActions";
 import type { SavingsBalance, SavingsItem } from "../../server/db/schema";
 
-// Lazy so recharts stays out of this page's chunk until the chart is drawn.
-const GoalChart = lazy(() =>
-    import("@/features/savings/components/GoalChart").then((m) => ({
-        default: m.GoalChart,
-    }))
-);
-
 type Editor =
-    | { kind: "goal"; goal: GoalPlan }
+    | { kind: "goal"; goal: GoalPlan; focusRate?: boolean }
     | { kind: "delete"; goal: GoalPlan }
     | { kind: "item"; item: SavingsItem | undefined }
     | { kind: "paid"; item: SavingsItem }
@@ -56,7 +51,8 @@ const editorTitle = (editor: Editor): string => {
 /** The form keeps its defaults from mount, so opening a different row has to
  *  remount it rather than reuse the one already on screen. */
 const editorKey = (editor: Editor): string => {
-    if (editor.kind === "goal") return `goal:${editor.goal.goal.id}`;
+    if (editor.kind === "goal")
+        return `goal:${editor.goal.goal.id}${editor.focusRate ? ":rate" : ""}`;
     if (editor.kind === "delete") return `delete:${editor.goal.goal.id}`;
     if (editor.kind === "item") return `item:${editor.item?.id ?? "new"}`;
     if (editor.kind === "paid") return `paid:${editor.item.id}`;
@@ -116,6 +112,11 @@ export const SavingsGoalPage = () => {
             ? whatIf.amount
             : (detail?.contribution ?? 0);
     const canSwitch = (detail?.contributionLineCount ?? 0) <= 1;
+    // An item-by-item goal with nothing unpaid has no plan to draw.
+    const nothingToPlan =
+        detail !== undefined &&
+        detail.goal.targetAmount === null &&
+        detail.items.every((item) => item.paidOn !== null);
 
     const switchContribution = async (perPeriod: number) => {
         if (!detail) return;
@@ -173,6 +174,9 @@ export const SavingsGoalPage = () => {
                     <GoalHeader
                         plan={selected}
                         onEdit={() => setEditor({ kind: "goal", goal: selected })}
+                        onEditRate={() =>
+                            setEditor({ kind: "goal", goal: selected, focusRate: true })
+                        }
                         onToggleArchived={() => void toggleArchived(selected)}
                         onDelete={() =>
                             setEditor({ kind: "delete", goal: selected })
@@ -203,47 +207,49 @@ export const SavingsGoalPage = () => {
                                 )}
 
                             <GoalFigures detail={detail} money={money} />
-                            <GoalVerdict
-                                detail={detail}
-                                money={money}
-                                pending={apply.isPending}
-                                onUse={(perPeriod) => void switchContribution(perPeriod)}
-                            />
-
-                            <section className="rounded-md border border-border bg-raised px-3.5 pb-2 pt-3">
-                                <Suspense
-                                    fallback={
-                                        <div className="h-[310px]">
-                                            <Spinner label="Loading the chart" />
-                                        </div>
-                                    }
-                                >
-                                    <GoalChart
-                                        input={input}
-                                        balanceNow={detail.plan.balanceNow}
-                                        whatIf={
-                                            whatIfAmount === detail.contribution
-                                                ? null
-                                                : whatIfAmount
-                                        }
+                            {nothingToPlan ? (
+                                <p className="rounded-md border border-dashed border-border-strong px-3.5 py-3 text-sm text-text-muted">
+                                    {detail.items.length === 0
+                                        ? "Add what you're saving for, each with its own date, and the plan shows here."
+                                        : "Nothing left to save for. Add an item, or archive the goal."}
+                                </p>
+                            ) : (
+                                <>
+                                    <GoalVerdict
+                                        detail={detail}
                                         money={money}
-                                        formatDate={formatDate}
+                                        pending={apply.isPending}
+                                        onUse={(perPeriod) => void switchContribution(perPeriod)}
                                     />
-                                </Suspense>
-                            </section>
 
-                            <WhatIf
-                                input={input}
-                                amount={whatIfAmount}
-                                onChange={(amount) =>
-                                    setWhatIf({ goalId: detail.goal.id, amount })
-                                }
-                                potName={detail.potName}
-                                canSwitch={canSwitch}
-                                pending={apply.isPending}
-                                onSwitch={(amount) => void switchContribution(amount)}
-                                money={money}
-                            />
+                                    <section className="rounded-md border border-border bg-raised px-3.5 pb-3 pt-3">
+                                        <GoalChart
+                                            input={input}
+                                            balanceNow={detail.plan.balanceNow}
+                                            whatIf={
+                                                whatIfAmount === detail.contribution
+                                                    ? null
+                                                    : whatIfAmount
+                                            }
+                                            money={money}
+                                            formatDate={formatDate}
+                                        />
+                                    </section>
+
+                                    <WhatIf
+                                        input={input}
+                                        amount={whatIfAmount}
+                                        onChange={(amount) =>
+                                            setWhatIf({ goalId: detail.goal.id, amount })
+                                        }
+                                        potName={detail.potName}
+                                        canSwitch={canSwitch}
+                                        pending={apply.isPending}
+                                        onSwitch={(amount) => void switchContribution(amount)}
+                                        money={money}
+                                    />
+                                </>
+                            )}
 
                             <section className="rounded-md border border-border bg-raised">
                                 <div className="flex items-center gap-2 border-b border-border px-3.5 py-2.5">
@@ -267,9 +273,9 @@ export const SavingsGoalPage = () => {
                                 </div>
                                 {detail.items.length === 0 ? (
                                     <p className="px-3.5 py-3 text-sm text-text-muted">
-                                        No items yet. Add what the goal will
-                                        cost, each with its own deadline if it's
-                                        due before the day.
+                                        {detail.goal.targetAmount === null
+                                            ? "No items yet. Add each thing you're saving for, with its date."
+                                            : "No items yet. Add what the goal will cost, each with its own deadline if it's due before the day."}
                                     </p>
                                 ) : (
                                     <ul className="m-0 list-none p-0">
@@ -277,7 +283,7 @@ export const SavingsGoalPage = () => {
                                             <ItemRow
                                                 key={item.id}
                                                 item={item}
-                                                targetDate={detail.goal.targetDate}
+                                                targetDate={detail.target.targetDate}
                                                 flag={detail.plan.flags[item.id]}
                                                 money={money}
                                                 pending={
@@ -294,6 +300,9 @@ export const SavingsGoalPage = () => {
                                             />
                                         ))}
                                     </ul>
+                                )}
+                                {detail.items.length > 0 && (
+                                    <ItemsFooter plan={detail} money={money} />
                                 )}
                             </section>
 
@@ -356,6 +365,7 @@ export const SavingsGoalPage = () => {
                         <GoalForm
                             key={editorKey(editor)}
                             goal={editor.goal}
+                            focusRate={editor.focusRate}
                             onDone={close}
                         />
                     )}
@@ -363,6 +373,7 @@ export const SavingsGoalPage = () => {
                         <ItemForm
                             key={editorKey(editor)}
                             goal={detail.goal}
+                            items={detail.items}
                             item={editor.item}
                             onDone={close}
                         />

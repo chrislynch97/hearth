@@ -328,4 +328,36 @@ describe('pots router', () => {
 
     expect(p.ownerId).toBe(person.id)
   })
+
+  it('keeps an interest rate through create and update, and clears it with null', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
+
+    const plain = await caller.pots.create({ name: 'Holiday', ownerId: joint.id })
+    expect(plain.interestRateBp).toBeNull()
+
+    const earning = await caller.pots.create({ name: 'Rainy day', ownerId: joint.id, interestRateBp: 450 })
+    expect(earning.interestRateBp).toBe(450)
+
+    const changed = await caller.pots.update({ id: earning.id, expectedUpdatedAt: earning.updatedAt, interestRateBp: 375 })
+    expect(changed.interestRateBp).toBe(375)
+    // An update that doesn't mention the rate leaves it alone.
+    const renamed = await caller.pots.update({ id: earning.id, expectedUpdatedAt: changed.updatedAt, name: 'Rainy days' })
+    expect(renamed.interestRateBp).toBe(375)
+    const cleared = await caller.pots.update({ id: earning.id, expectedUpdatedAt: renamed.updatedAt, interestRateBp: null })
+    expect(cleared.interestRateBp).toBeNull()
+  })
+
+  it('refuses a rate that is negative, over 100% or not in hundredths', async () => {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
+    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
+
+    for (const interestRateBp of [-1, 10_001, 4.5]) {
+      await expect(caller.pots.create({ name: 'Bad rate', ownerId: joint.id, interestRateBp })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    }
+  })
 })
