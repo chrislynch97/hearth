@@ -1,6 +1,7 @@
 import { useForm } from "react-hook-form";
 import { trpc } from "@/trpc";
 import { notifySuccess } from "@/notify";
+import { parseRate, rateInput, validRate } from "@/interestRate";
 import { orderMembers } from "@/potOptions";
 import { Button } from "@/components/ui/Button";
 import { SelectField } from "@/components/ui/SelectField";
@@ -23,6 +24,7 @@ interface PotFormValues {
     ownerId: string;
     categoryId: string;
     note: string;
+    rate: string;
 }
 
 /** The pot itself — what it is called, whose it is, where it sits. What goes
@@ -49,14 +51,17 @@ export const PotForm = ({
             ownerId: pot?.ownerId ?? "",
             categoryId: pot?.categoryId ?? defaultCategoryId ?? "",
             note: pot?.note ?? "",
+            rate: rateInput(pot?.interestRateBp ?? null),
         },
     });
 
+    // A rate changes what the pot's savings planner projects.
     const refresh = () =>
         Promise.all([
             utils.pots.list.invalidate(),
             utils.plan.funding.invalidate(),
             utils.standingOrders.alerts.invalidate(),
+            utils.savings.invalidate(),
         ]);
 
     const submit = handleSubmit(async (values) => {
@@ -72,6 +77,7 @@ export const PotForm = ({
                     ownerId: values.ownerId,
                     categoryId,
                     note: values.note.trim(),
+                    interestRateBp: parseRate(values.rate),
                 });
             } else {
                 await create.mutateAsync({
@@ -79,6 +85,7 @@ export const PotForm = ({
                     ownerId: values.ownerId,
                     categoryId,
                     note: values.note.trim() || undefined,
+                    interestRateBp: parseRate(values.rate),
                 });
             }
         } catch {
@@ -137,6 +144,14 @@ export const PotForm = ({
                     placeholder="Uncategorised"
                     options={categoryOptions}
                     {...register("categoryId")}
+                />
+                <TextField
+                    label="Interest rate (AER %)"
+                    description="Used by the pot's savings planner; elsewhere it's for reference."
+                    placeholder="Optional"
+                    inputMode="decimal"
+                    error={errors.rate?.message}
+                    {...register("rate", { validate: validRate })}
                 />
                 <TextField
                     label="Note"

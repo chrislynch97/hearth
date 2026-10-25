@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { formatMoney } from "@shared/money";
 import type { PeriodFrequency } from "@shared/period";
+import { formatAer } from "@/interestRate";
 import type { MoneyFormat } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
 import { OwnerChip } from "@/features/plan/components/OwnerChip";
@@ -81,6 +82,11 @@ export const PotCard = ({
             <div className="flex items-center gap-2.5 border-b border-border px-3.5 py-3">
                 <h3 className="font-display text-lg font-medium">{pot.name}</h3>
                 <OwnerChip owner={owner} />
+                {pot.interestRateBp ? (
+                    <span className="tabular shrink-0 rounded-xs bg-sunken px-1.5 text-xs text-text-secondary">
+                        {formatAer(pot.interestRateBp)}
+                    </span>
+                ) : null}
                 <span className="flex-1" />
                 {staleStandingOrder && (
                     <StandingOrderChip

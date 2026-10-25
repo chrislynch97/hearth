@@ -4,7 +4,7 @@ import { formatMoney } from "@shared/money";
 import { useElementWidth } from "@/useElementWidth";
 import { useFormatDate, type MoneyFormat } from "@/useMoney";
 import { ActionMenu } from "@/components/ui/ActionMenu";
-import type { GoalPlan } from "@/features/savings/model";
+import { nextDueLabel, type GoalPlan } from "@/features/savings/model";
 
 export interface GoalCardProps {
     plan: GoalPlan;
@@ -49,7 +49,10 @@ export const GoalCard = ({
                         {goal.name}
                     </span>
                     <span className="text-xs text-text-muted">
-                        {formatDate(goal.targetDate)} · {potName} pot
+                        {goal.targetDate === null
+                            ? nextDueLabel(plan, formatDate)
+                            : formatDate(goal.targetDate)}{" "}
+                        · {potName} pot
                     </span>
                 </span>
                 <span ref={ref} className="block h-1 rounded-xs bg-sunken">

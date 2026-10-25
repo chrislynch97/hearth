@@ -63,6 +63,7 @@ const pot = (over: Partial<Pot> & Pick<Pot, "id" | "name">): Pot => ({
     ownerId: "joint",
     sortOrder: 0,
     note: null,
+    interestRateBp: null,
     archivedAt: null,
     createdAt: now,
     updatedAt: now,

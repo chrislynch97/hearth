@@ -23,6 +23,7 @@ const pot: Pot = {
     ownerId: "joint",
     sortOrder: 0,
     note: null,
+    interestRateBp: null,
     archivedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -50,38 +51,51 @@ const carTax: Expense = {
 
 const noop = () => {};
 
+const renderCard = (shown: Pot) =>
+    render(
+        <PotCard
+            planPot={{
+                pot: shown,
+                owner: undefined,
+                bills: [carTax],
+                setAsides: [],
+                perPeriod: 5333,
+            }}
+            money={money}
+            frequency="monthly"
+            unit="/mo"
+            staleStandingOrder={undefined}
+            shouldHold={undefined}
+            acknowledging={false}
+            onAcknowledge={noop}
+            onEditPot={noop}
+            onAddBill={noop}
+            onEditBill={noop}
+            onAddSetAside={noop}
+            onEditSetAside={noop}
+        />
+    );
+
 describe("PotCard", () => {
     // The as-paid amount means nothing without how often it's paid, so a
     // self-deducting bill keeps its recurrence beside the auto tag.
     it("tags an auto bill with its recurrence, as paid, with its share", () => {
-        render(
-            <PotCard
-                planPot={{
-                    pot,
-                    owner: undefined,
-                    bills: [carTax],
-                    setAsides: [],
-                    perPeriod: 5333,
-                }}
-                money={money}
-                frequency="monthly"
-                unit="/mo"
-                staleStandingOrder={undefined}
-                shouldHold={undefined}
-                acknowledging={false}
-                onAcknowledge={noop}
-                onEditPot={noop}
-                onAddBill={noop}
-                onEditBill={noop}
-                onAddSetAside={noop}
-                onEditSetAside={noop}
-            />
-        );
+        renderCard(pot);
 
         const line = screen.getByRole("button", { name: "Edit Car tax" });
 
         expect(line).toHaveTextContent("yearly · auto");
         expect(line).toHaveTextContent("£640.00");
         expect(line).toHaveTextContent("£53.33/mo");
+    });
+
+    it("shows the pot's interest rate only when it has one", () => {
+        renderCard({ ...pot, interestRateBp: 450 });
+        expect(screen.getByText("4.50% AER")).toBeInTheDocument();
+    });
+
+    it("says nothing about interest on a pot without a rate", () => {
+        renderCard(pot);
+        expect(screen.queryByText(/AER/)).not.toBeInTheDocument();
     });
 });

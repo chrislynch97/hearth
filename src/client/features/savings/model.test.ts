@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { savingsPlan } from "@shared/savings";
+import { planTarget, savingsPlan } from "@shared/savings";
 import type { PeriodConfig } from "@shared/period";
 import type { MoneyFormat } from "@/useMoney";
 import {
     findGoal,
+    nextDueLabel,
     plannerInput,
     verdict,
     whatIfSentence,
@@ -76,6 +77,7 @@ const detail = (
         goal: goalRow(),
         slug: "k3x9p2-wedding",
         potName: "Wedding",
+        interestRateBp: null,
         items: [item("Catering", 750_000, "2028-05-29"), item("Photographer", 200_000, null)],
         balances: [balance],
         contribution,
@@ -84,8 +86,9 @@ const detail = (
         today: "2026-10-24",
         ...over,
     };
-    const plan = savingsPlan(plannerInput({ ...base, plan: undefined as never }));
-    return { ...base, plan };
+    const planned = { ...base, target: planTarget(base.goal, base.items, base.today) };
+    const plan = savingsPlan(plannerInput({ ...planned, plan: undefined as never }));
+    return { ...planned, plan };
 };
 
 describe("findGoal", () => {
@@ -186,5 +189,22 @@ describe("whatIfSentence", () => {
         expect(rest).toBe(
             " you're £4,500.00 short on 2028-06-12. The photographer and £18,500.00 not itemised fall short, first on 2028-06-12."
         );
+    });
+});
+
+describe("nextDueLabel", () => {
+    const itemByItem = goalRow({ targetAmount: null, targetDate: null });
+    const paid = (row: SavingsItem): SavingsItem => ({ ...row, paidOn: "2026-10-01" });
+    const away = item("My away hen", 60_000, "2027-03-14");
+    const home = item("My home hen", 15_000, "2027-04-10");
+
+    it("names the next item still to pay", () => {
+        const hens = detail(0, { goal: itemByItem, items: [paid(away), home] });
+        expect(nextDueLabel(hens, formatDate)).toBe("Next: My home hen, 2027-04-10");
+    });
+
+    it("says when everything's paid, or nothing's been added", () => {
+        expect(nextDueLabel(detail(0, { goal: itemByItem, items: [paid(away), paid(home)] }), formatDate)).toBe("All paid");
+        expect(nextDueLabel(detail(0, { goal: itemByItem, items: [] }), formatDate)).toBe("No items yet");
     });
 });
