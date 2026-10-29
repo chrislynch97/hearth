@@ -14,6 +14,12 @@
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
+/* The enter/exit animations shadcn components use (`animate-in`, `fade-in-0`…). */
+@import "tw-animate-css";
+
+/* `dark:` follows the Appearance setting, like the colour roles below, rather
+   than Tailwind's default of the OS preference. */
+@custom-variant dark (&:where([data-mantine-color-scheme="dark"], [data-mantine-color-scheme="dark"] *));
 
 @theme {
     --font-display: "Spectral", Georgia, "Times New Roman", serif;
@@ -60,6 +66,8 @@
     /* Roles point at the raw values below, so `bg-surface` and `text-primary`
        follow the colour scheme without a dark: variant on every element. */
     --color-bg: var(--hearth-bg);
+    /* The ground behind page content, under its cards. */
+    --color-canvas: var(--hearth-canvas);
     --color-surface: var(--hearth-surface);
     --color-sunken: var(--hearth-sunken);
     --color-raised: var(--hearth-raised);
@@ -87,6 +95,30 @@
     --color-danger-tint: var(--hearth-danger-tint);
     --color-ring: var(--hearth-ring);
     --color-overlay: var(--hearth-overlay);
+
+    /* shadcn's role names (components/shadcn), aliased onto ours so its
+       components take the Hearth palette without edits to their classes. */
+    --color-background: var(--hearth-bg);
+    --color-foreground: var(--hearth-text);
+    --color-card: var(--hearth-raised);
+    --color-card-foreground: var(--hearth-text);
+    --color-popover: var(--hearth-raised);
+    --color-popover-foreground: var(--hearth-text);
+    --color-primary-foreground: var(--hearth-primary-fg);
+    --color-secondary: var(--hearth-sunken);
+    --color-secondary-foreground: var(--hearth-text);
+    --color-muted: var(--hearth-sunken);
+    --color-muted-foreground: var(--hearth-text-muted);
+    --color-accent: var(--hearth-hover);
+    --color-accent-foreground: var(--hearth-text);
+    --color-destructive: var(--hearth-danger);
+    --color-input: var(--hearth-border-strong);
+    --color-sidebar: var(--hearth-surface);
+    --color-sidebar-foreground: var(--hearth-text-secondary);
+    --color-sidebar-accent: var(--hearth-hover);
+    --color-sidebar-accent-foreground: var(--hearth-text);
+    --color-sidebar-border: var(--hearth-border);
+    --color-sidebar-ring: var(--hearth-ring);
 }
 
 :root {
@@ -96,6 +128,7 @@
     color-scheme: light;
 
     --hearth-bg: #fbfaf4;
+    --hearth-canvas: #f4f2ea;
     --hearth-surface: #fbfaf4;
     --hearth-sunken: #f4f2ea;
     --hearth-raised: #fffef8;
@@ -132,29 +165,30 @@
         0 4px 12px rgba(34, 38, 31, 0.07);
 }
 
-/* Warm bark, never slate. Two things beyond a straight swap: the rail goes
-   darker than the content rather than lighter, and moss lifts to #7FA46F —
-   #47613F is only 1.4:1 on bark. */
+/* Grey with a trace of moss: each neutral keeps the old bark's lightness at a
+   quarter of its green, so contrast is unchanged and only the primary reads
+   green. Moss lifts to #7FA46F — #47613F is only 1.4:1 here. */
 [data-mantine-color-scheme="dark"] {
     color-scheme: dark;
 
-    --hearth-bg: #1b1e18;
-    --hearth-surface: #22261f;
-    --hearth-sunken: #171a15;
-    --hearth-raised: #2a2f26;
-    --hearth-hover: #2e332a;
-    --hearth-border: #343a2e;
-    --hearth-border-strong: #465040;
+    --hearth-bg: #1c1d1b;
+    --hearth-canvas: #1c1d1b;
+    --hearth-surface: #242523;
+    --hearth-sunken: #181918;
+    --hearth-raised: #2c2e2b;
+    --hearth-hover: #30322f;
+    --hearth-border: #363835;
+    --hearth-border-strong: #4a4d49;
     --hearth-text: #efede3;
-    --hearth-text-secondary: #b7bbab;
-    --hearth-text-muted: #8c9180;
-    --hearth-text-faint: #6e735f;
+    --hearth-text-secondary: #b8b9b5;
+    --hearth-text-muted: #8e8f8a;
+    --hearth-text-faint: #6f716b;
     --hearth-primary: #7fa46f;
     --hearth-primary-hover: #8fb47e;
     --hearth-primary-active: #6e9260;
-    --hearth-primary-fg: #171a14;
-    --hearth-primary-tint: #2c3a26;
-    --hearth-primary-tint-weak: #252c20;
+    --hearth-primary-fg: #181917;
+    --hearth-primary-tint: #2d3629;
+    --hearth-primary-tint-weak: #262b24;
     --hearth-attention: #d98c5f;
     --hearth-attention-fg: #d98c5f;
     --hearth-attention-tint: #36291f;
@@ -179,14 +213,23 @@
    It has to sit in `base`: unlayered CSS beats every layered rule, so out here
    `background: none` would silently win against `bg-primary-tint` and
    `color: inherit` against `text-primary`, leaving utilities in the class list
-   doing nothing. */
+   doing nothing.
+
+   shadcn's popovers, menus and dialogs portal out to <body>, beyond any
+   `.hearth-ds`; every part of them carries `data-slot`, so that scopes them in. */
 @layer base {
-    .hearth-ds a {
+    :where([data-slot], [data-slot] *) {
+        border-color: var(--color-border);
+    }
+
+    :is(.hearth-ds, [data-slot]) a,
+    a[data-slot] {
         color: inherit;
         text-decoration: none;
     }
 
-    .hearth-ds button {
+    :is(.hearth-ds, [data-slot]) button,
+    button[data-slot] {
         appearance: none;
         background: none;
         border: 0;
@@ -198,12 +241,13 @@
 
     /* Checkboxes and radios keep their native rendering: `accent-color` tints
        them to the palette, which beats redrawing a tick in CSS. */
-    .hearth-ds
+    :is(.hearth-ds, [data-slot])
         :is(
             input:not([type="checkbox"]):not([type="radio"]),
             select,
             textarea
-        ) {
+        ),
+    input[data-slot] {
         appearance: none;
         background: none;
         border: 0;
@@ -212,8 +256,16 @@
         font: inherit;
     }
 
-    .hearth-ds :is(h1, h2, h3, p) {
+    :is(.hearth-ds, [data-slot]) :is(h1, h2, h3, p),
+    :is(h1, h2, h3, p)[data-slot] {
         margin: 0;
+    }
+
+    [data-slot] ul,
+    ul[data-slot] {
+        margin: 0;
+        padding: 0;
+        list-style: none;
     }
 }
 

@@ -39,4 +39,10 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'warn',
     },
   },
+  // shadcn's components export their variants and hooks beside the components
+  // by design (`buttonVariants`, `useSidebar`); splitting them would fork upstream.
+  {
+    files: ['src/client/components/shadcn/**'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
 )

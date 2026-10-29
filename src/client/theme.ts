@@ -28,11 +28,11 @@ const sand: MantineColorsTuple = [
   '#b9ae95', '#a9a491', '#8a8570', '#6b6656', '#4a4638',
 ]
 
-// Warm dark ramp — overrides Mantine's blue-grey 'dark' so dark mode reads bark,
-// not slate. dark[7] = body background, dark[6] = elevated surface.
+// Dark ramp — overrides Mantine's blue-grey 'dark' with grey carrying a trace of
+// moss, matching design-system.css. dark[7] = body background, dark[6] = elevated surface.
 const bark: MantineColorsTuple = [
-  '#c7cbc0', '#a7ac9f', '#82887a', '#5c6356', '#434a3e',
-  '#363c31', '#2c3227', '#22261f', '#1b1f18', '#141711',
+  '#c8cac6', '#a9aaa6', '#848682', '#5f615d', '#464845',
+  '#393a37', '#2f302d', '#242523', '#1d1e1c', '#151614',
 ]
 
 export const theme = createTheme({

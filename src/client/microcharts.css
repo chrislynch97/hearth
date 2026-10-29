@@ -42,10 +42,10 @@
     --mc-positive: #7fb98c;
     --mc-negative: #e29a6c;
 
-    --mc-neutral: #82887a;
+    --mc-neutral: #848682;
     --mc-band: rgba(163, 188, 144, 0.14);
 
-    --mc-surface: #2c3227;
-    --mc-surface-ink: #c7cbc0;
-    --mc-surface-edge: #434a3e;
+    --mc-surface: #2f302d;
+    --mc-surface-ink: #c8cac6;
+    --mc-surface-edge: #464845;
 }
