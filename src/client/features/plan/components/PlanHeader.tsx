@@ -12,9 +12,9 @@ export interface PlanHeaderProps {
     potCount: number;
     billCount: number;
     setAsideCount: number;
-    /** The page-wide filters: the owner chips, and on a phone the category
-     *  picker. They narrow everything below, so they live up here rather than
-     *  in whichever category happens to come first. */
+    /** The page-wide filters: the category and owner pickers. They
+     *  narrow everything below, so they live up here rather than in whichever
+     *  category happens to come first. */
     children: ReactNode;
 }
 

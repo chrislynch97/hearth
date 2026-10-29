@@ -1,4 +1,10 @@
-import { chipClass } from "@/features/plan/chipClass";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/shadcn/select";
 import { ALL } from "@/features/plan/model";
 import type { Member } from "../../../../server/db/schema";
 
@@ -16,23 +22,26 @@ export const OwnerFilter = ({
     selected,
     onSelect,
 }: OwnerFilterProps) => (
-    <div className="flex flex-wrap items-center gap-1.5">
-        <button
-            onClick={() => onSelect(ALL)}
-            aria-pressed={selected === ALL}
-            className={chipClass(selected === ALL)}
+    <Select value={selected} onValueChange={onSelect}>
+        <SelectTrigger
+            aria-label="Whose accounts"
+            className="w-full bg-raised text-base sm:w-[180px]"
         >
-            Everyone
-        </button>
-        {members.map((member) => (
-            <button
-                key={member.id}
-                onClick={() => onSelect(member.id)}
-                aria-pressed={selected === member.id}
-                className={chipClass(selected === member.id)}
-            >
-                {member.displayName}
-            </button>
-        ))}
-    </div>
+            <SelectValue />
+        </SelectTrigger>
+        <SelectContent position="popper" className="hearth-ds">
+            <SelectItem value={ALL} className="text-base">
+                Everyone
+            </SelectItem>
+            {members.map((member) => (
+                <SelectItem
+                    key={member.id}
+                    value={member.id}
+                    className="text-base"
+                >
+                    {member.displayName}
+                </SelectItem>
+            ))}
+        </SelectContent>
+    </Select>
 );
