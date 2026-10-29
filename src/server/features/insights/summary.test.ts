@@ -33,20 +33,29 @@ describe('allocationByCategory', () => {
 describe('monthlyNetTrend', () => {
   it('returns the trailing N months chronologically, summing net per month', () => {
     const slips = [
-      { payDate: '2026-05-31', effectiveNet: 200000 },
-      { payDate: '2026-07-31', effectiveNet: 210000 },
-      { payDate: '2026-07-15', effectiveNet: 5000 }, // second July payslip → summed
+      { payDate: '2026-05-31', effectiveNet: 200000, ownerId: 'ava' },
+      { payDate: '2026-07-31', effectiveNet: 210000, ownerId: 'ava' },
+      { payDate: '2026-07-15', effectiveNet: 5000, ownerId: 'ava' }, // second July payslip → summed
     ]
     const trend = monthlyNetTrend(slips, '2026-07-03', 3)
     expect(trend).toEqual([
-      { month: '2026-05', net: 200000 },
-      { month: '2026-06', net: 0 },
-      { month: '2026-07', net: 215000 },
+      { month: '2026-05', net: 200000, byOwner: { ava: 200000 } },
+      { month: '2026-06', net: 0, byOwner: {} },
+      { month: '2026-07', net: 215000, byOwner: { ava: 215000 } },
     ])
   })
 
+  it('splits each month by whose payslip it was', () => {
+    const slips = [
+      { payDate: '2026-07-28', effectiveNet: 280000, ownerId: 'ava' },
+      { payDate: '2026-07-25', effectiveNet: 262000, ownerId: 'ben' },
+    ]
+    const [july] = monthlyNetTrend(slips, '2026-07-31', 1)
+    expect(july).toEqual({ month: '2026-07', net: 542000, byOwner: { ava: 280000, ben: 262000 } })
+  })
+
   it('ignores payslips outside the window', () => {
-    const slips = [{ payDate: '2025-01-31', effectiveNet: 999 }]
+    const slips = [{ payDate: '2025-01-31', effectiveNet: 999, ownerId: 'ava' }]
     const trend = monthlyNetTrend(slips, '2026-07-03', 3)
     expect(trend.every((m) => m.net === 0)).toBe(true)
   })
