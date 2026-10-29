@@ -4,6 +4,7 @@ import {
     SidebarMenuSubItem,
 } from "@/components/shadcn/sidebar";
 import { isCurrent, type NavItem } from "@/layout/nav-config";
+import { SoonBadge } from "@/components/ui/SoonBadge";
 
 export interface SidebarPageLinkProps {
     item: NavItem;
@@ -31,14 +32,10 @@ export const SidebarPageLink = ({
         >
             <Link to={item.to} onClick={onNavigate}>
                 <span className="flex-1 truncate">{item.label}</span>
-                {item.planned && (
-                    <span className="flex h-4 shrink-0 items-center rounded-xs border border-border px-[5px] font-mono text-[9px] uppercase tracking-[0.09em] text-text-faint">
-                        Soon
-                    </span>
-                )}
+                {item.planned && <SoonBadge />}
                 {count !== undefined && (
                     // A count is a fact, not an alarm — moss, never apricot.
-                    <span className="tabular flex h-[18px] min-w-5 shrink-0 items-center justify-center rounded-full bg-primary-tint px-1.5 font-mono text-[11px] text-primary">
+                    <span className="tabular flex h-[18px] min-w-5 shrink-0 items-center justify-center rounded-full bg-primary-tint px-1.5 text-xs font-medium text-primary">
                         {count}
                     </span>
                 )}

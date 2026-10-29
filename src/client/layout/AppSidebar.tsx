@@ -11,6 +11,7 @@ import {
     useSidebar,
 } from "@/components/shadcn/sidebar";
 import { isCurrent, NAV_SECTIONS } from "@/layout/nav-config";
+import { MobileMenuHeader } from "@/layout/MobileMenuHeader";
 import { SECTION_ICONS } from "@/layout/sectionIcons";
 import { SidebarFeedback } from "@/layout/SidebarFeedback";
 import { SidebarSection } from "@/layout/SidebarSection";
@@ -21,7 +22,7 @@ export type AppSidebarProps = ComponentProps<typeof Sidebar>;
  *  item that folds its pages. A full-screen sheet on phones. */
 export const AppSidebar = (props: AppSidebarProps) => {
     const { pathname } = useLocation();
-    const { setOpenMobile } = useSidebar();
+    const { setOpenMobile, isMobile } = useSidebar();
     const backlogQuery = trpc.reconcile.backlog.useQuery();
 
     const backlogCount = backlogQuery.data?.perPot?.length ?? 0;
@@ -31,6 +32,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
     return (
         <Sidebar {...props}>
+            {isMobile && <MobileMenuHeader />}
             <SidebarContent className="hearth-ds">
                 <SidebarGroup>
                     <nav aria-label="Main">
@@ -55,7 +57,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
                                     <SidebarMenuItem key={section.id}>
                                         <SidebarMenuButton
                                             asChild
-                                            isActive={isCurrent(single, pathname)}
+                                            isActive={isCurrent(
+                                                single,
+                                                pathname
+                                            )}
                                             className="text-base font-medium text-text max-md:h-10 max-md:text-md"
                                         >
                                             <Link

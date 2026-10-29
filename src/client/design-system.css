@@ -82,11 +82,17 @@
     --color-primary-hover: var(--hearth-primary-hover);
     --color-primary-active: var(--hearth-primary-active);
     --color-primary-fg: var(--hearth-primary-fg);
+    /* Behind text (a filled button, a ticked box); `primary` itself is the
+       accent for links, markers and data ink. */
+    --color-primary-fill: var(--hearth-primary-fill);
+    --color-primary-fill-hover: var(--hearth-primary-fill-hover);
     --color-primary-tint: var(--hearth-primary-tint);
     --color-primary-tint-weak: var(--hearth-primary-tint-weak);
     --color-attention: var(--hearth-attention);
     --color-attention-fg: var(--hearth-attention-fg);
     --color-attention-tint: var(--hearth-attention-tint);
+    /* Text on an apricot fill: dark in both schemes, as apricot is mid-tone. */
+    --color-attention-ink: var(--hearth-attention-ink);
     --color-positive-fg: var(--hearth-positive-fg);
     --color-savings-fg: var(--hearth-savings-fg);
     --color-danger: var(--hearth-danger);
@@ -139,22 +145,25 @@
     --hearth-text-secondary: #66705e;
     --hearth-text-muted: #7c8676;
     --hearth-text-faint: #a9a491;
-    --hearth-primary: #47613f;
-    --hearth-primary-hover: #3d5436;
-    --hearth-primary-active: #334529;
-    --hearth-primary-fg: #fbfaf4;
-    --hearth-primary-tint: #e2e5db;
-    --hearth-primary-tint-weak: #edeee6;
+    --hearth-primary: #3d6b35;
+    --hearth-primary-hover: #345d2e;
+    --hearth-primary-active: #2b4e26;
+    --hearth-primary-fg: #f7f9f2;
+    --hearth-primary-tint: #e1e9da;
+    --hearth-primary-tint-weak: #ecf1e6;
+    --hearth-primary-fill: #3d6b35;
+    --hearth-primary-fill-hover: #345d2e;
     --hearth-attention: #d98c5f;
     --hearth-attention-fg: #a85f30;
     --hearth-attention-tint: #f8efe5;
+    --hearth-attention-ink: #2b1b11;
     --hearth-positive-fg: #3e7c4f;
     --hearth-savings-fg: #8a7a6a;
     --hearth-danger: #a85f30;
     --hearth-danger-hover: #8e4e27;
     --hearth-danger-active: #7a4220;
     --hearth-danger-tint: #f8efe5;
-    --hearth-ring: #47613f;
+    --hearth-ring: #3d6b35;
     --hearth-overlay: rgba(34, 38, 31, 0.44);
 
     --hearth-shadow-raised: 0 1px 2px rgba(34, 38, 31, 0.05);
@@ -167,7 +176,7 @@
 
 /* Grey with a trace of moss: each neutral keeps the old bark's lightness at a
    quarter of its green, so contrast is unchanged and only the primary reads
-   green. Moss lifts to #7FA46F — #47613F is only 1.4:1 here. */
+   green. Accent moss lifts to #8CC07E for text and ink; fills stay deep. */
 [data-mantine-color-scheme="dark"] {
     color-scheme: dark;
 
@@ -183,22 +192,27 @@
     --hearth-text-secondary: #b8b9b5;
     --hearth-text-muted: #8e8f8a;
     --hearth-text-faint: #6f716b;
-    --hearth-primary: #7fa46f;
-    --hearth-primary-hover: #8fb47e;
-    --hearth-primary-active: #6e9260;
-    --hearth-primary-fg: #181917;
-    --hearth-primary-tint: #2d3629;
-    --hearth-primary-tint-weak: #262b24;
+    --hearth-primary: #8cc07e;
+    --hearth-primary-hover: #9dcc90;
+    --hearth-primary-active: #7aad6c;
+    --hearth-primary-fg: #f3f7ee;
+    --hearth-primary-tint: #2b3a27;
+    --hearth-primary-tint-weak: #252e22;
+    /* Text sits on a deep fill here, not on the bright accent — a pale green
+       button with dark text read as washed out. */
+    --hearth-primary-fill: #4a7d42;
+    --hearth-primary-fill-hover: #568c4d;
     --hearth-attention: #d98c5f;
     --hearth-attention-fg: #d98c5f;
     --hearth-attention-tint: #36291f;
+    --hearth-attention-ink: #1c140e;
     --hearth-positive-fg: #5fa06f;
     --hearth-savings-fg: #a3937f;
     --hearth-danger: #d98c5f;
     --hearth-danger-hover: #e39c72;
     --hearth-danger-active: #c67c50;
     --hearth-danger-tint: #36291f;
-    --hearth-ring: #9dbe8c;
+    --hearth-ring: #9dcc90;
     --hearth-overlay: rgba(9, 11, 8, 0.62);
     --hearth-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.35);
     --hearth-shadow-popover: 0 8px 24px -4px rgba(0, 0, 0, 0.55);
@@ -279,6 +293,15 @@
     box-shadow:
         0 0 0 2px var(--color-bg),
         0 0 0 4px var(--color-ring);
+}
+
+/* Recharts makes its SVG and its plot layer (`g[tabindex="-1"]`) focusable for
+   keyboard tooltips, so a click or tap focused one and the browser outlined the
+   whole plot. The tooltip already shows where focus is. */
+[data-slot="chart"] :focus,
+[data-slot="chart"] :focus-visible {
+    outline: none;
+    box-shadow: none;
 }
 
 /* A text field's border lives on the wrapper, so the ring has to as well — drawn

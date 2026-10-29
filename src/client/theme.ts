@@ -12,7 +12,7 @@ import { createTheme, Select, type MantineColorsTuple } from '@mantine/core'
 // Primary — Moss. Brand green sits at index 6 (Mantine's default shade).
 const moss: MantineColorsTuple = [
   '#eff3ec', '#d9e3d0', '#c0d0b2', '#a3bc90', '#86a971',
-  '#6a9157', '#47613f', '#3f5638', '#33472d', '#253620',
+  '#4a7d42', '#3d6b35', '#3f5638', '#33472d', '#253620',
 ]
 
 // Accent — Apricot. Use for attention / over-budget / warnings ONLY, never as
@@ -81,7 +81,7 @@ export const hearthTokens = {
     faint: '#8e9482',
   },
   brand: {
-    moss: '#47613f',
+    moss: '#3d6b35',
     mossDeep: '#2e3f28',
     apricot: '#d98c5f',
     ink: '#22261f',

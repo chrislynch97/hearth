@@ -15,8 +15,8 @@
  */
 :root {
     /* Data ink — moss, matching every other bar and line in the app. */
-    --mc-stroke: #47613f;
-    --mc-accent: #47613f;
+    --mc-stroke: #3d6b35;
+    --mc-accent: #3d6b35;
 
     /* Valence. Apricot is Hearth's attention colour; we never use pure red. */
     --mc-positive: #3e7c4f;
@@ -24,7 +24,7 @@
 
     /* Baselines, axis ticks and value labels. */
     --mc-neutral: #7c8676;
-    --mc-band: rgba(71, 97, 63, 0.1);
+    --mc-band: rgba(61, 107, 53, 0.1);
 
     --mc-font: var(--mantine-font-family);
     --mc-label-size: 0.72em;
@@ -33,11 +33,20 @@
     --mc-surface: #fbfaf4;
     --mc-surface-ink: #22261f;
     --mc-surface-edge: #e7e2d5;
+
+    /* Categories (segmented bars, their legends): moss leads, then the owner
+       palette's warm and cool notes — never microcharts' stock blue-gold. */
+    --mc-cat-1: #3d6b35;
+    --mc-cat-2: #c9744a;
+    --mc-cat-3: #5b7d86;
+    --mc-cat-4: #a08a52;
+    --mc-cat-5: #8a7a6a;
+    --mc-cat-6: #a3b591;
 }
 
 :root[data-mantine-color-scheme="dark"] {
-    --mc-stroke: #86a971;
-    --mc-accent: #86a971;
+    --mc-stroke: #8cc07e;
+    --mc-accent: #8cc07e;
 
     --mc-positive: #7fb98c;
     --mc-negative: #e29a6c;
@@ -48,4 +57,11 @@
     --mc-surface: #2f302d;
     --mc-surface-ink: #c8cac6;
     --mc-surface-edge: #464845;
+
+    --mc-cat-1: #8cc07e;
+    --mc-cat-2: #e29a6c;
+    --mc-cat-3: #7fa3ad;
+    --mc-cat-4: #c4ad72;
+    --mc-cat-5: #a3937f;
+    --mc-cat-6: #5f7a55;
 }

@@ -66,6 +66,24 @@ export function formatMoney(
     : `${sign}${opts.symbol}${number}`
 }
 
+/** A short amount for a chart axis — `£950`, `£2.6k`, `£1.2m`. Whole units under
+ *  a thousand, one decimal above, trailing `.0` dropped. */
+export function formatMoneyCompact(
+  minor: number,
+  opts: { symbol: string; decimalPlaces: number; symbolPosition?: 'prefix' | 'suffix' },
+): string {
+  const major = fromMinor(minor, opts.decimalPlaces)
+  const abs = Math.abs(major)
+  const [scaled, unit] =
+    abs >= 1_000_000 ? [abs / 1_000_000, 'm'] : abs >= 1_000 ? [abs / 1_000, 'k'] : [abs, '']
+  const digits = unit ? scaled.toFixed(1).replace(/\.0$/, '') : Math.round(scaled).toString()
+  const sign = major < 0 ? '-' : ''
+
+  return opts.symbolPosition === 'suffix'
+    ? `${sign}${digits}${unit}\u00A0${opts.symbol}`
+    : `${sign}${opts.symbol}${digits}${unit}`
+}
+
 /** Rescale a minor-units amount when the currency's decimal places change.
  *  Increasing places is exact; decreasing rounds half away from zero (lossy). */
 export function rescaleMinor(amount: number, fromDecimalPlaces: number, toDecimalPlaces: number): number {

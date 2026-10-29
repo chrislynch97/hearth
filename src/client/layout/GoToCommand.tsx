@@ -10,6 +10,7 @@ import {
     CommandList,
 } from "@/components/shadcn/command";
 import { NAV_SECTIONS, type AppRoutePath } from "@/layout/nav-config";
+import { SoonBadge } from "@/components/ui/SoonBadge";
 
 // A shortcut typed into a field is just text.
 const isTyping = (el: Element | null) =>
@@ -73,6 +74,9 @@ export const GoToCommand = () => {
                 onOpenChange={setOpen}
                 title="Go to a page"
                 description="Search every page in Hearth by name or section."
+                // Near the top, not centred: on a phone the keyboard takes the
+                // bottom half, and the list shouldn't jump as it filters.
+                className="top-[max(1rem,env(safe-area-inset-top))] translate-y-0 sm:top-[12vh]"
             >
                 <CommandInput placeholder="Go to…" />
                 <CommandList>
@@ -92,15 +96,11 @@ export const GoToCommand = () => {
                                             {item.label}
                                         </span>
                                         {group.title && (
-                                            <span className="font-mono text-[11px] text-text-faint">
+                                            <span className="text-xs text-text-faint">
                                                 {group.title}
                                             </span>
                                         )}
-                                        {item.planned && (
-                                            <span className="flex h-4 items-center rounded-xs border border-border px-[5px] font-mono text-[9px] uppercase tracking-[0.09em] text-text-faint">
-                                                Soon
-                                            </span>
-                                        )}
+                                        {item.planned && <SoonBadge />}
                                     </CommandItem>
                                 ))
                             )}

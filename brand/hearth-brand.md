@@ -47,7 +47,7 @@ set the wordmark in a sans.
 ### Core
 | Token | Hex | Role |
 |---|---|---|
-| Moss | `#47613F` | Primary. Brand green, primary buttons, active nav, sidebar. |
+| Moss | `#3D6B35` | Primary. Brand green, primary buttons, active nav, sidebar. |
 | Moss deep | `#2E3F28` | Emphasis surfaces (e.g. joint-pots card). |
 | Ink / Bark | `#22261F` | Text and dark buttons. (Dark mode uses its own grey ramp — see `bark` in `hearth-theme.ts`.) |
 | Apricot | `#D98C5F` | Accent — attention only (over budget, needs-a-pot, reconcile). |

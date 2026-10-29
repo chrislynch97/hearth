@@ -1,18 +1,5 @@
 import { Avatar, type AvatarProps } from "@mantine/core";
-import { hearthTokens } from "@/theme";
-
-function paletteColor(seed: string): string {
-    const { ownerPalette } = hearthTokens;
-
-    let hash = 0;
-    for (let i = 0; i < seed.length; i++) {
-        hash = (hash * 31 + seed.charCodeAt(i)) | 0;
-    }
-
-    return (
-        ownerPalette[Math.abs(hash) % ownerPalette.length] ?? ownerPalette[0]
-    );
-}
+import { personColor } from "@/personColor";
 
 export interface PersonAvatarProps extends Omit<AvatarProps, "color" | "name"> {
     name: string;
@@ -25,7 +12,7 @@ export const PersonAvatar = ({
     size = 28,
     ...props
 }: PersonAvatarProps) => {
-    const background = color ?? paletteColor(name);
+    const background = personColor(name, color);
 
     return (
         <Avatar

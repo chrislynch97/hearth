@@ -3,6 +3,7 @@ import { SidebarTrigger } from "@/components/shadcn/sidebar";
 import { HearthMark } from "@/components/HearthMark";
 import { GoToCommand } from "@/layout/GoToCommand";
 import { ProfileLink } from "@/layout/ProfileLink";
+import { ThemeToggle } from "@/layout/ThemeToggle";
 
 /** Brand, search and account across the top. The trigger opens the phone menu,
  *  and on desktop hides or shows the sidebar. */
@@ -24,7 +25,8 @@ export const TopBar = () => (
             </span>
         </Link>
         <GoToCommand />
-        <div className="flex shrink-0 md:ml-auto">
+        <div className="flex shrink-0 items-center gap-1 md:ml-auto">
+            <ThemeToggle />
             <ProfileLink />
         </div>
     </header>

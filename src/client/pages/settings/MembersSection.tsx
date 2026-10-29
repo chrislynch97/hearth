@@ -12,6 +12,8 @@ import {
     Title,
 } from "@mantine/core";
 import { trpc } from "@/trpc";
+import { PERSON_COLORS, personColor } from "@/personColor";
+import { SwatchPicker } from "@/components/ui/SwatchPicker";
 
 export const MembersSection = () => {
     const utils = trpc.useUtils();
@@ -77,6 +79,16 @@ export const MembersSection = () => {
     const cancelRename = () => {
         setEditingId(null);
         setEditName("");
+    };
+
+    const handleColor = async (id: string, color: string) => {
+        const target = members.find((m) => m.id === id);
+        await updateMember.mutateAsync({
+            id,
+            expectedUpdatedAt: target?.updatedAt,
+            color,
+        });
+        await Promise.all([refresh(), utils.dashboard.summary.invalidate()]);
     };
 
     return (
@@ -162,6 +174,21 @@ export const MembersSection = () => {
                                 </>
                             )}
                         </Group>
+                        {m.kind === "person" && editingId !== m.id && (
+                            <div className="hearth-ds flex items-center gap-2 px-2.5 pb-1.5">
+                                <span className="w-[58px] shrink-0 text-xs text-text-muted">
+                                    Colour
+                                </span>
+                                <SwatchPicker
+                                    label={`Colour for ${m.displayName}`}
+                                    swatches={PERSON_COLORS}
+                                    value={personColor(m.displayName, m.color)}
+                                    onChange={(color) =>
+                                        void handleColor(m.id, color)
+                                    }
+                                />
+                            </div>
+                        )}
                         {isAdmin &&
                             m.kind === "person" &&
                             editingId !== m.id && (
