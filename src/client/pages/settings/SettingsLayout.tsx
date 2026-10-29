@@ -1,6 +1,7 @@
 import { Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { Stack, Tabs, Title } from "@mantine/core";
 import { trpc } from "@/trpc";
+import { LogOutButton } from "./LogOutButton";
 
 type SettingsTab = "account" | "household" | "system";
 
@@ -17,7 +18,10 @@ export const SettingsLayout = () => {
 
     return (
         <Stack gap="lg" maw={760} mx="auto">
-            <Title order={2}>Settings</Title>
+            <div className="hearth-ds flex items-center justify-between gap-4">
+                <Title order={2}>Settings</Title>
+                <LogOutButton />
+            </div>
             <Tabs
                 value={active}
                 onChange={(v) =>

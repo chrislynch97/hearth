@@ -29,7 +29,6 @@ import './design-system.css'
 // Imported after Mantine's styles so our overrides win the cascade (#83).
 import './mobile.css'
 import './microcharts.css'
-import './safe-area.css'
 import { App } from './App'
 import { AppProviders } from './providers'
 
