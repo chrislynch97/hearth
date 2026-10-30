@@ -43,7 +43,7 @@ test('the primary household explains why it can’t be deleted here', async ({ p
   await page.goto('/settings/household')
 
   await expect(page.getByText(/can't be deleted here/)).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0)
 })
 
 // The demo instance signs in as the instance owner, whose account `deleteAccount`
@@ -55,7 +55,7 @@ test('the instance owner is told why their account can’t be deleted', async ({
 
   await expect(page.getByRole('heading', { name: 'Delete your account' })).toBeVisible()
   await expect(page.getByText(/instance owner's account/)).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Delete my account' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Delete my account' })).toHaveCount(0)
 })
 
 // Break-glass containment (#248). Firing it would sign this suite out mid-run, so

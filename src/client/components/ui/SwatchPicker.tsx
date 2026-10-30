@@ -1,5 +1,6 @@
-import { useRef, type KeyboardEvent } from "react";
 import { Check } from "lucide-react";
+import { RadioGroup as RadioGroupPrimitive } from "radix-ui";
+import { RadioGroup } from "@/components/shadcn/radio-group";
 
 export interface Swatch {
     name: string;
@@ -14,70 +15,35 @@ export interface SwatchPickerProps {
     onChange: (value: string) => void;
 }
 
-/** A row of colour dots to pick one from — a radio group, so arrow keys move
- *  between them and only the chosen one is a tab stop. */
+/** A row of colour dots to pick one from. A radio group underneath (shadcn's,
+ *  with our own dot for the item), so arrow keys move between colours and only
+ *  the chosen one is a tab stop. */
 export const SwatchPicker = ({
     label,
     swatches,
     value,
     onChange,
-}: SwatchPickerProps) => {
-    const groupRef = useRef<HTMLDivElement>(null);
-
-    const selected = swatches.findIndex((s) => s.value === value);
-    const tabStop = selected === -1 ? 0 : selected;
-
-    const move = (event: KeyboardEvent, from: number) => {
-        const step =
-            event.key === "ArrowRight" || event.key === "ArrowDown"
-                ? 1
-                : event.key === "ArrowLeft" || event.key === "ArrowUp"
-                  ? -1
-                  : 0;
-        if (step === 0) return;
-        event.preventDefault();
-        const next = (from + step + swatches.length) % swatches.length;
-        onChange(swatches[next]!.value);
-        const radios =
-            groupRef.current?.querySelectorAll<HTMLButtonElement>(
-                '[role="radio"]'
-            );
-        radios?.[next]?.focus();
-    };
-
-    return (
-        <div
-            ref={groupRef}
-            role="radiogroup"
-            aria-label={label}
-            className="flex flex-wrap gap-1.5"
-        >
-            {swatches.map((swatch, i) => {
-                const checked = i === selected;
-                return (
-                    <button
-                        key={swatch.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={checked}
-                        aria-label={swatch.name}
-                        title={swatch.name}
-                        tabIndex={i === tabStop ? 0 : -1}
-                        onClick={() => onChange(swatch.value)}
-                        onKeyDown={(event) => move(event, i)}
-                        // The swatch's own colour is the data here, not styling.
-                        style={{ backgroundColor: swatch.value }}
-                        className={[
-                            "flex size-6 items-center justify-center rounded-full text-white transition-transform duration-[140ms] ease-out hover:scale-110",
-                            checked
-                                ? "ring-2 ring-text ring-offset-2 ring-offset-surface"
-                                : "",
-                        ].join(" ")}
-                    >
-                        {checked && <Check size={13} strokeWidth={3} />}
-                    </button>
-                );
-            })}
-        </div>
-    );
-};
+}: SwatchPickerProps) => (
+    <RadioGroup
+        aria-label={label}
+        value={value ?? undefined}
+        onValueChange={onChange}
+        className="flex flex-wrap gap-1.5"
+    >
+        {swatches.map((swatch) => (
+            <RadioGroupPrimitive.Item
+                key={swatch.value}
+                value={swatch.value}
+                aria-label={swatch.name}
+                title={swatch.name}
+                // The swatch's own colour is the data here, not styling.
+                style={{ backgroundColor: swatch.value }}
+                className="flex size-7 items-center justify-center rounded-full text-white outline-none transition-transform duration-[140ms] ease-out hover:scale-110 focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=checked]:ring-2 data-[state=checked]:ring-text data-[state=checked]:ring-offset-2 data-[state=checked]:ring-offset-surface sm:size-6"
+            >
+                <RadioGroupPrimitive.Indicator>
+                    <Check size={13} strokeWidth={3} />
+                </RadioGroupPrimitive.Indicator>
+            </RadioGroupPrimitive.Item>
+        ))}
+    </RadioGroup>
+);

@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { formatMoney } from "@shared/money";
 import type { MoneyFormat } from "@/useMoney";
-import { buttonClass } from "@/components/ui/buttonClass";
+import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
 import type { DashboardSummary } from "@/features/home/model";
 
@@ -35,12 +35,9 @@ export const BacklogHeadline = ({ backlog, money }: BacklogHeadlineProps) => {
                     : "Spending to sort"
             }
             action={
-                <Link
-                    to="/catchup"
-                    className={buttonClass({ variant: "attention" })}
-                >
-                    Catch up
-                </Link>
+                <Button variant="attention" asChild>
+                    <Link to="/catchup">Catch up</Link>
+                </Button>
             }
         >
             Move {formatMoney(Math.abs(backlog.grandTotal), money)} between pots

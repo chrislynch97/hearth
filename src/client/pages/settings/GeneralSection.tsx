@@ -1,21 +1,14 @@
 import { useState } from "react";
-import {
-    Alert,
-    Button,
-    Card,
-    Group,
-    Loader,
-    NumberInput,
-    Select,
-    Stack,
-    Text,
-    TextInput,
-    Title,
-} from "@mantine/core";
 import { trpc } from "@/trpc";
 import { LOCALES } from "@/setup/locales";
-import type { Household } from "../../../server/db/schema";
 import { formatMoney } from "@shared/money";
+import { useFlash } from "@/hooks/useFlash";
+import { ChoiceField } from "@/components/ui/ChoiceField";
+import { SaveBar } from "@/components/ui/SaveBar";
+import { SettingsSection } from "@/components/ui/SettingsSection";
+import { Spinner } from "@/components/ui/Spinner";
+import { TextField } from "@/components/ui/TextField";
+import type { Household } from "../../../server/db/schema";
 
 // Thousands/decimal separator presets. Stored as two explicit characters on the
 // household so a Euro household can pick the German 1.234,56 shape; the key here
@@ -37,31 +30,31 @@ const numberFormatKey = (group: string, decimal: string): string =>
 interface GeneralForm {
     displayName: string;
     currencySymbol: string;
-    startDay: number | string;
+    startDay: string;
     periodFrequency: string;
     periodAnchor: string;
     jointBasis: string;
     jointFundingModel: string;
     incomeBasis: string;
-    decimalPlaces: number | string;
+    decimalPlaces: string;
     symbolPosition: string;
     numberFormat: string;
     locale: string;
     weekStart: string;
     dateFormat: string;
-    emergencyMonths: number | string;
+    emergencyMonths: string;
 }
 
 const generalFormFrom = (hh: Household): GeneralForm => ({
     displayName: hh.displayName,
     currencySymbol: hh.currencySymbol,
-    startDay: hh.budgetPeriodStartDay,
+    startDay: String(hh.budgetPeriodStartDay),
     periodFrequency: hh.budgetPeriodFrequency,
     periodAnchor: hh.budgetPeriodAnchor ?? "",
     jointBasis: hh.jointContributionBasis,
     jointFundingModel: hh.jointFundingModel,
     incomeBasis: hh.incomeBasisDefault,
-    decimalPlaces: hh.currencyDecimalPlaces,
+    decimalPlaces: String(hh.currencyDecimalPlaces),
     symbolPosition: hh.currencySymbolPosition,
     numberFormat: numberFormatKey(
         hh.currencyGroupSeparator,
@@ -70,29 +63,31 @@ const generalFormFrom = (hh: Household): GeneralForm => ({
     locale: hh.locale,
     weekStart: hh.weekStart,
     dateFormat: hh.dateFormat,
-    emergencyMonths: hh.emergencyFundMonths,
+    emergencyMonths: String(hh.emergencyFundMonths),
 });
 
+const today = () => new Date().toISOString().slice(0, 10);
+
+/** The household's own settings, in themed sections that share one save. */
 export const GeneralSection = () => {
     const utils = trpc.useUtils();
     const ctx = trpc.bootstrap.context.useQuery();
     const update = trpc.household.update.useMutation();
     const rescale = trpc.data.rescaleCurrency.useMutation();
-    const hh = ctx.data?.household;
 
-    // One form object: the household's values until edited, then the edits. `null`
-    // until the household loads, so fields never flash blank defaults over real data.
+    // The household's values until edited, then the edits. `null` until the
+    // household loads, so fields never flash blank defaults over real data.
     const [edits, setForm] = useState<GeneralForm | null>(null);
-    const [saved, setSaved] = useState(false);
+    const [saved, flashSaved] = useFlash(3000);
 
+    const hh = ctx.data?.household;
     const form = edits ?? (hh ? generalFormFrom(hh) : null);
-
-    const set = <K extends keyof GeneralForm>(key: K, value: GeneralForm[K]) =>
-        setForm(form ? { ...form, [key]: value } : form);
-
     const selectedFormat =
         NUMBER_FORMATS.find((f) => f.value === form?.numberFormat) ??
         NUMBER_FORMATS[0];
+
+    const set = <K extends keyof GeneralForm>(key: K, value: GeneralForm[K]) =>
+        setForm(form ? { ...form, [key]: value } : form);
 
     const handleSave = async () => {
         if (!form) return;
@@ -110,8 +105,7 @@ export const GeneralSection = () => {
             budgetPeriodAnchor:
                 form.periodFrequency === "monthly"
                     ? null
-                    : form.periodAnchor ||
-                      new Date().toISOString().slice(0, 10),
+                    : form.periodAnchor || today(),
             jointContributionBasis: form.jointBasis as
                 "equal" | "income_proportional" | "custom",
             jointFundingModel: form.jointFundingModel as "split" | "pooled",
@@ -131,46 +125,36 @@ export const GeneralSection = () => {
             });
         }
         await utils.invalidate();
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
+        setForm(null);
+        flashSaved();
     };
 
-    if (!form) {
-        return (
-            <Card withBorder padding="md" radius="md">
-                <Loader size="sm" />
-            </Card>
-        );
-    }
+    if (!form) return <Spinner label="Loading household settings" />;
+
+    const symbol = form.currencySymbol || "£";
+    const pooled = form.jointFundingModel === "pooled";
 
     return (
-        <Card withBorder padding="md" radius="md">
-            <Title order={4} mb="sm">
-                General
-            </Title>
-            <Stack gap="sm">
-                <Group grow>
-                    <TextInput
-                        label="Household name"
-                        value={form.displayName}
-                        onChange={(e) =>
-                            set("displayName", e.currentTarget.value)
-                        }
-                    />
-                    <TextInput
-                        label="Currency symbol"
-                        value={form.currencySymbol}
-                        onChange={(e) =>
-                            set("currencySymbol", e.currentTarget.value)
-                        }
-                        w={120}
-                    />
-                </Group>
-                <Group grow align="flex-start">
-                    <Select
+        <>
+            <SettingsSection
+                title="Household"
+                description="The name everyone in it sees."
+            >
+                <TextField
+                    label="Household name"
+                    value={form.displayName}
+                    onChange={(e) => set("displayName", e.currentTarget.value)}
+                />
+            </SettingsSection>
+
+            <SettingsSection
+                title="Budget period"
+                description="How your pay cycle is split into periods. Plans, funding and the Overview all work a period at a time."
+            >
+                <div className="grid gap-4 sm:grid-cols-2 sm:items-end">
+                    <ChoiceField
                         label="Budget period"
-                        description="How your pay cycle is split into budget periods."
-                        data={[
+                        options={[
                             { value: "monthly", label: "Monthly" },
                             { value: "four_weekly", label: "Every 4 weeks" },
                             {
@@ -180,118 +164,139 @@ export const GeneralSection = () => {
                             { value: "weekly", label: "Weekly" },
                         ]}
                         value={form.periodFrequency}
-                        onChange={(v) => {
-                            const next = v ?? "monthly";
-                            set("periodFrequency", next);
-                            // A weekly cycle needs a reference start date — seed today if unset.
-                            if (next !== "monthly" && !form.periodAnchor) {
-                                set(
-                                    "periodAnchor",
-                                    new Date().toISOString().slice(0, 10)
-                                );
-                            }
-                        }}
-                        allowDeselect={false}
+                        onChange={(next) =>
+                            // A weekly cycle needs a reference start date —
+                            // seed today if unset.
+                            setForm({
+                                ...form,
+                                periodFrequency: next,
+                                periodAnchor:
+                                    next !== "monthly" && !form.periodAnchor
+                                        ? today()
+                                        : form.periodAnchor,
+                            })
+                        }
                     />
                     {form.periodFrequency === "monthly" ? (
-                        <NumberInput
+                        <TextField
                             label="Starts on day"
-                            description="Day of the month the period begins."
+                            description="Day of the month the period begins (1–28)."
+                            type="number"
                             min={1}
                             max={28}
                             value={form.startDay}
-                            onChange={(v) => set("startDay", v)}
+                            onChange={(e) =>
+                                set("startDay", e.currentTarget.value)
+                            }
                         />
                     ) : (
-                        <TextInput
-                            type="date"
+                        <TextField
                             label="First period starts"
-                            description="Anchor date; periods repeat from here."
+                            description="Periods repeat from this date."
+                            type="date"
                             value={form.periodAnchor}
                             onChange={(e) =>
                                 set("periodAnchor", e.currentTarget.value)
                             }
                         />
                     )}
-                </Group>
-                <Group grow>
-                    <NumberInput
+                </div>
+                <TextField
+                    label="Emergency fund (months of bills)"
+                    description="Target cushion shown on the Funding page — typically 3–6 months."
+                    type="number"
+                    min={0}
+                    max={24}
+                    value={form.emergencyMonths}
+                    onChange={(e) =>
+                        set("emergencyMonths", e.currentTarget.value)
+                    }
+                    className="sm:max-w-[50%]"
+                />
+            </SettingsSection>
+
+            <SettingsSection
+                title="Money format"
+                description={
+                    <>
+                        How amounts are written everywhere. Preview:{" "}
+                        <span className="tabular font-semibold text-text">
+                            {formatMoney(123456, {
+                                symbol,
+                                decimalPlaces: Number(form.decimalPlaces) || 0,
+                                symbolPosition: form.symbolPosition as
+                                    "prefix" | "suffix",
+                                groupSeparator: selectedFormat.group,
+                                decimalSeparator: selectedFormat.decimal,
+                            })}
+                        </span>
+                    </>
+                }
+            >
+                <div className="grid gap-4 sm:grid-cols-2 sm:items-end">
+                    <TextField
+                        label="Currency symbol"
+                        value={form.currencySymbol}
+                        onChange={(e) =>
+                            set("currencySymbol", e.currentTarget.value)
+                        }
+                    />
+                    <ChoiceField
+                        label="Currency symbol position"
+                        options={[
+                            { value: "prefix", label: `Before (${symbol}100)` },
+                            { value: "suffix", label: `After (100 ${symbol})` },
+                        ]}
+                        value={form.symbolPosition}
+                        onChange={(v) => set("symbolPosition", v)}
+                    />
+                    <ChoiceField
+                        label="Number format"
+                        options={NUMBER_FORMATS}
+                        value={form.numberFormat}
+                        onChange={(v) => set("numberFormat", v)}
+                    />
+                    <TextField
                         label="Currency decimal places"
-                        description="Changing this rescales all stored amounts"
+                        description="Changing this rescales every stored amount."
+                        type="number"
                         min={0}
                         max={4}
                         value={form.decimalPlaces}
-                        onChange={(v) => set("decimalPlaces", v)}
-                    />
-                    <div />
-                </Group>
-                <Group grow align="flex-end">
-                    <Select
-                        label="Currency symbol position"
-                        data={[
-                            {
-                                value: "prefix",
-                                label: `Before (${form.currencySymbol || "£"}100)`,
-                            },
-                            {
-                                value: "suffix",
-                                label: `After (100 ${form.currencySymbol || "£"})`,
-                            },
-                        ]}
-                        value={form.symbolPosition}
-                        onChange={(v) => set("symbolPosition", v ?? "prefix")}
-                        allowDeselect={false}
-                    />
-                    <Select
-                        label="Number format"
-                        data={NUMBER_FORMATS.map((f) => ({
-                            value: f.value,
-                            label: f.label,
-                        }))}
-                        value={form.numberFormat}
-                        onChange={(v) => set("numberFormat", v ?? "comma_dot")}
-                        allowDeselect={false}
-                    />
-                </Group>
-                <Text size="xs" c="dimmed">
-                    Preview:{" "}
-                    <Text span ff="monospace" fz="sm" fw={500}>
-                        {formatMoney(123456, {
-                            symbol: form.currencySymbol || "£",
-                            decimalPlaces: Number(form.decimalPlaces) || 0,
-                            symbolPosition: form.symbolPosition as
-                                "prefix" | "suffix",
-                            groupSeparator: selectedFormat.group,
-                            decimalSeparator: selectedFormat.decimal,
-                        })}
-                    </Text>
-                </Text>
-                {/* Bottom-aligned: only one of the three carries a description, and a
-                    centred row would leave its input half a line below the others. */}
-                <Group grow align="flex-end">
-                    <Select
-                        label="Joint funding model"
-                        description={
-                            form.jointFundingModel === "pooled"
-                                ? "Each person contributes their whole remainder into a joint pool that covers joint costs."
-                                : "Joint costs are split per person by the contribution basis."
+                        onChange={(e) =>
+                            set("decimalPlaces", e.currentTarget.value)
                         }
-                        data={[
-                            { value: "split", label: "Split joint costs" },
-                            { value: "pooled", label: "Pool remainders" },
-                        ]}
-                        value={form.jointFundingModel}
-                        onChange={(v) => set("jointFundingModel", v ?? "split")}
-                        allowDeselect={false}
                     />
-                    <Select
+                </div>
+            </SettingsSection>
+
+            <SettingsSection
+                title="Joint costs"
+                description="How shared bills are funded between the people in the household."
+            >
+                <ChoiceField
+                    label="Joint funding model"
+                    description={
+                        pooled
+                            ? "Each person contributes their whole remainder into a joint pool that covers joint costs."
+                            : "Joint costs are split per person by the contribution basis."
+                    }
+                    options={[
+                        { value: "split", label: "Split joint costs" },
+                        { value: "pooled", label: "Pool remainders" },
+                    ]}
+                    value={form.jointFundingModel}
+                    onChange={(v) => set("jointFundingModel", v)}
+                />
+                <div className="grid gap-4 sm:grid-cols-2 sm:items-end">
+                    <ChoiceField
                         label="Joint contribution basis"
                         description={
-                            form.jointFundingModel === "pooled"
+                            pooled
                                 ? "Not used when remainders are pooled."
                                 : undefined
                         }
-                        data={[
+                        options={[
                             { value: "equal", label: "Equal" },
                             {
                                 value: "income_proportional",
@@ -300,13 +305,12 @@ export const GeneralSection = () => {
                             { value: "custom", label: "Custom weights" },
                         ]}
                         value={form.jointBasis}
-                        onChange={(v) => set("jointBasis", v ?? "equal")}
-                        disabled={form.jointFundingModel === "pooled"}
-                        allowDeselect={false}
+                        onChange={(v) => set("jointBasis", v)}
+                        disabled={pooled}
                     />
-                    <Select
+                    <ChoiceField
                         label="Income basis"
-                        data={[
+                        options={[
                             {
                                 value: "regular_net",
                                 label: "Regular net (salary)",
@@ -321,76 +325,54 @@ export const GeneralSection = () => {
                             },
                         ]}
                         value={form.incomeBasis}
-                        onChange={(v) => set("incomeBasis", v ?? "regular_net")}
-                        allowDeselect={false}
+                        onChange={(v) => set("incomeBasis", v)}
                     />
-                </Group>
-                <Group grow>
-                    <Select
-                        label="Region"
-                        description="Sets how dates are shown (numeric day/month order and month names)."
-                        data={LOCALES}
-                        value={form.locale}
-                        searchable
-                        onChange={(v) => set("locale", v ?? "en-GB")}
-                        allowDeselect={false}
-                    />
-                    <div />
-                </Group>
-                <Group grow>
-                    <Select
+                </div>
+            </SettingsSection>
+
+            <SettingsSection
+                title="Dates"
+                description="How dates are written and which day a week starts on."
+            >
+                <ChoiceField
+                    label="Region"
+                    description="Sets the day/month order and month names."
+                    options={LOCALES}
+                    value={form.locale}
+                    onChange={(v) => set("locale", v)}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <ChoiceField
                         label="Week starts on"
-                        data={[
+                        options={[
                             { value: "monday", label: "Monday" },
                             { value: "sunday", label: "Sunday" },
                         ]}
                         value={form.weekStart}
-                        onChange={(v) => set("weekStart", v ?? "monday")}
-                        allowDeselect={false}
+                        onChange={(v) => set("weekStart", v)}
                     />
-                    <Select
+                    <ChoiceField
                         label="Date format"
-                        data={[
+                        options={[
                             { value: "medium", label: "Medium (4 Jul 2026)" },
                             { value: "long", label: "Long (4 July 2026)" },
                             { value: "numeric", label: "Numeric (04/07/2026)" },
                             { value: "iso", label: "ISO (2026-07-04)" },
                         ]}
                         value={form.dateFormat}
-                        onChange={(v) => set("dateFormat", v ?? "medium")}
-                        allowDeselect={false}
+                        onChange={(v) => set("dateFormat", v)}
                     />
-                </Group>
-                <Group grow>
-                    <NumberInput
-                        label="Emergency fund (months of bills)"
-                        description="Target cushion shown on the Funding page — typically 3–6 months."
-                        min={0}
-                        max={24}
-                        value={form.emergencyMonths}
-                        onChange={(v) => set("emergencyMonths", v)}
-                    />
-                    <div />
-                </Group>
-                {(update.error || rescale.error) && (
-                    <Alert color="red" title="Error">
-                        {update.error?.message || rescale.error?.message}
-                    </Alert>
-                )}
-                <Group justify="flex-end">
-                    {saved && (
-                        <Text size="sm" c="dimmed">
-                            Saved ✓
-                        </Text>
-                    )}
-                    <Button
-                        onClick={() => void handleSave()}
-                        loading={update.isPending || rescale.isPending}
-                    >
-                        Save changes
-                    </Button>
-                </Group>
-            </Stack>
-        </Card>
+                </div>
+            </SettingsSection>
+
+            <SaveBar
+                dirty={edits !== null}
+                saved={saved}
+                saving={update.isPending || rescale.isPending}
+                error={update.error?.message || rescale.error?.message}
+                onSave={() => void handleSave()}
+                onDiscard={() => setForm(null)}
+            />
+        </>
     );
 };

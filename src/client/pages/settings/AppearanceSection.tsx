@@ -1,40 +1,33 @@
-import {
-    Card,
-    SegmentedControl,
-    Stack,
-    Text,
-    Title,
-    useMantineColorScheme,
-} from "@mantine/core";
+import { useColorScheme } from "@/hooks/useColorScheme";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SettingsSection } from "@/components/ui/SettingsSection";
 
-/** Appearance (Account scope). Light / Dark / System, wired straight to Mantine's
- *  color scheme — a per-browser preference it persists in localStorage, so no
- *  server or schema involvement. "System" maps to Mantine's "auto". */
+/** Appearance (Account scope): a per-browser preference, persisted locally, so
+ *  no server or schema involvement. The top bar's sun/moon sets the same one. */
 export const AppearanceSection = () => {
-    const { colorScheme, setColorScheme } = useMantineColorScheme();
+    const { setting, set } = useColorScheme();
+
     return (
-        <Card withBorder padding="md" radius="md">
-            <Title order={4} mb="sm">
-                Appearance
-            </Title>
-            <Stack gap="xs">
-                <Text size="sm" c="dimmed">
-                    Choose how Hearth looks in this browser. System follows your
-                    device’s light or dark setting.
-                </Text>
+        <SettingsSection
+            title="Appearance"
+            description="How Hearth looks in this browser."
+        >
+            <SettingsRow
+                title="Theme"
+                description="System follows your device’s light or dark setting."
+            >
                 <SegmentedControl
-                    value={colorScheme}
-                    onChange={(v) =>
-                        setColorScheme(v as "light" | "dark" | "auto")
-                    }
-                    aria-label="Appearance"
-                    data={[
+                    label="Appearance"
+                    value={setting}
+                    onChange={set}
+                    options={[
                         { value: "light", label: "Light" },
                         { value: "dark", label: "Dark" },
                         { value: "auto", label: "System" },
                     ]}
                 />
-            </Stack>
-        </Card>
+            </SettingsRow>
+        </SettingsSection>
     );
 };

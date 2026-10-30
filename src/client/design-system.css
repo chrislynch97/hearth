@@ -283,16 +283,15 @@
     }
 }
 
-/* Scoped to `.hearth-ds` while Mantine is still here — applied globally it would
-   double up with Mantine's own focus styles on every existing control. Drop the
-   scope (and the class) once Mantine is gone; the ring is meant to be one object
-   for the whole app. */
-.hearth-ds :focus-visible,
+/* The keyboard focus ring for hand-built controls: a soft halo, the same one
+   shadcn draws (`ring-[3px] ring-ring/50`), so the two kinds look alike. shadcn's
+   own parts carry `data-slot` and draw theirs, so they're left out — two rings
+   stacked on one control was the "crappy border". Scoped to `.hearth-ds` while
+   Mantine, with focus styles of its own, is still here. */
+.hearth-ds :focus-visible:not([data-slot]),
 .hearth-ds:focus-visible {
     outline: none;
-    box-shadow:
-        0 0 0 2px var(--color-bg),
-        0 0 0 4px var(--color-ring);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ring) 50%, transparent);
 }
 
 /* Recharts makes its SVG and its plot layer (`g[tabindex="-1"]`) focusable for
@@ -304,16 +303,15 @@
     box-shadow: none;
 }
 
-/* A text field's border lives on the wrapper, so the ring has to as well — drawn
-   on the control it sits inside that border, a couple of pixels off from the box
-   it is meant to be highlighting. The wrapper takes it on `:focus-within`
-   instead. More specific than the rule above, and unlayered like it. */
+/* A hand-built field whose border lives on a wrapper takes the ring there, on
+   `:focus-within` — drawn on the inner control it would sit inside the border,
+   off from the box it's meant to highlight. */
 .hearth-ds
     :is(
         input:not([type="checkbox"]):not([type="radio"]),
         select,
         textarea
-    ):focus-visible {
+    ):focus-visible:not([data-slot]) {
     box-shadow: none;
 }
 

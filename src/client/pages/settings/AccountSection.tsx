@@ -1,17 +1,11 @@
 import { useState } from "react";
-import {
-    Alert,
-    Button,
-    Card,
-    Group,
-    PasswordInput,
-    Stack,
-    Text,
-    TextInput,
-    Title,
-} from "@mantine/core";
 import { trpc } from "@/trpc";
 import { useEmailConfirmation } from "@/useEmailConfirmation";
+import { useFlash } from "@/hooks/useFlash";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
+import { SettingsSection } from "@/components/ui/SettingsSection";
+import { TextField } from "@/components/ui/TextField";
 import { ConfirmEmailChange } from "./ConfirmEmailChange";
 import { EmailVerification } from "./EmailVerification";
 
@@ -33,7 +27,7 @@ export const AccountSection = () => {
     const [currentPassword, setCurrentPassword] = useState("");
     const [confirming, setConfirming] = useState(false);
     const [pending, setPending] = useState<"save" | "send" | null>(null);
-    const [saved, setSaved] = useState(false);
+    const [saved, flashSaved] = useFlash();
     const [error, setError] = useState("");
 
     const d = me.data;
@@ -98,84 +92,77 @@ export const AccountSection = () => {
             setConfirming(false);
             return;
         }
-        // Saved. A failed send is reported by the verification card below rather
+        // Saved. A failed send is reported by the verification note below rather
         // than as a save error — the profile change did land.
         if (sendConfirmation) await confirmation.send(newEmail);
         await Promise.all([
             utils.users.me.invalidate(),
             utils.auth.status.invalidate(),
             // A changed address goes back to unconfirmed (#111), so the
-            // verification card has to re-read its state.
+            // verification note has to re-read its state.
             utils.email.status.invalidate(),
         ]);
         setCurrentPassword("");
         setPending(null);
         setConfirming(false);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
+        flashSaved();
     };
 
     return (
-        <Card withBorder padding="md" radius="md">
-            <Title order={4} mb="sm">
-                Your account
-            </Title>
-            <Stack gap="sm">
-                <Group grow>
-                    <TextInput
-                        label="Name"
-                        value={form.displayName}
-                        onChange={(e) =>
-                            set("displayName", e.currentTarget.value)
-                        }
-                    />
-                    <TextInput
-                        label="Username"
-                        value={form.username}
-                        onChange={(e) => set("username", e.currentTarget.value)}
-                    />
-                </Group>
-                <TextInput
-                    label="Email"
-                    description={emailDescription}
-                    value={form.email}
-                    onChange={(e) => set("email", e.currentTarget.value)}
-                    type="email"
+        <SettingsSection
+            title="Your account"
+            description="How you sign in, and the name the rest of the household sees."
+        >
+            <div className="grid gap-4 sm:grid-cols-2">
+                <TextField
+                    label="Name"
+                    value={form.displayName}
+                    onChange={(e) => set("displayName", e.currentTarget.value)}
                 />
-                <EmailVerification confirmation={confirmation} />
-                {needsPassword && (
-                    <PasswordInput
-                        label="Current password"
-                        description="Changing your username or email needs your password, so a stolen session can’t take the account over."
-                        value={currentPassword}
-                        onChange={(e) =>
-                            setCurrentPassword(e.currentTarget.value)
-                        }
-                    />
+                <TextField
+                    label="Username"
+                    value={form.username}
+                    onChange={(e) => set("username", e.currentTarget.value)}
+                    autoComplete="username"
+                />
+            </div>
+            <TextField
+                label="Email"
+                description={emailDescription}
+                value={form.email}
+                onChange={(e) => set("email", e.currentTarget.value)}
+                type="email"
+                autoComplete="email"
+            />
+            <EmailVerification confirmation={confirmation} />
+            {needsPassword && (
+                <TextField
+                    label="Current password"
+                    description="Changing your username or email needs your password, so a stolen session can’t take the account over."
+                    type="password"
+                    autoComplete="current-password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.currentTarget.value)}
+                />
+            )}
+            {error && <Notice tone="danger" title={error} />}
+            <div className="flex items-center justify-end gap-3">
+                {saved && (
+                    <span className="text-sm text-text-muted">Saved</span>
                 )}
-                {error && (
-                    <Alert color="red" title="Error">
-                        {error}
-                    </Alert>
-                )}
-                <Group justify="flex-end">
-                    {saved && (
-                        <Text size="sm" c="dimmed">
-                            Saved ✓
-                        </Text>
-                    )}
-                    <Button
-                        onClick={() => {
-                            if (confirmsEmailChange) setConfirming(true);
-                            else void handleSave();
-                        }}
-                        loading={update.isPending && !confirming}
-                        disabled={needsPassword && !currentPassword}
-                    >
-                        Save
-                    </Button>
-                </Group>
-            </Stack>
+                <Button
+                    variant="solid"
+                    disabled={
+                        update.isPending || (needsPassword && !currentPassword)
+                    }
+                    onClick={() => {
+                        if (confirmsEmailChange) setConfirming(true);
+                        else void handleSave();
+                    }}
+                >
+                    Save
+                </Button>
+            </div>
             <ConfirmEmailChange
                 opened={confirming}
                 email={newEmail}
@@ -183,6 +170,6 @@ export const AccountSection = () => {
                 onCancel={() => setConfirming(false)}
                 onConfirm={(send) => void handleSave(send)}
             />
-        </Card>
+        </SettingsSection>
     );
 };

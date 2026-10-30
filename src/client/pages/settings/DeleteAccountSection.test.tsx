@@ -127,9 +127,10 @@ describe("DeleteAccountSection", () => {
         };
         renderSection();
 
+        // Blocked: no button to press, just the reason.
         expect(
-            screen.getByRole("button", { name: "Delete my account" })
-        ).toBeDisabled();
+            screen.queryByRole("button", { name: "Delete my account" })
+        ).not.toBeInTheDocument();
         expect(
             screen.getByText(/only owner of Maple Street/)
         ).toBeInTheDocument();
@@ -139,9 +140,10 @@ describe("DeleteAccountSection", () => {
         mocks.impact = { ...mocks.impact, isInstanceOwner: true };
         renderSection();
 
+        // Blocked: no button to press, just the reason.
         expect(
-            screen.getByRole("button", { name: "Delete my account" })
-        ).toBeDisabled();
+            screen.queryByRole("button", { name: "Delete my account" })
+        ).not.toBeInTheDocument();
         expect(
             screen.getByText(/instance owner's account/)
         ).toBeInTheDocument();

@@ -1,16 +1,11 @@
 import { useState } from "react";
-import {
-    Alert,
-    Button,
-    Divider,
-    Group,
-    Modal,
-    Select,
-    Stack,
-    Text,
-} from "@mantine/core";
 import { trpc } from "@/trpc";
 import { useFormatDate } from "@/useMoney";
+import { Button } from "@/components/ui/Button";
+import { ChoiceField } from "@/components/ui/ChoiceField";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Notice } from "@/components/ui/Notice";
+import { SettingsRow } from "@/components/ui/SettingsRow";
 import { msToLocalIso } from "./util";
 
 const formatSize = (bytes: number): string =>
@@ -32,6 +27,10 @@ export const OffsiteRestore = () => {
     const [confirming, setConfirming] = useState(false);
     const [error, setError] = useState("");
 
+    if (!backups.data || backups.data.kind === null) return null;
+
+    const { kind, restorable, entries, primary } = backups.data;
+
     const handleRestore = async () => {
         if (!selected) return;
         setConfirming(false);
@@ -49,109 +48,67 @@ export const OffsiteRestore = () => {
         }
     };
 
-    if (!backups.data || backups.data.kind === null) return null;
-
-    const { kind, restorable, entries, primary } = backups.data;
-
     return (
         <>
-            <Divider />
-            <Group justify="space-between" align="flex-end">
-                <div>
-                    <Text size="sm" fw={500}>
-                        Restore from off-site
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                        Encrypted copies held at your{" "}
-                        <Text span ff="monospace" fz="xs">
-                            {kind}
-                        </Text>{" "}
-                        target
-                        {primary === "offsite"
-                            ? " — the primary store for this instance."
-                            : "."}{" "}
-                        Replaces all current data. This cannot be undone.
-                    </Text>
-                </div>
+            <SettingsRow
+                title="Restore from off-site"
+                description={`Encrypted copies held at your ${kind} target${primary === "offsite" ? " — the primary store for this instance" : ""}. Replaces all current data. This cannot be undone.`}
+            >
                 {restorable && (
-                    <Group gap="sm" align="flex-end">
-                        <Select
+                    <>
+                        <ChoiceField
                             label="Backup"
-                            size="xs"
-                            w={260}
+                            hideLabel
                             placeholder={
                                 entries.length === 0
                                     ? "None stored yet"
                                     : "Choose a backup"
                             }
                             disabled={entries.length === 0}
-                            data={entries.map((entry) => ({
+                            options={entries.map((entry) => ({
                                 value: entry.name,
                                 label: `${fmt(msToLocalIso(entry.at))} · ${formatSize(entry.size)}`,
                             }))}
                             value={selected}
                             onChange={setSelected}
+                            className="w-56"
                         />
                         <Button
-                            variant="default"
-                            size="xs"
-                            disabled={!selected}
-                            loading={restore.isPending}
+                            disabled={!selected || restore.isPending}
                             onClick={() => setConfirming(true)}
                         >
                             Restore
                         </Button>
-                    </Group>
+                    </>
                 )}
-            </Group>
+            </SettingsRow>
             {backups.data.error && (
-                <Alert color="red" title="Off-site backups are not working">
+                <Notice tone="danger" title="Off-site backups are not working">
                     {backups.data.error}
-                </Alert>
+                </Notice>
             )}
             {!restorable && !backups.data.error && (
-                <Alert color="yellow" variant="light">
-                    A {kind} target is write-only, so backups can't be listed or
-                    restored from here. Switch to an <code>s3</code> or{" "}
-                    <code>directory</code> target to restore in the app.
-                </Alert>
+                <Notice tone="attention" title="Write-only target">
+                    A {kind} target can&apos;t be listed or restored from here.
+                    Switch to an <code className="font-mono">s3</code> or{" "}
+                    <code className="font-mono">directory</code> target to
+                    restore in the app.
+                </Notice>
             )}
-            {error && (
-                <Alert color="red" title="Error">
-                    {error}
-                </Alert>
-            )}
+            {error && <Notice tone="danger" title={error} />}
 
-            <Modal
-                opened={confirming}
-                onClose={() => setConfirming(false)}
+            <ConfirmDialog
+                open={confirming}
+                onOpenChange={setConfirming}
                 title="Restore this backup?"
-                size="sm"
-            >
-                <Stack gap="md">
-                    <Text size="sm">
-                        Every member, pot, outgoing, spend, payslip and raise is
-                        replaced with the contents of this backup, and everyone
-                        signs in with the credentials they had when it was
-                        taken. There is no undo.
-                    </Text>
-                    <Group justify="flex-end">
-                        <Button
-                            variant="default"
-                            onClick={() => setConfirming(false)}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            color="red"
-                            loading={restore.isPending}
-                            onClick={() => void handleRestore()}
-                        >
-                            Restore
-                        </Button>
-                    </Group>
-                </Stack>
-            </Modal>
+                description="Every member, pot, outgoing, spend, payslip and raise is replaced with the contents of this backup, and everyone signs in with the credentials they had when it was taken. There is no undo."
+                tone="danger"
+                confirm={{
+                    label: "Restore",
+                    onClick: () => void handleRestore(),
+                    pending: restore.isPending,
+                }}
+            />
         </>
     );
 };

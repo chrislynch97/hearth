@@ -1,20 +1,14 @@
 import { useState } from "react";
-import {
-    ActionIcon,
-    Button,
-    Card,
-    Divider,
-    Group,
-    Select,
-    Stack,
-    Text,
-    TextInput,
-    Title,
-} from "@mantine/core";
 import { trpc } from "@/trpc";
-import { PERSON_COLORS, personColor } from "@/personColor";
-import { SwatchPicker } from "@/components/ui/SwatchPicker";
+import { Separator } from "@/components/shadcn/separator";
+import { Button } from "@/components/ui/Button";
+import { SettingsSection } from "@/components/ui/SettingsSection";
+import { TextField } from "@/components/ui/TextField";
+import type { MemberEdit } from "./MemberEditDialog";
+import { MemberRow } from "./MemberRow";
 
+/** The people money is planned around — distinct from the logins with access,
+ *  though an admin can link the two. */
 export const MembersSection = () => {
     const utils = trpc.useUtils();
     const membersQuery = trpc.members.list.useQuery();
@@ -22,37 +16,49 @@ export const MembersSection = () => {
     const updateMember = trpc.members.update.useMutation();
     const archive = trpc.members.archive.useMutation();
     const linkUser = trpc.members.linkUser.useMutation();
-
     const me = trpc.users.me.useQuery();
+
     const isAdmin = me.data?.role === "admin" || me.data?.role === "owner";
     // Accounts to map members onto (admin-only endpoint).
     const accounts = trpc.access.list.useQuery(undefined, { enabled: isAdmin });
 
+    const [newName, setNewName] = useState("");
+
     const members = (membersQuery.data ?? []).filter(
         (m) => m.archivedAt === null
     );
-    const [newName, setNewName] = useState("");
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editName, setEditName] = useState("");
-
-    const accountOptions = [
-        { value: "", label: "— no account —" },
-        ...(accounts.data ?? []).map((a) => ({
-            value: a.userId,
-            label: `${a.displayName} (@${a.username})`,
-        })),
-    ];
+    const accountOptions = (accounts.data ?? []).map((a) => ({
+        value: a.userId,
+        label: `${a.displayName} (@${a.username})`,
+    }));
 
     const refresh = async () => {
         await Promise.all([
             utils.members.list.invalidate(),
             utils.bootstrap.context.invalidate(),
             utils.users.me.invalidate(),
+            // Colours and names show up on the Overview's charts.
+            utils.dashboard.summary.invalidate(),
         ]);
     };
 
-    const handleLink = async (memberId: string, userId: string) => {
-        await linkUser.mutateAsync({ memberId, userId: userId || null });
+    const save = async (id: string, edit: MemberEdit) => {
+        const target = members.find((m) => m.id === id);
+        if (!target) return;
+        if (
+            edit.displayName !== target.displayName ||
+            (edit.color && edit.color !== target.color)
+        ) {
+            await updateMember.mutateAsync({
+                id,
+                expectedUpdatedAt: target.updatedAt,
+                displayName: edit.displayName,
+                ...(edit.color ? { color: edit.color } : {}),
+            });
+        }
+        if (edit.userId !== target.userId) {
+            await linkUser.mutateAsync({ memberId: id, userId: edit.userId });
+        }
         await refresh();
     };
 
@@ -63,177 +69,43 @@ export const MembersSection = () => {
         setNewName("");
     };
 
-    const handleRename = async (id: string) => {
-        if (editName.trim()) {
-            const target = members.find((m) => m.id === id);
-            await updateMember.mutateAsync({
-                id,
-                expectedUpdatedAt: target?.updatedAt,
-                displayName: editName.trim(),
-            });
-            await refresh();
-        }
-        setEditingId(null);
-    };
-
-    const cancelRename = () => {
-        setEditingId(null);
-        setEditName("");
-    };
-
-    const handleColor = async (id: string, color: string) => {
-        const target = members.find((m) => m.id === id);
-        await updateMember.mutateAsync({
-            id,
-            expectedUpdatedAt: target?.updatedAt,
-            color,
-        });
-        await Promise.all([refresh(), utils.dashboard.summary.invalidate()]);
-    };
-
     return (
-        <Card withBorder padding="md" radius="md">
-            <Title order={4} mb="sm">
-                Members
-            </Title>
-            <Stack gap={4}>
+        <SettingsSection
+            title="Members"
+            description="The people money is planned around. Each person's colour is used for them in charts."
+        >
+            <ul className="flex flex-col divide-y divide-border">
                 {members.map((m) => (
-                    <div key={m.id}>
-                        <Group justify="space-between" px="xs" py={4}>
-                            {editingId === m.id ? (
-                                <Group gap="xs" style={{ flex: 1 }}>
-                                    <TextInput
-                                        size="xs"
-                                        value={editName}
-                                        onChange={(e) =>
-                                            setEditName(e.currentTarget.value)
-                                        }
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter")
-                                                void handleRename(m.id);
-                                            else if (e.key === "Escape")
-                                                cancelRename();
-                                        }}
-                                        autoFocus
-                                        style={{ flex: 1 }}
-                                    />
-                                    <Button
-                                        size="xs"
-                                        onClick={() => void handleRename(m.id)}
-                                    >
-                                        Save
-                                    </Button>
-                                    <Button
-                                        size="xs"
-                                        variant="default"
-                                        onClick={cancelRename}
-                                    >
-                                        Cancel
-                                    </Button>
-                                </Group>
-                            ) : (
-                                <>
-                                    <Text size="sm">
-                                        {m.displayName}
-                                        {m.kind === "joint" && (
-                                            <Text span size="xs" c="dimmed">
-                                                {" "}
-                                                · joint
-                                            </Text>
-                                        )}
-                                    </Text>
-                                    <Group gap={4}>
-                                        <ActionIcon
-                                            variant="subtle"
-                                            size="sm"
-                                            aria-label={`Rename ${m.displayName}`}
-                                            onClick={() => {
-                                                setEditingId(m.id);
-                                                setEditName(m.displayName);
-                                            }}
-                                        >
-                                            ✎
-                                        </ActionIcon>
-                                        {m.kind !== "joint" && (
-                                            <ActionIcon
-                                                variant="subtle"
-                                                color="red"
-                                                size="sm"
-                                                aria-label={`Archive ${m.displayName}`}
-                                                onClick={async () => {
-                                                    await archive.mutateAsync({
-                                                        id: m.id,
-                                                    });
-                                                    await refresh();
-                                                }}
-                                            >
-                                                ×
-                                            </ActionIcon>
-                                        )}
-                                    </Group>
-                                </>
-                            )}
-                        </Group>
-                        {m.kind === "person" && editingId !== m.id && (
-                            <div className="hearth-ds flex items-center gap-2 px-2.5 pb-1.5">
-                                <span className="w-[58px] shrink-0 text-xs text-text-muted">
-                                    Colour
-                                </span>
-                                <SwatchPicker
-                                    label={`Colour for ${m.displayName}`}
-                                    swatches={PERSON_COLORS}
-                                    value={personColor(m.displayName, m.color)}
-                                    onChange={(color) =>
-                                        void handleColor(m.id, color)
-                                    }
-                                />
-                            </div>
-                        )}
-                        {isAdmin &&
-                            m.kind === "person" &&
-                            editingId !== m.id && (
-                                <Group gap="xs" px="xs" pb={6} wrap="nowrap">
-                                    <Text
-                                        size="xs"
-                                        c="dimmed"
-                                        w={58}
-                                        style={{ flexShrink: 0 }}
-                                    >
-                                        Account
-                                    </Text>
-                                    <Select
-                                        size="xs"
-                                        data={accountOptions}
-                                        value={m.userId ?? ""}
-                                        allowDeselect={false}
-                                        placeholder="— no account —"
-                                        onChange={(v) =>
-                                            void handleLink(m.id, v ?? "")
-                                        }
-                                        style={{ flex: 1, maxWidth: 260 }}
-                                    />
-                                </Group>
-                            )}
-                    </div>
+                    <MemberRow
+                        key={m.id}
+                        member={m}
+                        accounts={isAdmin ? accountOptions : undefined}
+                        onSave={(edit) => save(m.id, edit)}
+                        onArchive={async () => {
+                            await archive.mutateAsync({ id: m.id });
+                            await refresh();
+                        }}
+                    />
                 ))}
-            </Stack>
-            <Divider my="sm" />
-            <Group align="flex-end">
-                <TextInput
+            </ul>
+            <Separator />
+            <div className="flex items-end gap-2">
+                <TextField
                     label="Add person"
                     placeholder="Name"
                     value={newName}
                     onChange={(e) => setNewName(e.currentTarget.value)}
                     onKeyDown={(e) => e.key === "Enter" && void handleAdd()}
-                    style={{ flex: 1 }}
+                    className="flex-1"
                 />
                 <Button
+                    variant="outline"
+                    disabled={addPerson.isPending || !newName.trim()}
                     onClick={() => void handleAdd()}
-                    loading={addPerson.isPending}
                 >
                     Add
                 </Button>
-            </Group>
-        </Card>
+            </div>
+        </SettingsSection>
     );
 };

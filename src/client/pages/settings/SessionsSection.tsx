@@ -1,16 +1,12 @@
 import { useState } from "react";
-import {
-    Alert,
-    Button,
-    Card,
-    Group,
-    Loader,
-    Table,
-    Text,
-    Title,
-} from "@mantine/core";
+import { Monitor, Smartphone } from "lucide-react";
 import { trpc } from "@/trpc";
 import { useFormatDate } from "@/useMoney";
+import { Badge } from "@/components/shadcn/badge";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
+import { SettingsSection } from "@/components/ui/SettingsSection";
+import { Spinner } from "@/components/ui/Spinner";
 
 /** Turn a raw user-agent into something a person can recognise their own device
  *  by. Deliberately crude: this only has to be good enough to tell "the laptop I
@@ -45,14 +41,20 @@ const describeUserAgent = (ua: string | null): string => {
     return [browser, os].filter(Boolean).join(" on ");
 };
 
+const isPhone = (ua: string | null) => !!ua && /Android|iPhone|iPad/.test(ua);
+
 export const SessionsSection = () => {
     const utils = trpc.useUtils();
     const sessions = trpc.sessions.list.useQuery();
     const revoke = trpc.sessions.revoke.useMutation();
     const revokeOthers = trpc.sessions.revokeOthers.useMutation();
     const formatDate = useFormatDate();
+
     const [error, setError] = useState("");
     const [message, setMessage] = useState("");
+
+    const rows = sessions.data ?? [];
+    const others = rows.filter((s) => !s.current).length;
 
     const refresh = async () => {
         await Promise.all([
@@ -101,102 +103,87 @@ export const SessionsSection = () => {
         }
     };
 
-    const rows = sessions.data ?? [];
-    const others = rows.filter((s) => !s.current).length;
-
     return (
-        <Card withBorder padding="md" radius="md">
-            <Title order={4} mb="xs">
-                Active sessions
-            </Title>
-            <Text size="sm" c="dimmed" mb="sm">
-                Every device currently signed in as you. A session ends on its
-                own after 14 days of inactivity, and after 90 days regardless.
-                If you don’t recognise one, end it — then change your password.
-            </Text>
+        <SettingsSection
+            title="Active sessions"
+            description="Every device signed in as you. A session ends on its own after 14 days of inactivity, and after 90 days regardless. If you don’t recognise one, end it — then change your password."
+        >
             {sessions.isLoading ? (
-                <Loader size="sm" />
+                <Spinner label="Loading sessions" />
+            ) : rows.length === 0 ? (
+                <p className="text-base text-text-muted">
+                    No signed-in sessions. Until a password is set, this
+                    instance is open on your network without one.
+                </p>
             ) : (
-                <Table verticalSpacing={6}>
-                    <Table.Thead>
-                        <Table.Tr>
-                            <Table.Th>Device</Table.Th>
-                            <Table.Th>From</Table.Th>
-                            <Table.Th>Last active</Table.Th>
-                            <Table.Th />
-                        </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                        {rows.map((s) => (
-                            <Table.Tr key={s.ref}>
-                                <Table.Td>
-                                    <Group gap="xs">
-                                        <Text size="sm">
-                                            {describeUserAgent(s.userAgent)}
-                                        </Text>
+                <ul className="flex flex-col divide-y divide-border">
+                    {rows.map((s) => {
+                        const Icon = isPhone(s.userAgent)
+                            ? Smartphone
+                            : Monitor;
+                        return (
+                            <li
+                                key={s.ref}
+                                className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+                            >
+                                <Icon
+                                    size={18}
+                                    strokeWidth={1.5}
+                                    className="shrink-0 text-text-muted"
+                                />
+                                <div className="min-w-0 flex-1">
+                                    <p className="flex flex-wrap items-center gap-2 text-base text-text">
+                                        {describeUserAgent(s.userAgent)}
                                         {s.current && (
-                                            <Text size="xs" c="dimmed">
-                                                (this device)
-                                            </Text>
+                                            <Badge variant="tint">
+                                                This device
+                                            </Badge>
                                         )}
-                                    </Group>
-                                </Table.Td>
-                                <Table.Td>
-                                    <Text size="sm" c="dimmed">
-                                        {s.ip ?? "—"}
-                                    </Text>
-                                </Table.Td>
-                                <Table.Td>
-                                    <Text size="sm" c="dimmed">
-                                        {/* en-CA renders as YYYY-MM-DD, which is what the
-                                            household date formatter parses (see AuditLogSection).
-                                            The time matters here — "yesterday" is not enough to
-                                            recognise a session by — so show it alongside. */}
+                                    </p>
+                                    <p className="text-sm text-text-muted">
+                                        {s.ip ?? "Unknown address"} ·{" "}
+                                        {/* en-CA renders as YYYY-MM-DD, which is
+                                            what the household date formatter
+                                            parses. The time matters here —
+                                            "yesterday" isn't enough to
+                                            recognise a session by. */}
                                         {formatDate(
                                             s.lastSeenAt.toLocaleDateString(
                                                 "en-CA"
                                             )
                                         )}{" "}
-                                        {s.lastSeenAt.toLocaleTimeString()}
-                                    </Text>
-                                </Table.Td>
-                                <Table.Td ta="right">
-                                    <Button
-                                        size="compact-xs"
-                                        variant="subtle"
-                                        color="red"
-                                        loading={revoke.isPending}
-                                        onClick={() => void handleRevoke(s.ref)}
-                                    >
-                                        {s.current ? "Sign out" : "End"}
-                                    </Button>
-                                </Table.Td>
-                            </Table.Tr>
-                        ))}
-                    </Table.Tbody>
-                </Table>
+                                        {s.lastSeenAt.toLocaleTimeString([], {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                        })}
+                                    </p>
+                                </div>
+                                <Button
+                                    variant="danger"
+                                    compact
+                                    disabled={revoke.isPending}
+                                    onClick={() => void handleRevoke(s.ref)}
+                                >
+                                    {s.current ? "Sign out" : "End"}
+                                </Button>
+                            </li>
+                        );
+                    })}
+                </ul>
             )}
-            {error && (
-                <Alert color="red" title="Error" mt="sm">
-                    {error}
-                </Alert>
+            {error && <Notice tone="danger" title={error} />}
+            {message && <Notice tone="positive" title={message} />}
+            {others > 0 && (
+                <div className="flex justify-end">
+                    <Button
+                        variant="danger"
+                        disabled={revokeOthers.isPending}
+                        onClick={() => void handleRevokeOthers()}
+                    >
+                        Sign out everywhere else
+                    </Button>
+                </div>
             )}
-            {message && (
-                <Text size="sm" c="dimmed" mt="sm">
-                    {message}
-                </Text>
-            )}
-            <Group justify="flex-end" mt="sm">
-                <Button
-                    variant="light"
-                    color="red"
-                    disabled={others === 0}
-                    loading={revokeOthers.isPending}
-                    onClick={() => void handleRevokeOthers()}
-                >
-                    Sign out everywhere else
-                </Button>
-            </Group>
-        </Card>
+        </SettingsSection>
     );
 };

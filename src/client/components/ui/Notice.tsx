@@ -1,7 +1,14 @@
 import type { ReactNode } from "react";
-import { CircleAlert, CircleCheck, Info, type LucideIcon } from "lucide-react";
+import {
+    CircleAlert,
+    CircleCheck,
+    CircleX,
+    Info,
+    type LucideIcon,
+} from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/shadcn/alert";
 
-export type NoticeTone = "attention" | "positive" | "info";
+export type NoticeTone = "attention" | "positive" | "info" | "danger";
 
 export interface NoticeProps {
     tone?: NoticeTone;
@@ -26,6 +33,11 @@ const TONES: Record<
         icon: "text-primary",
         Icon: CircleCheck,
     },
+    danger: {
+        box: "border-danger/40 bg-danger-tint",
+        icon: "text-danger",
+        Icon: CircleX,
+    },
     info: {
         box: "border-border bg-raised",
         icon: "text-text-muted",
@@ -33,9 +45,9 @@ const TONES: Record<
     },
 };
 
-/** A page-level message: something needs you (attention), all's well
- *  (positive), or just so you know (info). Every warning on a page uses this,
- *  so they all look alike. */
+/** A page-level message on shadcn's Alert: something needs you (attention),
+ *  something failed (danger), all's well (positive), or just so you know
+ *  (info). Every message on a page uses this, so they all look alike. */
 export const Notice = ({
     tone = "info",
     title,
@@ -45,32 +57,28 @@ export const Notice = ({
     const { box, icon, Icon } = TONES[tone];
 
     return (
-        <div
-            role={tone === "attention" ? "alert" : "status"}
-            className={`flex flex-col gap-3 rounded-xl border px-4 py-4 sm:flex-row sm:items-center sm:gap-4 sm:px-5 ${box}`}
+        <Alert
+            role={
+                tone === "attention" || tone === "danger" ? "alert" : "status"
+            }
+            // A third column for the action from `sm` up; below the text, full
+            // width, on a phone, so neither gets squeezed into a sliver.
+            className={`gap-x-3 rounded-xl px-4 py-4 text-text has-[>svg]:grid-cols-[18px_1fr] sm:px-5 sm:has-[>svg]:grid-cols-[18px_1fr_auto] ${box}`}
         >
-            <div className="flex min-w-0 flex-1 items-start gap-3">
-                <Icon
-                    size={18}
-                    strokeWidth={1.75}
-                    className={`mt-0.5 shrink-0 ${icon}`}
-                />
-                <div className="min-w-0">
-                    <p className="text-md font-semibold text-text">{title}</p>
-                    {children && (
-                        <p className="mt-0.5 text-base text-text-secondary">
-                            {children}
-                        </p>
-                    )}
-                </div>
-            </div>
-            {/* Below the text and full width on a phone, so neither the words
-                nor the button get squeezed into a sliver. */}
+            <Icon strokeWidth={1.75} className={`size-[18px]! ${icon}`} />
+            <AlertTitle className="line-clamp-none text-md font-semibold tracking-normal text-text">
+                {title}
+            </AlertTitle>
+            {children && (
+                <AlertDescription className="block text-base text-text-secondary">
+                    {children}
+                </AlertDescription>
+            )}
             {action && (
-                <div className="shrink-0 [&>*]:w-full sm:[&>*]:w-auto">
+                <div className="col-span-2 mt-3 [&>*]:w-full sm:col-span-1 sm:col-start-3 sm:row-span-2 sm:row-start-1 sm:mt-0 sm:self-center sm:[&>*]:w-auto">
                     {action}
                 </div>
             )}
-        </div>
+        </Alert>
     );
 };

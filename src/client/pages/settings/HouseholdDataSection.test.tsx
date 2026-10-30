@@ -170,13 +170,15 @@ describe("HouseholdDataSection", () => {
         );
     });
 
-    // eraseHousehold refuses DEFAULT_HOUSEHOLD_ID; a silently missing button
-    // would leave the owner assuming the right doesn't exist.
+    // eraseHousehold refuses DEFAULT_HOUSEHOLD_ID. No button there, but the
+    // reason stays so the owner doesn't assume the right doesn't exist.
     it("explains why the primary household can't be erased here", () => {
         mocks.me = { ...mocks.me, isPrimaryHousehold: true };
         renderSection();
 
-        expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+        expect(
+            screen.queryByRole("button", { name: "Delete" })
+        ).not.toBeInTheDocument();
         expect(screen.getByText(/Use Reset all data/)).toBeInTheDocument();
         // Export still works there — only erasure is instance-wide.
         expect(

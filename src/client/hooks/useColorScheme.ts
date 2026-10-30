@@ -1,13 +1,20 @@
 import { useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 
-/** The scheme actually showing, and a flip to the other one. Mantine still owns
- *  the setting (Appearance writes it too), so this is the one seam to replace
- *  when Mantine goes. */
+export type ColorSchemeSetting = "light" | "dark" | "auto";
+
+/** The colour scheme: the setting ("auto" follows the device), the scheme
+ *  actually showing, and ways to change it. Mantine still owns the setting, so
+ *  this is the one seam to replace when Mantine goes. */
 export const useColorScheme = () => {
-    const { setColorScheme } = useMantineColorScheme();
+    const { colorScheme, setColorScheme } = useMantineColorScheme();
     const scheme = useComputedColorScheme("light");
 
     const toggle = () => setColorScheme(scheme === "dark" ? "light" : "dark");
 
-    return { scheme, toggle };
+    return {
+        setting: colorScheme as ColorSchemeSetting,
+        scheme,
+        set: (setting: ColorSchemeSetting) => setColorScheme(setting),
+        toggle,
+    };
 };

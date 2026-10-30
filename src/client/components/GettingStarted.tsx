@@ -10,7 +10,6 @@ import {
     CardTitle,
 } from "@/components/shadcn/card";
 import { Button } from "@/components/ui/Button";
-import { buttonClass } from "@/components/ui/buttonClass";
 import { CheckDot } from "@/components/ui/CheckDot";
 
 interface Step {
@@ -111,18 +110,15 @@ export const GettingStarted = () => {
                                     </div>
                                 </div>
                                 {!done && (
-                                    <Link
-                                        to={step.to}
-                                        // Under the step on a phone, lined up
-                                        // with its text past the tick.
-                                        className={buttonClass({
-                                            variant: "outline",
-                                            compact: true,
-                                            className: "self-start max-sm:ml-9",
-                                        })}
+                                    // Under the step on a phone, lined up
+                                    // with its text past the tick.
+                                    <Button
+                                        compact
+                                        asChild
+                                        className="self-start max-sm:ml-9"
                                     >
-                                        {step.cta}
-                                    </Link>
+                                        <Link to={step.to}>{step.cta}</Link>
+                                    </Button>
                                 )}
                             </li>
                         );

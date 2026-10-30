@@ -1,16 +1,10 @@
 import { useState } from "react";
-import {
-    Alert,
-    Button,
-    Card,
-    Group,
-    PasswordInput,
-    Stack,
-    Text,
-    Title,
-} from "@mantine/core";
 import { trpc } from "@/trpc";
 import { MIN_PASSWORD_LENGTH, validatePassword } from "@shared/password-policy";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
+import { SettingsSection } from "@/components/ui/SettingsSection";
+import { TextField } from "@/components/ui/TextField";
 
 export const SecuritySection = () => {
     const utils = trpc.useUtils();
@@ -18,13 +12,13 @@ export const SecuritySection = () => {
     const setPassword = trpc.auth.setPassword.useMutation();
     const clearPassword = trpc.auth.clearPassword.useMutation();
 
-    const passwordSet = statusQuery.data?.passwordSet ?? false;
-
     const [current, setCurrent] = useState("");
     const [next, setNext] = useState("");
     const [confirm, setConfirm] = useState("");
     const [message, setMessage] = useState("");
     const [error, setError] = useState("");
+
+    const passwordSet = statusQuery.data?.passwordSet ?? false;
 
     const reset = () => {
         setCurrent("");
@@ -69,66 +63,63 @@ export const SecuritySection = () => {
     };
 
     return (
-        <Card withBorder padding="md" radius="md">
-            <Title order={4} mb="sm">
-                Security
-            </Title>
-            <Text size="xs" c="dimmed" mb="sm">
-                Your account password. While it&apos;s unset the app is open on
-                your network; setting one turns on login (anyone you invite
-                signs in with their own account). For internet exposure, also
-                put it behind a reverse proxy or Tailscale.
-            </Text>
-            <Stack gap="sm">
+        <SettingsSection
+            title="Password"
+            description={
+                <>
+                    While it&apos;s unset the app is open on your network;
+                    setting one turns on login, and anyone you invite signs in
+                    with their own account. For internet exposure, also put it
+                    behind a reverse proxy or Tailscale.
+                </>
+            }
+        >
+            {passwordSet && (
+                <TextField
+                    label="Current password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={current}
+                    onChange={(e) => setCurrent(e.currentTarget.value)}
+                />
+            )}
+            <div className="grid gap-4 sm:grid-cols-2 sm:items-end">
+                <TextField
+                    label={passwordSet ? "New password" : "Password"}
+                    description={`At least ${MIN_PASSWORD_LENGTH} characters`}
+                    type="password"
+                    autoComplete="new-password"
+                    value={next}
+                    onChange={(e) => setNext(e.currentTarget.value)}
+                />
+                <TextField
+                    label="Confirm"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.currentTarget.value)}
+                />
+            </div>
+            {message && <Notice tone="positive" title={message} />}
+            {error && <Notice tone="danger" title={error} />}
+            <div className="flex flex-wrap justify-end gap-2">
                 {passwordSet && (
-                    <PasswordInput
-                        label="Current password"
-                        value={current}
-                        onChange={(e) => setCurrent(e.currentTarget.value)}
-                    />
-                )}
-                <Group grow>
-                    <PasswordInput
-                        label={passwordSet ? "New password" : "Password"}
-                        description={`At least ${MIN_PASSWORD_LENGTH} characters`}
-                        value={next}
-                        onChange={(e) => setNext(e.currentTarget.value)}
-                    />
-                    <PasswordInput
-                        label="Confirm"
-                        value={confirm}
-                        onChange={(e) => setConfirm(e.currentTarget.value)}
-                    />
-                </Group>
-                {message && (
-                    <Alert color="moss" variant="light">
-                        {message}
-                    </Alert>
-                )}
-                {error && (
-                    <Alert color="red" title="Error">
-                        {error}
-                    </Alert>
-                )}
-                <Group justify="flex-end" gap="sm">
-                    {passwordSet && (
-                        <Button
-                            variant="light"
-                            color="red"
-                            loading={clearPassword.isPending}
-                            onClick={() => void handleClear()}
-                        >
-                            Remove password
-                        </Button>
-                    )}
                     <Button
-                        loading={setPassword.isPending}
-                        onClick={() => void handleSet()}
+                        variant="danger"
+                        disabled={clearPassword.isPending}
+                        onClick={() => void handleClear()}
                     >
-                        {passwordSet ? "Change password" : "Set password"}
+                        Remove password
                     </Button>
-                </Group>
-            </Stack>
-        </Card>
+                )}
+                <Button
+                    variant="solid"
+                    disabled={setPassword.isPending}
+                    onClick={() => void handleSet()}
+                >
+                    {passwordSet ? "Change password" : "Set password"}
+                </Button>
+            </div>
+        </SettingsSection>
     );
 };

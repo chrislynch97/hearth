@@ -1,19 +1,11 @@
 import { useState } from "react";
-import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    Group,
-    List,
-    Modal,
-    PasswordInput,
-    Stack,
-    Text,
-    TextInput,
-    Title,
-} from "@mantine/core";
 import { trpc } from "@/trpc";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Notice } from "@/components/ui/Notice";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SettingsSection } from "@/components/ui/SettingsSection";
+import { TextField } from "@/components/ui/TextField";
 
 /** Settings → Account → Delete your account (#230): erasing the login identity,
  *  as opposed to the household (Settings → Household → Your data).
@@ -74,114 +66,99 @@ export const DeleteAccountSection = () => {
     };
 
     return (
-        <Card withBorder padding="md" radius="md">
-            <Title order={4} mb="sm">
-                Delete your account
-            </Title>
-            <Group justify="space-between" align="flex-start">
-                <Box flex={1} miw={260}>
-                    <Text size="xs" c="dimmed">
-                        {reason}
-                    </Text>
-                </Box>
-                <Button
-                    color="red"
-                    variant="light"
-                    disabled={blocked}
-                    onClick={() => {
-                        setPassword("");
-                        setCode("");
-                        setTyped("");
-                        setError("");
-                        setOpened(true);
-                    }}
-                >
-                    Delete my account
-                </Button>
-            </Group>
-
-            <Modal
-                opened={opened}
-                onClose={() => setOpened(false)}
-                title="Delete your account?"
-                size="md"
+        <SettingsSection
+            title="Danger zone"
+            description="Things that can't be undone."
+            tone="danger"
+        >
+            <SettingsRow
+                title="Delete your account"
+                description={reason}
+                danger
             >
-                <Stack gap="md">
-                    <Text size="sm">This permanently deletes:</Text>
-                    <List size="sm" spacing={4}>
-                        <List.Item>
+                {/* Blocked: the description says why, and a dead button adds
+                    nothing to it. */}
+                {!blocked && (
+                    <Button
+                        variant="danger"
+                        onClick={() => {
+                            setPassword("");
+                            setCode("");
+                            setTyped("");
+                            setError("");
+                            setOpened(true);
+                        }}
+                    >
+                        Delete my account
+                    </Button>
+                )}
+            </SettingsRow>
+
+            <ConfirmDialog
+                open={opened}
+                onOpenChange={setOpened}
+                title="Delete your account?"
+                tone="danger"
+                confirm={{
+                    label: "Delete my account",
+                    onClick: () => void handleDelete(),
+                    pending: deleteMut.isPending,
+                    disabled:
+                        typed.trim() !== username ||
+                        (passwordRequired && !password) ||
+                        (mfaRequired && !code),
+                }}
+            >
+                <div>
+                    <p>This permanently deletes:</p>
+                    <ul className="mt-1.5 list-disc space-y-1 pl-5">
+                        <li>
                             your login — name, username, email address, password
                             and two-factor enrolment
-                        </List.Item>
-                        <List.Item>
-                            every session you have open, on every device
-                        </List.Item>
+                        </li>
+                        <li>every session you have open, on every device</li>
                         {households.map((h) => (
-                            <List.Item key={h.id}>
+                            <li key={h.id}>
                                 {h.name}, and everything in it — nobody else
                                 belongs to it, so it goes with your account
-                            </List.Item>
+                            </li>
                         ))}
-                    </List>
-                    <Text size="sm">
-                        Spending, payslips and pots you entered in households
-                        that other people are still in stay where they are; the
-                        person they were filed under simply stops being linked
-                        to an account. Backups already taken still contain a
-                        copy until they roll off.
-                    </Text>
-                    <Text size="sm">
-                        Download your data first if you want to keep it.
-                    </Text>
-                    {passwordRequired && (
-                        <PasswordInput
-                            label="Current password"
-                            value={password}
-                            onChange={(e) => setPassword(e.currentTarget.value)}
-                        />
-                    )}
-                    {mfaRequired && (
-                        <TextInput
-                            label="Authentication code"
-                            description="From your authenticator app, or one of your recovery codes."
-                            value={code}
-                            onChange={(e) => setCode(e.currentTarget.value)}
-                            autoComplete="one-time-code"
-                        />
-                    )}
-                    <TextInput
-                        label={`Type ${username} to confirm`}
-                        value={typed}
-                        onChange={(e) => setTyped(e.currentTarget.value)}
-                        autoComplete="off"
+                    </ul>
+                </div>
+                <p className="text-text-secondary">
+                    Spending, payslips and pots you entered in households that
+                    other people are still in stay where they are; the person
+                    they were filed under simply stops being linked to an
+                    account. Backups already taken still contain a copy until
+                    they roll off. Download your data first if you want to keep
+                    it.
+                </p>
+                {passwordRequired && (
+                    <TextField
+                        label="Current password"
+                        type="password"
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.currentTarget.value)}
                     />
-                    {error && (
-                        <Alert color="red" title="Error">
-                            {error}
-                        </Alert>
-                    )}
-                    <Group justify="flex-end">
-                        <Button
-                            variant="default"
-                            onClick={() => setOpened(false)}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            color="red"
-                            disabled={
-                                typed.trim() !== username ||
-                                (passwordRequired && !password) ||
-                                (mfaRequired && !code)
-                            }
-                            loading={deleteMut.isPending}
-                            onClick={() => void handleDelete()}
-                        >
-                            Delete my account
-                        </Button>
-                    </Group>
-                </Stack>
-            </Modal>
-        </Card>
+                )}
+                {mfaRequired && (
+                    <TextField
+                        label="Authentication code"
+                        description="From your authenticator app, or one of your recovery codes."
+                        value={code}
+                        onChange={(e) => setCode(e.currentTarget.value)}
+                        autoComplete="one-time-code"
+                    />
+                )}
+                <TextField
+                    label={`Type ${username} to confirm`}
+                    value={typed}
+                    onChange={(e) => setTyped(e.currentTarget.value)}
+                    autoComplete="off"
+                />
+                {error && <Notice tone="danger" title={error} />}
+            </ConfirmDialog>
+        </SettingsSection>
     );
 };

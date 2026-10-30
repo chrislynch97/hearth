@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { formatMoney } from "@shared/money";
 import { useFormatDate, type MoneyFormat } from "@/useMoney";
-import { buttonClass } from "@/components/ui/buttonClass";
+import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
 import type { SavingsAlert } from "../../../../server/features/savings/savings";
 
@@ -25,13 +25,14 @@ export const SavingsAlerts = ({ alerts, money }: SavingsAlertsProps) => {
                     tone="attention"
                     title={`${alert.itemName}, ${formatMoney(alert.amount, money)}, ${alert.kind === "overdue" ? "was due" : "due"} ${formatDate(alert.due)}`}
                     action={
-                        <Link
-                            to="/planners/$goal"
-                            params={{ goal: alert.goalSlug }}
-                            className={buttonClass({ variant: "attention" })}
-                        >
-                            Open planner
-                        </Link>
+                        <Button variant="attention" asChild>
+                            <Link
+                                to="/planners/$goal"
+                                params={{ goal: alert.goalSlug }}
+                            >
+                                Open planner
+                            </Link>
+                        </Button>
                     }
                 >
                     {alert.goalName}. The pot is{" "}
