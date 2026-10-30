@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { Alert, Button, PasswordInput, Text } from "@mantine/core";
-import { trpc } from "@/trpc";
-import { AuthCard } from "@/AuthCard";
 import { MIN_PASSWORD_LENGTH, validatePassword } from "@shared/password-policy";
+import { AuthCard } from "@/AuthCard";
+import { AuthForm } from "@/AuthForm";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
+import { PasswordField } from "@/components/ui/PasswordField";
+import { trpc } from "@/trpc";
 
 export interface ResetPasswordProps {
     token: string;
@@ -39,47 +42,44 @@ export const ResetPassword = ({ token }: ResetPasswordProps) => {
     if (reset.isSuccess) {
         return (
             <AuthCard>
-                <Alert color="moss" variant="light" title="Password changed">
-                    <Text size="sm">
-                        Sign in with your new password. Every other device has
-                        been signed out.
-                    </Text>
-                </Alert>
-                <Button component="a" href="/" fullWidth>
-                    Sign in
+                <Notice tone="positive" title="Password changed">
+                    Sign in with your new password. Every other device has been
+                    signed out.
+                </Notice>
+                <Button asChild variant="solid" className="w-full">
+                    <a href="/">Sign in</a>
                 </Button>
             </AuthCard>
         );
     }
 
     return (
-        <AuthCard>
-            <Text size="sm" c="dimmed" ta="center">
-                Choose a new password for your Hearth account.
-            </Text>
-            <PasswordInput
-                label="New password"
-                description={`At least ${MIN_PASSWORD_LENGTH} characters.`}
-                value={password}
-                onChange={(e) => setPassword(e.currentTarget.value)}
-                autoComplete="new-password"
-                autoFocus
-            />
-            <PasswordInput
-                label="Confirm new password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.currentTarget.value)}
-                onKeyDown={(e) => e.key === "Enter" && void submit()}
-                error={error || undefined}
-                autoComplete="new-password"
-            />
-            <Button
-                onClick={() => void submit()}
-                loading={reset.isPending}
-                fullWidth
-            >
-                Set new password
-            </Button>
+        <AuthCard lead="Choose a new password for your Hearth account.">
+            <AuthForm onSubmit={() => void submit()}>
+                <PasswordField
+                    label="New password"
+                    description={`At least ${MIN_PASSWORD_LENGTH} characters.`}
+                    value={password}
+                    onChange={(e) => setPassword(e.currentTarget.value)}
+                    autoComplete="new-password"
+                    autoFocus
+                />
+                <PasswordField
+                    label="Confirm new password"
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.currentTarget.value)}
+                    error={error || undefined}
+                    autoComplete="new-password"
+                />
+                <Button
+                    type="submit"
+                    variant="solid"
+                    className="w-full"
+                    disabled={reset.isPending}
+                >
+                    Set new password
+                </Button>
+            </AuthForm>
         </AuthCard>
     );
 };

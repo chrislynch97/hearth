@@ -1,22 +1,20 @@
 import { useEffect, useState } from "react";
-import {
-    Alert,
-    Anchor,
-    Button,
-    PasswordInput,
-    Text,
-    TextInput,
-} from "@mantine/core";
-import { trpc } from "./trpc";
-import { AuthCard } from "./AuthCard";
-import {
-    MIN_PASSWORD_LENGTH,
-    validatePassword,
-} from "../shared/password-policy";
 import { DATA_NOTICE_TEXT, DATA_NOTICE_URL } from "@shared/data-notice";
+import { MIN_PASSWORD_LENGTH, validatePassword } from "@shared/password-policy";
+import { AuthCard } from "@/AuthCard";
+import { AuthForm } from "@/AuthForm";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
+import { PasswordField } from "@/components/ui/PasswordField";
+import { TextField } from "@/components/ui/TextField";
+import { trpc } from "@/trpc";
+
+export interface AcceptInviteProps {
+    token: string;
+}
 
 /** Shown at /invite#<token> — lets an invitee create their account and join. */
-export function AcceptInvite({ token }: { token: string }) {
+export const AcceptInvite = ({ token }: AcceptInviteProps) => {
     // `invitations.info` is a read declared as a mutation so the token goes in the
     // POST body rather than a logged URL (#176) — hence a manual fire on mount
     // instead of useQuery. `mutate` is referentially stable, so this runs once.
@@ -36,12 +34,13 @@ export function AcceptInvite({ token }: { token: string }) {
     // Idle counts as loading: the mutation hasn't fired yet on the first render,
     // and a "not valid" alert there would be wrong.
     const checking = info.isIdle || info.isPending;
+    const invite = info.data;
     // Only asked for when this instance requires an address and the invite didn't
     // already carry one (#199) — otherwise joining a household is how an account
     // ends up with no recovery route at all.
-    const needsEmail = info.data?.needsEmail ?? false;
+    const needsEmail = invite?.needsEmail ?? false;
 
-    async function submit() {
+    const submit = async () => {
         setError("");
         const weak = validatePassword(password);
         if (weak) return setError(weak);
@@ -65,84 +64,92 @@ export function AcceptInvite({ token }: { token: string }) {
                     : "Could not accept the invitation."
             );
         }
+    };
+
+    if (checking) {
+        return <AuthCard lead="Checking your invitation…" />;
+    }
+
+    if (!invite) {
+        return (
+            <AuthCard>
+                <Notice tone="danger" title="Invitation not valid">
+                    This invite link is invalid, already used, or expired. Ask
+                    whoever invited you for a fresh one.
+                </Notice>
+            </AuthCard>
+        );
     }
 
     return (
-        <AuthCard>
-            {checking ? (
-                <Text size="sm" c="dimmed" ta="center">
-                    Checking your invitation…
-                </Text>
-            ) : !info.data ? (
-                <Alert color="red" title="Invitation not valid">
-                    This invite link is invalid, already used, or expired. Ask
-                    whoever invited you for a fresh one.
-                </Alert>
-            ) : (
+        <AuthCard
+            lead={
                 <>
-                    <Text size="sm" c="dimmed" ta="center">
-                        You&apos;ve been invited to join{" "}
-                        <b>{info.data.householdName}</b> as {info.data.role}.
-                        Create an account to continue.
-                    </Text>
-                    <TextInput
-                        label="Your name"
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.currentTarget.value)}
-                        autoFocus
-                    />
-                    <TextInput
-                        label="Username"
-                        value={username}
-                        onChange={(e) => setUsername(e.currentTarget.value)}
-                        autoComplete="username"
-                    />
-                    {needsEmail && (
-                        <TextInput
-                            label="Email"
-                            description="Where a password-reset link would go. We'll send a confirmation link to check it's yours."
-                            value={email}
-                            onChange={(e) => setEmail(e.currentTarget.value)}
-                            type="email"
-                            autoComplete="email"
-                        />
-                    )}
-                    <PasswordInput
-                        label="Password"
-                        description={`At least ${MIN_PASSWORD_LENGTH} characters`}
-                        value={password}
-                        onChange={(e) => setPassword(e.currentTarget.value)}
-                        onKeyDown={(e) => e.key === "Enter" && void submit()}
-                        autoComplete="new-password"
-                    />
-                    {error && (
-                        <Alert color="red" title="Error">
-                            {error}
-                        </Alert>
-                    )}
-                    {/* Mail is optional, so this screen — not the invite email —
-                        is the copy every invitee sees before joining (#229). */}
-                    <Text size="xs" c="dimmed">
-                        <b>Before you accept:</b> {DATA_NOTICE_TEXT}{" "}
-                        <Anchor
-                            href={DATA_NOTICE_URL}
-                            target="_blank"
-                            rel="noreferrer"
-                            inherit
-                        >
-                            What happens to your data here
-                        </Anchor>
-                        .
-                    </Text>
-                    <Button
-                        onClick={() => void submit()}
-                        loading={accept.isPending}
-                        fullWidth
-                    >
-                        Join {info.data.householdName}
-                    </Button>
+                    You've been invited to join{" "}
+                    <strong className="font-semibold text-text">
+                        {invite.householdName}
+                    </strong>{" "}
+                    as {invite.role}. Create an account to continue.
                 </>
-            )}
+            }
+        >
+            <AuthForm onSubmit={() => void submit()}>
+                <TextField
+                    label="Your name"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.currentTarget.value)}
+                    autoFocus
+                />
+                <TextField
+                    label="Username"
+                    value={username}
+                    onChange={(e) => setUsername(e.currentTarget.value)}
+                    autoComplete="username"
+                />
+                {needsEmail && (
+                    <TextField
+                        label="Email"
+                        description="Where a password-reset link would go. We'll send a confirmation link to check it's yours."
+                        value={email}
+                        onChange={(e) => setEmail(e.currentTarget.value)}
+                        type="email"
+                        autoComplete="email"
+                    />
+                )}
+                <PasswordField
+                    label="Password"
+                    description={`At least ${MIN_PASSWORD_LENGTH} characters`}
+                    value={password}
+                    onChange={(e) => setPassword(e.currentTarget.value)}
+                    autoComplete="new-password"
+                />
+                {error && <Notice tone="danger" title={error} />}
+                {/* Mail is optional, so this screen — not the invite email — is
+                    the copy every invitee sees before joining (#229). */}
+                <p className="text-sm text-text-muted">
+                    <strong className="font-semibold text-text-secondary">
+                        Before you accept:
+                    </strong>{" "}
+                    {DATA_NOTICE_TEXT}{" "}
+                    <a
+                        href={DATA_NOTICE_URL}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-semibold text-primary underline-offset-4 hover:underline"
+                    >
+                        What happens to your data here
+                    </a>
+                    .
+                </p>
+                <Button
+                    type="submit"
+                    variant="solid"
+                    className="w-full"
+                    disabled={accept.isPending}
+                >
+                    Join {invite.householdName}
+                </Button>
+            </AuthForm>
         </AuthCard>
     );
-}
+};

@@ -4,7 +4,7 @@ import { MIN_PASSWORD_LENGTH, validatePassword } from "@shared/password-policy";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
 import { SettingsSection } from "@/components/ui/SettingsSection";
-import { TextField } from "@/components/ui/TextField";
+import { PasswordField } from "@/components/ui/PasswordField";
 
 export const SecuritySection = () => {
     const utils = trpc.useUtils();
@@ -75,26 +75,23 @@ export const SecuritySection = () => {
             }
         >
             {passwordSet && (
-                <TextField
+                <PasswordField
                     label="Current password"
-                    type="password"
                     autoComplete="current-password"
                     value={current}
                     onChange={(e) => setCurrent(e.currentTarget.value)}
                 />
             )}
             <div className="grid gap-4 sm:grid-cols-2 sm:items-end">
-                <TextField
+                <PasswordField
                     label={passwordSet ? "New password" : "Password"}
                     description={`At least ${MIN_PASSWORD_LENGTH} characters`}
-                    type="password"
                     autoComplete="new-password"
                     value={next}
                     onChange={(e) => setNext(e.currentTarget.value)}
                 />
-                <TextField
+                <PasswordField
                     label="Confirm"
-                    type="password"
                     autoComplete="new-password"
                     value={confirm}
                     onChange={(e) => setConfirm(e.currentTarget.value)}

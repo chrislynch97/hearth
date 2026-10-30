@@ -6,7 +6,7 @@ import { httpBatchLink, httpLink, splitLink } from '@trpc/client'
 import superjson from 'superjson'
 import { trpc } from './trpc'
 import { theme } from './theme'
-import { ErrorBoundary } from './ErrorState'
+import { ErrorBoundary } from './ErrorBoundary'
 import { createQueryClient } from './queryClient'
 
 /** All app-wide context providers in one place: tRPC + React Query data layer,

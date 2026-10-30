@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { Alert, Anchor, Button, Text, TextInput } from "@mantine/core";
+import { AuthCard } from "@/AuthCard";
+import { AuthForm } from "@/AuthForm";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
+import { TextField } from "@/components/ui/TextField";
 import { trpc } from "@/trpc";
 
 export interface ForgotPasswordProps {
@@ -23,60 +27,44 @@ export const ForgotPassword = ({ onBack }: ForgotPasswordProps) => {
             .catch(() => {});
     };
 
+    const back = (
+        <Button variant="link" className="self-center" onClick={onBack}>
+            Back to sign in
+        </Button>
+    );
+
     if (request.isSuccess || request.isError) {
         return (
-            <>
-                <Alert color="moss" variant="light" title="Check your email">
-                    <Text size="sm">
-                        If that account exists and has a confirmed email
-                        address, a reset link is on its way. It expires in an
-                        hour.
-                    </Text>
-                </Alert>
-                <Anchor
-                    component="button"
-                    type="button"
-                    size="xs"
-                    ta="center"
-                    onClick={onBack}
-                >
-                    Back to sign in
-                </Anchor>
-            </>
+            <AuthCard>
+                <Notice tone="positive" title="Check your email">
+                    If that account exists and has a confirmed email address, a
+                    reset link is on its way. It expires in an hour.
+                </Notice>
+                {back}
+            </AuthCard>
         );
     }
 
     return (
-        <>
-            <Text size="sm" c="dimmed" ta="center">
-                Enter your username and we&apos;ll email a reset link to the
-                address on your account.
-            </Text>
-            <TextInput
-                label="Username"
-                value={username}
-                onChange={(e) => setUsername(e.currentTarget.value)}
-                onKeyDown={(e) => e.key === "Enter" && void submit()}
-                autoComplete="username"
-                autoFocus
-            />
-            <Button
-                onClick={() => void submit()}
-                loading={request.isPending}
-                disabled={!username.trim()}
-                fullWidth
-            >
-                Email me a link
-            </Button>
-            <Anchor
-                component="button"
-                type="button"
-                size="xs"
-                ta="center"
-                onClick={onBack}
-            >
-                Back to sign in
-            </Anchor>
-        </>
+        <AuthCard lead="Enter your username and we'll email a reset link to the address on your account.">
+            <AuthForm onSubmit={() => void submit()}>
+                <TextField
+                    label="Username"
+                    value={username}
+                    onChange={(e) => setUsername(e.currentTarget.value)}
+                    autoComplete="username"
+                    autoFocus
+                />
+                <Button
+                    type="submit"
+                    variant="solid"
+                    className="w-full"
+                    disabled={request.isPending || !username.trim()}
+                >
+                    Email me a link
+                </Button>
+            </AuthForm>
+            {back}
+        </AuthCard>
     );
 };

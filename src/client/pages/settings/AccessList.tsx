@@ -4,7 +4,7 @@ import { MIN_PASSWORD_LENGTH, validatePassword } from "@shared/password-policy";
 import { CheckboxField } from "@/components/ui/CheckboxField";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Notice } from "@/components/ui/Notice";
-import { TextField } from "@/components/ui/TextField";
+import { PasswordField } from "@/components/ui/PasswordField";
 import { AccessRow, type AccessRole } from "./AccessRow";
 
 export interface AccessListProps {
@@ -215,9 +215,8 @@ export const AccessList = ({ isOwner }: AccessListProps) => {
                     pending: resetPassword.isPending,
                 }}
             >
-                <TextField
+                <PasswordField
                     label="New password"
-                    type="password"
                     autoComplete="new-password"
                     value={newPw}
                     onChange={(e) => setNewPw(e.currentTarget.value)}

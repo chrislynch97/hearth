@@ -5,6 +5,7 @@ import { useFlash } from "@/hooks/useFlash";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
 import { SettingsSection } from "@/components/ui/SettingsSection";
+import { PasswordField } from "@/components/ui/PasswordField";
 import { TextField } from "@/components/ui/TextField";
 import { ConfirmEmailChange } from "./ConfirmEmailChange";
 import { EmailVerification } from "./EmailVerification";
@@ -136,10 +137,9 @@ export const AccountSection = () => {
             />
             <EmailVerification confirmation={confirmation} />
             {needsPassword && (
-                <TextField
+                <PasswordField
                     label="Current password"
                     description="Changing your username or email needs your password, so a stolen session can’t take the account over."
-                    type="password"
                     autoComplete="current-password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.currentTarget.value)}

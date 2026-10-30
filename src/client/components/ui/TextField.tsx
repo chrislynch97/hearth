@@ -1,4 +1,9 @@
-import { forwardRef, useId, type InputHTMLAttributes } from "react";
+import {
+    forwardRef,
+    useId,
+    type InputHTMLAttributes,
+    type ReactNode,
+} from "react";
 import { Input } from "@/components/shadcn/input";
 import { Label } from "@/components/shadcn/label";
 
@@ -9,6 +14,8 @@ export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
     error?: string;
     /** Sits inside the field ahead of the value — a currency symbol, a unit. */
     prefix?: string;
+    /** Sits inside the field after the value — a small button, usually. */
+    trailing?: ReactNode;
     /** Keeps the label for assistive tech only, where the row around the field
      *  already says what it is. */
     hideLabel?: boolean;
@@ -28,6 +35,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
             description,
             error,
             prefix,
+            trailing,
             hideLabel = false,
             id,
             className = "",
@@ -74,24 +82,28 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
                         {description}
                     </p>
                 )}
-                {prefix ? (
+                {prefix || trailing ? (
                     // The border and ring move to a wrapper so the prefix sits
                     // inside the same box as the value.
                     <div
                         className={[
-                            "flex h-9 items-center rounded-md border bg-bg pl-3 shadow-xs transition-[color,box-shadow]",
+                            "flex h-9 items-center rounded-md border bg-bg shadow-xs transition-[color,box-shadow]",
                             "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
+                            prefix ? "pl-3" : "",
                             error
                                 ? "border-destructive"
                                 : "border-border-strong",
                         ].join(" ")}
                     >
-                        <span className="tabular shrink-0 text-base text-text-muted">
-                            {prefix}
-                        </span>
-                        {input(
-                            "h-full border-0 pl-1.5 shadow-none focus-visible:ring-0"
+                        {prefix && (
+                            <span className="tabular shrink-0 text-base text-text-muted">
+                                {prefix}
+                            </span>
                         )}
+                        {input(
+                            `h-full border-0 shadow-none focus-visible:ring-0 ${prefix ? "pl-1.5" : ""}`
+                        )}
+                        {trailing}
                     </div>
                 ) : (
                     input("")

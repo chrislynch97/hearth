@@ -6,7 +6,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Notice } from "@/components/ui/Notice";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SettingsSection } from "@/components/ui/SettingsSection";
-import { TextField } from "@/components/ui/TextField";
+import { PasswordField } from "@/components/ui/PasswordField";
 import { MfaEnrolment } from "./MfaEnrolment";
 import { RecoveryCodes } from "./RecoveryCodes";
 
@@ -171,9 +171,8 @@ export const MfaSection = () => {
                     disabled: !disablePassword,
                 }}
             >
-                <TextField
+                <PasswordField
                     label="Password"
-                    type="password"
                     autoComplete="current-password"
                     value={disablePassword}
                     onChange={(e) => setDisablePassword(e.currentTarget.value)}

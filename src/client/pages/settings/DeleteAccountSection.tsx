@@ -5,6 +5,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Notice } from "@/components/ui/Notice";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SettingsSection } from "@/components/ui/SettingsSection";
+import { PasswordField } from "@/components/ui/PasswordField";
 import { TextField } from "@/components/ui/TextField";
 
 /** Settings → Account → Delete your account (#230): erasing the login identity,
@@ -134,9 +135,8 @@ export const DeleteAccountSection = () => {
                     it.
                 </p>
                 {passwordRequired && (
-                    <TextField
+                    <PasswordField
                         label="Current password"
-                        type="password"
                         autoComplete="current-password"
                         value={password}
                         onChange={(e) => setPassword(e.currentTarget.value)}
