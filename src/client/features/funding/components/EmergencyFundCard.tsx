@@ -1,17 +1,16 @@
 import { formatMoney } from "@shared/money";
 import type { MoneyFormat } from "@/useMoney";
-import { Figure } from "@/features/funding/components/Figure";
-import { FigureRow } from "@/features/funding/components/FigureRow";
-import { FundingCard } from "@/features/funding/components/FundingCard";
+import { StatRow } from "@/components/ui/StatRow";
 import type { FundingPlan } from "@/features/funding/model";
+import { FundingAccountCard } from "./FundingAccountCard";
 
 export interface EmergencyFundCardProps {
     emergencyFund: FundingPlan["emergencyFund"];
     money: MoneyFormat;
 }
 
-/** The savings cushion: a target per account, with the monthly commitments it
- *  is built from shown alongside so the multiple is visible. */
+/** The savings cushion: a target per account, with the monthly commitments it's
+ *  built from shown so the multiple is visible. */
 export const EmergencyFundCard = ({
     emergencyFund,
     money,
@@ -19,21 +18,23 @@ export const EmergencyFundCard = ({
     const { months, perOwner, total } = emergencyFund;
 
     return (
-        <FundingCard
+        <FundingAccountCard
             title="Emergency fund"
-            subtitle={`A cushion of ${months} month${months === 1 ? "" : "s"} of essential outgoings to hold in easy-access savings. Covers bills and set-asides; exclude any from its own settings. Set the months in Settings.`}
-            figure={<Figure amount={formatMoney(total, money)} />}
+            figureLabel="To hold in easy-access savings"
+            figure={formatMoney(total, money)}
+            hint={`${months} ${months === 1 ? "month" : "months"} of essential bills and set-asides. Change the months in Settings, and leave any out from their own settings.`}
         >
-            {perOwner
-                .filter((owner) => owner.target > 0)
-                .map((owner) => (
-                    <FigureRow
-                        key={owner.memberId}
-                        label={owner.displayName}
-                        meta={`${formatMoney(owner.monthlyCommitments, money)}/mo × ${months}`}
-                        amount={formatMoney(owner.target, money)}
-                    />
-                ))}
-        </FundingCard>
+            <div className="flex flex-col gap-1">
+                {perOwner
+                    .filter((owner) => owner.target > 0)
+                    .map((owner) => (
+                        <StatRow
+                            key={owner.memberId}
+                            label={`${owner.displayName} · ${formatMoney(owner.monthlyCommitments, money)} × ${months}`}
+                            value={formatMoney(owner.target, money)}
+                        />
+                    ))}
+            </div>
+        </FundingAccountCard>
     );
 };
