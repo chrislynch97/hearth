@@ -3,10 +3,10 @@ import { eq, gte, isNull } from 'drizzle-orm'
 import { router, publicProcedure } from '../../trpc/trpc'
 import { scopeWhere } from '../../trpc/tenant'
 import { category, expense, setAside, household, member, pot, spendTransaction } from '../../db/schema'
-import { computeFundingPlan, mainBillOwnerId } from '../budget/funding'
+import { computeFundingPlan } from '../budget/funding'
 import { computeIncomeByMember } from '../income/service'
 import { allocationByCategory } from './summary'
-import { categoryBreakdown, monthlyTotals, monthOverMonth, perMemberVsJoint, spendVsAllocation } from './reports'
+import { categoryBreakdown, monthlyTotals, monthOverMonth, spendVsAllocation } from './reports'
 import { periodForDate, periodConfig } from '../../../shared/period'
 import { subtractMonths, todayIso } from '../../../shared/dates'
 import type { Recurrence } from '../../../shared/recurrence'
@@ -58,7 +58,6 @@ export const reportsRouter = router({
         .where(scopeWhere(ctx.householdId, setAside.householdId, isNull(setAside.archivedAt), eq(setAside.active, 1)))
 
       const incomeByMember = await computeIncomeByMember(ctx.db, ctx.householdId)
-      const householdMonthlyIncome = [...incomeByMember.values()].reduce((acc, i) => acc + i.monthlyIncome, 0)
 
       const billInputs = expenses.map((e) => ({
         recurrence: e.recurrence as Recurrence,
@@ -140,26 +139,8 @@ export const reportsRouter = router({
 
       return {
         period,
-        householdMonthlyIncome,
         spendVsAllocation: spendVsAllocation({ allocation: allocation.perCategory, breakdown: breakdown.rows }),
         categoryBreakdown: breakdown,
-        perMemberVsJoint: perMemberVsJoint({
-          members: members.map((m) => ({ id: m.id, displayName: m.displayName, kind: m.kind as 'person' | 'joint' })),
-          costs: (() => {
-            const potOwner = new Map(pots.map((p) => [p.id, p.ownerId]))
-            const jointId = members.find((m) => m.kind === 'joint')?.id
-            const personIds = new Set(members.filter((m) => m.kind === 'person').map((m) => m.id))
-            const costs: Array<{ recurrence: Recurrence; amount: number; ownerId: string }> = []
-            for (const b of billInputs) {
-              // Attribute a bill to whoever owns the pot it drains; main-account bills to their owner, else joint.
-              const ownerId =
-                b.funding === 'main' ? mainBillOwnerId(b.ownerId, personIds) ?? jointId : b.potId ? potOwner.get(b.potId) : undefined
-              if (ownerId) costs.push({ recurrence: b.recurrence, amount: b.amount, ownerId })
-            }
-            for (const s of setAsides) costs.push({ recurrence: s.recurrence as Recurrence, amount: s.amount, ownerId: s.ownerId })
-            return costs
-          })(),
-        }),
         monthlyTotals: monthlyTotals({
           spends: scoped.map((s) => ({ date: s.date, amount: s.amount })),
           asOf: today,

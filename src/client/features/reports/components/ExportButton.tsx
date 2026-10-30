@@ -1,11 +1,17 @@
-import { Button } from "@mantine/core";
+import { Download } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 
 export interface ExportButtonProps {
     onClick: () => void;
 }
 
 export const ExportButton = ({ onClick }: ExportButtonProps) => (
-    <Button size="xs" variant="default" onClick={onClick}>
+    <Button
+        compact
+        icon={<Download />}
+        className="max-sm:h-9 max-sm:w-full"
+        onClick={onClick}
+    >
         Export CSV
     </Button>
 );

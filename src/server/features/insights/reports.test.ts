@@ -3,7 +3,6 @@ import {
   categoryBreakdown,
   monthlyTotals,
   monthOverMonth,
-  perMemberVsJoint,
   spendCategory,
   spendVsAllocation,
 } from './reports'
@@ -66,26 +65,6 @@ describe('spendVsAllocation', () => {
     expect(rows.find((r) => r.categoryId === 'fun')).toEqual({ categoryId: 'fun', name: 'Fun', planned: 5000, actual: 0, diff: 5000 })
     // Spent-but-unfunded appears with planned 0.
     expect(rows.find((r) => r.categoryId === 'savings')).toEqual({ categoryId: 'savings', name: 'Savings', planned: 0, actual: 2000, diff: -2000 })
-  })
-})
-
-describe('perMemberVsJoint', () => {
-  it('sums each owner\'s monthly outgoing cost from attributed costs (fairness lens)', () => {
-    const rows = perMemberVsJoint({
-      members: [
-        { id: 'alice', displayName: 'Alice', kind: 'person' },
-        { id: 'bob', displayName: 'Bob', kind: 'person' },
-        { id: 'joint', displayName: 'Joint', kind: 'joint' },
-      ],
-      costs: [
-        { recurrence: 'monthly', amount: 5000, ownerId: 'alice' },
-        { recurrence: 'monthly', amount: 3000, ownerId: 'joint' },
-        { recurrence: 'yearly', amount: 12000, ownerId: 'bob' }, // 1000/mo
-      ],
-    })
-    expect(rows.find((r) => r.ownerId === 'alice')?.monthlyCost).toBe(5000)
-    expect(rows.find((r) => r.ownerId === 'bob')?.monthlyCost).toBe(1000)
-    expect(rows.find((r) => r.ownerId === 'joint')?.monthlyCost).toBe(3000)
   })
 })
 
