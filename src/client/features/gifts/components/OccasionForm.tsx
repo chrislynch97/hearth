@@ -4,7 +4,8 @@ import { trpc } from "@/trpc";
 import { notifySuccess } from "@/notify";
 import { useMoney } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
-import { SelectField } from "@/components/ui/SelectField";
+import { FormFooter } from "@/components/ui/FormFooter";
+import { FormChoiceField } from "@/components/ui/FormChoiceField";
 import { TextField } from "@/components/ui/TextField";
 import { ArchiveAction } from "@/components/ui/ArchiveAction";
 import {
@@ -45,6 +46,7 @@ export const OccasionForm = ({
 
     const {
         register,
+        control,
         handleSubmit,
         formState: { errors, isSubmitting },
     } = useForm<OccasionFormValues>({
@@ -142,11 +144,10 @@ export const OccasionForm = ({
                             value.trim().length > 0 || "Enter a name.",
                     })}
                 />
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-3">
                     <TextField
                         label="Date"
                         type="date"
-                        className="flex-1"
                         {...register("date")}
                     />
                     <TextField
@@ -159,7 +160,6 @@ export const OccasionForm = ({
                         placeholder="Optional"
                         inputMode="decimal"
                         prefix={money.symbol}
-                        className="flex-1"
                         error={errors.budget?.message}
                         {...register("budget", {
                             validate: (value) => validMoney(value, false),
@@ -167,53 +167,49 @@ export const OccasionForm = ({
                     />
                 </div>
                 {!occasion && copyOptions.length > 0 && (
-                    <SelectField
+                    <FormChoiceField
+                        control={control}
+                        name="copyFromId"
                         label="Copy people from"
                         description="Brings over their names and budgets, not their gifts."
-                        placeholder="Start empty"
+                        emptyLabel="Start empty"
                         options={copyOptions}
-                        {...register("copyFromId")}
                     />
                 )}
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
-                <Button variant="ghost" onClick={onDone}>
-                    Cancel
-                </Button>
-                <Button variant="solid" type="submit" disabled={isSubmitting}>
+            <FormFooter
+                aside={
+                    occasion && (
+                        <>
+                            <Button
+                                className="max-sm:h-9"
+                                disabled={setArchived.isPending}
+                                onClick={() => void toggleArchived()}
+                            >
+                                {occasion.archivedAt === null
+                                    ? "Archive"
+                                    : "Restore"}
+                            </Button>
+                            <ArchiveAction
+                                label="Delete"
+                                consequence="Deletes it with every person and gift on it. This can't be undone."
+                                pending={remove.isPending}
+                                onArchive={() => void handleRemove()}
+                            />
+                        </>
+                    )
+                }
+            >
+                <Button
+                    variant="solid"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="max-sm:h-9 max-sm:w-full"
+                >
                     {occasion ? "Save changes" : "Add occasion"}
                 </Button>
-            </div>
-
-            {occasion && (
-                <>
-                    <div className="mt-4 border-t border-border pt-3.5">
-                        <Button
-                            variant="ghost"
-                            compact
-                            className="px-0"
-                            disabled={setArchived.isPending}
-                            onClick={() => void toggleArchived()}
-                        >
-                            {occasion.archivedAt === null
-                                ? "Archive occasion"
-                                : "Restore occasion"}
-                        </Button>
-                        <p className="mt-1.5 text-xs leading-snug text-text-muted">
-                            {occasion.archivedAt === null
-                                ? "Moves it under Archived once it's over. Nothing is deleted."
-                                : "Puts it back with the current occasions."}
-                        </p>
-                    </div>
-                    <ArchiveAction
-                        label="Delete occasion"
-                        consequence="Deletes it with every person and gift on it. This can't be undone."
-                        pending={remove.isPending}
-                        onArchive={() => void handleRemove()}
-                    />
-                </>
-            )}
+            </FormFooter>
         </form>
     );
 };

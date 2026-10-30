@@ -9,8 +9,8 @@ export interface ArchiveActionProps {
     onArchive: () => void;
 }
 
-/** Archive, confirmed in place. A dialog over a docked panel would be a third
- *  layer of chrome for a one-line question. */
+/** Archive or delete, confirmed in place: a button in a form's footer that opens
+ *  out to say what it'll do. A dialog over the sheet would be one layer too many. */
 export const ArchiveAction = ({
     label,
     consequence,
@@ -19,37 +19,36 @@ export const ArchiveAction = ({
 }: ArchiveActionProps) => {
     const [confirming, setConfirming] = useState(false);
 
+    if (!confirming) {
+        return (
+            <Button
+                variant="danger-outline"
+                className="max-sm:h-9"
+                onClick={() => setConfirming(true)}
+            >
+                {label}
+            </Button>
+        );
+    }
+
     return (
-        <div className="mt-4 border-t border-border pt-3.5">
-            {confirming ? (
-                <div className="flex flex-wrap items-center gap-2">
-                    <p className="flex-1 text-sm text-text">Sure?</p>
-                    <Button
-                        variant="ghost"
-                        onClick={() => setConfirming(false)}
-                    >
-                        Keep it
-                    </Button>
-                    <Button
-                        variant="destructive"
-                        disabled={pending}
-                        onClick={onArchive}
-                    >
-                        {label}
-                    </Button>
-                </div>
-            ) : (
+        <div
+            data-confirming
+            className="flex w-full flex-col gap-3 rounded-lg bg-danger-tint p-3"
+        >
+            <p className="text-sm text-text">{consequence}</p>
+            <div className="flex justify-end gap-2 max-sm:[&>*]:h-9 max-sm:[&>*]:flex-1">
+                <Button variant="ghost" onClick={() => setConfirming(false)}>
+                    Keep it
+                </Button>
                 <Button
-                    variant="danger-outline"
-                    className="max-sm:h-9 max-sm:w-full"
-                    onClick={() => setConfirming(true)}
+                    variant="destructive"
+                    disabled={pending}
+                    onClick={onArchive}
                 >
                     {label}
                 </Button>
-            )}
-            <p className="mt-1.5 text-xs leading-snug text-text-muted">
-                {consequence}
-            </p>
+            </div>
         </div>
     );
 };

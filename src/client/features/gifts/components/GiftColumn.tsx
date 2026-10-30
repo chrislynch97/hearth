@@ -69,7 +69,7 @@ export const GiftColumn = ({
                     : "outline-transparent",
             ].join(" ")}
         >
-            <h2 className="flex items-baseline justify-between gap-2 text-eyebrow font-semibold uppercase text-text-muted">
+            <h2 className="flex items-baseline justify-between gap-2 text-sm font-semibold text-text-secondary">
                 <span>
                     {title} · {column.gifts.length}
                 </span>

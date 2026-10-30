@@ -2,8 +2,10 @@ import { useState } from "react";
 import { getRouteApi } from "@tanstack/react-router";
 import { todayIso } from "@shared/dates";
 import { trpc } from "@/trpc";
+import { Card, CardContent } from "@/components/shadcn/card";
 import { Button } from "@/components/ui/Button";
 import { EditorPanel } from "@/components/ui/EditorPanel";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { PlusIcon } from "@/components/ui/PlusIcon";
 import { Spinner } from "@/components/ui/Spinner";
 import { BudgetBar } from "@/features/gifts/components/BudgetBar";
@@ -135,24 +137,20 @@ export const GiftsPage = () => {
 
     return (
         <div className="hearth-ds mx-auto flex max-w-[1120px] flex-col gap-5 text-base">
-            <header className="border-b border-border-strong pb-5">
-                <h1 className="font-display text-h1 font-medium leading-tight">
-                    Gifts
-                </h1>
-                <p className="mt-1 text-sm text-text-muted">
-                    Who you're buying for, what you've got them, and what's left
-                    to spend.
-                </p>
-            </header>
+            <PageHeader
+                title="Gifts"
+                description="Who you're buying for, what you've got them, and what's left to spend."
+            />
 
             {occasionsQuery.isLoading && <Spinner label="Loading gifts" />}
 
             {!occasionsQuery.isLoading && !selected && (
-                <div className="flex flex-col items-start gap-3 rounded-md border border-dashed border-border-strong p-5">
-                    <p className="text-sm text-text-muted">
+                <Card>
+                    <CardContent className="flex flex-col items-start gap-3">
+                        <p className="text-base text-text-muted">
                         Start with an occasion, like Christmas or a birthday.
                         Then add the people you're buying for.
-                    </p>
+                        </p>
                     <Button
                         icon={<PlusIcon />}
                         onClick={() =>
@@ -161,7 +159,8 @@ export const GiftsPage = () => {
                     >
                         New occasion
                     </Button>
-                </div>
+                    </CardContent>
+                </Card>
             )}
 
             {selected && (
@@ -200,18 +199,19 @@ export const GiftsPage = () => {
                                         }
                                     />
                                 ))}
-                                <button
+                                <Button
+                                    variant="dashed"
+                                    icon={<PlusIcon />}
+                                    className="h-auto min-h-16 rounded-xl"
                                     onClick={() =>
                                         setEditor({
                                             kind: "recipient",
                                             recipient: undefined,
                                         })
                                     }
-                                    className="flex min-h-16 items-center justify-center gap-2 rounded-md border border-dashed border-border-strong font-semibold text-primary transition-colors duration-[140ms] ease-out hover:bg-hover"
                                 >
-                                    <PlusIcon />
-                                    <span className="text-sm">Add person</span>
-                                </button>
+                                    Add person
+                                </Button>
                             </div>
 
                             <div className="grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-3">
@@ -242,7 +242,7 @@ export const GiftsPage = () => {
                                                         variant="dashed"
                                                         compact
                                                         icon={<PlusIcon />}
-                                                        className="self-start"
+                                                        className="self-start max-sm:h-9 max-sm:w-full"
                                                         onClick={() =>
                                                             setEditor({
                                                                 kind: "gift",

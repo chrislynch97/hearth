@@ -2,6 +2,7 @@ import { Progress } from "@microcharts/react/progress";
 import { formatMoney } from "@shared/money";
 import { useElementWidth } from "@/useElementWidth";
 import { useMoney } from "@/useMoney";
+import { Button } from "@/components/ui/Button";
 import type { RecipientWithGifts } from "@/features/gifts/model";
 
 export interface PersonCardProps {
@@ -22,10 +23,10 @@ export const PersonCard = ({ recipient, onEdit }: PersonCardProps) => {
             : `${gifts.length} gift${gifts.length === 1 ? "" : "s"}`;
 
     return (
-        <button
+        <Button
             onClick={onEdit}
             aria-label={`Edit ${recipient.name}`}
-            className="flex min-w-0 flex-col gap-1.5 rounded-md border border-border bg-raised px-3 py-2.5 text-left transition-colors duration-[140ms] ease-out hover:bg-hover"
+            className="h-auto min-w-0 flex-col items-stretch gap-1.5 whitespace-normal rounded-xl p-3 text-left font-normal text-text"
         >
             <span className="truncate font-display text-md font-medium">
                 {recipient.name}
@@ -65,6 +66,6 @@ export const PersonCard = ({ recipient, onEdit }: PersonCardProps) => {
                 </span>
                 <span className="shrink-0 text-text-muted">{count}</span>
             </span>
-        </button>
+        </Button>
     );
 };

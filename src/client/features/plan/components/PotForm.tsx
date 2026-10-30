@@ -4,6 +4,7 @@ import { notifySuccess } from "@/notify";
 import { parseRate, rateInput, validRate } from "@/interestRate";
 import { orderMembers } from "@/potOptions";
 import { Button } from "@/components/ui/Button";
+import { FormFooter } from "@/components/ui/FormFooter";
 import { FormChoiceField } from "@/components/ui/FormChoiceField";
 import { TextField } from "@/components/ui/TextField";
 import { ArchiveAction } from "@/components/ui/ArchiveAction";
@@ -162,7 +163,18 @@ export const PotForm = ({
                 />
             </div>
 
-            <div className="mt-5 flex justify-end">
+            <FormFooter
+                aside={
+                    pot && (
+                        <ArchiveAction
+                            label="Archive pot"
+                            consequence="Bills pointing at it keep their history, but stop being funded. Nothing is deleted."
+                            pending={archive.isPending}
+                            onArchive={() => void handleArchive()}
+                        />
+                    )
+                }
+            >
                 <Button
                     variant="solid"
                     type="submit"
@@ -171,16 +183,7 @@ export const PotForm = ({
                 >
                     {pot ? "Save changes" : "Add pot"}
                 </Button>
-            </div>
-
-            {pot && (
-                <ArchiveAction
-                    label="Archive pot"
-                    consequence="Bills pointing at it keep their history, but stop being funded. Nothing is deleted."
-                    pending={archive.isPending}
-                    onArchive={() => void handleArchive()}
-                />
-            )}
+            </FormFooter>
         </form>
     );
 };

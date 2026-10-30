@@ -4,6 +4,7 @@ import { notifySuccess } from "@/notify";
 import { useFormatDate, useMoney } from "@/useMoney";
 import { ArchiveAction } from "@/components/ui/ArchiveAction";
 import { Button } from "@/components/ui/Button";
+import { FormFooter } from "@/components/ui/FormFooter";
 import { TextField } from "@/components/ui/TextField";
 import {
     moneyInput,
@@ -133,7 +134,18 @@ export const BalanceForm = ({
                 />
             </div>
 
-            <div className="mt-5 flex justify-end">
+            <FormFooter
+                aside={
+                    balance && (
+                        <ArchiveAction
+                            label="Delete balance"
+                            consequence="Takes this reading out of the history and the plan. This can't be undone."
+                            pending={remove.isPending}
+                            onArchive={() => void handleRemove()}
+                        />
+                    )
+                }
+            >
                 <Button
                     variant="solid"
                     type="submit"
@@ -142,16 +154,7 @@ export const BalanceForm = ({
                 >
                     {balance ? "Save changes" : "Record balance"}
                 </Button>
-            </div>
-
-            {balance && (
-                <ArchiveAction
-                    label="Delete balance"
-                    consequence="Takes this reading out of the history and the plan. This can't be undone."
-                    pending={remove.isPending}
-                    onArchive={() => void handleRemove()}
-                />
-            )}
+            </FormFooter>
         </form>
     );
 };

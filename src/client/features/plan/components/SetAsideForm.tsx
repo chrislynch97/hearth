@@ -4,6 +4,7 @@ import { trpc } from "@/trpc";
 import { notifySuccess } from "@/notify";
 import { useMoney } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
+import { FormFooter } from "@/components/ui/FormFooter";
 import { FormCheckbox } from "@/components/ui/FormCheckbox";
 import { FormChoiceField } from "@/components/ui/FormChoiceField";
 import { TextField } from "@/components/ui/TextField";
@@ -145,7 +146,18 @@ export const SetAsideForm = ({ pot, setAside, onDone }: SetAsideFormProps) => {
                 />
             </div>
 
-            <div className="mt-5 flex justify-end">
+            <FormFooter
+                aside={
+                    setAside && (
+                        <ArchiveAction
+                            label="Remove set-aside"
+                            consequence="It stops filling this pot, and the pot needs that much less each period."
+                            pending={archive.isPending}
+                            onArchive={() => void handleArchive()}
+                        />
+                    )
+                }
+            >
                 <Button
                     variant="solid"
                     type="submit"
@@ -154,16 +166,7 @@ export const SetAsideForm = ({ pot, setAside, onDone }: SetAsideFormProps) => {
                 >
                     {setAside ? "Save changes" : "Add set-aside"}
                 </Button>
-            </div>
-
-            {setAside && (
-                <ArchiveAction
-                    label="Remove set-aside"
-                    consequence="It stops filling this pot, and the pot needs that much less each period."
-                    pending={archive.isPending}
-                    onArchive={() => void handleArchive()}
-                />
-            )}
+            </FormFooter>
         </form>
     );
 };

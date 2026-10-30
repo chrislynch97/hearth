@@ -5,6 +5,7 @@ import { notifySuccess } from "@/notify";
 import { useMoney } from "@/useMoney";
 import { groupedPotOptions, orderMembers } from "@/potOptions";
 import { Button } from "@/components/ui/Button";
+import { FormFooter } from "@/components/ui/FormFooter";
 import { Combobox } from "@/components/ui/Combobox";
 import { FormCheckbox } from "@/components/ui/FormCheckbox";
 import { FormChoiceField } from "@/components/ui/FormChoiceField";
@@ -288,7 +289,18 @@ export const BillForm = ({
                 />
             </div>
 
-            <div className="mt-5 flex justify-end">
+            <FormFooter
+                aside={
+                    bill && (
+                        <ArchiveAction
+                            label="Archive bill"
+                            consequence="It stops being funded and leaves the plan. Past spends keep their history."
+                            pending={archive.isPending}
+                            onArchive={() => void handleArchive()}
+                        />
+                    )
+                }
+            >
                 <Button
                     variant="solid"
                     type="submit"
@@ -297,16 +309,7 @@ export const BillForm = ({
                 >
                     {bill ? "Save changes" : "Add bill"}
                 </Button>
-            </div>
-
-            {bill && (
-                <ArchiveAction
-                    label="Archive bill"
-                    consequence="It stops being funded and leaves the plan. Past spends keep their history."
-                    pending={archive.isPending}
-                    onArchive={() => void handleArchive()}
-                />
-            )}
+            </FormFooter>
         </form>
     );
 };

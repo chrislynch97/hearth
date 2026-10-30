@@ -1,7 +1,7 @@
 import { useFormatDate } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
+import { Combobox } from "@/components/ui/Combobox";
 import { PlusIcon } from "@/components/ui/PlusIcon";
-import { SelectField } from "@/components/ui/SelectField";
 import type { OccasionSummary } from "@/features/gifts/model";
 
 export interface OccasionBarProps {
@@ -26,36 +26,43 @@ export const OccasionBar = ({
         value: occasion.id,
         label: occasion.name,
     });
-    const current = occasions.filter(
-        (occasion) => occasion.archivedAt === null
-    );
-    const archived = occasions.filter(
-        (occasion) => occasion.archivedAt !== null
-    );
-    const options = [
-        ...current.map(option),
-        ...(archived.length > 0
-            ? [{ label: "Archived", options: archived.map(option) }]
-            : []),
-    ];
+    const groups = [
+        {
+            group: "Current",
+            items: occasions.filter((o) => o.archivedAt === null).map(option),
+        },
+        {
+            group: "Archived",
+            items: occasions.filter((o) => o.archivedAt !== null).map(option),
+        },
+    ].filter((group) => group.items.length > 0);
 
     return (
         <div className="flex flex-wrap items-end gap-2">
-            <SelectField
+            <Combobox
                 label="Occasion"
                 description={
                     selected.date ? formatDate(selected.date) : undefined
                 }
-                options={options}
+                placeholder="Pick an occasion"
+                options={groups}
                 value={selected.id}
-                onChange={(event) => onSelect(event.target.value)}
-                className="min-w-48 flex-1 sm:flex-none"
+                onChange={(id) => id && onSelect(id)}
+                className="w-full sm:w-64"
             />
-            <Button variant="ghost" onClick={onEdit}>
+            <Button
+                variant="ghost"
+                className="h-9 max-sm:flex-1"
+                onClick={onEdit}
+            >
                 Edit
             </Button>
-            <span className="flex-1" />
-            <Button icon={<PlusIcon />} onClick={onAdd}>
+            <span className="hidden flex-1 sm:block" />
+            <Button
+                icon={<PlusIcon />}
+                className="h-9 max-sm:flex-1"
+                onClick={onAdd}
+            >
                 New occasion
             </Button>
         </div>
