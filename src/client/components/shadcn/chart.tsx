@@ -5,7 +5,7 @@ import type { TooltipValueType } from "recharts"
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 // Dark follows the Appearance setting, like design-system.css.
-const THEMES = { light: "", dark: "[data-mantine-color-scheme=\"dark\"]" } as const
+const THEMES = { light: "", dark: "[data-theme=\"dark\"]" } as const
 
 const INITIAL_DIMENSION = { width: 320, height: 200 } as const
 type TooltipNameType = number | string

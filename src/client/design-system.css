@@ -1,25 +1,18 @@
-/* Hearth design system — tokens + Tailwind utilities.
- *
- * Two deliberate departures from the design handoff's drop-in file:
- *
- * 1. No preflight. `@import "tailwindcss"` would pull in Tailwind's reset, which
- *    strips Mantine's own base styles out from under the ~100 files still using
- *    it. Importing theme + utilities by layer skips it. Restore preflight when
- *    Mantine is gone.
- * 2. Dark mode keys off Mantine's `data-mantine-color-scheme` rather than the
- *    handoff's `[data-theme="dark"]`, so the existing Appearance setting drives
- *    both systems from one attribute instead of two that can disagree.
+/* Hearth design system — tokens + Tailwind utilities. Dark mode keys off
+ * `[data-theme="dark"]` on <html>, which `useColorScheme` keeps in step with the
+ * Appearance setting.
  */
 
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities);
 /* The enter/exit animations shadcn components use (`animate-in`, `fade-in-0`…). */
 @import "tw-animate-css";
 
 /* `dark:` follows the Appearance setting, like the colour roles below, rather
    than Tailwind's default of the OS preference. */
-@custom-variant dark (&:where([data-mantine-color-scheme="dark"], [data-mantine-color-scheme="dark"] *));
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme {
     --font-display: "Spectral", Georgia, "Times New Roman", serif;
@@ -177,7 +170,7 @@
 /* Grey with a trace of moss: each neutral keeps the old bark's lightness at a
    quarter of its green, so contrast is unchanged and only the primary reads
    green. Accent moss lifts to #8CC07E for text and ink; fills stay deep. */
-[data-mantine-color-scheme="dark"] {
+[data-theme="dark"] {
     color-scheme: dark;
 
     --hearth-bg: #1c1d1b;
@@ -219,75 +212,43 @@
     --hearth-shadow-modal: 0 28px 64px -12px rgba(0, 0, 0, 0.66);
 }
 
-/* Preflight is off (see the top of this file), so Mantine's base styles still
-   reach into the design-system subtree — underlining its links and giving its
-   buttons a border and a background. Reset just the elements it uses, scoped to
-   the subtree. Delete this block when preflight comes back with Mantine's exit.
-
-   It has to sit in `base`: unlayered CSS beats every layered rule, so out here
-   `background: none` would silently win against `bg-primary-tint` and
-   `color: inherit` against `text-primary`, leaving utilities in the class list
-   doing nothing.
-
-   shadcn's popovers, menus and dialogs portal out to <body>, beyond any
-   `.hearth-ds`; every part of them carries `data-slot`, so that scopes them in. */
 @layer base {
-    :where([data-slot], [data-slot] *) {
+    *,
+    ::before,
+    ::after,
+    ::backdrop,
+    ::file-selector-button {
         border-color: var(--color-border);
     }
 
-    :is(.hearth-ds, [data-slot]) a,
-    a[data-slot] {
-        color: inherit;
-        text-decoration: none;
+    body {
+        background: var(--color-canvas);
+        color: var(--color-text);
+        font-family: var(--font-ui);
+        font-size: 16px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
     }
 
-    :is(.hearth-ds, [data-slot]) button,
-    button[data-slot] {
-        appearance: none;
-        background: none;
-        border: 0;
-        padding: 0;
-        color: inherit;
-        font: inherit;
+    button:not(:disabled) {
         cursor: pointer;
     }
 
     /* Checkboxes and radios keep their native rendering: `accent-color` tints
        them to the palette, which beats redrawing a tick in CSS. */
-    :is(.hearth-ds, [data-slot])
-        :is(
-            input:not([type="checkbox"]):not([type="radio"]),
-            select,
-            textarea
-        ),
-    input[data-slot] {
+    :is(
+        input:not([type="checkbox"]):not([type="radio"]),
+        select,
+        textarea
+    ) {
         appearance: none;
-        background: none;
-        border: 0;
-        padding: 0;
-        color: inherit;
-        font: inherit;
-    }
-
-    :is(.hearth-ds, [data-slot]) :is(h1, h2, h3, p),
-    :is(h1, h2, h3, p)[data-slot] {
-        margin: 0;
-    }
-
-    [data-slot] ul,
-    ul[data-slot] {
-        margin: 0;
-        padding: 0;
-        list-style: none;
     }
 }
 
 /* The keyboard focus ring for hand-built controls: a soft halo, the same one
    shadcn draws (`ring-[3px] ring-ring/50`), so the two kinds look alike. shadcn's
    own parts carry `data-slot` and draw theirs, so they're left out — two rings
-   stacked on one control was the "crappy border". Scoped to `.hearth-ds` while
-   Mantine, with focus styles of its own, is still here. */
+   stacked on one control was the "crappy border". */
 .hearth-ds :focus-visible:not([data-slot]),
 .hearth-ds:focus-visible:not([data-slot]) {
     outline: none;

@@ -45,7 +45,7 @@ export function useWeekStart(): 'monday' | 'sunday' {
   return (ctx.data?.household?.weekStart as 'monday' | 'sunday') ?? 'monday'
 }
 
-/** The household's week start as Mantine's `firstDayOfWeek` (0 = Sunday, 1 = Monday). */
+/** The household's week start as a day index (0 = Sunday, 1 = Monday). */
 export function useFirstDayOfWeek(): 0 | 1 {
   return useWeekStart() === 'sunday' ? 0 : 1
 }

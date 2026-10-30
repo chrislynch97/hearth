@@ -154,8 +154,8 @@ async function main() {
     // Serve our own SPA + tRPC and nothing else: no directive names a third-party
     // origin, so a self-hosted instance makes zero external requests and works on
     // an offline LAN (#54 — fonts are bundled via @fontsource, not Google Fonts).
-    // Still needed: 'unsafe-inline' styles for Mantine's runtime-injected <style>
-    // tags, and data: URIs for the inline favicon and the MFA-enrolment QR image.
+    // Still needed: 'unsafe-inline' styles for sonner's runtime-injected <style>
+    // tag and inline style attributes, and data: URIs for the inline favicon and the MFA-enrolment QR image.
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],

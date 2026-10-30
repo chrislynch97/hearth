@@ -82,7 +82,7 @@ export interface DemoPerson {
   /** Stable key for this person's pots and payslip components ('ava'). Unique per household. */
   key: string
   name: string
-  /** Mantine colour name for the member chip. */
+  /** Legacy palette name for the member chip. */
   color: string
   /** Annual salary (major units) before the promotion below. */
   salary: number

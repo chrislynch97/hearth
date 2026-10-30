@@ -1,6 +1,6 @@
 import { useMediaQuery } from "@/useMediaQuery";
 
-/** Mantine's `sm` breakpoint, the same 48em `mobile.css` keys its form-control
+/** The same 48em `mobile.css` keys its form-control
  *  sizing off. */
 const PHONE = "(max-width: 48em)";
 

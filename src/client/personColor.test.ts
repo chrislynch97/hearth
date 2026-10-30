@@ -12,7 +12,7 @@ describe("personColor", () => {
         expect(personColor("Ava")).toBe(personColor("Ava", null));
     });
 
-    it("treats a legacy Mantine name or an off-palette colour as unpicked", () => {
+    it("treats a legacy palette name or an off-palette colour as unpicked", () => {
         expect(personColor("Ava", "grape")).toBe(personColor("Ava"));
         expect(personColor("Ava", "#ff0000")).toBe(personColor("Ava"));
     });

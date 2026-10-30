@@ -18,7 +18,7 @@ const isPickable = (color: string) =>
 
 /** A person's colour as CSS: the one they picked from `PERSON_COLORS`, else one
  *  from it chosen by their name, so it's the same everywhere they appear.
- *  Older members store a Mantine palette name ("grape"); that counts as
+ *  Older members store a palette name ("grape"); that counts as
  *  unpicked. */
 export const personColor = (name: string, picked?: string | null): string => {
     if (picked && isPickable(picked)) return picked;

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MantineProvider } from "@mantine/core";
 
 // The in-app route for a portability or erasure request (#228). Erasure is
 // irreversible and owner-only, so what's asserted here is who sees the controls,
@@ -47,13 +46,9 @@ vi.mock("@/csv", () => ({ downloadJson: mocks.downloadJson }));
 import { HouseholdDataSection } from "./HouseholdDataSection";
 
 const renderSection = () =>
-    render(
-        <MantineProvider>
-            <HouseholdDataSection />
-        </MantineProvider>
-    );
+    render(<HouseholdDataSection />);
 
-/** Opens the confirmation and waits for the modal, which Mantine portals in on
+/** Opens the confirmation and waits for the dialog, which portals in on
  *  the tick after the click. */
 const openConfirm = async () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));

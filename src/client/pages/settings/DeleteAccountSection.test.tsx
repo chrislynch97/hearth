@@ -6,7 +6,6 @@ import {
     waitFor,
     within,
 } from "@testing-library/react";
-import { MantineProvider } from "@mantine/core";
 
 // Erasing the login identity (#230), as opposed to the household. Irreversible
 // and confirmed twice over, so what's asserted here is that the confirmation
@@ -38,11 +37,7 @@ vi.mock("@/trpc", () => ({
 import { DeleteAccountSection } from "./DeleteAccountSection";
 
 const renderSection = () =>
-    render(
-        <MantineProvider>
-            <DeleteAccountSection />
-        </MantineProvider>
-    );
+    render(<DeleteAccountSection />);
 
 const openConfirm = async () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete my account" }));

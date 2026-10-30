@@ -7,7 +7,7 @@
  * which would otherwise paint charts dark while the rest of the app obeys a
  * light scheme forced in Appearance settings.
  *
- * The scheme is keyed off Mantine's resolved `data-mantine-color-scheme`
+ * The scheme is keyed off the resolved `data-theme`
  * attribute rather than `light-dark()`. These tokens are substituted into SVG
  * `fill`/`stroke`, and a `light-dark()` an engine won't accept there makes the
  * whole declaration invalid at computed-value time — which paints the bar its
@@ -26,10 +26,10 @@
     --mc-neutral: #7c8676;
     --mc-band: rgba(61, 107, 53, 0.1);
 
-    --mc-font: var(--mantine-font-family);
+    --mc-font: var(--font-ui);
     --mc-label-size: 0.72em;
 
-    /* Hover readouts on the interactive variants read as Mantine surfaces. */
+    /* Hover readouts on the interactive variants read as raised surfaces. */
     --mc-surface: #fbfaf4;
     --mc-surface-ink: #22261f;
     --mc-surface-edge: #e7e2d5;
@@ -44,7 +44,7 @@
     --mc-cat-6: #a3b591;
 }
 
-:root[data-mantine-color-scheme="dark"] {
+:root[data-theme="dark"] {
     --mc-stroke: #8cc07e;
     --mc-accent: #8cc07e;
 

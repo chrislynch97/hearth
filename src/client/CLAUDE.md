@@ -24,9 +24,7 @@ Two libraries, and the choice is about size, not taste:
   `main.tsx` if the chart has one.
 - Full charts (axes, legend, tooltips) use shadcn's `components/shadcn/chart`
   (recharts, themed from the design tokens) behind a `React.lazy` boundary — see
-  `features/home/components/IncomeTrendChart.tsx`. Older ones (net-worth trend,
-  payslip history) still use `@mantine/charts`; move them across as their pages
-  are rewritten, and don't add new ones on it.
+  `features/home/components/IncomeTrendChart.tsx`.
 
 Don't hand-roll a bar or sparkline out of `<Box>` and percentage widths;
 microcharts covers those and describes itself to assistive tech.

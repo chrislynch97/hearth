@@ -1,5 +1,4 @@
 import type { IconName } from "@/layout/nav-config";
-import { hearthTokens } from "@/theme";
 import type { ReactElement } from "react";
 
 // Hand-rolled line icons (24×24, stroke = currentColor) so we stay dependency-free
@@ -75,7 +74,7 @@ export interface NavIconProps {
 
 export const NavIcon = ({
     name,
-    color = hearthTokens.brand.linen,
+    color = "currentColor",
     size = 18,
 }: NavIconProps) => (
     <svg

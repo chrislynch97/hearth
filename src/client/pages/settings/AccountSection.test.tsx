@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MantineProvider } from "@mantine/core";
 
 // Changing your email drops its confirmed state, and with it password reset
 // (#198). Saving has to say so, and offer the send as its own explicit press.
@@ -42,11 +41,7 @@ vi.mock("@/trpc", () => {
 import { AccountSection } from "./AccountSection";
 
 const renderSection = () =>
-    render(
-        <MantineProvider>
-            <AccountSection />
-        </MantineProvider>
-    );
+    render(<AccountSection />);
 
 const typeEmail = (value: string) =>
     fireEvent.change(screen.getByLabelText("Email"), { target: { value } });
