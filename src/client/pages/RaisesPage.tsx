@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ListRow } from "@/components/ui/ListRow";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { PersonPicker } from "@/components/ui/PersonPicker";
 import { Spinner } from "@/components/ui/Spinner";
 import { RaiseDialog } from "@/features/raises/components/RaiseDialog";
 import { SalaryCard } from "@/features/raises/components/SalaryCard";
@@ -72,16 +72,12 @@ export const RaisesPage = () => {
                     Add people to your household to record raises.
                 </p>
             )}
-            {persons.length > 1 && activeOwner && (
-                <SegmentedControl
+            {activeOwner && (
+                <PersonPicker
                     label="Whose raises"
-                    options={persons.map((p) => ({
-                        value: p.id,
-                        label: p.displayName,
-                    }))}
+                    persons={persons}
                     value={activeOwner}
                     onChange={setOwnerId}
-                    className="w-full sm:w-fit [&>*]:flex-1"
                 />
             )}
             {raisesQuery.isLoading && <Spinner label="Loading raises" />}

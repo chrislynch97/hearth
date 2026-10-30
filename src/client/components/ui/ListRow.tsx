@@ -6,8 +6,8 @@ export interface ListRowProps {
     title: ReactNode;
     /** What it is, in a muted line under the title. */
     details?: ReactNode;
-    /** The figure on the right. */
-    value: ReactNode;
+    /** The figure on the right, if the record has one. */
+    value?: ReactNode;
     /** A line under the figure: a date, a change, a badge. */
     meta?: ReactNode;
     onClick: () => void;

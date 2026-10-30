@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/Button";
 // A bottom sheet on a phone, a centred dialog from `sm` up: same element, so no
 // breakpoint hook and nothing to re-render.
 const SHEET_ON_PHONE =
-    "max-sm:inset-x-0 max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-h-[90dvh] max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:overflow-y-auto max-sm:rounded-t-2xl max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0 max-sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] max-sm:data-[state=closed]:slide-out-to-bottom max-sm:data-[state=closed]:zoom-out-100 max-sm:data-[state=open]:slide-in-from-bottom max-sm:data-[state=open]:zoom-in-100";
+    "max-sm:inset-x-0 max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-2xl max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0 max-sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] max-sm:data-[state=closed]:slide-out-to-bottom max-sm:data-[state=closed]:zoom-out-100 max-sm:data-[state=open]:slide-in-from-bottom max-sm:data-[state=open]:zoom-in-100";
 
 export interface ConfirmDialogAction {
     label: string;
@@ -57,7 +57,7 @@ export const ConfirmDialog = ({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className={`hearth-ds gap-5 bg-raised sm:max-w-md ${SHEET_ON_PHONE}`}
+                className={`hearth-ds max-h-[90dvh] gap-5 overflow-y-auto bg-raised sm:max-w-md ${SHEET_ON_PHONE}`}
             >
                 <DialogHeader className="text-left">
                     <DialogTitle className="font-display text-h3 font-medium">
