@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
-import type { BacklogPayer, HistoryBatch } from "./model";
-import { batchSummary, isOvershoot, parseMoved, settlement } from "./model";
+import type { BacklogPayer, BacklogPot, HistoryBatch } from "./model";
+import {
+    batchSummary,
+    isOvershoot,
+    parseMoved,
+    settlement,
+    transferSections,
+} from "./model";
 import { PART_PAY_NOTE } from "@shared/reconcile";
 
 const payer = (over: Partial<BacklogPayer> = {}): BacklogPayer => ({
@@ -181,5 +187,62 @@ describe("batchSummary", () => {
             batchSummary(batch({ reversedAt: new Date("2026-03-20") }))
                 .isReversed
         ).toBe(true);
+    });
+});
+
+describe("transferSections", () => {
+    const pot = (potId: string, payers: BacklogPayer[]): BacklogPot => ({
+        potId,
+        potName: potId,
+        ownerId: "joint",
+        total: 0,
+        count: 0,
+        residual: 0,
+        payers,
+    });
+    const members = [
+        { id: "ava", displayName: "Ava" },
+        { id: "ben", displayName: "Ben" },
+    ];
+
+    it("groups a pot's payers under each person, biggest first", () => {
+        const sections = transferSections(
+            [
+                pot("Fuel", [
+                    payer({ ownerId: "ava", total: 7000, count: 1 }),
+                    payer({ ownerId: "ben", total: 9000, count: 1 }),
+                ]),
+                pot("Gym", [payer({ ownerId: "ava", total: 3000, count: 1 })]),
+            ],
+            members
+        );
+
+        expect(sections.map((s) => [s.name, s.total])).toEqual([
+            ["Ava", 10000],
+            ["Ben", 9000],
+        ]);
+        expect(sections[0]?.transfers.map((t) => t.potName)).toEqual([
+            "Fuel",
+            "Gym",
+        ]);
+    });
+
+    it("counts carried-over residuals, and nets off anything owed back", () => {
+        const [section] = transferSections(
+            [
+                pot("Fuel", [
+                    payer({
+                        ownerId: "ava",
+                        total: 5000,
+                        count: 1,
+                        residual: 1000,
+                    }),
+                ]),
+                pot("Gym", [payer({ ownerId: "ava", total: -2000, count: 1 })]),
+            ],
+            members
+        );
+
+        expect(section?.total).toBe(4000);
     });
 });

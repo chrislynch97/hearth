@@ -10,6 +10,8 @@ export interface ListRowProps {
     value?: ReactNode;
     /** A line under the figure: a date, a change, a badge. */
     meta?: ReactNode;
+    /** A quick action beside the row, in place of its chevron. */
+    trailing?: ReactNode;
     onClick: () => void;
 }
 
@@ -20,12 +22,13 @@ export const ListRow = ({
     details,
     value,
     meta,
+    trailing,
     onClick,
 }: ListRowProps) => (
-    <li>
+    <li className="flex items-center gap-2">
         <Button
             variant="ghost"
-            className="h-auto w-full justify-between gap-3 whitespace-normal px-2 py-2.5 text-left font-normal"
+            className="h-auto min-w-0 flex-1 justify-between gap-3 whitespace-normal px-2 py-2.5 text-left font-normal"
             onClick={onClick}
         >
             <span className="min-w-0 flex-1">
@@ -44,7 +47,8 @@ export const ListRow = ({
                 </span>
                 {meta}
             </span>
-            <ChevronRight className="text-text-faint" />
+            {!trailing && <ChevronRight className="text-text-faint" />}
         </Button>
+        {trailing}
     </li>
 );

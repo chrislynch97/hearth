@@ -1,4 +1,5 @@
 import type { ComponentProps } from "react";
+import { backlogToMove } from "@/features/catchup/model";
 import { Link, useLocation } from "@tanstack/react-router";
 import { trpc } from "@/trpc";
 import {
@@ -25,7 +26,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
     const { setOpenMobile, isMobile } = useSidebar();
     const backlogQuery = trpc.reconcile.backlog.useQuery();
 
-    const backlogCount = backlogQuery.data?.perPot?.length ?? 0;
+    const backlogCount = backlogToMove(
+        backlogQuery.data?.perPot ?? []
+    ).transfers;
     const counts = backlogCount > 0 ? { "/catchup": backlogCount } : {};
     // Picking a page is the end of a trip through the phone menu.
     const closeMenu = () => setOpenMobile(false);
