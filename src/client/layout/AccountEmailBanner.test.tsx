@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MantineProvider } from "@mantine/core";
 
 // The nudge covers two dead-recovery states: no address where one is required
 // (#199), and an address that's present but unproven (#198) — which is how an
@@ -37,12 +36,7 @@ vi.mock("@tanstack/react-router", () => ({
 // Imported after the mocks are registered.
 import { AccountEmailBanner } from "./AccountEmailBanner";
 
-const renderBanner = () =>
-    render(
-        <MantineProvider>
-            <AccountEmailBanner />
-        </MantineProvider>
-    );
+const renderBanner = () => render(<AccountEmailBanner />);
 
 const CONFIRM = "Confirm your email address";
 const ADD = "Add an email address";

@@ -17,7 +17,6 @@ import '@fontsource/space-mono/700.css'
 import '@mantine/core/styles.css'
 import '@mantine/charts/styles.css'
 import '@mantine/dates/styles.css'
-import '@mantine/notifications/styles.css'
 // Only the stylesheets the charts we actually use need — microcharts splits
 // them per chart, and `styles.css` would pull in all 106 (#184).
 import '@microcharts/react/styles/core.css'

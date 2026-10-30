@@ -1,17 +1,10 @@
 import { useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
-import {
-    Alert,
-    Anchor,
-    Button,
-    Group,
-    Modal,
-    SegmentedControl,
-    Stack,
-    Text,
-    Textarea,
-    TextInput,
-} from "@mantine/core";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Notice } from "@/components/ui/Notice";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { TextAreaField } from "@/components/ui/TextAreaField";
+import { TextField } from "@/components/ui/TextField";
 import { trpc } from "@/trpc";
 
 export interface FeedbackModalProps {
@@ -21,10 +14,17 @@ export interface FeedbackModalProps {
 
 type Kind = "bug" | "idea";
 
+const KINDS: Array<{ value: Kind; label: string }> = [
+    { value: "bug", label: "Bug" },
+    { value: "idea", label: "Idea" },
+];
+
 export const FeedbackModal = ({ opened, onClose }: FeedbackModalProps) => {
     const config = trpc.feedback.config.useQuery();
     const me = trpc.users.me.useQuery();
-    const submit = trpc.feedback.submit.useMutation();
+    const submit = trpc.feedback.submit.useMutation({
+        meta: { suppressErrorToast: true },
+    });
     const route = useRouterState({ select: (s) => s.location.pathname });
 
     const [kind, setKind] = useState<Kind>("bug");
@@ -51,7 +51,7 @@ export const FeedbackModal = ({ opened, onClose }: FeedbackModalProps) => {
 
     const handleClose = () => {
         onClose();
-        // Clear after the modal has animated out so nothing flashes on the way.
+        // Clear after the dialog has animated out so nothing flashes on the way.
         setTimeout(reset, 200);
     };
 
@@ -73,44 +73,44 @@ export const FeedbackModal = ({ opened, onClose }: FeedbackModalProps) => {
     };
 
     return (
-        <Modal
-            opened={opened}
-            onClose={handleClose}
+        <ConfirmDialog
+            open={opened}
+            onOpenChange={(next) => !next && handleClose()}
             title="Send feedback"
-            size="lg"
+            confirm={
+                created
+                    ? undefined
+                    : {
+                          label: "Send",
+                          onClick: () => void handleSubmit(),
+                          pending: submit.isPending,
+                          disabled: !canSubmit,
+                      }
+            }
         >
             {created ? (
-                <Stack gap="md">
-                    <Alert
-                        color="moss"
-                        variant="light"
-                        title="Thanks — your report was filed"
+                <Notice tone="positive" title="Thanks — your report was filed">
+                    Issue #{created.number} was created.{" "}
+                    <a
+                        href={created.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-semibold text-primary underline-offset-4 hover:underline"
                     >
-                        Issue #{created.number} was created.{" "}
-                        <Anchor
-                            href={created.url}
-                            target="_blank"
-                            rel="noreferrer"
-                        >
-                            View it on GitHub
-                        </Anchor>
-                        .
-                    </Alert>
-                    <Group justify="flex-end">
-                        <Button onClick={handleClose}>Done</Button>
-                    </Group>
-                </Stack>
+                        View it on GitHub
+                    </a>
+                    .
+                </Notice>
             ) : (
-                <Stack gap="sm">
+                <>
                     <SegmentedControl
+                        label="Kind of feedback"
+                        options={KINDS}
                         value={kind}
-                        onChange={(v) => setKind(v as Kind)}
-                        data={[
-                            { value: "bug", label: "Bug" },
-                            { value: "idea", label: "Idea" },
-                        ]}
+                        onChange={setKind}
+                        className="w-full [&>*]:flex-1"
                     />
-                    <TextInput
+                    <TextField
                         label="Title"
                         placeholder={
                             kind === "bug"
@@ -120,50 +120,36 @@ export const FeedbackModal = ({ opened, onClose }: FeedbackModalProps) => {
                         value={title}
                         onChange={(e) => setTitle(e.currentTarget.value)}
                         maxLength={160}
-                        autoFocus
+                        data-autofocus
                     />
-                    <Textarea
+                    <TextAreaField
                         label="Details"
                         description="What happened, what you expected, and how to reproduce it if it's a bug."
                         placeholder="The more detail, the easier it is to fix."
                         value={description}
                         onChange={(e) => setDescription(e.currentTarget.value)}
-                        minRows={5}
                         maxLength={4000}
-                        autosize
                     />
-                    <Text size="xs" c="dimmed">
+                    <p className="text-sm text-text-muted">
                         Posted publicly to the{" "}
                         {repo ? (
-                            <Text span ff="monospace" fz="xs">
+                            <span className="font-semibold text-text-secondary">
                                 {repo}
-                            </Text>
+                            </span>
                         ) : (
                             "project"
                         )}{" "}
                         GitHub repo, along with your name ({name}), the page
                         you&apos;re on, and the app version. Don&apos;t include
                         anything private.
-                    </Text>
+                    </p>
                     {error && (
-                        <Alert color="red" title="Couldn't send">
+                        <Notice tone="danger" title="Couldn't send">
                             {error}
-                        </Alert>
+                        </Notice>
                     )}
-                    <Group justify="flex-end">
-                        <Button variant="default" onClick={handleClose}>
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={() => void handleSubmit()}
-                            loading={submit.isPending}
-                            disabled={!canSubmit}
-                        >
-                            Send
-                        </Button>
-                    </Group>
-                </Stack>
+                </>
             )}
-        </Modal>
+        </ConfirmDialog>
     );
 };

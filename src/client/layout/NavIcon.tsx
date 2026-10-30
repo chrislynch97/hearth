@@ -7,13 +7,6 @@ import type { ReactElement } from "react";
 const NAV_ICONS: Record<IconName, ReactElement> = {
     home: <path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5" />,
     plan: <path d="M4 4.5h16v15H4zM9.5 4.5v15M12.5 9.5h5M12.5 13.5h3" />,
-    categories: <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />,
-    pots: (
-        <path d="M4 8V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2M5 8h14l-1 11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z" />
-    ),
-    bills: (
-        <path d="M6 2h9l3 3v17l-2.2-1.3L13.6 22 11 20.7 8.4 22 6 20.7zM9 8h6M9 12h6" />
-    ),
     review: (
         <path d="M10.5 3a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15zM16 16l5 5M7 12l2-2.2 2 1.6L13.8 8" />
     ),

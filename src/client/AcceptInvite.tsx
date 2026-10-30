@@ -18,8 +18,12 @@ export const AcceptInvite = ({ token }: AcceptInviteProps) => {
     // `invitations.info` is a read declared as a mutation so the token goes in the
     // POST body rather than a logged URL (#176) — hence a manual fire on mount
     // instead of useQuery. `mutate` is referentially stable, so this runs once.
-    const info = trpc.invitations.info.useMutation();
-    const accept = trpc.invitations.accept.useMutation();
+    const info = trpc.invitations.info.useMutation({
+        meta: { suppressErrorToast: true },
+    });
+    const accept = trpc.invitations.accept.useMutation({
+        meta: { suppressErrorToast: true },
+    });
     const [username, setUsername] = useState("");
     const [displayName, setDisplayName] = useState("");
     const [password, setPassword] = useState("");

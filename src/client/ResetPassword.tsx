@@ -15,7 +15,9 @@ export interface ResetPasswordProps {
  *  link. Deliberately doesn't sign you in: the server revokes every session and
  *  sends you back through the login screen, so a reset can't step around MFA. */
 export const ResetPassword = ({ token }: ResetPasswordProps) => {
-    const reset = trpc.auth.resetPassword.useMutation();
+    const reset = trpc.auth.resetPassword.useMutation({
+        meta: { suppressErrorToast: true },
+    });
 
     const [password, setPassword] = useState("");
     const [confirm, setConfirm] = useState("");

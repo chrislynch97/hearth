@@ -2,13 +2,20 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { isConflictError, notifyError, notifySuccess } from "./notify";
 
 // The toast library is the boundary; assert on what we hand it.
-const show = vi.hoisted(() => vi.fn());
-vi.mock("@mantine/notifications", () => ({ notifications: { show } }));
+const toast = vi.hoisted(() => ({
+    error: vi.fn(),
+    warning: vi.fn(),
+    success: vi.fn(),
+}));
+vi.mock("sonner", () => ({ toast }));
 
-const lastToast = () => show.mock.calls.at(-1)?.[0];
+const lastCall = (fn: typeof toast.error) => {
+    const [title, options] = fn.mock.calls.at(-1) ?? [];
+    return { title, ...options };
+};
 
 beforeEach(() => {
-    show.mockClear();
+    vi.clearAllMocks();
 });
 
 describe("isConflictError", () => {
@@ -34,10 +41,9 @@ describe("notifyError", () => {
     it("shows the error’s own message", () => {
         notifyError(new Error("Pot not found"));
 
-        expect(lastToast()).toMatchObject({
-            color: "red",
+        expect(lastCall(toast.error)).toMatchObject({
             title: "Something went wrong",
-            message: "Pot not found",
+            description: "Pot not found",
         });
     });
 
@@ -51,7 +57,7 @@ describe("notifyError", () => {
             { message: 42 },
         ]) {
             notifyError(thrown);
-            expect(lastToast().message).toBe(
+            expect(lastCall(toast.error).description).toBe(
                 "Something went wrong. Please try again."
             );
         }
@@ -63,49 +69,50 @@ describe("notifyError", () => {
             message: "Changed since you loaded it",
         });
 
-        expect(lastToast()).toMatchObject({
-            color: "yellow",
+        expect(toast.error).not.toHaveBeenCalled();
+        expect(lastCall(toast.warning)).toMatchObject({
             title: "Changed by someone else",
-            message: "Changed since you loaded it",
+            description: "Changed since you loaded it",
         });
     });
 
     it("leaves a conflict toast up longer than an ordinary error", () => {
         notifyError({ data: { code: "CONFLICT" } });
-        const conflict = lastToast().autoClose;
-
         notifyError(new Error("boom"));
 
-        expect(conflict).toBeGreaterThan(lastToast().autoClose);
+        expect(lastCall(toast.warning).duration).toBeGreaterThan(
+            lastCall(toast.error).duration
+        );
     });
 
     it("lets the caller override the title, conflict or not", () => {
         notifyError(new Error("boom"), { title: "Could not save" });
-        expect(lastToast().title).toBe("Could not save");
+        expect(lastCall(toast.error).title).toBe("Could not save");
 
         notifyError(
             { data: { code: "CONFLICT" } },
             { title: "Could not save" }
         );
-        expect(lastToast().title).toBe("Could not save");
+        expect(lastCall(toast.warning).title).toBe("Could not save");
     });
 });
 
 describe("notifySuccess", () => {
-    it("shows a green toast with the message", () => {
+    it("shows the message on its own", () => {
         notifySuccess("Pot archived");
 
-        expect(lastToast()).toMatchObject({
-            color: "teal",
-            message: "Pot archived",
+        expect(lastCall(toast.success)).toMatchObject({
+            title: "Pot archived",
+            description: undefined,
         });
     });
 
-    it("has no title unless one is given", () => {
-        notifySuccess("Pot archived");
-        expect(lastToast().title).toBeUndefined();
-
+    it("puts the message under a title when one is given", () => {
         notifySuccess("Pot archived", { title: "Done" });
-        expect(lastToast().title).toBe("Done");
+
+        expect(lastCall(toast.success)).toMatchObject({
+            title: "Done",
+            description: "Pot archived",
+        });
     });
 });

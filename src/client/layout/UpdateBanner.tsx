@@ -1,6 +1,7 @@
-import { Alert, Anchor, Button, Group } from "@mantine/core";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
 import { trpc } from "@/trpc";
 
 // Per-version dismissal: once dismissed, the banner stays hidden until a newer
@@ -52,34 +53,30 @@ export const UpdateBanner = () => {
         settings.data?.updaterOnline && !settings.data.updatePending;
 
     return (
-        <Alert
-            color="blue"
-            variant="light"
-            withCloseButton
-            onClose={dismiss}
-            title={`Update available: ${latest}`}
-            mb="lg"
-        >
-            <Group gap="sm">
-                <span>A new version of Hearth is available.</span>
-                {canApply ? (
-                    <Button
-                        size="xs"
-                        loading={applyUpdate.isPending}
-                        disabled={applying}
-                        onClick={() => void apply()}
-                    >
-                        Update now
-                    </Button>
-                ) : (
-                    <Anchor component={Link} to="/settings/system">
-                        View details
-                    </Anchor>
-                )}
-                {applying && (
-                    <span>Updating — the app will restart shortly.</span>
-                )}
-            </Group>
-        </Alert>
+        <div className="hearth-ds mb-5">
+            <Notice
+                title={`Update available: ${latest}`}
+                action={
+                    canApply ? (
+                        <Button
+                            variant="solid"
+                            disabled={applyUpdate.isPending || applying}
+                            onClick={() => void apply()}
+                        >
+                            Update now
+                        </Button>
+                    ) : (
+                        <Button asChild>
+                            <Link to="/settings/system">View details</Link>
+                        </Button>
+                    )
+                }
+                onDismiss={dismiss}
+            >
+                {applying
+                    ? "Updating — the app will restart shortly."
+                    : "A new version of Hearth is available."}
+            </Notice>
+        </div>
     );
 };

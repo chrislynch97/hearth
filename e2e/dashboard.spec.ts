@@ -27,7 +27,7 @@ test.describe('dashboard', () => {
     await expect(page.getByRole('heading', { name: 'Plan' })).toBeVisible()
     await expect(nav.locator('[data-active="true"]')).toHaveText('Plan')
 
-    // Categories, Pots and Bills folded into Plan: still routable, off the list.
+    // Categories, Pots and Bills folded into Plan: off the list.
     await expect(nav.getByRole('link', { name: 'Pots' })).toHaveCount(0)
 
     await nav.getByRole('link', { name: 'Upcoming' }).click()

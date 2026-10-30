@@ -12,8 +12,12 @@ import { trpc } from "@/trpc";
  *  offers self-registration when the instance has open registration enabled. */
 export const LoginGate = () => {
     const utils = trpc.useUtils();
-    const login = trpc.auth.login.useMutation();
-    const register = trpc.auth.register.useMutation();
+    const login = trpc.auth.login.useMutation({
+        meta: { suppressErrorToast: true },
+    });
+    const register = trpc.auth.register.useMutation({
+        meta: { suppressErrorToast: true },
+    });
     const regOpen = trpc.auth.registrationOpen.useQuery();
     const status = trpc.auth.status.useQuery();
 

@@ -16,7 +16,9 @@ export interface ForgotPasswordProps {
  *  screen can only ever say "if there's an account, we've sent a link" — telling
  *  the person more would tell an attacker the same thing. */
 export const ForgotPassword = ({ onBack }: ForgotPasswordProps) => {
-    const request = trpc.auth.requestPasswordReset.useMutation();
+    const request = trpc.auth.requestPasswordReset.useMutation({
+        meta: { suppressErrorToast: true },
+    });
     const [username, setUsername] = useState("");
 
     const submit = async () => {

@@ -13,7 +13,9 @@ export interface VerifyEmailProps {
  *  Reached from an email, so often in a browser with no session; the token is
  *  the whole proof, so no login is required either way. */
 export const VerifyEmail = ({ token }: VerifyEmailProps) => {
-    const verify = trpc.email.verify.useMutation();
+    const verify = trpc.email.verify.useMutation({
+        meta: { suppressErrorToast: true },
+    });
 
     // A mutation, not a query, so the token travels in the POST body rather than
     // a logged URL (#176) — hence a manual fire on mount. `mutate` is

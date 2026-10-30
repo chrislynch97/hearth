@@ -34,7 +34,6 @@ export const EditorPanel = ({
     onClose,
     children,
 }: EditorPanelProps) => {
-    const body = useRef<HTMLDivElement>(null);
     const exit = useRef(onExited);
 
     useEffect(() => {
@@ -50,18 +49,7 @@ export const EditorPanel = ({
 
     return (
         <Dialog open={!exiting} onOpenChange={(open) => !open && onClose()}>
-            <SheetDialogContent
-                className="gap-4"
-                onOpenAutoFocus={(event) => {
-                    const marked =
-                        body.current?.querySelector<HTMLElement>(
-                            "[data-autofocus]"
-                        );
-                    if (!marked) return;
-                    event.preventDefault();
-                    marked.focus();
-                }}
-            >
+            <SheetDialogContent className="gap-4">
                 <DialogHeader className="text-left">
                     <DialogTitle className="font-display text-h3 font-medium">
                         {title}
@@ -76,7 +64,7 @@ export const EditorPanel = ({
                         {subtitle ?? title}
                     </DialogDescription>
                 </DialogHeader>
-                <div ref={body}>{children}</div>
+                <div>{children}</div>
             </SheetDialogContent>
         </Dialog>
     );

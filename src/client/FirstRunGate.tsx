@@ -14,7 +14,9 @@ import { trpc } from "@/trpc";
  *  so a blocked batch can't drag it down. */
 export const FirstRunGate = () => {
     const utils = trpc.useUtils();
-    const setPassword = trpc.auth.setPassword.useMutation();
+    const setPassword = trpc.auth.setPassword.useMutation({
+        meta: { suppressErrorToast: true },
+    });
 
     const [password, setPassword_] = useState("");
     const [confirm, setConfirm] = useState("");

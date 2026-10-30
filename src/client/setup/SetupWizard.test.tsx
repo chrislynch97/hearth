@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MantineProvider } from "@mantine/core";
 
 // The wizard's "You" step (issue #61): a fresh install names its own account and
 // gets a member linked to it without ever opening Settings.
@@ -67,13 +66,11 @@ import { SetupWizard } from "./SetupWizard";
 /** Render the wizard and advance past the Household step onto You. */
 const renderOnYouStep = async () => {
     render(
-        <MantineProvider>
-            <SetupWizard
-                householdName="Maple Street"
-                currencyCode="GBP"
-                locale="en-GB"
-            />
-        </MantineProvider>
+        <SetupWizard
+            householdName="Maple Street"
+            currencyCode="GBP"
+            locale="en-GB"
+        />
     );
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await screen.findByLabelText("Your name");

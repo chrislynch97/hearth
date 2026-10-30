@@ -10,11 +10,13 @@ const SHEET_ON_PHONE =
 export type SheetDialogContentProps = ComponentProps<typeof DialogContent>;
 
 /** shadcn's DialogContent, styled for Hearth and fitted to phones, for anything
- *  that opens over a page. */
+ *  that opens over a page. Opens on the field marked `data-autofocus`, else the
+ *  first thing it can focus. */
 export const SheetDialogContent = ({
     className = "",
     style,
     children,
+    onOpenAutoFocus,
     ...props
 }: SheetDialogContentProps) => {
     const keyboardInset = useKeyboardInset();
@@ -36,6 +38,15 @@ export const SheetDialogContent = ({
                     ...style,
                 } as CSSProperties
             }
+            onOpenAutoFocus={(event) => {
+                onOpenAutoFocus?.(event);
+                const marked = (
+                    event.currentTarget as HTMLElement
+                ).querySelector<HTMLElement>("[data-autofocus]");
+                if (!marked) return;
+                event.preventDefault();
+                marked.focus();
+            }}
             {...props}
         >
             {children}

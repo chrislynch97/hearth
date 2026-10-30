@@ -1,9 +1,6 @@
 export type IconName =
     | "home"
     | "plan"
-    | "categories"
-    | "pots"
-    | "bills"
     | "review"
     | "renewals"
     | "funding"
@@ -38,9 +35,6 @@ export type IconName =
 export type AppRoutePath =
     | "/"
     | "/plan"
-    | "/categories"
-    | "/pots"
-    | "/outgoings"
     | "/review"
     | "/renewals"
     | "/funding"
@@ -126,19 +120,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
                         icon: "renewals",
                         planned:
                             "Insurance, broadband, mobile and energy contracts with their renewal dates and current price, so nothing auto-renews at the loyalty penalty.",
-                    },
-                    {
-                        to: "/categories",
-                        label: "Categories",
-                        icon: "categories",
-                        hidden: true,
-                    },
-                    { to: "/pots", label: "Pots", icon: "pots", hidden: true },
-                    {
-                        to: "/outgoings",
-                        label: "Bills",
-                        icon: "bills",
-                        hidden: true,
                     },
                     {
                         to: "/review",
