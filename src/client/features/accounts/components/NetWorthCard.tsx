@@ -6,8 +6,10 @@ import { StatRow } from "@/components/ui/StatRow";
 import { monthLabel } from "@/features/reports/model";
 import type { AccountsSummary } from "../model";
 
-const NetWorthChart = lazy(() =>
-    import("./NetWorthChart").then((m) => ({ default: m.NetWorthChart }))
+const TrendChart = lazy(() =>
+    import("@/components/ui/TrendChart").then((m) => ({
+        default: m.TrendChart,
+    }))
 );
 
 export interface NetWorthCardProps {
@@ -63,7 +65,14 @@ export const NetWorthCard = ({ summary, money }: NetWorthCardProps) => {
                 </div>
                 {timeline.length > 1 && (
                     <Suspense fallback={null}>
-                        <NetWorthChart timeline={timeline} money={money} />
+                        <TrendChart
+                            label="Net worth"
+                            points={timeline.map((point) => ({
+                                date: point.date,
+                                value: point.netWorth,
+                            }))}
+                            money={money}
+                        />
                     </Suspense>
                 )}
             </CardContent>
