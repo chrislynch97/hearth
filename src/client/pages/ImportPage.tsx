@@ -1,317 +1,109 @@
-import { useMemo, useState } from 'react'
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  Center,
-  Checkbox,
-  FileButton,
-  Group,
-  Loader,
-  Select,
-  Stack,
-  Table,
-  Text,
-  Title,
-} from '@mantine/core'
-import { trpc } from '../trpc'
-import { formatMoney } from '../../shared/money'
-import { useMoney, useFormatDate } from '../useMoney'
-import type { PreviewRow } from '../../server/features/spending/imports.router'
+import { useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { trpc } from "@/trpc";
+import { useMoney } from "@/useMoney";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Spinner } from "@/components/ui/Spinner";
+import { ImportReview } from "@/features/spending/components/ImportReview";
+import { ImportStatementCard } from "@/features/spending/components/ImportStatementCard";
 
-const STATUS_COLOR: Record<string, string> = {
-  new: 'moss',
-  foreign: 'apricot',
-  excluded: 'gray',
-  duplicate: 'gray',
-  error: 'red',
-}
+/** Bring a bank statement in: pick the file, review its rows, then import. */
+export const ImportPage = () => {
+    const money = useMoney();
+    const membersQuery = trpc.members.list.useQuery();
+    const profilesQuery = trpc.imports.profiles.useQuery();
+    const preview = trpc.imports.preview.useMutation();
+    const [chosenOwner, setChosenOwner] = useState<string | null>(null);
+    const [chosenSource, setChosenSource] = useState<string | null>(null);
+    const [file, setFile] = useState<{ name: string; text: string } | null>(
+        null
+    );
+    const [previewRun, setPreviewRun] = useState(0);
+    const [result, setResult] = useState<{
+        imported: number;
+        skipped: number;
+    } | null>(null);
 
-interface Decision {
-  included: boolean
-  potId: string | null
-}
+    const members = (membersQuery.data ?? []).filter(
+        (m) => m.archivedAt === null
+    );
+    const profiles = profilesQuery.data ?? [];
+    // Both pickers sit on the first option until someone chooses another.
+    const ownerId = chosenOwner ?? members[0]?.id ?? null;
+    const source = chosenSource ?? profiles[0]?.id ?? null;
 
-export function ImportPage() {
-  const money = useMoney()
-  const fmt = useFormatDate()
-  const utils = trpc.useUtils()
+    const runPreview = (
+        csvText: string,
+        owner: string | null,
+        bank: string | null
+    ) => {
+        if (!owner || !bank) return;
+        setResult(null);
+        preview.mutate(
+            { ownerId: owner, csvText, source: bank },
+            { onSuccess: () => setPreviewRun((run) => run + 1) }
+        );
+    };
 
-  const membersQuery = trpc.members.list.useQuery()
-  const potsQuery = trpc.pots.list.useQuery()
-  const profilesQuery = trpc.imports.profiles.useQuery()
-  const preview = trpc.imports.preview.useMutation()
-  const commit = trpc.imports.commit.useMutation()
+    const chooseFile = async (chosen: File) => {
+        const text = await chosen.text();
+        setFile({ name: chosen.name, text });
+        runPreview(text, ownerId, source);
+    };
 
-  const members = (membersQuery.data ?? []).filter((m) => m.archivedAt === null)
-  const pots = potsQuery.data ?? []
-  const potData = pots.map((p) => ({ value: p.id, label: p.name }))
-  const profiles = profilesQuery.data ?? []
-
-  const [chosenOwnerId, setOwnerId] = useState<string | null>(null)
-  const [chosenSource, setSource] = useState<string | null>(null)
-  const [csvText, setCsvText] = useState('')
-  const [filename, setFilename] = useState('')
-  const [decisions, setDecisions] = useState<Record<number, Decision>>({})
-  const [result, setResult] = useState<{ imported: number; skipped: number } | null>(null)
-
-  // Both pickers sit on the first option until the user chooses another.
-  const ownerId = chosenOwnerId ?? members[0]?.id ?? null
-  const source = chosenSource ?? profiles[0]?.id ?? null
-
-  const activeProfile = profiles.find((p) => p.id === source)
-
-  const data = preview.data
-  // Seed per-row decisions when a preview arrives: import new + foreign by default.
-  const [seededFrom, setSeededFrom] = useState(data)
-  if (data && data !== seededFrom) {
-    setSeededFrom(data)
-    const seed: Record<number, Decision> = {}
-    for (const r of data.rows) {
-      seed[r.index] = {
-        included: r.status === 'new' || r.status === 'foreign',
-        potId: r.suggestedPotId,
-      }
-    }
-    setDecisions(seed)
-  }
-
-  async function handleFile(file: File | null) {
-    if (!file) return
-    setResult(null)
-    setFilename(file.name)
-    setCsvText(await file.text())
-    preview.reset()
-  }
-
-  async function runPreview() {
-    if (!ownerId || !csvText || !source) return
-    setResult(null)
-    await preview.mutateAsync({ ownerId, csvText, source })
-  }
-
-  function setDecision(index: number, patch: Partial<Decision>) {
-    setDecisions((prev) => ({ ...prev, [index]: { ...prev[index]!, ...patch } }))
-  }
-
-  const includedRows = useMemo(
-    () => (data?.rows ?? []).filter((r) => decisions[r.index]?.included),
-    [data, decisions],
-  )
-
-  async function runCommit() {
-    if (!ownerId || !data) return
-    const rows = includedRows.map((r) => ({
-      importRef: r.importRef,
-      date: r.date,
-      description: r.description,
-      amount: r.amount,
-      potId: decisions[r.index]?.potId ?? null,
-      note: r.note || null,
-      raw: r.raw,
-    }))
-    const res = await commit.mutateAsync({
-      ownerId,
-      filename: filename || null,
-      source: data.source,
-      mapping: data.mapping,
-      totalRows: data.summary.total,
-      rows,
-    })
-    setResult({ imported: res.imported, skipped: res.skipped })
-    preview.reset()
-    setCsvText('')
-    setFilename('')
-    await Promise.all([
-      utils.spends.list.invalidate(),
-      utils.reconcile.backlog.invalidate(),
-      utils.dashboard.summary.invalidate(),
-    ])
-  }
-
-  return (
-    <Stack gap="lg" maw={960} mx="auto">
-      <Title order={2}>Import a bank statement</Title>
-      <Text size="sm" c="dimmed">
-        Export a CSV statement from your bank and drop it here. You'll review everything before
-        anything is saved. One export is one person's account.
-        {activeProfile ? ` ${activeProfile.instructions}` : ''}
-      </Text>
-
-      <Card withBorder padding="md" radius="md">
-        <Group align="flex-end" gap="md" wrap="wrap">
-          <Select
-            label="Bank"
-            data={profiles.map((p) => ({ value: p.id, label: p.label }))}
-            value={source}
-            onChange={setSource}
-            allowDeselect={false}
-            w={220}
-          />
-          <Select
-            label="Whose account?"
-            data={members.map((m) => ({ value: m.id, label: m.displayName }))}
-            value={ownerId}
-            onChange={setOwnerId}
-            allowDeselect={false}
-            w={200}
-          />
-          <FileButton onChange={(f) => void handleFile(f)} accept="text/csv,.csv">
-            {(props) => (
-              <Button variant="default" {...props}>
-                {filename || 'Choose CSV file…'}
-              </Button>
+    return (
+        <div className="hearth-ds mx-auto flex max-w-[1000px] flex-col gap-5">
+            <PageHeader
+                title="Import"
+                description="You'll review everything before anything is saved."
+            />
+            <ImportStatementCard
+                profiles={profiles}
+                members={members}
+                source={source}
+                ownerId={ownerId}
+                filename={file?.name}
+                error={preview.error?.message}
+                onSource={(next) => {
+                    setChosenSource(next);
+                    if (file) runPreview(file.text, ownerId, next);
+                }}
+                onOwner={(next) => {
+                    setChosenOwner(next);
+                    if (file) runPreview(file.text, next, source);
+                }}
+                onFile={(chosen) => void chooseFile(chosen)}
+            />
+            {result && (
+                <Notice
+                    tone="positive"
+                    title={`Imported ${result.imported} ${result.imported === 1 ? "transaction" : "transactions"}${result.skipped > 0 ? `, skipped ${result.skipped}` : ""}`}
+                    action={
+                        <Button asChild>
+                            <Link to="/spending">Go to Spending</Link>
+                        </Button>
+                    }
+                >
+                    They&apos;re on the Spending register, ready to reconcile.
+                </Notice>
             )}
-          </FileButton>
-          <Button onClick={() => void runPreview()} disabled={!ownerId || !csvText} loading={preview.isPending}>
-            Preview
-          </Button>
-        </Group>
-        {preview.error && (
-          <Alert color="red" title="Couldn't read that file" mt="sm">
-            {preview.error.message}
-          </Alert>
-        )}
-      </Card>
-
-      {result && (
-        <Alert color="moss" variant="light" title="Import complete">
-          Imported {result.imported} transaction{result.imported === 1 ? '' : 's'}
-          {result.skipped > 0 ? `, skipped ${result.skipped}` : ''}. They're on the Spending register,
-          ready to reconcile.
-        </Alert>
-      )}
-
-      {preview.isPending && (
-        <Center>
-          <Loader size="sm" />
-        </Center>
-      )}
-
-      {data && (
-        <>
-          <Group gap="xs">
-            <Badge color="moss" variant="light">
-              {data.summary.new} new
-            </Badge>
-            <Badge color="apricot" variant="light">
-              {data.summary.foreign} foreign
-            </Badge>
-            <Badge color="gray" variant="light">
-              {data.summary.excluded} internal
-            </Badge>
-            <Badge color="gray" variant="light">
-              {data.summary.duplicate} duplicate
-            </Badge>
-            {data.summary.error > 0 && (
-              <Badge color="red" variant="light">
-                {data.summary.error} error
-              </Badge>
+            {preview.isPending && <Spinner label="Reading the statement" />}
+            {preview.data && ownerId && file && !preview.isPending && (
+                <ImportReview
+                    key={previewRun}
+                    preview={preview.data}
+                    ownerId={ownerId}
+                    filename={file.name}
+                    money={money}
+                    onImported={(imported) => {
+                        setResult(imported);
+                        setFile(null);
+                        preview.reset();
+                    }}
+                />
             )}
-          </Group>
-
-          <Card withBorder padding="md" radius="md">
-            <Table.ScrollContainer minWidth={760}>
-              <Table verticalSpacing="xs" horizontalSpacing="sm">
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th w={40} />
-                    <Table.Th style={{ whiteSpace: 'nowrap' }}>Date</Table.Th>
-                    <Table.Th>Description</Table.Th>
-                    <Table.Th style={{ textAlign: 'right' }}>Amount</Table.Th>
-                    <Table.Th>Status</Table.Th>
-                    <Table.Th>Pot</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {data.rows.map((r: PreviewRow) => {
-                    const decision = decisions[r.index]
-                    const importable = r.status === 'new' || r.status === 'foreign' || r.status === 'excluded'
-                    return (
-                      <Table.Tr key={r.index} style={{ opacity: decision?.included ? 1 : 0.55 }}>
-                        <Table.Td>
-                          <Checkbox
-                            checked={decision?.included ?? false}
-                            disabled={!importable}
-                            onChange={(e) => setDecision(r.index, { included: e.currentTarget.checked })}
-                            aria-label={`Include ${r.description}`}
-                          />
-                        </Table.Td>
-                        <Table.Td>
-                          <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{r.date ? fmt(r.date) : '—'}</Text>
-                        </Table.Td>
-                        <Table.Td>
-                          <Text size="sm">{r.description}</Text>
-                          {r.error && (
-                            <Text size="xs" c="red">
-                              {r.error}
-                            </Text>
-                          )}
-                        </Table.Td>
-                        <Table.Td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                          <Text size="sm" c={r.amount < 0 ? 'moss' : undefined}>
-                            {r.amount < 0 ? '+' : ''}
-                            {formatMoney(Math.abs(r.amount), money)}
-                          </Text>
-                          {r.foreign && (
-                            <Text size="xs" c="dimmed">
-                              {r.currency}
-                            </Text>
-                          )}
-                        </Table.Td>
-                        <Table.Td>
-                          <Badge size="sm" variant="light" color={STATUS_COLOR[r.status]}>
-                            {r.status === 'excluded' ? 'internal' : r.status}
-                          </Badge>
-                        </Table.Td>
-                        <Table.Td>
-                          {importable ? (
-                            <Select
-                              size="xs"
-                              w={170}
-                              placeholder="No pot (assign later)"
-                              data={potData}
-                              value={decision?.potId ?? null}
-                              searchable
-                              clearable
-                              onChange={(v) => setDecision(r.index, { potId: v || null })}
-                              disabled={!decision?.included}
-                            />
-                          ) : (
-                            <Text size="xs" c="dimmed">
-                              —
-                            </Text>
-                          )}
-                        </Table.Td>
-                      </Table.Tr>
-                    )
-                  })}
-                </Table.Tbody>
-              </Table>
-            </Table.ScrollContainer>
-          </Card>
-
-          {commit.error && (
-            <Alert color="red" title="Import failed">
-              {commit.error.message}
-            </Alert>
-          )}
-
-          <Group justify="flex-end">
-            <Text size="sm" c="dimmed">
-              {includedRows.length} selected
-            </Text>
-            <Button
-              onClick={() => void runCommit()}
-              disabled={includedRows.length === 0}
-              loading={commit.isPending}
-            >
-              Import {includedRows.length} transaction{includedRows.length === 1 ? '' : 's'}
-            </Button>
-          </Group>
-        </>
-      )}
-    </Stack>
-  )
-}
+        </div>
+    );
+};
