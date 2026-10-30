@@ -1,6 +1,7 @@
 import { formatMoney } from "@shared/money";
 import type { PeriodFrequency } from "@shared/period";
 import type { MoneyFormat } from "@/useMoney";
+import { Card } from "@/components/shadcn/card";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/PlusIcon";
 import { PlanLineRow } from "@/features/plan/components/PlanLineRow";
@@ -45,13 +46,12 @@ export const MainAccountCard = ({
     };
 
     return (
-        <section className="rounded-md border border-dashed border-border-strong bg-sunken">
-            <div className="flex items-center gap-2.5 border-b border-border px-3.5 py-3">
+        <Card className="gap-0 overflow-hidden border-dashed border-border-strong bg-sunken py-0 shadow-none">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-border px-3.5 py-3">
                 <h3 className="font-display text-lg font-medium">
                     Straight from the main account
                 </h3>
-                <span className="flex-1" />
-                <span className="tabular text-fig-sm font-semibold text-text">
+                <span className="tabular ml-auto text-fig-sm font-semibold text-text">
                     {formatMoney(total, money)}
                     <span className="ml-1 text-xs font-normal text-text-muted">
                         {unit}
@@ -85,6 +85,6 @@ export const MainAccountCard = ({
                     Add bill
                 </Button>
             </div>
-        </section>
+        </Card>
     );
 };

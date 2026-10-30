@@ -30,6 +30,8 @@ export interface ComboboxGroup {
 export interface ComboboxProps {
     label: string;
     description?: string;
+    /** The form's message for this field. Present means invalid. */
+    error?: string;
     options: Array<ComboboxOption | ComboboxGroup>;
     value: string | null;
     /** Null when the clear option is picked. */
@@ -53,6 +55,7 @@ const isGroup = (
 export const Combobox = ({
     label,
     description,
+    error,
     options,
     value,
     onChange,
@@ -154,6 +157,7 @@ export const Combobox = ({
                     </Command>
                 </PopoverContent>
             </Popover>
+            {error && <p className="mt-1.5 text-xs text-danger">{error}</p>}
         </div>
     );
 };

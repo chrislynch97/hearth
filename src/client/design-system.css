@@ -289,7 +289,7 @@
    stacked on one control was the "crappy border". Scoped to `.hearth-ds` while
    Mantine, with focus styles of its own, is still here. */
 .hearth-ds :focus-visible:not([data-slot]),
-.hearth-ds:focus-visible {
+.hearth-ds:focus-visible:not([data-slot]) {
     outline: none;
     box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ring) 50%, transparent);
 }

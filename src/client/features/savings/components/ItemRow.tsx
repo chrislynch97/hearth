@@ -1,6 +1,9 @@
 import { formatMoney } from "@shared/money";
 import type { ItemFlag } from "@shared/savings";
 import { useFormatDate, type MoneyFormat } from "@/useMoney";
+import { Badge } from "@/components/shadcn/badge";
+import { Checkbox } from "@/components/shadcn/checkbox";
+import { Button } from "@/components/ui/Button";
 import { FLAG_LABEL } from "@/features/savings/model";
 import type { SavingsItem } from "../../../../server/db/schema";
 
@@ -41,19 +44,17 @@ export const ItemRow = ({
 
     return (
         <li className="grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0.5 border-t border-border px-3.5 py-2.5 first:border-t-0">
-            <input
-                type="checkbox"
+            <Checkbox
                 checked={paid}
                 disabled={pending}
                 aria-label={`${item.name} paid`}
-                onChange={() => (paid ? onUntick() : onTick())}
-                className="accent-primary h-4 w-4 cursor-pointer"
+                onCheckedChange={() => (paid ? onUntick() : onTick())}
             />
-            <button
-                type="button"
+            <Button
+                variant="ghost"
                 onClick={onEdit}
                 aria-label={`Edit ${item.name}`}
-                className="min-w-0 text-left"
+                className="block h-auto min-w-0 whitespace-normal px-1 py-0.5 text-left font-normal"
             >
                 <span
                     className={[
@@ -66,16 +67,16 @@ export const ItemRow = ({
                     {item.name}
                 </span>
                 {flag && (
-                    <span className="ml-1.5 inline-block rounded-xs bg-attention-tint px-1.5 align-[1px] text-xs font-semibold text-attention-fg">
+                    <Badge variant="attention" className="ml-1.5">
                         {FLAG_LABEL[flag.kind]}
-                    </span>
+                    </Badge>
                 )}
                 <span className="block text-xs text-text-muted">
                     {when}
                     {flag &&
                         ` · ${formatMoney(flag.shortBy, money)} short by then`}
                 </span>
-            </button>
+            </Button>
             <span className="tabular text-right font-semibold">
                 {formatMoney(item.amount, money)}
             </span>

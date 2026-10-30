@@ -1,3 +1,4 @@
+import { Card } from "@/components/shadcn/card";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/PlusIcon";
 
@@ -9,7 +10,7 @@ export interface EmptyPlanProps {
 /** A new household has no categories, so no pane to hold a "New pot" button.
  *  A pot doesn't need a category, so it shouldn't have to wait for one. */
 export const EmptyPlan = ({ onAddCategory, onAddPot }: EmptyPlanProps) => (
-    <section className="rounded-md border border-dashed border-border-strong bg-sunken px-4 py-6">
+    <Card className="block border-dashed border-border-strong bg-sunken px-4 py-6 shadow-none">
         <h2 className="font-display text-h3 font-medium leading-tight">
             Nothing planned yet
         </h2>
@@ -25,5 +26,5 @@ export const EmptyPlan = ({ onAddCategory, onAddPot }: EmptyPlanProps) => (
                 New pot
             </Button>
         </div>
-    </section>
+    </Card>
 );

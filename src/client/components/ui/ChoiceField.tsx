@@ -16,6 +16,8 @@ export interface ChoiceOption<T extends string> {
 export interface ChoiceFieldProps<T extends string> {
     label: string;
     description?: string;
+    /** The form's message for this field. Present means invalid. */
+    error?: string;
     options: readonly ChoiceOption<T>[];
     value: T | null;
     onChange: (value: T) => void;
@@ -32,6 +34,7 @@ export interface ChoiceFieldProps<T extends string> {
 export const ChoiceField = <T extends string>({
     label,
     description,
+    error,
     options,
     value,
     onChange,
@@ -71,6 +74,7 @@ export const ChoiceField = <T extends string>({
                 <SelectTrigger
                     id={id}
                     aria-describedby={descriptionId}
+                    aria-invalid={error ? true : undefined}
                     className="w-full border-border-strong bg-bg text-base data-[size=default]:h-9 dark:bg-bg dark:hover:bg-bg"
                 >
                     <SelectValue placeholder={placeholder} />
@@ -87,6 +91,7 @@ export const ChoiceField = <T extends string>({
                     ))}
                 </SelectContent>
             </Select>
+            {error && <p className="mt-1.5 text-xs text-danger">{error}</p>}
         </div>
     );
 };

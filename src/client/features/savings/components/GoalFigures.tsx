@@ -1,6 +1,8 @@
 import { formatMoney } from "@shared/money";
 import { periodUnitLabel } from "@shared/period";
 import { useFormatDate, type MoneyFormat } from "@/useMoney";
+import { Card, CardContent } from "@/components/shadcn/card";
+import { StatFigure } from "@/components/ui/StatFigure";
 import type { GoalDetail } from "@/features/savings/model";
 
 export interface GoalFiguresProps {
@@ -62,21 +64,17 @@ export const GoalFigures = ({ detail, money }: GoalFiguresProps) => {
     ];
 
     return (
-        <dl className="m-0 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border md:grid-cols-4">
-            {figures.map((figure) => (
-                <div
-                    key={figure.label}
-                    className="flex flex-col gap-0.5 bg-raised px-3.5 py-3"
-                >
-                    <dt className="text-sm text-text-muted">{figure.label}</dt>
-                    <dd className="tabular m-0 text-fig font-semibold text-text">
-                        {figure.value}
-                    </dd>
-                    <dd className="m-0 text-xs text-text-secondary">
-                        {figure.sub}
-                    </dd>
-                </div>
-            ))}
-        </dl>
+        <Card>
+            <CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                {figures.map((figure) => (
+                    <StatFigure
+                        key={figure.label}
+                        label={figure.label}
+                        value={figure.value}
+                        hint={figure.sub}
+                    />
+                ))}
+            </CardContent>
+        </Card>
     );
 };

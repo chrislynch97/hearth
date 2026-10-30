@@ -96,11 +96,13 @@ export const CategoryForm = ({
                         value.trim().length > 0 || "Enter a name.",
                 })}
             />
-            <div className="mt-4 flex justify-end gap-2">
-                <Button variant="ghost" onClick={onDone}>
-                    Cancel
-                </Button>
-                <Button variant="solid" type="submit" disabled={isSubmitting}>
+            <div className="mt-4 flex justify-end">
+                <Button
+                    variant="solid"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="max-sm:h-9 max-sm:w-full"
+                >
                     {category ? "Save changes" : "Add category"}
                 </Button>
             </div>

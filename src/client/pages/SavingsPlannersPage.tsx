@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { trpc } from "@/trpc";
-import { useMediaQuery } from "@/useMediaQuery";
 import { useMoney } from "@/useMoney";
+import { Card, CardContent } from "@/components/shadcn/card";
 import { Button } from "@/components/ui/Button";
 import { EditorPanel } from "@/components/ui/EditorPanel";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { PlusIcon } from "@/components/ui/PlusIcon";
 import { Spinner } from "@/components/ui/Spinner";
 import { DeleteGoalConfirm } from "@/features/savings/components/DeleteGoalConfirm";
@@ -25,9 +26,6 @@ const editorTitle = (editor: Editor): string =>
           ? "Edit goal"
           : `Delete ${editor.plan.goal.name}?`;
 
-/** Below this the editor is a sheet rather than a modal. */
-const MODAL_FITS = "(min-width: 640px)";
-
 /** Every savings goal, live ones first: where each stands, and the way into
  *  it. Adding, renaming, archiving and deleting all start here. */
 export const SavingsPlannersPage = () => {
@@ -38,7 +36,6 @@ export const SavingsPlannersPage = () => {
     const navigate = useNavigate();
     const { toggleArchived, removeGoal, removing } = useGoalActions();
 
-    const compact = !useMediaQuery(MODAL_FITS);
 
     const [editor, setEditor] = useState<Editor | null>(null);
     const [exiting, setExiting] = useState(false);
@@ -54,35 +51,31 @@ export const SavingsPlannersPage = () => {
     };
 
     return (
-        <div className="hearth-ds mx-auto flex max-w-[1040px] flex-col gap-4 text-base">
-            <header className="flex flex-wrap items-end gap-x-3 gap-y-2 border-b border-border-strong pb-5">
-                <div className="min-w-0 flex-1">
-                    <h1 className="font-display text-h1 font-medium leading-tight">
-                        Savings planners
-                    </h1>
-                    <p className="mt-1 text-sm text-text-muted">
-                        A goal on top of a pot: what each deadline needs, and
-                        whether what's going in gets you there.
-                    </p>
-                </div>
-                <Button icon={<PlusIcon />} onClick={() => setEditor({ kind: "new" })}>
-                    New goal
-                </Button>
-            </header>
+        <div className="hearth-ds mx-auto flex max-w-[1000px] flex-col gap-5 text-base">
+            <PageHeader
+                title="Savings planners"
+                description="A goal on top of a pot: what each deadline needs, and whether what's going in gets you there."
+                actions={
+                    <Button
+                        icon={<PlusIcon />}
+                        className="max-sm:h-9 max-sm:w-full"
+                        onClick={() => setEditor({ kind: "new" })}
+                    >
+                        New goal
+                    </Button>
+                }
+            />
 
             {goalsQuery.isLoading && <Spinner label="Loading goals" />}
 
             {!goalsQuery.isLoading && goals.length === 0 && (
-                <div className="flex flex-col items-start gap-3 rounded-md border border-dashed border-border-strong p-5">
-                    <p className="text-sm text-text-muted">
+                <Card>
+                    <CardContent className="text-base text-text-muted">
                         Start with a goal, like a wedding or a new kitchen, and
                         the pot it's saved in. Then add what it'll cost and
                         when.
-                    </p>
-                    <Button icon={<PlusIcon />} onClick={() => setEditor({ kind: "new" })}>
-                        New goal
-                    </Button>
-                </div>
+                    </CardContent>
+                </Card>
             )}
 
             {live.length > 0 && (
@@ -128,7 +121,6 @@ export const SavingsPlannersPage = () => {
                     subtitle={
                         editor.kind === "edit" ? editor.plan.goal.name : undefined
                     }
-                    mode={compact ? "sheet" : "modal"}
                     exiting={exiting}
                     onExited={finishClose}
                     onClose={close}
@@ -142,7 +134,6 @@ export const SavingsPlannersPage = () => {
                                     if (done) close();
                                 })
                             }
-                            onCancel={close}
                         />
                     ) : (
                         <GoalForm

@@ -26,15 +26,12 @@ export const ArchiveAction = ({
                     <p className="flex-1 text-sm text-text">Sure?</p>
                     <Button
                         variant="ghost"
-                        compact
                         onClick={() => setConfirming(false)}
                     >
-                        Cancel
+                        Keep it
                     </Button>
                     <Button
-                        variant="danger"
-                        compact
-                        className="border-danger"
+                        variant="destructive"
                         disabled={pending}
                         onClick={onArchive}
                     >
@@ -43,9 +40,8 @@ export const ArchiveAction = ({
                 </div>
             ) : (
                 <Button
-                    variant="danger"
-                    compact
-                    className="px-0"
+                    variant="danger-outline"
+                    className="max-sm:h-9 max-sm:w-full"
                     onClick={() => setConfirming(true)}
                 >
                     {label}

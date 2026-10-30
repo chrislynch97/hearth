@@ -3,7 +3,6 @@ import { getRouteApi } from "@tanstack/react-router";
 import { todayIso } from "@shared/dates";
 import { periodConfig, periodUnitLabel } from "@shared/period";
 import { trpc } from "@/trpc";
-import { useMediaQuery } from "@/useMediaQuery";
 import { useMoney } from "@/useMoney";
 import { orderMembers } from "@/potOptions";
 import { Button } from "@/components/ui/Button";
@@ -76,9 +75,6 @@ const editorKey = (editor: Editor): string => {
 
 const route = getRouteApi("/plan");
 
-/** Below this the editor opens as a sheet rather than a modal. */
-const MODAL_FITS = "(min-width: 1080px)";
-
 /** Categories, pots and bills on one page — pick a category at the
  *  top, work on its pots below, edit whatever you clicked in a panel. The three
  *  pages this replaces were the same tree sliced three ways. */
@@ -102,7 +98,6 @@ export const PlanPage = () => {
     const acknowledge = trpc.standingOrders.acknowledge.useMutation();
 
     const money = useMoney();
-    const compact = !useMediaQuery(MODAL_FITS);
     const frequency = periodConfig(ctx.data?.household ?? 1).frequency;
     const unit = periodUnitLabel(frequency);
 
@@ -220,7 +215,7 @@ export const PlanPage = () => {
     };
 
     return (
-        <div className="hearth-ds flex min-w-0">
+        <div className="hearth-ds mx-auto flex w-full min-w-0 max-w-[1120px]">
             {isLoading ? (
                 <div className="w-full">
                     <Spinner label="Loading the plan" />
@@ -266,7 +261,7 @@ export const PlanPage = () => {
                                     <Button
                                         variant="dashed"
                                         icon={<PlusIcon />}
-                                        className="h-9"
+                                        className="h-9 max-sm:w-full"
                                         onClick={() =>
                                             setEditor({
                                                 kind: "category",
@@ -277,7 +272,7 @@ export const PlanPage = () => {
                                         New category
                                     </Button>
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-3 max-sm:w-full max-sm:flex-col">
                                     <ShouldHoldDateChip
                                         value={shouldHoldOn}
                                         onChange={setShouldHoldOn}
@@ -287,9 +282,7 @@ export const PlanPage = () => {
                             </div>
                         </PlanHeader>
 
-                        {/* Capped, but generously: past ~1120px a pot card only
-                            puts more air between a name and its amount. */}
-                        <div className="flex min-w-0 flex-1 flex-col gap-10 xl:max-w-[1120px]">
+                        <div className="flex min-w-0 flex-1 flex-col gap-10">
                             {groups.length === 0 && (
                                 <EmptyPlan
                                     onAddCategory={() =>
@@ -382,7 +375,6 @@ export const PlanPage = () => {
                             <EditorPanel
                                 title={editorTitle(editor)}
                                 subtitle={editorSubtitle(editor)}
-                                mode={compact ? "sheet" : "modal"}
                                 exiting={exiting}
                                 onExited={finishClose}
                                 onClose={close}

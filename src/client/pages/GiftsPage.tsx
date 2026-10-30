@@ -2,7 +2,6 @@ import { useState } from "react";
 import { getRouteApi } from "@tanstack/react-router";
 import { todayIso } from "@shared/dates";
 import { trpc } from "@/trpc";
-import { useMediaQuery } from "@/useMediaQuery";
 import { Button } from "@/components/ui/Button";
 import { EditorPanel } from "@/components/ui/EditorPanel";
 import { PlusIcon } from "@/components/ui/PlusIcon";
@@ -50,9 +49,6 @@ const editorKey = (editor: Editor): string => {
 
 const route = getRouteApi("/gifts");
 
-/** Below this the editor is a sheet rather than a modal. */
-const MODAL_FITS = "(min-width: 640px)";
-
 /** Presents for an occasion: who they're for, what they cost, and how much of
  *  the budget is left. Shared by the whole household. */
 export const GiftsPage = () => {
@@ -60,7 +56,6 @@ export const GiftsPage = () => {
     const utils = trpc.useUtils();
     const updateGift = trpc.gifts.updateGift.useMutation();
 
-    const compact = !useMediaQuery(MODAL_FITS);
 
     // URL state, so a refresh or a shared link comes back to the same occasion.
     const requested = route.useSearch().occasion;
@@ -283,7 +278,6 @@ export const GiftsPage = () => {
                             ? undefined
                             : selected?.name
                     }
-                    mode={compact ? "sheet" : "modal"}
                     exiting={exiting}
                     onExited={finishClose}
                     onClose={close}

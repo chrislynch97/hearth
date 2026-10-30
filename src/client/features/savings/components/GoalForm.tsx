@@ -8,12 +8,12 @@ import { parseRate, rateInput, validRate } from "@/interestRate";
 import { orderMembers } from "@/potOptions";
 import { useFormatDate, useMoney } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
-import { Callout } from "@/components/ui/Callout";
+import { FormChoiceField } from "@/components/ui/FormChoiceField";
+import { Notice } from "@/components/ui/Notice";
 import {
     SegmentedControl,
     type SegmentedOption,
 } from "@/components/ui/SegmentedControl";
-import { SelectField } from "@/components/ui/SelectField";
 import { TextField } from "@/components/ui/TextField";
 import {
     moneyInput,
@@ -179,18 +179,19 @@ export const GoalForm = ({
                         options={SHAPES}
                         value={shape}
                         onChange={setShape}
+                        className="w-full [&>*]:flex-1"
                     />
                     <p className="text-xs leading-snug text-text-muted">
                         {SHAPE_HELP[shape]}
                     </p>
                 </div>
                 {switching && (undated > 0 || unitemised > 0) && goal.goal.targetDate !== null && (
-                    <Callout>
+                    <Notice tone="info" title="Switching to item by item">
                         {undated > 0 &&
                             `${undated === 1 ? "The item" : `The ${undated} items`} with no date of ${undated === 1 ? "its" : "their"} own will be due on ${formatDate(goal.goal.targetDate)}. `}
                         {unitemised > 0 &&
                             `The ${formatMoney(unitemised, money)} not itemised drops out of the plan.`}
-                    </Callout>
+                    </Notice>
                 )}
                 {shape === "target" && (
                     <>
@@ -205,13 +206,14 @@ export const GoalForm = ({
                             })}
                         />
                         {belowItems && (
-                            <Callout tone="attention">
-                                The unpaid items come to{" "}
-                                {formatMoney(unpaid, money)}, more than this
-                                target. The plan will still need{" "}
-                                {formatMoney(unpaid, money)}; Items offers to
-                                raise the target to match.
-                            </Callout>
+                            <Notice
+                                tone="attention"
+                                title={`The unpaid items come to ${formatMoney(unpaid, money)}`}
+                            >
+                                That's more than this target. The plan will
+                                still need it, and Items offers to raise the
+                                target to match.
+                            </Notice>
                         )}
                         <TextField
                             label="Date"
@@ -225,29 +227,33 @@ export const GoalForm = ({
                     </>
                 )}
                 {!goal && (
-                    <SelectField
+                    <FormChoiceField
+                        control={control}
+                        name="potId"
                         label="Pot"
                         description="The money goes in through this pot's set-aside, so Plan and Funding see it."
                         options={potOptions}
-                        {...register("potId", {
+                        onValueChange={(next) => {
                             // An existing pot brings its rate; going back to a new one brings back what was typed.
-                            onChange: (event: { target: { value: string } }) => {
-                                if (potId === NEW_POT) setNewPotRate(getValues("rate"));
-                                const picked = pots.find((pot) => pot.id === event.target.value);
-                                setValue(
-                                    "rate",
-                                    picked ? rateInput(picked.interestRateBp) : newPotRate
-                                );
-                            },
-                        })}
+                            if (potId === NEW_POT)
+                                setNewPotRate(getValues("rate"));
+                            const picked = pots.find((pot) => pot.id === next);
+                            setValue(
+                                "rate",
+                                picked
+                                    ? rateInput(picked.interestRateBp)
+                                    : newPotRate
+                            );
+                        }}
                     />
                 )}
                 {!goal && potId === NEW_POT && (
-                    <SelectField
+                    <FormChoiceField
+                        control={control}
+                        name="ownerId"
                         label="Whose pot"
                         description="Named after the goal. You can rename or recategorise it on Plan."
                         options={ownerOptions}
-                        {...register("ownerId")}
                     />
                 )}
                 <TextField
@@ -261,11 +267,13 @@ export const GoalForm = ({
                 />
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
-                <Button variant="ghost" onClick={onDone}>
-                    Cancel
-                </Button>
-                <Button variant="solid" type="submit" disabled={isSubmitting}>
+            <div className="mt-5 flex justify-end">
+                <Button
+                    variant="solid"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="max-sm:h-9 max-sm:w-full"
+                >
                     {goal ? "Save changes" : "Add goal"}
                 </Button>
             </div>

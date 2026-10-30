@@ -106,10 +106,7 @@ export const PaidForm = ({
                 )}
             </div>
 
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-                <Button variant="ghost" onClick={onDone}>
-                    Cancel
-                </Button>
+            <div className="mt-5 flex flex-wrap justify-end gap-2 max-sm:[&>*]:h-9 max-sm:[&>*]:flex-1">
                 {target === null ? (
                     <Button variant="solid" type="submit" disabled={isSubmitting}>
                         Mark paid

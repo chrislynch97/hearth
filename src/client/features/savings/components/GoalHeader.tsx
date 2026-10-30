@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
+import { ArrowLeft } from "lucide-react";
 import { formatAer } from "@/interestRate";
 import { useFormatDate } from "@/useMoney";
+import { Separator } from "@/components/shadcn/separator";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import { Button } from "@/components/ui/Button";
 import { nextDueLabel, type GoalPlan } from "@/features/savings/model";
@@ -29,15 +31,15 @@ export const GoalHeader = ({
     const { goal, potName, interestRateBp } = plan;
 
     return (
-        <header className="flex flex-col gap-2 border-b border-border-strong pb-5">
-            <Link
-                to="/planners"
-                className="self-start text-sm font-semibold text-primary"
-            >
-                ← Savings planners
-            </Link>
-            <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
-                <div className="min-w-0 flex-1">
+        <header className="flex flex-col gap-3">
+            <Button variant="link" asChild className="self-start text-sm">
+                <Link to="/planners">
+                    <ArrowLeft />
+                    Savings planners
+                </Link>
+            </Button>
+            <div className="flex flex-wrap items-end gap-x-3 gap-y-3">
+                <div className="min-w-full flex-1 sm:min-w-0">
                     <h1 className="font-display text-h1 font-medium leading-tight [overflow-wrap:anywhere]">
                         {goal.name}
                     </h1>
@@ -46,17 +48,19 @@ export const GoalHeader = ({
                             ? nextDueLabel(plan, formatDate)
                             : formatDate(goal.targetDate)}{" "}
                         · {potName} pot ·{" "}
-                        <button
-                            type="button"
-                            onClick={onEditRate}
-                            className="font-semibold text-primary hover:underline"
-                        >
-                            {interestRateBp ? formatAer(interestRateBp) : "Add interest rate"}
-                        </button>
+                        <Button variant="link" onClick={onEditRate}>
+                            {interestRateBp
+                                ? formatAer(interestRateBp)
+                                : "Add interest rate"}
+                        </Button>
                         {goal.archivedAt !== null && " · Archived"}
                     </p>
                 </div>
-                <Button variant="dashed" onClick={onRecordBalance}>
+                <Button
+                    variant="dashed"
+                    className="max-sm:h-9 max-sm:flex-1"
+                    onClick={onRecordBalance}
+                >
                     Record balance
                 </Button>
                 <ActionMenu
@@ -64,13 +68,17 @@ export const GoalHeader = ({
                     items={[
                         { label: "Edit", onSelect: onEdit },
                         {
-                            label: goal.archivedAt === null ? "Archive" : "Restore",
+                            label:
+                                goal.archivedAt === null
+                                    ? "Archive"
+                                    : "Restore",
                             onSelect: onToggleArchived,
                         },
                         { label: "Delete", onSelect: onDelete, danger: true },
                     ]}
                 />
             </div>
+            <Separator />
         </header>
     );
 };

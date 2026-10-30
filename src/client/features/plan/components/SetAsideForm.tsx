@@ -4,8 +4,8 @@ import { trpc } from "@/trpc";
 import { notifySuccess } from "@/notify";
 import { useMoney } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
-import { Checkbox } from "@/components/ui/Checkbox";
-import { SelectField } from "@/components/ui/SelectField";
+import { FormCheckbox } from "@/components/ui/FormCheckbox";
+import { FormChoiceField } from "@/components/ui/FormChoiceField";
 import { TextField } from "@/components/ui/TextField";
 import { ArchiveAction } from "@/components/ui/ArchiveAction";
 import type { Pot, SetAside } from "../../../../server/db/schema";
@@ -41,6 +41,7 @@ export const SetAsideForm = ({ pot, setAside, onDone }: SetAsideFormProps) => {
 
     const {
         register,
+        control,
         handleSubmit,
         formState: { errors, isSubmitting },
     } = useForm<SetAsideFormValues>({
@@ -118,37 +119,39 @@ export const SetAsideForm = ({ pot, setAside, onDone }: SetAsideFormProps) => {
                     autoFocus
                     {...register("name")}
                 />
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-3">
                     <TextField
                         label="Amount"
                         placeholder="0.00"
                         inputMode="decimal"
                         prefix={money.symbol}
-                        className="flex-1"
                         error={errors.amountMajor?.message}
                         {...register("amountMajor", {
                             validate: (value) =>
                                 Number(value) > 0 || "Enter an amount.",
                         })}
                     />
-                    <SelectField
+                    <FormChoiceField
+                        control={control}
+                        name="recurrence"
                         label="Every"
                         options={RECURRENCES}
-                        className="w-32"
-                        {...register("recurrence")}
                     />
                 </div>
-                <Checkbox
+                <FormCheckbox
+                    control={control}
+                    name="includeInEmergencyFund"
                     label="Counts toward the emergency fund"
-                    {...register("includeInEmergencyFund")}
                 />
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
-                <Button variant="ghost" onClick={onDone}>
-                    Cancel
-                </Button>
-                <Button variant="solid" type="submit" disabled={isSubmitting}>
+            <div className="mt-5 flex justify-end">
+                <Button
+                    variant="solid"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="max-sm:h-9 max-sm:w-full"
+                >
                     {setAside ? "Save changes" : "Add set-aside"}
                 </Button>
             </div>

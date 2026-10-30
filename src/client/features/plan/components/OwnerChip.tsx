@@ -1,3 +1,4 @@
+import { personColor } from "@/personColor";
 import type { Member } from "../../../../server/db/schema";
 
 export interface OwnerChipProps {
@@ -14,7 +15,9 @@ export const OwnerChip = ({ owner }: OwnerChipProps) => {
         <span className="inline-flex shrink-0 items-center gap-1.5">
             <span
                 className="h-1.5 w-1.5 rounded-full"
-                style={{ background: owner.color ?? "var(--color-text-muted)" }}
+                style={{
+                    background: personColor(owner.displayName, owner.color),
+                }}
             />
             <span className="text-xs text-text-muted">{owner.displayName}</span>
         </span>

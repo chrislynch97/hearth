@@ -3,12 +3,14 @@ import { formatMoney } from "@shared/money";
 import type { PeriodFrequency } from "@shared/period";
 import { formatAer } from "@/interestRate";
 import type { MoneyFormat } from "@/useMoney";
+import { Badge } from "@/components/shadcn/badge";
+import { Card } from "@/components/shadcn/card";
 import { Button } from "@/components/ui/Button";
 import { OwnerChip } from "@/features/plan/components/OwnerChip";
 import { PlanLineRow } from "@/features/plan/components/PlanLineRow";
 import { PotColumn } from "@/features/plan/components/PotColumn";
 import { ShouldHold } from "@/features/plan/components/ShouldHold";
-import { StandingOrderChip } from "@/features/plan/components/StandingOrderChip";
+import { StandingOrderStrip } from "@/features/plan/components/StandingOrderStrip";
 import {
     fundingOf,
     perPeriodLabel,
@@ -78,25 +80,18 @@ export const PotCard = ({
         row.name === pot.name ? "Contribution" : row.name;
 
     return (
-        <section className="rounded-md border border-border bg-raised">
-            <div className="flex items-center gap-2.5 border-b border-border px-3.5 py-3">
-                <h3 className="font-display text-lg font-medium">{pot.name}</h3>
+        <Card className="gap-0 overflow-hidden py-0">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-border px-3.5 py-3">
+                <h3 className="min-w-0 truncate font-display text-lg font-medium">
+                    {pot.name}
+                </h3>
                 <OwnerChip owner={owner} />
                 {pot.interestRateBp ? (
-                    <span className="tabular shrink-0 rounded-xs bg-sunken px-1.5 text-xs text-text-secondary">
+                    <Badge variant="secondary">
                         {formatAer(pot.interestRateBp)}
-                    </span>
+                    </Badge>
                 ) : null}
-                <span className="flex-1" />
-                {staleStandingOrder && (
-                    <StandingOrderChip
-                        wasMonthly={staleStandingOrder.wasMonthly}
-                        money={money}
-                        pending={acknowledging}
-                        onAcknowledge={onAcknowledge}
-                    />
-                )}
-                <span className="tabular text-fig-sm font-semibold text-text">
+                <span className="tabular ml-auto text-fig-sm font-semibold text-text">
                     {formatMoney(perPeriod, money)}
                     <span className="ml-1 text-xs font-normal text-text-muted">
                         {unit}
@@ -107,10 +102,20 @@ export const PotCard = ({
                     compact
                     onClick={onEditPot}
                     aria-label={`Edit ${pot.name}`}
+                    className="max-sm:h-8"
                 >
                     Edit
                 </Button>
             </div>
+
+            {staleStandingOrder && (
+                <StandingOrderStrip
+                    wasMonthly={staleStandingOrder.wasMonthly}
+                    money={money}
+                    pending={acknowledging}
+                    onAcknowledge={onAcknowledge}
+                />
+            )}
 
             {goal && (
                 <Link
@@ -179,6 +184,6 @@ export const PotCard = ({
                     ))}
                 </PotColumn>
             </div>
-        </section>
+        </Card>
     );
 };

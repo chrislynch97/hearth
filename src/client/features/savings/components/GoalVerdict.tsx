@@ -3,6 +3,7 @@ import { formatMoney } from "@shared/money";
 import { periodUnitLabel } from "@shared/period";
 import { useFormatDate, type MoneyFormat } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
 import { verdict, type GoalDetail } from "@/features/savings/model";
 
 export interface GoalVerdictProps {
@@ -28,33 +29,32 @@ export const GoalVerdict = ({
     const canApply = detail.contributionLineCount <= 1;
 
     return (
-        <div
-            className={[
-                "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md px-3.5 py-2.5",
-                short
-                    ? "border border-attention bg-attention-tint"
-                    : "bg-primary-tint-weak",
-            ].join(" ")}
-        >
-            <p className="min-w-0 flex-[1_1_280px] text-base">
-                <strong className="font-semibold">{lead}</strong>
-                {rest}
-            </p>
-            {short && needed !== null && canApply && (
-                <Button
-                    variant="solid"
-                    disabled={pending}
-                    onClick={() => onUse(needed)}
-                >
-                    Use {formatMoney(needed, money)}
-                    {periodUnitLabel(detail.period.frequency)}
-                </Button>
-            )}
-            {short && needed !== null && !canApply && (
-                <Link to="/plan" className="text-sm font-semibold text-primary">
-                    Change the {detail.potName} pot's lines on Plan →
-                </Link>
-            )}
-        </div>
+        <Notice
+            tone={short ? "attention" : "positive"}
+            title={
+                <span className="font-normal">
+                    <strong className="font-semibold">{lead}</strong>
+                    {rest}
+                </span>
+            }
+            action={
+                short &&
+                needed !== null &&
+                (canApply ? (
+                    <Button
+                        variant="attention"
+                        disabled={pending}
+                        onClick={() => onUse(needed)}
+                    >
+                        Use {formatMoney(needed, money)}
+                        {periodUnitLabel(detail.period.frequency)}
+                    </Button>
+                ) : (
+                    <Button asChild>
+                        <Link to="/plan">Change it on Plan</Link>
+                    </Button>
+                ))
+            }
+        />
     );
 };
