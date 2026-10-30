@@ -73,7 +73,7 @@ test('the instance owner is offered the sign-everyone-out lever', async ({ page 
   await dialog.getByLabel(/to confirm/).fill('sign out everyone')
   await expect(dialog.getByRole('button', { name: 'Sign everyone out' })).toBeEnabled()
 
-  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await dialog.getByRole('button', { name: 'Close' }).click()
   await expect(dialog).toBeHidden()
 })
 

@@ -39,7 +39,8 @@ export interface ConfirmDialogProps {
 }
 
 /** "Are you sure?" with room for the consequences and for whatever has to be
- *  typed first. Cancel always closes; the confirm stays where the thumb is. */
+ *  typed first. Closes from its corner or by tapping outside; the confirm stays
+ *  where the thumb is. */
 export const ConfirmDialog = ({
     open,
     onOpenChange,
@@ -79,13 +80,6 @@ export const ConfirmDialog = ({
                             {aside}
                         </div>
                     )}
-                    <Button
-                        variant="ghost"
-                        disabled={busy}
-                        onClick={() => onOpenChange(false)}
-                    >
-                        Cancel
-                    </Button>
                     {secondary && (
                         <Button
                             variant="outline"

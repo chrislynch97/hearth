@@ -112,7 +112,7 @@ describe("AccountSection email change", () => {
         renderSection();
         typeEmail("new@example.com");
         save();
-        fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+        fireEvent.click(await screen.findByRole("button", { name: "Close" }));
 
         await waitFor(() =>
             expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
