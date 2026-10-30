@@ -1,7 +1,7 @@
-import { Center, Loader } from '@mantine/core'
 import { RouterProvider } from '@tanstack/react-router'
+import { Spinner } from '@/components/ui/Spinner'
 import { trpc } from '@/trpc'
-import { ConnectionError } from './ErrorState'
+import { ConnectionError } from './ConnectionError'
 import { LoginGate } from './LoginGate'
 import { FirstRunGate } from './FirstRunGate'
 import { AcceptInvite } from './AcceptInvite'
@@ -34,11 +34,7 @@ export function App() {
   }
 
   if (authStatus.isLoading) {
-    return (
-      <Center h={200}>
-        <Loader />
-      </Center>
-    )
+    return <Spinner label="Loading Hearth" />
   }
 
   if (authStatus.isError) {
@@ -63,11 +59,7 @@ function AuthedApp() {
   const ctx = trpc.bootstrap.context.useQuery()
 
   if (ctx.isLoading) {
-    return (
-      <Center h={200}>
-        <Loader />
-      </Center>
-    )
+    return <Spinner label="Loading Hearth" />
   }
 
   if (ctx.isError) {

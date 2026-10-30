@@ -3,18 +3,16 @@ import { getRouteApi } from "@tanstack/react-router";
 import { todayIso } from "@shared/dates";
 import { periodConfig, periodUnitLabel } from "@shared/period";
 import { trpc } from "@/trpc";
-import { useMediaQuery } from "@/useMediaQuery";
 import { useMoney } from "@/useMoney";
 import { orderMembers } from "@/potOptions";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/PlusIcon";
-import { SelectField } from "@/components/ui/SelectField";
 import { Spinner } from "@/components/ui/Spinner";
 import { BillForm } from "@/features/plan/components/BillForm";
 import { BillReviewLink } from "@/features/plan/components/BillReviewLink";
 import { CategoryForm } from "@/features/plan/components/CategoryForm";
 import { CategoryPane } from "@/features/plan/components/CategoryPane";
-import { CategoryRail } from "@/features/plan/components/CategoryRail";
+import { CategoryFilter } from "@/features/plan/components/CategoryFilter";
 import { EditorPanel } from "@/components/ui/EditorPanel";
 import { EmptyPlan } from "@/features/plan/components/EmptyPlan";
 import { OwnerFilter } from "@/features/plan/components/OwnerFilter";
@@ -77,13 +75,8 @@ const editorKey = (editor: Editor): string => {
 
 const route = getRouteApi("/plan");
 
-/** Where the rail earns its 200px. Below this the page goes compact: the
- *  categories become a picker in the header, and the editor a sheet rather than
- *  a modal. Kept in step with the `min-[1080px]:` variants below. */
-const RAIL_FITS = "(min-width: 1080px)";
-
-/** Categories, pots and bills on one page — pick a category on the left, work on
- *  its pots in the middle, edit whatever you clicked on the right. The three
+/** Categories, pots and bills on one page — pick a category at the
+ *  top, work on its pots below, edit whatever you clicked in a panel. The three
  *  pages this replaces were the same tree sliced three ways. */
 export const PlanPage = () => {
     const categoriesQuery = trpc.categories.list.useQuery();
@@ -105,7 +98,6 @@ export const PlanPage = () => {
     const acknowledge = trpc.standingOrders.acknowledge.useMutation();
 
     const money = useMoney();
-    const compact = !useMediaQuery(RAIL_FITS);
     const frequency = periodConfig(ctx.data?.household ?? 1).frequency;
     const unit = periodUnitLabel(frequency);
 
@@ -149,7 +141,7 @@ export const PlanPage = () => {
         frequency,
     });
 
-    // Filter by owner first, so the rail and the page total agree with the cards:
+    // Filter by owner first, so the tabs and the page total agree with the cards:
     // picking Ben should retotal the categories, not just thin them out.
     const ownerGroups = groups.map((group) =>
         filterByOwner(group, owner, members, frequency)
@@ -223,38 +215,14 @@ export const PlanPage = () => {
     };
 
     return (
-        // Full-bleed: the rail is a nav tier against the sidebar, not a card
-        // floating inside the page, so it has to cancel AppShell's padding and
-        // put it back on the content column. `first:` keeps the top margin off
-        // whenever a banner is rendered above us.
-        <div className="hearth-ds -mx-[var(--app-shell-padding)] -mb-[var(--app-shell-padding)] flex min-h-[calc(100dvh-var(--app-shell-header-height,0px))] items-stretch first:-mt-[var(--app-shell-padding)]">
+        <div className="hearth-ds mx-auto flex w-full min-w-0 max-w-[1120px]">
             {isLoading ? (
                 <div className="w-full">
                     <Spinner label="Loading the plan" />
                 </div>
             ) : (
                 <>
-                    {/* Sticky and self-start rather than stretched: the rail is
-                        taller than the window on the All view, and an add
-                        button you have to scroll eight categories to reach is not
-                        an add button. */}
-                    <div className="sticky top-0 hidden h-[calc(100dvh-var(--app-shell-header-height,0px))] self-start min-[1080px]:flex">
-                        <CategoryRail
-                            groups={ownerGroups}
-                            selected={selected}
-                            onSelect={selectCategory}
-                            total={total}
-                            money={money}
-                            onAddCategory={() =>
-                                setEditor({
-                                    kind: "category",
-                                    category: undefined,
-                                })
-                            }
-                        />
-                    </div>
-
-                    <div className="flex min-w-0 flex-1 flex-col gap-6 p-[var(--app-shell-padding)]">
+                    <div className="flex min-w-0 flex-1 flex-col gap-6">
                         <PlanHeader
                             total={total}
                             unit={unit}
@@ -276,68 +244,45 @@ export const PlanPage = () => {
                                 0
                             )}
                         >
-                            {/* No rail this narrow, so the picker carries the
-                            add button the rail would have held. */}
-                            <div className="flex items-end gap-2 min-[1080px]:hidden">
-                                {/* Empty means all: the field reads as unfiltered
-                                rather than as one more category, and the real
-                                ones sit under their own header in the native
-                                picker. */}
-                                <SelectField
-                                    label="Category"
-                                    className="flex-1"
-                                    placeholder="All categories"
-                                    options={[
-                                        {
-                                            label: "Categories",
-                                            options: ownerGroups.map(
-                                                (group) => ({
-                                                    value: groupKey(group),
-                                                    label: group.name,
-                                                })
-                                            ),
-                                        },
-                                    ]}
-                                    value={selected === ALL ? "" : selected}
-                                    onChange={(event) =>
-                                        selectCategory(
-                                            event.currentTarget.value || ALL
-                                        )
-                                    }
-                                />
-                                <Button
-                                    variant="outline"
-                                    aria-label="New category"
-                                    className="h-[34px] w-[34px] px-0"
-                                    onClick={() =>
-                                        setEditor({
-                                            kind: "category",
-                                            category: undefined,
-                                        })
-                                    }
-                                >
-                                    <PlusIcon size={15} />
-                                </Button>
-                            </div>
                             <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div className="flex flex-wrap items-center gap-1.5">
+                                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                                    <CategoryFilter
+                                        groups={ownerGroups}
+                                        selected={selected}
+                                        onSelect={selectCategory}
+                                        total={total}
+                                        money={money}
+                                    />
                                     <OwnerFilter
                                         members={orderMembers(members)}
                                         selected={owner}
                                         onSelect={setOwner}
                                     />
+                                    <Button
+                                        variant="dashed"
+                                        icon={<PlusIcon />}
+                                        className="h-9 max-sm:w-full"
+                                        onClick={() =>
+                                            setEditor({
+                                                kind: "category",
+                                                category: undefined,
+                                            })
+                                        }
+                                    >
+                                        New category
+                                    </Button>
+                                </div>
+                                <div className="flex items-center gap-3 max-sm:w-full max-sm:flex-col">
                                     <ShouldHoldDateChip
                                         value={shouldHoldOn}
                                         onChange={setShouldHoldOn}
                                     />
+                                    <BillReviewLink />
                                 </div>
-                                <BillReviewLink />
                             </div>
                         </PlanHeader>
 
-                        {/* Capped, but generously: past ~1120px a pot card only
-                            puts more air between a name and its amount. */}
-                        <div className="flex min-w-0 flex-1 flex-col gap-10 xl:max-w-[1120px]">
+                        <div className="flex min-w-0 flex-1 flex-col gap-10">
                             {groups.length === 0 && (
                                 <EmptyPlan
                                     onAddCategory={() =>
@@ -430,7 +375,6 @@ export const PlanPage = () => {
                             <EditorPanel
                                 title={editorTitle(editor)}
                                 subtitle={editorSubtitle(editor)}
-                                mode={compact ? "sheet" : "modal"}
                                 exiting={exiting}
                                 onExited={finishClose}
                                 onClose={close}

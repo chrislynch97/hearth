@@ -76,7 +76,7 @@ export const PotColumn = ({
                     variant="dashed"
                     compact
                     icon={<PlusIcon />}
-                    className="mt-auto w-full"
+                    className="mt-auto w-full max-sm:h-9"
                     onClick={onAdd}
                 >
                     {addLabel}

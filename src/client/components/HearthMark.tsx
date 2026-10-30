@@ -1,22 +1,19 @@
-import { hearthTokens } from "@/theme";
-
 export interface HearthMarkProps {
     size?: number;
-    /** The house stroke. Defaults to linen for the dark mobile header; the light
-     *  sidebar rail passes moss. The window stays apricot either way. */
+    /** The house stroke. The window stays apricot either way. */
     color?: string;
 }
 
 export const HearthMark = ({
     size = 24,
-    color = hearthTokens.brand.linen,
+    color = "currentColor",
 }: HearthMarkProps) => (
     <svg
         width={size}
         height={size}
         viewBox="0 0 48 48"
         fill="none"
-        style={{ marginTop: -3, flexShrink: 0 }}
+        className="-mt-[3px] shrink-0"
     >
         <polyline
             points="8,25 24,10 40,25"
@@ -32,6 +29,6 @@ export const HearthMark = ({
             strokeLinecap="round"
             strokeLinejoin="round"
         />
-        <circle cx="24" cy="32" r="3.8" fill={hearthTokens.brand.apricot} />
+        <circle cx="24" cy="32" r="3.8" fill="var(--color-attention)" />
     </svg>
 );

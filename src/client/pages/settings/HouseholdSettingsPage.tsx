@@ -1,17 +1,16 @@
-import { Stack } from "@mantine/core";
-import { AuditLogSection } from "@/pages/AuditLogSection";
+import { AuditLogSection } from "./AuditLogSection";
 import { GeneralSection } from "./GeneralSection";
-import { MembersSection } from "./MembersSection";
 import { HouseholdAccessSection } from "./HouseholdAccessSection";
 import { HouseholdDataSection } from "./HouseholdDataSection";
+import { MembersSection } from "./MembersSection";
 
 /** Settings for the active household, with edits gated by role — see issue #16. */
 export const HouseholdSettingsPage = () => (
-    <Stack gap="lg">
+    <div className="flex flex-col gap-10">
         <GeneralSection />
         <MembersSection />
         <HouseholdAccessSection />
-        <HouseholdDataSection />
         <AuditLogSection />
-    </Stack>
+        <HouseholdDataSection />
+    </div>
 );

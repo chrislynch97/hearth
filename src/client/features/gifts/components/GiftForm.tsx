@@ -3,7 +3,8 @@ import { trpc } from "@/trpc";
 import { notifySuccess } from "@/notify";
 import { useMoney } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
-import { SelectField } from "@/components/ui/SelectField";
+import { FormFooter } from "@/components/ui/FormFooter";
+import { FormChoiceField } from "@/components/ui/FormChoiceField";
 import { TextField } from "@/components/ui/TextField";
 import { ArchiveAction } from "@/components/ui/ArchiveAction";
 import {
@@ -49,6 +50,7 @@ export const GiftForm = ({
 
     const {
         register,
+        control,
         handleSubmit,
         formState: { errors, isSubmitting },
     } = useForm<GiftFormValues>({
@@ -121,28 +123,28 @@ export const GiftForm = ({
                             value.trim().length > 0 || "Enter what it is.",
                     })}
                 />
-                <SelectField
+                <FormChoiceField
+                    control={control}
+                    name="recipientId"
                     label="For"
                     options={recipientOptions}
-                    {...register("recipientId")}
                 />
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-3">
                     <TextField
                         label="Price"
                         placeholder="0.00"
                         inputMode="decimal"
                         prefix={money.symbol}
-                        className="flex-1"
                         error={errors.amount?.message}
                         {...register("amount", {
                             validate: (value) => validMoney(value, true),
                         })}
                     />
-                    <SelectField
+                    <FormChoiceField
+                        control={control}
+                        name="status"
                         label="Status"
                         options={STATUS_OPTIONS}
-                        className="w-32"
-                        {...register("status")}
                     />
                 </div>
                 <TextField
@@ -157,23 +159,27 @@ export const GiftForm = ({
                 />
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
-                <Button variant="ghost" onClick={onDone}>
-                    Cancel
-                </Button>
-                <Button variant="solid" type="submit" disabled={isSubmitting}>
+            <FormFooter
+                aside={
+                    gift && (
+                        <ArchiveAction
+                            label="Delete gift"
+                            consequence="Removes it from the list and the totals."
+                            pending={remove.isPending}
+                            onArchive={() => void handleRemove()}
+                        />
+                    )
+                }
+            >
+                <Button
+                    variant="solid"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="max-sm:h-9 max-sm:w-full"
+                >
                     {gift ? "Save changes" : "Add gift"}
                 </Button>
-            </div>
-
-            {gift && (
-                <ArchiveAction
-                    label="Delete gift"
-                    consequence="Removes it from the list and the totals."
-                    pending={remove.isPending}
-                    onArchive={() => void handleRemove()}
-                />
-            )}
+            </FormFooter>
         </form>
     );
 };

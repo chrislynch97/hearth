@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from "./routes/__root";
 import { Route as IndexRouteImport } from "./routes/index";
 import { Route as AccountsRouteImport } from "./routes/accounts";
 import { Route as CatchupRouteImport } from "./routes/catchup";
-import { Route as CategoriesRouteImport } from "./routes/categories";
 import { Route as ChoresRouteImport } from "./routes/chores";
 import { Route as DiyRouteImport } from "./routes/diy";
 import { Route as FundingRouteImport } from "./routes/funding";
@@ -22,11 +21,9 @@ import { Route as IncomeRouteImport } from "./routes/income";
 import { Route as InventoryRouteImport } from "./routes/inventory";
 import { Route as MaintenanceRouteImport } from "./routes/maintenance";
 import { Route as MealsRouteImport } from "./routes/meals";
-import { Route as OutgoingsRouteImport } from "./routes/outgoings";
 import { Route as PayslipsRouteImport } from "./routes/payslips";
 import { Route as PlanRouteImport } from "./routes/plan";
 import { Route as PlannersRouteImport } from "./routes/planners";
-import { Route as PotsRouteImport } from "./routes/pots";
 import { Route as QuotesRouteImport } from "./routes/quotes";
 import { Route as RaisesRouteImport } from "./routes/raises";
 import { Route as RenewalsRouteImport } from "./routes/renewals";
@@ -61,11 +58,6 @@ const AccountsRoute = AccountsRouteImport.update({
 const CatchupRoute = CatchupRouteImport.update({
   id: "/catchup",
   path: "/catchup",
-  getParentRoute: () => rootRouteImport,
-} as any);
-const CategoriesRoute = CategoriesRouteImport.update({
-  id: "/categories",
-  path: "/categories",
   getParentRoute: () => rootRouteImport,
 } as any);
 const ChoresRoute = ChoresRouteImport.update({
@@ -113,11 +105,6 @@ const MealsRoute = MealsRouteImport.update({
   path: "/meals",
   getParentRoute: () => rootRouteImport,
 } as any);
-const OutgoingsRoute = OutgoingsRouteImport.update({
-  id: "/outgoings",
-  path: "/outgoings",
-  getParentRoute: () => rootRouteImport,
-} as any);
 const PayslipsRoute = PayslipsRouteImport.update({
   id: "/payslips",
   path: "/payslips",
@@ -131,11 +118,6 @@ const PlanRoute = PlanRouteImport.update({
 const PlannersRoute = PlannersRouteImport.update({
   id: "/planners",
   path: "/planners",
-  getParentRoute: () => rootRouteImport,
-} as any);
-const PotsRoute = PotsRouteImport.update({
-  id: "/pots",
-  path: "/pots",
   getParentRoute: () => rootRouteImport,
 } as any);
 const QuotesRoute = QuotesRouteImport.update({
@@ -243,7 +225,6 @@ export interface FileRoutesByFullPath {
   "/": typeof IndexRoute;
   "/accounts": typeof AccountsRoute;
   "/catchup": typeof CatchupRoute;
-  "/categories": typeof CategoriesRoute;
   "/chores": typeof ChoresRoute;
   "/diy": typeof DiyRoute;
   "/funding": typeof FundingRoute;
@@ -253,11 +234,9 @@ export interface FileRoutesByFullPath {
   "/inventory": typeof InventoryRoute;
   "/maintenance": typeof MaintenanceRoute;
   "/meals": typeof MealsRoute;
-  "/outgoings": typeof OutgoingsRoute;
   "/payslips": typeof PayslipsRoute;
   "/plan": typeof PlanRoute;
   "/planners": typeof PlannersRouteWithChildren;
-  "/pots": typeof PotsRoute;
   "/quotes": typeof QuotesRoute;
   "/raises": typeof RaisesRoute;
   "/renewals": typeof RenewalsRoute;
@@ -283,7 +262,6 @@ export interface FileRoutesByTo {
   "/": typeof IndexRoute;
   "/accounts": typeof AccountsRoute;
   "/catchup": typeof CatchupRoute;
-  "/categories": typeof CategoriesRoute;
   "/chores": typeof ChoresRoute;
   "/diy": typeof DiyRoute;
   "/funding": typeof FundingRoute;
@@ -293,10 +271,8 @@ export interface FileRoutesByTo {
   "/inventory": typeof InventoryRoute;
   "/maintenance": typeof MaintenanceRoute;
   "/meals": typeof MealsRoute;
-  "/outgoings": typeof OutgoingsRoute;
   "/payslips": typeof PayslipsRoute;
   "/plan": typeof PlanRoute;
-  "/pots": typeof PotsRoute;
   "/quotes": typeof QuotesRoute;
   "/raises": typeof RaisesRoute;
   "/renewals": typeof RenewalsRoute;
@@ -322,7 +298,6 @@ export interface FileRoutesById {
   "/": typeof IndexRoute;
   "/accounts": typeof AccountsRoute;
   "/catchup": typeof CatchupRoute;
-  "/categories": typeof CategoriesRoute;
   "/chores": typeof ChoresRoute;
   "/diy": typeof DiyRoute;
   "/funding": typeof FundingRoute;
@@ -332,11 +307,9 @@ export interface FileRoutesById {
   "/inventory": typeof InventoryRoute;
   "/maintenance": typeof MaintenanceRoute;
   "/meals": typeof MealsRoute;
-  "/outgoings": typeof OutgoingsRoute;
   "/payslips": typeof PayslipsRoute;
   "/plan": typeof PlanRoute;
   "/planners": typeof PlannersRouteWithChildren;
-  "/pots": typeof PotsRoute;
   "/quotes": typeof QuotesRoute;
   "/raises": typeof RaisesRoute;
   "/renewals": typeof RenewalsRoute;
@@ -364,7 +337,6 @@ export interface FileRouteTypes {
     | "/"
     | "/accounts"
     | "/catchup"
-    | "/categories"
     | "/chores"
     | "/diy"
     | "/funding"
@@ -374,11 +346,9 @@ export interface FileRouteTypes {
     | "/inventory"
     | "/maintenance"
     | "/meals"
-    | "/outgoings"
     | "/payslips"
     | "/plan"
     | "/planners"
-    | "/pots"
     | "/quotes"
     | "/raises"
     | "/renewals"
@@ -404,7 +374,6 @@ export interface FileRouteTypes {
     | "/"
     | "/accounts"
     | "/catchup"
-    | "/categories"
     | "/chores"
     | "/diy"
     | "/funding"
@@ -414,10 +383,8 @@ export interface FileRouteTypes {
     | "/inventory"
     | "/maintenance"
     | "/meals"
-    | "/outgoings"
     | "/payslips"
     | "/plan"
-    | "/pots"
     | "/quotes"
     | "/raises"
     | "/renewals"
@@ -442,7 +409,6 @@ export interface FileRouteTypes {
     | "/"
     | "/accounts"
     | "/catchup"
-    | "/categories"
     | "/chores"
     | "/diy"
     | "/funding"
@@ -452,11 +418,9 @@ export interface FileRouteTypes {
     | "/inventory"
     | "/maintenance"
     | "/meals"
-    | "/outgoings"
     | "/payslips"
     | "/plan"
     | "/planners"
-    | "/pots"
     | "/quotes"
     | "/raises"
     | "/renewals"
@@ -483,7 +447,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute;
   AccountsRoute: typeof AccountsRoute;
   CatchupRoute: typeof CatchupRoute;
-  CategoriesRoute: typeof CategoriesRoute;
   ChoresRoute: typeof ChoresRoute;
   DiyRoute: typeof DiyRoute;
   FundingRoute: typeof FundingRoute;
@@ -493,11 +456,9 @@ export interface RootRouteChildren {
   InventoryRoute: typeof InventoryRoute;
   MaintenanceRoute: typeof MaintenanceRoute;
   MealsRoute: typeof MealsRoute;
-  OutgoingsRoute: typeof OutgoingsRoute;
   PayslipsRoute: typeof PayslipsRoute;
   PlanRoute: typeof PlanRoute;
   PlannersRoute: typeof PlannersRouteWithChildren;
-  PotsRoute: typeof PotsRoute;
   QuotesRoute: typeof QuotesRoute;
   RaisesRoute: typeof RaisesRoute;
   RenewalsRoute: typeof RenewalsRoute;
@@ -535,13 +496,6 @@ declare module "@tanstack/react-router" {
       path: "/catchup";
       fullPath: "/catchup";
       preLoaderRoute: typeof CatchupRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/categories": {
-      id: "/categories";
-      path: "/categories";
-      fullPath: "/categories";
-      preLoaderRoute: typeof CategoriesRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/chores": {
@@ -607,13 +561,6 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof MealsRouteImport;
       parentRoute: typeof rootRouteImport;
     };
-    "/outgoings": {
-      id: "/outgoings";
-      path: "/outgoings";
-      fullPath: "/outgoings";
-      preLoaderRoute: typeof OutgoingsRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
     "/payslips": {
       id: "/payslips";
       path: "/payslips";
@@ -633,13 +580,6 @@ declare module "@tanstack/react-router" {
       path: "/planners";
       fullPath: "/planners";
       preLoaderRoute: typeof PlannersRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/pots": {
-      id: "/pots";
-      path: "/pots";
-      fullPath: "/pots";
-      preLoaderRoute: typeof PotsRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/quotes": {
@@ -821,7 +761,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountsRoute: AccountsRoute,
   CatchupRoute: CatchupRoute,
-  CategoriesRoute: CategoriesRoute,
   ChoresRoute: ChoresRoute,
   DiyRoute: DiyRoute,
   FundingRoute: FundingRoute,
@@ -831,11 +770,9 @@ const rootRouteChildren: RootRouteChildren = {
   InventoryRoute: InventoryRoute,
   MaintenanceRoute: MaintenanceRoute,
   MealsRoute: MealsRoute,
-  OutgoingsRoute: OutgoingsRoute,
   PayslipsRoute: PayslipsRoute,
   PlanRoute: PlanRoute,
   PlannersRoute: PlannersRouteWithChildren,
-  PotsRoute: PotsRoute,
   QuotesRoute: QuotesRoute,
   RaisesRoute: RaisesRoute,
   RenewalsRoute: RenewalsRoute,

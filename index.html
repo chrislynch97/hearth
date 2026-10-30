@@ -7,10 +7,12 @@
     <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
     <!-- viewport-fit=cover lets the installed iOS app draw into the notch and
          home-indicator strips instead of being letterboxed; src/client/safe-area.css
-         insets the shell so nothing lands under system UI (#166). -->
+         insets the shell so nothing lands under system UI (#166).
+         interactive-widget makes Android shrink the page for the keyboard, so
+         anything pinned to the bottom sits on it; iOS ignores it (useKeyboardInset). -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <title>Hearth</title>
     <!-- Fonts are bundled via @fontsource and imported in src/client/main.tsx —
@@ -20,7 +22,7 @@
          own light/dark surface; the manifest's single theme_color can't. -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbfaf4" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#22261f" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#242523" />
 
     <!-- iOS ignores the manifest: it needs its own icon and metas to open
          chrome-less rather than as a Safari bookmark. -->

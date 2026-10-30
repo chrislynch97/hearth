@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { ArrowRight } from "lucide-react";
 import { formatMoney } from "@shared/money";
 import { useMoney } from "@/useMoney";
+import { Button } from "@/components/ui/Button";
 import {
     GIFT_DRAG_TYPE,
     STATUS_LABEL,
@@ -44,17 +46,18 @@ export const GiftTile = ({
             }}
             onDragEnd={() => setDragging(false)}
             className={[
-                "flex cursor-grab flex-col gap-1 rounded-md border px-3 py-2.5 active:cursor-grabbing",
+                "flex cursor-grab flex-col gap-1 rounded-xl border p-3 active:cursor-grabbing",
                 dragging ? "opacity-40" : "",
                 status === "idea"
                     ? "border-dashed border-border-strong"
-                    : "border-border bg-raised",
+                    : "border-border bg-card shadow-raised",
             ].join(" ")}
         >
-            <button
+            <Button
+                variant="ghost"
                 onClick={onEdit}
                 aria-label={`Edit ${gift.name} for ${recipient.name}`}
-                className="flex items-baseline justify-between gap-2 text-left"
+                className="h-auto min-h-6 justify-between gap-2 px-0 py-0 text-left font-normal hover:bg-transparent"
             >
                 <span className="min-w-0 truncate text-base text-text">
                     {gift.name}
@@ -62,8 +65,8 @@ export const GiftTile = ({
                 <span className="tabular shrink-0 text-base font-semibold text-text">
                     {formatMoney(gift.amount, money)}
                 </span>
-            </button>
-            <span className="truncate text-xs text-text-muted">
+            </Button>
+            <span className="truncate text-sm text-text-muted">
                 For {recipient.name}
                 {gift.link && " · "}
                 {link ? (
@@ -81,15 +84,15 @@ export const GiftTile = ({
                 )}
             </span>
             {next && (
-                <button
+                <Button
+                    compact
                     disabled={pending}
+                    className="mt-1 self-start max-sm:h-9 max-sm:w-full"
                     onClick={() => onAdvance(next)}
-                    className="self-start font-semibold text-primary hover:underline disabled:opacity-50"
                 >
-                    <span className="text-xs">
-                        Mark {STATUS_LABEL[next].toLowerCase()} →
-                    </span>
-                </button>
+                    Mark {STATUS_LABEL[next].toLowerCase()}
+                    <ArrowRight />
+                </Button>
             )}
         </li>
     );

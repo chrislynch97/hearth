@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toMinor, fromMinor, formatMoney, allocate, rescaleMinor } from './money'
+import { toMinor, fromMinor, formatMoney, formatMoneyCompact, allocate, rescaleMinor } from './money'
 
 describe('rescaleMinor', () => {
   it('is a no-op when decimal places are unchanged', () => {
@@ -140,5 +140,24 @@ describe('allocate (negatives)', () => {
   })
   it('splits a negative total proportionally', () => {
     expect(allocate(-1000, [3, 1])).toEqual([-750, -250])
+  })
+})
+
+describe('formatMoneyCompact', () => {
+  const gbp = { symbol: '£', decimalPlaces: 2 }
+
+  it('keeps whole units under a thousand', () => {
+    expect(formatMoneyCompact(95_049, gbp)).toBe('£950')
+  })
+  it('shortens thousands and millions to one decimal', () => {
+    expect(formatMoneyCompact(262_252, gbp)).toBe('£2.6k')
+    expect(formatMoneyCompact(123_000_000, gbp)).toBe('£1.2m')
+  })
+  it('drops a trailing .0', () => {
+    expect(formatMoneyCompact(300_000, gbp)).toBe('£3k')
+  })
+  it('leads with the sign and honours a suffix symbol', () => {
+    expect(formatMoneyCompact(-150_000, gbp)).toBe('-£1.5k')
+    expect(formatMoneyCompact(150_000, { symbol: 'kr', decimalPlaces: 2, symbolPosition: 'suffix' })).toBe('1.5k kr')
   })
 })

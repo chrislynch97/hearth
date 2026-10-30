@@ -6,7 +6,6 @@ import {
     waitFor,
     within,
 } from "@testing-library/react";
-import { MantineProvider } from "@mantine/core";
 
 // Break-glass containment from the UI (#248). It signs the operator out too and
 // can't be undone, so what's asserted here is that the typed confirmation really
@@ -33,11 +32,7 @@ vi.mock("@/trpc", () => ({
 import { SignOutEveryoneSection } from "./SignOutEveryoneSection";
 
 const renderSection = () =>
-    render(
-        <MantineProvider>
-            <SignOutEveryoneSection />
-        </MantineProvider>
-    );
+    render(<SignOutEveryoneSection />);
 
 const openConfirm = async () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign everyone out" }));

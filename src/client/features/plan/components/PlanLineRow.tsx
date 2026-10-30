@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/Button";
 import { ShieldIcon } from "@/components/ui/ShieldIcon";
 
 export interface PlanLineRowProps {
@@ -26,10 +27,11 @@ export const PlanLineRow = ({
     ariaLabel,
     onClick,
 }: PlanLineRowProps) => (
-    <button
+    <Button
+        variant="ghost"
         onClick={onClick}
         aria-label={ariaLabel}
-        className="flex min-h-7 w-full items-center gap-2 rounded-xs px-1 text-left transition-colors duration-[140ms] ease-out hover:bg-hover"
+        className="h-auto min-h-7 w-full justify-start gap-2 whitespace-normal rounded-xs px-1 py-0 text-left font-normal max-sm:min-h-10"
     >
         {/* Leading, and held open whether or not there is a shield in it.
             Tucked beside the name it sat in a different place on every row, and
@@ -59,5 +61,5 @@ export const PlanLineRow = ({
                 <span className="text-xs text-text-faint">{perPeriod}</span>
             )}
         </span>
-    </button>
+    </Button>
 );

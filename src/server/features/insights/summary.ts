@@ -37,22 +37,25 @@ export function allocationByCategory(input: {
 export interface MonthNet {
   month: string // YYYY-MM
   net: number
+  /** The same month's net per payslip owner (member id), for a stacked chart. */
+  byOwner: Record<string, number>
 }
 
 /** Household net pay summed per calendar month over the trailing `months`
  *  months ending at `asOf` (inclusive of asOf's month), chronological. */
 export function monthlyNetTrend(
-  payslips: Array<{ payDate: string; effectiveNet: number }>,
+  payslips: Array<{ payDate: string; effectiveNet: number; ownerId: string }>,
   asOf: string,
   months: number,
 ): MonthNet[] {
   const result: MonthNet[] = []
   for (let i = months - 1; i >= 0; i -= 1) {
     const month = subtractMonths(asOf, i).slice(0, 7)
-    const net = payslips
-      .filter((p) => p.payDate.slice(0, 7) === month)
-      .reduce((acc, p) => acc + p.effectiveNet, 0)
-    result.push({ month, net })
+    const inMonth = payslips.filter((p) => p.payDate.slice(0, 7) === month)
+    const byOwner: Record<string, number> = {}
+    for (const p of inMonth) byOwner[p.ownerId] = (byOwner[p.ownerId] ?? 0) + p.effectiveNet
+    const net = inMonth.reduce((acc, p) => acc + p.effectiveNet, 0)
+    result.push({ month, net, byOwner })
   }
   return result
 }

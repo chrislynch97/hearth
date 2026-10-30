@@ -1,6 +1,7 @@
-import { Alert, Anchor, Button, Group, Text } from "@mantine/core";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
 import { trpc } from "@/trpc";
 import { useEmailConfirmation } from "@/useEmailConfirmation";
 
@@ -47,46 +48,41 @@ export const AccountEmailBanner = () => {
         setDismissed(email ?? NO_ADDRESS);
     };
 
-    return (
-        <Alert
-            color="orange"
-            variant="light"
-            withCloseButton
-            closeButtonLabel="Dismiss"
-            onClose={dismiss}
-            title={
-                email ? "Confirm your email address" : "Add an email address"
-            }
-            mb="lg"
+    const action = sentTo ? undefined : email ? (
+        <Button
+            variant="attention"
+            disabled={sending}
+            onClick={() => void send()}
         >
-            <Group gap="sm">
-                <span>
-                    {sentTo
-                        ? `Check ${sentTo} for the confirmation link.`
-                        : email
-                          ? "Until it's confirmed, it can't reset your password if you lose it."
-                          : "Without one there's no way to reset your password if you lose it."}
-                </span>
-                {!sentTo &&
-                    (email ? (
-                        <Button
-                            size="xs"
-                            loading={sending}
-                            onClick={() => void send()}
-                        >
-                            Send confirmation email
-                        </Button>
-                    ) : (
-                        <Anchor component={Link} to="/settings/account">
-                            Add one
-                        </Anchor>
-                    ))}
-            </Group>
-            {error && (
-                <Text size="sm" c="red" mt="xs">
-                    {error}
-                </Text>
-            )}
-        </Alert>
+            Send confirmation email
+        </Button>
+    ) : (
+        <Button asChild>
+            <Link to="/settings/account">Add one</Link>
+        </Button>
+    );
+
+    return (
+        <div className="hearth-ds mb-5">
+            <Notice
+                tone="attention"
+                title={
+                    email
+                        ? "Confirm your email address"
+                        : "Add an email address"
+                }
+                action={action}
+                onDismiss={dismiss}
+            >
+                {sentTo
+                    ? `Check ${sentTo} for the confirmation link.`
+                    : email
+                      ? "Until it's confirmed, it can't reset your password if you lose it."
+                      : "Without one there's no way to reset your password if you lose it."}
+                {error && (
+                    <span className="mt-1 block text-danger">{error}</span>
+                )}
+            </Notice>
+        </div>
     );
 };

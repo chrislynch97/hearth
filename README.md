@@ -333,7 +333,7 @@ The step-by-step setup, including why to send from a subdomain, is in
 
 ## Tech
 
-TypeScript end-to-end. React + Vite + Mantine (client), Fastify + tRPC (server),
+TypeScript end-to-end. React + Vite + shadcn/ui and Tailwind (client), Fastify + tRPC (server),
 Postgres via Drizzle ORM — embedded [PGlite](https://pglite.dev) by default, or
 `pg` (node-postgres) against a real server, selected by `DATABASE_URL`. Money is
 stored as integer minor units and timestamps as `timestamptz`; migrations run

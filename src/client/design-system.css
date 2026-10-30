@@ -1,19 +1,18 @@
-/* Hearth design system — tokens + Tailwind utilities.
- *
- * Two deliberate departures from the design handoff's drop-in file:
- *
- * 1. No preflight. `@import "tailwindcss"` would pull in Tailwind's reset, which
- *    strips Mantine's own base styles out from under the ~100 files still using
- *    it. Importing theme + utilities by layer skips it. Restore preflight when
- *    Mantine is gone.
- * 2. Dark mode keys off Mantine's `data-mantine-color-scheme` rather than the
- *    handoff's `[data-theme="dark"]`, so the existing Appearance setting drives
- *    both systems from one attribute instead of two that can disagree.
+/* Hearth design system — tokens + Tailwind utilities. Dark mode keys off
+ * `[data-theme="dark"]` on <html>, which `useColorScheme` keeps in step with the
+ * Appearance setting.
  */
 
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities);
+/* The enter/exit animations shadcn components use (`animate-in`, `fade-in-0`…). */
+@import "tw-animate-css";
+
+/* `dark:` follows the Appearance setting, like the colour roles below, rather
+   than Tailwind's default of the OS preference. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme {
     --font-display: "Spectral", Georgia, "Times New Roman", serif;
@@ -60,6 +59,8 @@
     /* Roles point at the raw values below, so `bg-surface` and `text-primary`
        follow the colour scheme without a dark: variant on every element. */
     --color-bg: var(--hearth-bg);
+    /* The ground behind page content, under its cards. */
+    --color-canvas: var(--hearth-canvas);
     --color-surface: var(--hearth-surface);
     --color-sunken: var(--hearth-sunken);
     --color-raised: var(--hearth-raised);
@@ -74,11 +75,17 @@
     --color-primary-hover: var(--hearth-primary-hover);
     --color-primary-active: var(--hearth-primary-active);
     --color-primary-fg: var(--hearth-primary-fg);
+    /* Behind text (a filled button, a ticked box); `primary` itself is the
+       accent for links, markers and data ink. */
+    --color-primary-fill: var(--hearth-primary-fill);
+    --color-primary-fill-hover: var(--hearth-primary-fill-hover);
     --color-primary-tint: var(--hearth-primary-tint);
     --color-primary-tint-weak: var(--hearth-primary-tint-weak);
     --color-attention: var(--hearth-attention);
     --color-attention-fg: var(--hearth-attention-fg);
     --color-attention-tint: var(--hearth-attention-tint);
+    /* Text on an apricot fill: dark in both schemes, as apricot is mid-tone. */
+    --color-attention-ink: var(--hearth-attention-ink);
     --color-positive-fg: var(--hearth-positive-fg);
     --color-savings-fg: var(--hearth-savings-fg);
     --color-danger: var(--hearth-danger);
@@ -87,6 +94,30 @@
     --color-danger-tint: var(--hearth-danger-tint);
     --color-ring: var(--hearth-ring);
     --color-overlay: var(--hearth-overlay);
+
+    /* shadcn's role names (components/shadcn), aliased onto ours so its
+       components take the Hearth palette without edits to their classes. */
+    --color-background: var(--hearth-bg);
+    --color-foreground: var(--hearth-text);
+    --color-card: var(--hearth-raised);
+    --color-card-foreground: var(--hearth-text);
+    --color-popover: var(--hearth-raised);
+    --color-popover-foreground: var(--hearth-text);
+    --color-primary-foreground: var(--hearth-primary-fg);
+    --color-secondary: var(--hearth-sunken);
+    --color-secondary-foreground: var(--hearth-text);
+    --color-muted: var(--hearth-sunken);
+    --color-muted-foreground: var(--hearth-text-muted);
+    --color-accent: var(--hearth-hover);
+    --color-accent-foreground: var(--hearth-text);
+    --color-destructive: var(--hearth-danger);
+    --color-input: var(--hearth-border-strong);
+    --color-sidebar: var(--hearth-surface);
+    --color-sidebar-foreground: var(--hearth-text-secondary);
+    --color-sidebar-accent: var(--hearth-hover);
+    --color-sidebar-accent-foreground: var(--hearth-text);
+    --color-sidebar-border: var(--hearth-border);
+    --color-sidebar-ring: var(--hearth-ring);
 }
 
 :root {
@@ -96,6 +127,7 @@
     color-scheme: light;
 
     --hearth-bg: #fbfaf4;
+    --hearth-canvas: #f4f2ea;
     --hearth-surface: #fbfaf4;
     --hearth-sunken: #f4f2ea;
     --hearth-raised: #fffef8;
@@ -106,22 +138,25 @@
     --hearth-text-secondary: #66705e;
     --hearth-text-muted: #7c8676;
     --hearth-text-faint: #a9a491;
-    --hearth-primary: #47613f;
-    --hearth-primary-hover: #3d5436;
-    --hearth-primary-active: #334529;
-    --hearth-primary-fg: #fbfaf4;
-    --hearth-primary-tint: #e2e5db;
-    --hearth-primary-tint-weak: #edeee6;
+    --hearth-primary: #3d6b35;
+    --hearth-primary-hover: #345d2e;
+    --hearth-primary-active: #2b4e26;
+    --hearth-primary-fg: #f7f9f2;
+    --hearth-primary-tint: #e1e9da;
+    --hearth-primary-tint-weak: #ecf1e6;
+    --hearth-primary-fill: #3d6b35;
+    --hearth-primary-fill-hover: #345d2e;
     --hearth-attention: #d98c5f;
     --hearth-attention-fg: #a85f30;
     --hearth-attention-tint: #f8efe5;
+    --hearth-attention-ink: #2b1b11;
     --hearth-positive-fg: #3e7c4f;
     --hearth-savings-fg: #8a7a6a;
     --hearth-danger: #a85f30;
     --hearth-danger-hover: #8e4e27;
     --hearth-danger-active: #7a4220;
     --hearth-danger-tint: #f8efe5;
-    --hearth-ring: #47613f;
+    --hearth-ring: #3d6b35;
     --hearth-overlay: rgba(34, 38, 31, 0.44);
 
     --hearth-shadow-raised: 0 1px 2px rgba(34, 38, 31, 0.05);
@@ -132,113 +167,112 @@
         0 4px 12px rgba(34, 38, 31, 0.07);
 }
 
-/* Warm bark, never slate. Two things beyond a straight swap: the rail goes
-   darker than the content rather than lighter, and moss lifts to #7FA46F —
-   #47613F is only 1.4:1 on bark. */
-[data-mantine-color-scheme="dark"] {
+/* Grey with a trace of moss: each neutral keeps the old bark's lightness at a
+   quarter of its green, so contrast is unchanged and only the primary reads
+   green. Accent moss lifts to #8CC07E for text and ink; fills stay deep. */
+[data-theme="dark"] {
     color-scheme: dark;
 
-    --hearth-bg: #1b1e18;
-    --hearth-surface: #22261f;
-    --hearth-sunken: #171a15;
-    --hearth-raised: #2a2f26;
-    --hearth-hover: #2e332a;
-    --hearth-border: #343a2e;
-    --hearth-border-strong: #465040;
+    --hearth-bg: #1c1d1b;
+    --hearth-canvas: #1c1d1b;
+    --hearth-surface: #242523;
+    --hearth-sunken: #181918;
+    --hearth-raised: #2c2e2b;
+    --hearth-hover: #30322f;
+    --hearth-border: #363835;
+    --hearth-border-strong: #4a4d49;
     --hearth-text: #efede3;
-    --hearth-text-secondary: #b7bbab;
-    --hearth-text-muted: #8c9180;
-    --hearth-text-faint: #6e735f;
-    --hearth-primary: #7fa46f;
-    --hearth-primary-hover: #8fb47e;
-    --hearth-primary-active: #6e9260;
-    --hearth-primary-fg: #171a14;
-    --hearth-primary-tint: #2c3a26;
-    --hearth-primary-tint-weak: #252c20;
+    --hearth-text-secondary: #b8b9b5;
+    --hearth-text-muted: #8e8f8a;
+    --hearth-text-faint: #6f716b;
+    --hearth-primary: #8cc07e;
+    --hearth-primary-hover: #9dcc90;
+    --hearth-primary-active: #7aad6c;
+    --hearth-primary-fg: #f3f7ee;
+    --hearth-primary-tint: #2b3a27;
+    --hearth-primary-tint-weak: #252e22;
+    /* Text sits on a deep fill here, not on the bright accent — a pale green
+       button with dark text read as washed out. */
+    --hearth-primary-fill: #4a7d42;
+    --hearth-primary-fill-hover: #568c4d;
     --hearth-attention: #d98c5f;
     --hearth-attention-fg: #d98c5f;
     --hearth-attention-tint: #36291f;
+    --hearth-attention-ink: #1c140e;
     --hearth-positive-fg: #5fa06f;
     --hearth-savings-fg: #a3937f;
     --hearth-danger: #d98c5f;
     --hearth-danger-hover: #e39c72;
     --hearth-danger-active: #c67c50;
     --hearth-danger-tint: #36291f;
-    --hearth-ring: #9dbe8c;
+    --hearth-ring: #9dcc90;
     --hearth-overlay: rgba(9, 11, 8, 0.62);
     --hearth-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.35);
     --hearth-shadow-popover: 0 8px 24px -4px rgba(0, 0, 0, 0.55);
     --hearth-shadow-modal: 0 28px 64px -12px rgba(0, 0, 0, 0.66);
 }
 
-/* Preflight is off (see the top of this file), so Mantine's base styles still
-   reach into the design-system subtree — underlining its links and giving its
-   buttons a border and a background. Reset just the elements it uses, scoped to
-   the subtree. Delete this block when preflight comes back with Mantine's exit.
-
-   It has to sit in `base`: unlayered CSS beats every layered rule, so out here
-   `background: none` would silently win against `bg-primary-tint` and
-   `color: inherit` against `text-primary`, leaving utilities in the class list
-   doing nothing. */
 @layer base {
-    .hearth-ds a {
-        color: inherit;
-        text-decoration: none;
+    *,
+    ::before,
+    ::after,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: var(--color-border);
     }
 
-    .hearth-ds button {
-        appearance: none;
-        background: none;
-        border: 0;
-        padding: 0;
-        color: inherit;
-        font: inherit;
+    body {
+        background: var(--color-canvas);
+        color: var(--color-text);
+        font-family: var(--font-ui);
+        font-size: 16px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    button:not(:disabled) {
         cursor: pointer;
     }
 
     /* Checkboxes and radios keep their native rendering: `accent-color` tints
        them to the palette, which beats redrawing a tick in CSS. */
-    .hearth-ds
-        :is(
-            input:not([type="checkbox"]):not([type="radio"]),
-            select,
-            textarea
-        ) {
+    :is(
+        input:not([type="checkbox"]):not([type="radio"]),
+        select,
+        textarea
+    ) {
         appearance: none;
-        background: none;
-        border: 0;
-        padding: 0;
-        color: inherit;
-        font: inherit;
-    }
-
-    .hearth-ds :is(h1, h2, h3, p) {
-        margin: 0;
     }
 }
 
-/* Scoped to `.hearth-ds` while Mantine is still here — applied globally it would
-   double up with Mantine's own focus styles on every existing control. Drop the
-   scope (and the class) once Mantine is gone; the ring is meant to be one object
-   for the whole app. */
-.hearth-ds :focus-visible,
-.hearth-ds:focus-visible {
+/* The keyboard focus ring for hand-built controls: a soft halo, the same one
+   shadcn draws (`ring-[3px] ring-ring/50`), so the two kinds look alike. shadcn's
+   own parts carry `data-slot` and draw theirs, so they're left out — two rings
+   stacked on one control was the "crappy border". */
+.hearth-ds :focus-visible:not([data-slot]),
+.hearth-ds:focus-visible:not([data-slot]) {
     outline: none;
-    box-shadow:
-        0 0 0 2px var(--color-bg),
-        0 0 0 4px var(--color-ring);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ring) 50%, transparent);
 }
 
-/* A text field's border lives on the wrapper, so the ring has to as well — drawn
-   on the control it sits inside that border, a couple of pixels off from the box
-   it is meant to be highlighting. The wrapper takes it on `:focus-within`
-   instead. More specific than the rule above, and unlayered like it. */
+/* Recharts makes its SVG and its plot layer (`g[tabindex="-1"]`) focusable for
+   keyboard tooltips, so a click or tap focused one and the browser outlined the
+   whole plot. The tooltip already shows where focus is. */
+[data-slot="chart"] :focus,
+[data-slot="chart"] :focus-visible {
+    outline: none;
+    box-shadow: none;
+}
+
+/* A hand-built field whose border lives on a wrapper takes the ring there, on
+   `:focus-within` — drawn on the inner control it would sit inside the border,
+   off from the box it's meant to highlight. */
 .hearth-ds
     :is(
         input:not([type="checkbox"]):not([type="radio"]),
         select,
         textarea
-    ):focus-visible {
+    ):focus-visible:not([data-slot]) {
     box-shadow: none;
 }
 

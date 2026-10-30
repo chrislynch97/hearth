@@ -1,6 +1,7 @@
 import { formatMoney } from "@shared/money";
 import type { PeriodFrequency } from "@shared/period";
 import type { MoneyFormat } from "@/useMoney";
+import { Card } from "@/components/shadcn/card";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/PlusIcon";
 import { MainAccountCard } from "@/features/plan/components/MainAccountCard";
@@ -69,7 +70,7 @@ export const CategoryPane = ({
                 start of a section on the All view and as a header on its own.
                 Laid out like a pot card's header — name left, total and Edit
                 right — one level up. */}
-            <header className="flex items-center gap-3 rounded-md border border-border bg-sunken px-4 py-3">
+            <Card className="flex-row items-center gap-3 bg-sunken px-4 py-3 shadow-none">
                 <div className="min-w-0 flex-1">
                     <h2 className="font-display text-h3 font-medium leading-tight">
                         {group.name}
@@ -93,12 +94,13 @@ export const CategoryPane = ({
                         variant="ghost"
                         compact
                         aria-label={`Edit ${group.name} category`}
+                        className="max-sm:h-8"
                         onClick={onEditCategory}
                     >
                         Edit
                     </Button>
                 )}
-            </header>
+            </Card>
 
             <div className="mt-3 flex flex-col md:flex-row md:justify-end">
                 {/* On a phone each button gets a full-width row — "Bill with no

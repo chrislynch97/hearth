@@ -1,4 +1,4 @@
-import { Callout } from "@/components/ui/Callout";
+import { Notice } from "@/components/ui/Notice";
 
 /** Where the Updating docs explain the one-time compose file switch. */
 const DOCS_UPDATING_URL =
@@ -20,10 +20,9 @@ export const ComposeOutdatedNotice = ({
     if (!outdated) return null;
 
     return (
-        <Callout
+        <Notice
             tone="attention"
             title="Your compose file is older than this version"
-            className="mb-3"
         >
             <p>
                 Some settings in <code className="font-mono">.env</code> may
@@ -43,6 +42,6 @@ export const ComposeOutdatedNotice = ({
                     How to update
                 </a>
             </p>
-        </Callout>
+        </Notice>
     );
 };

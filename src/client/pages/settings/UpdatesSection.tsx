@@ -1,25 +1,19 @@
 import { useState } from "react";
-import {
-    Alert,
-    Anchor,
-    Button,
-    Card,
-    Code,
-    CopyButton,
-    Divider,
-    Group,
-    Stack,
-    Switch,
-    Text,
-    Title,
-} from "@mantine/core";
-import { TimeInput } from "@mantine/dates";
 import { trpc } from "@/trpc";
+import { Switch } from "@/components/shadcn/switch";
+import { Button } from "@/components/ui/Button";
+import { CopyField } from "@/components/ui/CopyField";
+import { Notice } from "@/components/ui/Notice";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SettingsSection } from "@/components/ui/SettingsSection";
+import { TextField } from "@/components/ui/TextField";
 import { ComposeOutdatedNotice } from "./ComposeOutdatedNotice";
 
 /** Where the Updating docs live — linked when the host updater isn't installed. */
 const DOCS_UPDATING_URL =
     "https://github.com/chrislynch97/hearth/blob/main/docs/deployment.md#updating--three-ways";
+
+const LINK = "font-semibold text-primary underline";
 
 /** Shows the running version and, on demand, whether a newer GitHub release
  *  exists, plus the owner's update preferences (background polling, backup-first,
@@ -39,6 +33,7 @@ export const UpdatesSection = () => {
     const saveSettings = trpc.data.setUpdateSettings.useMutation({
         onSuccess: () => utils.data.updateSettings.invalidate(),
     });
+
     const [backupMsg, setBackupMsg] = useState("");
     const [applying, setApplying] = useState(false);
 
@@ -64,223 +59,217 @@ export const UpdatesSection = () => {
         saveSettings.mutate(patch);
 
     return (
-        <Card withBorder padding="md" radius="md">
-            <Title order={4} mb="sm">
-                Updates
-            </Title>
-            <Group justify="space-between" wrap="nowrap" mb="sm">
-                <Text size="sm" c="dimmed">
-                    Current version: <Code>{current ?? "…"}</Code>
-                </Text>
+        <SettingsSection
+            title="Updates"
+            description="Which version is running, and how new ones get installed."
+        >
+            <SettingsRow
+                title="Version"
+                description={
+                    <>
+                        You&apos;re running{" "}
+                        <code className="font-mono text-text">
+                            {current ?? "…"}
+                        </code>
+                        .
+                    </>
+                }
+            >
                 <Button
-                    size="xs"
-                    variant="default"
-                    loading={check.isFetching}
+                    disabled={check.isFetching}
                     onClick={() => void check.refetch()}
                 >
                     Check for updates
                 </Button>
-            </Group>
+            </SettingsRow>
 
             {settings && (
                 <ComposeOutdatedNotice outdated={settings.composeOutdated} />
             )}
 
             {settings?.deployMode === "image" && !settings.updaterOnline && (
-                <Alert color="yellow" variant="light" mb="sm">
-                    One-click and automatic updates need the host updater, which
-                    isn't running on this host.{" "}
-                    <Anchor
+                <Notice tone="attention" title="The host updater isn't running">
+                    One-click and automatic updates need it.{" "}
+                    <a
                         href={DOCS_UPDATING_URL}
                         target="_blank"
                         rel="noreferrer"
+                        className={LINK}
                     >
                         Set it up
-                    </Anchor>{" "}
+                    </a>{" "}
                     to turn them on.
-                </Alert>
+                </Notice>
             )}
 
             {settings?.updateResult && !settings.updateResult.ok && (
-                <Alert color="red" variant="light" mb="sm">
-                    The last update attempt failed:{" "}
-                    {settings.updateResult.error ?? "unknown error"}.
-                </Alert>
+                <Notice tone="danger" title="The last update attempt failed">
+                    {settings.updateResult.error ?? "Unknown error"}.
+                </Notice>
             )}
 
             {status && !status.checked && (
-                <Alert color="yellow" variant="light">
-                    Couldn't reach GitHub to check for updates. Try again when
-                    you're online.
-                </Alert>
+                <Notice
+                    tone="attention"
+                    title="Couldn't reach GitHub to check for updates"
+                >
+                    Try again when you&apos;re online.
+                </Notice>
             )}
 
             {status && status.checked && !status.updateAvailable && (
-                <Alert color="green" variant="light">
-                    {status.latest === null
-                        ? "No published releases to compare against yet."
-                        : status.current === "unknown"
-                          ? `Latest release is ${status.latest}. This build doesn't report its own version, so an update can't be confirmed.`
-                          : "You're up to date."}
-                </Alert>
+                <Notice
+                    tone="positive"
+                    title={
+                        status.latest === null
+                            ? "No published releases to compare against yet."
+                            : status.current === "unknown"
+                              ? `Latest release is ${status.latest}. This build doesn't report its own version, so an update can't be confirmed.`
+                              : "You're up to date."
+                    }
+                />
             )}
 
             {status && status.updateAvailable && (
-                <Stack gap="md">
-                    <Alert color="blue" variant="light">
-                        Update available: <b>{status.latest}</b>
+                <div className="flex flex-col gap-4 rounded-lg border border-primary/25 bg-primary-tint-weak p-4">
+                    <p className="text-md font-semibold text-text">
+                        Update available: {status.latest}
                         {status.releaseUrl && (
                             <>
-                                {" — "}
-                                <Anchor
+                                {" · "}
+                                <a
                                     href={status.releaseUrl}
                                     target="_blank"
                                     rel="noreferrer"
+                                    className={LINK}
                                 >
-                                    release notes
-                                </Anchor>
+                                    Release notes
+                                </a>
                             </>
                         )}
-                    </Alert>
-
+                    </p>
                     {settings?.updaterOnline ? (
-                        <div>
-                            <Group gap="sm">
+                        <>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                                 <Button
-                                    size="xs"
-                                    loading={applyUpdate.isPending}
+                                    variant="solid"
                                     disabled={
-                                        applying || settings.updatePending
+                                        applyUpdate.isPending ||
+                                        applying ||
+                                        settings.updatePending
                                     }
                                     onClick={() => void handleApply()}
                                 >
                                     Update now
                                 </Button>
-                                <Text size="sm" c="dimmed">
+                                <span className="text-sm text-text-muted">
                                     {settings.preUpdateBackup
                                         ? "Backs up first, then installs and restarts."
                                         : "Installs the update and restarts."}
-                                </Text>
-                            </Group>
+                                </span>
+                            </div>
                             {(applying || settings.updatePending) && (
-                                <Alert color="blue" variant="light" mt="sm">
-                                    Update in progress — the app will restart
-                                    shortly and come back on the new version.
-                                </Alert>
+                                <Notice tone="info" title="Update in progress">
+                                    The app will restart shortly and come back
+                                    on the new version.
+                                </Notice>
                             )}
-                        </div>
+                        </>
                     ) : (
-                        <>
-                            <div>
-                                <Text size="sm" fw={500} mb={4}>
+                        <ol className="flex flex-col gap-4">
+                            <li className="flex flex-col gap-2">
+                                <span className="text-base font-semibold text-text">
                                     1. Back up first
-                                </Text>
-                                <Group gap="sm">
+                                </span>
+                                <div className="flex flex-wrap items-center gap-3">
                                     <Button
-                                        size="xs"
-                                        variant="default"
-                                        loading={backupNow.isPending}
+                                        disabled={backupNow.isPending}
                                         onClick={() => void handleBackup()}
                                     >
                                         Back up now
                                     </Button>
                                     {backupMsg && (
-                                        <Text size="sm" c="dimmed">
+                                        <span className="text-sm text-text-muted">
                                             {backupMsg}
-                                        </Text>
+                                        </span>
                                     )}
-                                </Group>
-                            </div>
-
-                            <div>
-                                <Text size="sm" fw={500} mb={4}>
+                                </div>
+                            </li>
+                            <li className="flex flex-col gap-2">
+                                <span className="text-base font-semibold text-text">
                                     2. Then run on the host
-                                </Text>
-                                <Group
-                                    align="flex-start"
-                                    gap="xs"
-                                    wrap="nowrap"
-                                >
-                                    <Code block style={{ flex: 1 }}>
-                                        {status.commands}
-                                    </Code>
-                                    <CopyButton value={status.commands}>
-                                        {({ copied, copy }) => (
-                                            <Button
-                                                size="xs"
-                                                variant="default"
-                                                onClick={copy}
-                                            >
-                                                {copied ? "Copied" : "Copy"}
-                                            </Button>
-                                        )}
-                                    </CopyButton>
-                                </Group>
-                            </div>
-                        </>
+                                </span>
+                                <CopyField
+                                    label="Update commands"
+                                    value={status.commands}
+                                    multiline
+                                />
+                            </li>
+                        </ol>
                     )}
-                </Stack>
+                </div>
             )}
 
             {settings && (
                 <>
-                    <Divider my="md" />
-                    <Stack gap="sm">
+                    <SettingsRow
+                        title="Check for updates automatically"
+                        description="Checks GitHub about once an hour and shows a banner when a new version is available."
+                    >
                         <Switch
-                            label="Check for updates automatically"
-                            description="Checks GitHub about once an hour and shows a banner when a new version is available."
+                            aria-label="Check for updates automatically"
                             checked={settings.autoPoll}
-                            onChange={(e) =>
-                                save({ autoPoll: e.currentTarget.checked })
+                            onCheckedChange={(autoPoll) => save({ autoPoll })}
+                        />
+                    </SettingsRow>
+                    <SettingsRow
+                        title="Back up before updating"
+                        description="Writes a backup first whenever an update is installed."
+                    >
+                        <Switch
+                            aria-label="Back up before updating"
+                            checked={settings.preUpdateBackup}
+                            onCheckedChange={(preUpdateBackup) =>
+                                save({ preUpdateBackup })
                             }
                         />
+                    </SettingsRow>
+                    <SettingsRow
+                        title="Install updates automatically"
+                        description={
+                            settings.updaterOnline
+                                ? "Installs new versions for you without running any commands."
+                                : settings.deployMode === "image"
+                                  ? "Needs the host updater running — see the note above."
+                                  : "Only available on the managed Docker image deploy."
+                        }
+                    >
                         <Switch
-                            label="Back up before updating"
-                            description="Writes a backup first whenever an update is installed."
-                            checked={settings.preUpdateBackup}
+                            aria-label="Install updates automatically"
+                            checked={settings.autoUpdate}
+                            disabled={!settings.updaterOnline}
+                            onCheckedChange={(autoUpdate) =>
+                                save({ autoUpdate })
+                            }
+                        />
+                    </SettingsRow>
+                    {settings.updaterOnline && settings.autoUpdate && (
+                        <TextField
+                            label="Install at"
+                            description="Leave blank to install as soon as an update is found."
+                            type="time"
+                            value={settings.autoUpdateTime ?? ""}
                             onChange={(e) =>
                                 save({
-                                    preUpdateBackup: e.currentTarget.checked,
+                                    autoUpdateTime:
+                                        e.currentTarget.value || null,
                                 })
                             }
+                            className="max-w-40"
                         />
-                        <div>
-                            <Switch
-                                label="Install updates automatically"
-                                description={
-                                    settings.updaterOnline
-                                        ? "Installs new versions for you without running any commands."
-                                        : settings.deployMode === "image"
-                                          ? "Needs the host updater running — see the setup guide above."
-                                          : "Only available on the managed Docker image deploy."
-                                }
-                                checked={settings.autoUpdate}
-                                disabled={!settings.updaterOnline}
-                                onChange={(e) =>
-                                    save({
-                                        autoUpdate: e.currentTarget.checked,
-                                    })
-                                }
-                            />
-                            {settings.updaterOnline && settings.autoUpdate && (
-                                <TimeInput
-                                    label="Install at"
-                                    description="Leave blank to install as soon as an update is found."
-                                    value={settings.autoUpdateTime ?? ""}
-                                    onChange={(e) =>
-                                        save({
-                                            autoUpdateTime:
-                                                e.currentTarget.value || null,
-                                        })
-                                    }
-                                    mt="xs"
-                                    maw={150}
-                                />
-                            )}
-                        </div>
-                    </Stack>
+                    )}
                 </>
             )}
-        </Card>
+        </SettingsSection>
     );
 };

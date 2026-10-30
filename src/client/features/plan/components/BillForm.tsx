@@ -1,12 +1,14 @@
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { fromMinor, toMinor } from "@shared/money";
 import { trpc } from "@/trpc";
 import { notifySuccess } from "@/notify";
 import { useMoney } from "@/useMoney";
-import { orderMembers } from "@/potOptions";
+import { groupedPotOptions, orderMembers } from "@/potOptions";
 import { Button } from "@/components/ui/Button";
-import { Checkbox } from "@/components/ui/Checkbox";
-import { SelectField } from "@/components/ui/SelectField";
+import { FormFooter } from "@/components/ui/FormFooter";
+import { Combobox } from "@/components/ui/Combobox";
+import { FormCheckbox } from "@/components/ui/FormCheckbox";
+import { FormChoiceField } from "@/components/ui/FormChoiceField";
 import { TextField } from "@/components/ui/TextField";
 import { ArchiveAction } from "@/components/ui/ArchiveAction";
 import { fundingOf, type Funding } from "@/features/plan/model";
@@ -174,29 +176,14 @@ export const BillForm = ({
         onDone();
     };
 
-    // Flat, owner-prefixed: a native select has optgroups, but the prefix keeps
-    // the chosen pot readable once the menu is closed.
-    const ownerName = new Map(
-        orderMembers(members).map((member) => [member.id, member.displayName])
-    );
-    const potOptions = pots
-        .filter((pot) => pot.archivedAt === null)
-        .map((pot) => ({
-            value: pot.id,
-            label: `${ownerName.get(pot.ownerId) ?? "—"} · ${pot.name}`,
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label));
     const categoryOptions = categories.map((category) => ({
         value: category.id,
         label: category.name,
     }));
-    const accountOptions = [
-        { value: "", label: "Joint" },
-        ...people.map((person) => ({
-            value: person.id,
-            label: person.displayName,
-        })),
-    ];
+    const accountOptions = people.map((person) => ({
+        value: person.id,
+        label: person.displayName,
+    }));
 
     return (
         <form onSubmit={submit}>
@@ -211,103 +198,118 @@ export const BillForm = ({
                             value.trim().length > 0 || "Enter a name.",
                     })}
                 />
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-3">
                     <TextField
                         label="Amount"
                         placeholder="0.00"
                         inputMode="decimal"
                         prefix={money.symbol}
-                        className="flex-1"
                         error={errors.amountMajor?.message}
                         {...register("amountMajor", {
                             validate: (value) =>
                                 Number(value) > 0 || "Enter an amount.",
                         })}
                     />
-                    <SelectField
+                    <FormChoiceField
+                        control={control}
+                        name="recurrence"
                         label="Every"
                         options={RECURRENCES}
-                        className="w-32"
-                        {...register("recurrence")}
                     />
                 </div>
-                <SelectField
+                <FormChoiceField
+                    control={control}
+                    name="funding"
                     label="How it is paid"
                     options={FUNDINGS}
                     description={FUNDING_HINT[funding]}
-                    {...register("funding")}
                 />
                 {isMain ? (
-                    <div className="flex gap-2">
-                        <SelectField
+                    <div className="grid grid-cols-2 gap-3">
+                        <FormChoiceField
+                            control={control}
+                            name="categoryId"
+                            rules={{
+                                validate: (value) =>
+                                    !isMain ||
+                                    String(value).length > 0 ||
+                                    "A main-account bill needs a category.",
+                            }}
                             label="Category"
                             placeholder="Pick a category"
                             options={categoryOptions}
-                            className="flex-1"
                             error={errors.categoryId?.message}
-                            {...register("categoryId", {
-                                validate: (value) =>
-                                    !isMain ||
-                                    value.length > 0 ||
-                                    "A main-account bill needs a category.",
-                            })}
                         />
-                        <SelectField
+                        <FormChoiceField
+                            control={control}
+                            name="ownerId"
                             label="Paid from"
+                            emptyLabel="Joint"
                             options={accountOptions}
-                            className="flex-1"
-                            {...register("ownerId")}
                         />
                     </div>
                 ) : (
-                    <SelectField
-                        label="Pot"
-                        placeholder="Pick a pot"
-                        options={potOptions}
-                        error={errors.potId?.message}
-                        {...register("potId", {
+                    <Controller
+                        control={control}
+                        name="potId"
+                        rules={{
                             validate: (value) =>
                                 isMain || value.length > 0 || "Pick a pot.",
-                        })}
+                        }}
+                        render={({ field }) => (
+                            <Combobox
+                                label="Pot"
+                                placeholder="Pick a pot"
+                                options={groupedPotOptions(pots, members)}
+                                value={field.value || null}
+                                onChange={(value) =>
+                                    field.onChange(value ?? "")
+                                }
+                                error={errors.potId?.message}
+                            />
+                        )}
                     />
                 )}
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-3">
                     <TextField
                         label="Next due"
                         type="date"
-                        className="flex-1"
                         {...register("dueAnchor")}
                     />
                     <TextField
                         label="Note"
                         placeholder="Optional"
-                        className="flex-1"
                         {...register("note")}
                     />
                 </div>
-                <Checkbox
+                <FormCheckbox
+                    control={control}
+                    name="includeInEmergencyFund"
                     label="Counts toward the emergency fund"
-                    {...register("includeInEmergencyFund")}
                 />
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
-                <Button variant="ghost" onClick={onDone}>
-                    Cancel
-                </Button>
-                <Button variant="solid" type="submit" disabled={isSubmitting}>
+            <FormFooter
+                aside={
+                    bill && (
+                        <ArchiveAction
+                            label="Archive bill"
+                            consequence="It stops being funded and leaves the plan. Past spends keep their history."
+                            pending={archive.isPending}
+                            onArchive={() => void handleArchive()}
+                        />
+                    )
+                }
+            >
+                <Button
+                    variant="solid"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="max-sm:h-9 max-sm:w-full"
+                >
                     {bill ? "Save changes" : "Add bill"}
                 </Button>
-            </div>
-
-            {bill && (
-                <ArchiveAction
-                    label="Archive bill"
-                    consequence="It stops being funded and leaves the plan. Past spends keep their history."
-                    pending={archive.isPending}
-                    onArchive={() => void handleArchive()}
-                />
-            )}
+            </FormFooter>
         </form>
     );
 };

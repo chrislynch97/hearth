@@ -1,5 +1,7 @@
-import { Alert, Anchor, Badge, Button, Group, Text } from "@mantine/core";
 import type { EmailConfirmation } from "@/useEmailConfirmation";
+import { Badge } from "@/components/shadcn/badge";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
 
 export interface EmailVerificationProps {
     confirmation: EmailConfirmation;
@@ -9,7 +11,7 @@ export interface EmailVerificationProps {
  *  a fresh link (#111). Only rendered on an instance that can send mail — an
  *  address on a self-host install with no relay is just a note to itself, and
  *  telling people to "confirm" it with no way to would be nonsense. State comes
- *  from the parent so the confirm-on-save dialog and this card agree (#198). */
+ *  from the parent so the confirm-on-save dialog and this note agree (#198). */
 export const EmailVerification = ({ confirmation }: EmailVerificationProps) => {
     const { enabled, email, verified, sentTo, error, sending, send } =
         confirmation;
@@ -19,56 +21,40 @@ export const EmailVerification = ({ confirmation }: EmailVerificationProps) => {
     return (
         <>
             {verified ? (
-                <Group gap="xs">
-                    <Badge color="moss" variant="light">
-                        Confirmed
-                    </Badge>
-                    <Text size="xs" c="dimmed">
+                <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="tint">Confirmed</Badge>
+                    <span className="text-sm text-text-muted">
                         This address can be used to reset your password.
-                    </Text>
-                </Group>
+                    </span>
+                </div>
             ) : (
-                <Group gap="xs">
-                    <Badge color="orange" variant="light">
-                        Not confirmed
-                    </Badge>
-                    <Text size="xs" c="dimmed" style={{ flex: 1 }}>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Badge variant="attention">Not confirmed</Badge>
+                    <span className="flex-1 text-sm text-text-muted">
                         Confirm this address so you can reset your password if
                         you lose it.
-                    </Text>
+                    </span>
                     <Button
-                        size="compact-sm"
-                        variant="default"
+                        compact
+                        disabled={sending}
                         onClick={() => void send()}
-                        loading={sending}
                     >
                         Send confirmation email
                     </Button>
-                </Group>
+                </div>
             )}
             {sentTo && (
-                <Alert color="moss" variant="light" title="Email sent">
-                    <Text size="sm">
-                        Check <b>{sentTo}</b> for a confirmation link. It
-                        expires in 24 hours — if it doesn&apos;t arrive, check
-                        your spam folder or{" "}
-                        <Anchor
-                            component="button"
-                            type="button"
-                            size="sm"
-                            onClick={() => void send()}
-                        >
-                            send another
-                        </Anchor>
-                        .
-                    </Text>
-                </Alert>
+                <Notice tone="positive" title="Email sent">
+                    Check <b>{sentTo}</b> for a confirmation link. It expires in
+                    24 hours — if it doesn&apos;t arrive, check your spam folder
+                    or{" "}
+                    <Button variant="link" onClick={() => void send()}>
+                        send another
+                    </Button>
+                    .
+                </Notice>
             )}
-            {error && (
-                <Alert color="red" title="Error">
-                    {error}
-                </Alert>
-            )}
+            {error && <Notice tone="danger" title={error} />}
         </>
     );
 };

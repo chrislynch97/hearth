@@ -1,187 +1,206 @@
-import type { Member, Pot } from "../../../../server/db/schema";
-import type { MoneyFormat } from "@/useMoney";
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { todayIso } from "@shared/dates";
+import { formatMoney } from "@shared/money";
+import { groupedPotOptions } from "@/potOptions";
 import { trpc } from "@/trpc";
+import type { MoneyFormat } from "@/useMoney";
 import {
-    Button,
     Card,
-    Center,
-    Group,
-    Loader,
-    Select,
-    Stack,
-    Switch,
-    Table,
-    Text,
-    Title,
-} from "@mantine/core";
-import { SpendRow } from "@/features/spending/components/SpendRow";
+    CardContent,
+    CardHeader,
+    CardTitle,
+} from "@/components/shadcn/card";
+import { Button } from "@/components/ui/Button";
+import { ChoiceField } from "@/components/ui/ChoiceField";
+import { Combobox } from "@/components/ui/Combobox";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Spinner } from "@/components/ui/Spinner";
+import {
+    dayHeading,
+    groupByDay,
+    statusInput,
+    type Member,
+    type Pot,
+    type Spend,
+    type StatusFilter,
+} from "../model";
+import { EditSpendDialog } from "./EditSpendDialog";
+import { SplitSpendDialog } from "./SplitSpendDialog";
+import { SpendRow } from "./SpendRow";
+
+const PAGE_SIZE = 100;
+
+const STATUSES: Array<{ value: StatusFilter; label: string }> = [
+    { value: "all", label: "Any status" },
+    { value: "needs-pot", label: "Needs a pot" },
+    { value: "pending", label: "Pending" },
+    { value: "reconciled", label: "Reconciled" },
+];
 
 export interface RegisterProps {
     members: Member[];
     pots: Pot[];
     money: MoneyFormat;
     ownerFilter: string | null;
-    setOwnerFilter: (ownerId: string | null) => void;
+    initialStatus: StatusFilter;
 }
 
+/** Every transaction, newest first and a day at a time, the way a bank shows
+ *  them. Pages through history rather than loading the whole table. */
 export const Register = ({
     members,
     pots,
     money,
     ownerFilter,
-    setOwnerFilter,
+    initialStatus,
 }: RegisterProps) => {
+    const utils = trpc.useUtils();
+    const categories = trpc.categories.list.useQuery().data ?? [];
+    const remove = trpc.spends.remove.useMutation();
     const [potFilter, setPotFilter] = useState<string | null>(null);
-    const [reconciledFilter, setReconciledFilter] = useState<string | null>(
-        null
-    );
-    const [needsPotOnly, setNeedsPotOnly] = useState(false);
-
-    const input = useMemo(() => {
-        const i: {
-            ownerId?: string;
-            potId?: string;
-            reconciled?: boolean;
-            needsPot?: boolean;
-        } = {};
-        if (ownerFilter) i.ownerId = ownerFilter;
-        if (potFilter) i.potId = potFilter;
-        if (reconciledFilter) i.reconciled = reconciledFilter === "yes";
-        if (needsPotOnly) i.needsPot = true;
-        return i;
-    }, [ownerFilter, potFilter, reconciledFilter, needsPotOnly]);
-
-    // Page through history rather than loading and rendering the whole table: fetch
-    // `limit + 1` so we know whether a "Load more" is warranted, and reset to the
-    // first page whenever the filters change.
-    const PAGE_SIZE = 100;
+    const [status, setStatus] = useState(initialStatus);
     const [pages, setPages] = useState(1);
-    const [pagedInput, setPagedInput] = useState(input);
-    if (pagedInput !== input) {
-        setPagedInput(input);
-        setPages(1);
-    }
-    const limit = pages * PAGE_SIZE;
+    const [editing, setEditing] = useState<Spend | null>(null);
+    const [splitting, setSplitting] = useState<Spend | null>(null);
+    const [deleting, setDeleting] = useState<Spend | null>(null);
 
+    const limit = pages * PAGE_SIZE;
+    // One over the page, to know whether there's more to load.
     const spendsQuery = trpc.spends.list.useQuery({
-        ...input,
+        ...(ownerFilter ? { ownerId: ownerFilter } : {}),
+        ...(potFilter ? { potId: potFilter } : {}),
+        ...statusInput(status),
         limit: limit + 1,
     });
-    const allRows = spendsQuery.data ?? [];
-    const hasMore = allRows.length > limit;
-    const spends = hasMore ? allRows.slice(0, limit) : allRows;
-    // Queried once here and passed to every row, rather than each SpendRow mounting
-    // its own categories.list subscription.
-    const categories = trpc.categories.list.useQuery().data ?? [];
+    const rows = spendsQuery.data ?? [];
+
+    const filterBy = (apply: () => void) => {
+        apply();
+        setPages(1);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleting) return;
+        await remove.mutateAsync({ id: deleting.id });
+        await Promise.all([
+            utils.spends.list.invalidate(),
+            utils.spends.lastByOwner.invalidate(),
+            utils.reconcile.backlog.invalidate(),
+        ]);
+        setDeleting(null);
+    };
 
     return (
-        <Card withBorder padding="md">
-            <Stack gap="sm">
-                <Title order={4}>Register</Title>
-                <Group gap="sm" wrap="wrap" align="flex-end">
-                    <Select
-                        label="Owner"
-                        placeholder="All"
-                        data={members.map((m) => ({
-                            value: m.id,
-                            label: m.displayName,
-                        }))}
-                        value={ownerFilter}
-                        onChange={setOwnerFilter}
-                        clearable
-                        size="xs"
-                    />
-                    <Select
+        <Card>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle>Transactions</CardTitle>
+                <div className="grid w-full grid-cols-2 gap-2 sm:w-auto">
+                    <Combobox
                         label="Pot"
-                        placeholder="All"
-                        data={pots.map((p) => ({ value: p.id, label: p.name }))}
+                        hideLabel
+                        placeholder="All pots"
+                        clearLabel="All pots"
+                        options={groupedPotOptions(pots, members)}
                         value={potFilter}
-                        onChange={setPotFilter}
-                        searchable
-                        clearable
-                        size="xs"
+                        onChange={(next) => filterBy(() => setPotFilter(next))}
+                        className="min-w-0 sm:w-40"
                     />
-                    <Select
-                        label="Reconciled"
-                        placeholder="All"
-                        data={[
-                            { value: "yes", label: "Reconciled" },
-                            { value: "no", label: "Pending" },
-                        ]}
-                        value={reconciledFilter}
-                        onChange={setReconciledFilter}
-                        clearable
-                        size="xs"
+                    <ChoiceField
+                        label="Status"
+                        hideLabel
+                        options={STATUSES}
+                        value={status}
+                        onChange={(next) => filterBy(() => setStatus(next))}
+                        className="min-w-0 sm:w-40"
                     />
-                    <Switch
-                        label="Needs a pot"
-                        checked={needsPotOnly}
-                        onChange={(e) =>
-                            setNeedsPotOnly(e.currentTarget.checked)
-                        }
-                        mb={4}
-                    />
-                </Group>
-
+                </div>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
                 {spendsQuery.isLoading && (
-                    <Center>
-                        <Loader size="sm" />
-                    </Center>
+                    <Spinner label="Loading transactions" />
                 )}
+                {!spendsQuery.isLoading && rows.length === 0 && (
+                    <p className="text-base text-text-muted">
+                        Nothing matches these filters.
+                    </p>
+                )}
+                {groupByDay(rows.slice(0, limit)).map((day) => (
+                    <section
+                        key={day.date}
+                        className="-mx-2 flex flex-col gap-0.5"
+                    >
+                        <div className="flex items-baseline justify-between gap-3 rounded-md bg-sunken px-2 py-1.5">
+                            <h3 className="text-sm font-semibold text-text-secondary">
+                                {dayHeading(day.date, todayIso(), money.locale)}
+                            </h3>
+                            <span className="tabular text-sm text-text-muted">
+                                {day.total < 0 ? "+" : ""}
+                                {formatMoney(Math.abs(day.total), money)}
+                            </span>
+                        </div>
+                        <ul className="flex flex-col">
+                            {day.spends.map((spend) => (
+                                <SpendRow
+                                    key={spend.id}
+                                    spend={spend}
+                                    members={members}
+                                    pots={pots}
+                                    categories={categories}
+                                    money={money}
+                                    onOpen={() => setEditing(spend)}
+                                />
+                            ))}
+                        </ul>
+                    </section>
+                ))}
+                {rows.length > limit && (
+                    <Button
+                        className="self-center"
+                        onClick={() => setPages((p) => p + 1)}
+                    >
+                        Load more
+                    </Button>
+                )}
+            </CardContent>
 
-                {!spendsQuery.isLoading && spends.length === 0 && (
-                    <Text c="dimmed" size="sm">
-                        No spending transactions match these filters.
-                    </Text>
-                )}
-
-                {!spendsQuery.isLoading && spends.length > 0 && (
-                    <Table.ScrollContainer minWidth={700}>
-                        <Table verticalSpacing="xs">
-                            <Table.Thead>
-                                <Table.Tr>
-                                    <Table.Th style={{ whiteSpace: "nowrap" }}>
-                                        Date
-                                    </Table.Th>
-                                    <Table.Th>Description</Table.Th>
-                                    <Table.Th>Owner</Table.Th>
-                                    <Table.Th>Amount</Table.Th>
-                                    <Table.Th>Pot</Table.Th>
-                                    <Table.Th style={{ whiteSpace: "nowrap" }}>
-                                        Status
-                                    </Table.Th>
-                                    <Table.Th />
-                                </Table.Tr>
-                            </Table.Thead>
-                            <Table.Tbody>
-                                {spends.map((s) => (
-                                    <SpendRow
-                                        key={s.id}
-                                        spend={s}
-                                        members={members}
-                                        pots={pots}
-                                        money={money}
-                                        categories={categories}
-                                    />
-                                ))}
-                            </Table.Tbody>
-                        </Table>
-                    </Table.ScrollContainer>
-                )}
-
-                {!spendsQuery.isLoading && hasMore && (
-                    <Group justify="center">
-                        <Button
-                            variant="default"
-                            size="xs"
-                            onClick={() => setPages((p) => p + 1)}
-                        >
-                            Load more
-                        </Button>
-                    </Group>
-                )}
-            </Stack>
+            {editing && (
+                <EditSpendDialog
+                    spend={editing}
+                    members={members}
+                    pots={pots}
+                    money={money}
+                    onClose={() => setEditing(null)}
+                    onSplit={() => {
+                        setSplitting(editing);
+                        setEditing(null);
+                    }}
+                    onDelete={() => {
+                        setDeleting(editing);
+                        setEditing(null);
+                    }}
+                />
+            )}
+            {splitting && (
+                <SplitSpendDialog
+                    spend={splitting}
+                    members={members}
+                    pots={pots}
+                    money={money}
+                    onClose={() => setSplitting(null)}
+                />
+            )}
+            <ConfirmDialog
+                open={deleting !== null}
+                onOpenChange={(open) => !open && setDeleting(null)}
+                title={`Delete ${deleting?.description ?? "this spend"}?`}
+                description="This can't be undone."
+                tone="danger"
+                confirm={{
+                    label: "Delete",
+                    onClick: () => void confirmDelete(),
+                    pending: remove.isPending,
+                }}
+            />
         </Card>
     );
 };

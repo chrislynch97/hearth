@@ -1,6 +1,5 @@
 /** Pure report aggregations (spec §5.6 Reports). Amounts are integer minor
  *  units; dates are `YYYY-MM-DD`. Callers pre-filter spends by period. */
-import { normaliseToMonthly, roundMinor, type Recurrence } from '../../../shared/recurrence'
 import { subtractMonths } from '../../../shared/dates'
 
 export interface CategoryRef {
@@ -74,32 +73,6 @@ export function spendVsAllocation(input: {
     rows.push({ categoryId: key, name, planned, actual, diff: planned - actual })
   }
   return rows.sort((a, b) => b.planned - a.planned)
-}
-
-export interface MemberCostRow {
-  ownerId: string
-  displayName: string
-  kind: 'person' | 'joint'
-  monthlyCost: number
-}
-
-/** Each owner's monthly-equivalent outgoing cost — the fairness lens (spec §6.5).
- *  Bills are single-pot now, so the caller attributes each cost to an owner: a
- *  bill to its pot's owner (main-account bills to joint), a set-aside to its owner. */
-export function perMemberVsJoint(input: {
-  members: Array<{ id: string; displayName: string; kind: 'person' | 'joint' }>
-  costs: Array<{ recurrence: Recurrence; amount: number; ownerId: string }>
-}): MemberCostRow[] {
-  const byOwner = new Map<string, number>()
-  for (const c of input.costs) {
-    byOwner.set(c.ownerId, (byOwner.get(c.ownerId) ?? 0) + normaliseToMonthly(c.amount, c.recurrence))
-  }
-  return input.members.map((m) => ({
-    ownerId: m.id,
-    displayName: m.displayName,
-    kind: m.kind,
-    monthlyCost: roundMinor(byOwner.get(m.id) ?? 0),
-  }))
 }
 
 export interface MonthlyTotalsRow {

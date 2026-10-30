@@ -137,15 +137,29 @@ export const dashboardRouter = router({
         categories: categories.map((c) => ({ id: c.id, name: c.name })),
       })
 
-      // E — 12-month household net trend.
+      // E — 12-month household net trend, split by whose pay it was.
+      const memberName = new Map(members.map((m) => [m.id, m.displayName]))
+      const memberColor = new Map(members.map((m) => [m.id, m.color]))
       const incomeTrend = monthlyNetTrend(
-        payslipSummaries.map((p) => ({ payDate: p.payDate, effectiveNet: p.effectiveNet })),
+        payslipSummaries.map((p) => ({ payDate: p.payDate, effectiveNet: p.effectiveNet, ownerId: p.ownerId })),
         today,
         12,
       )
+      // Who appears in that split, biggest earner first so the stack reads
+      // bottom-up the same way every month.
+      const earnedBy = new Map<string, number>()
+      for (const m of incomeTrend) {
+        for (const [id, net] of Object.entries(m.byOwner)) earnedBy.set(id, (earnedBy.get(id) ?? 0) + net)
+      }
+      const incomeEarners = [...earnedBy]
+        .sort(([, a], [, b]) => b - a)
+        .map(([id]) => ({
+          id,
+          displayName: memberName.get(id) ?? 'Former member',
+          color: memberColor.get(id) ?? null,
+        }))
 
       // F — recent activity (last 10 spends, with names for inline display).
-      const memberName = new Map(members.map((m) => [m.id, m.displayName]))
       const potName = new Map(pots.map((p) => [p.id, p.name]))
       const recentActivity = recentRows.map((r) => ({
         id: r.id,
@@ -186,6 +200,7 @@ export const dashboardRouter = router({
         funding,
         allocation,
         incomeTrend,
+        incomeEarners,
         recentActivity,
         upcoming,
         savingsAlerts: savings,

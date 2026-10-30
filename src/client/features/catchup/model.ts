@@ -49,6 +49,74 @@ export const settlement = (payer: BacklogPayer): Settlement => {
     };
 };
 
+/** One transfer to make: a single payer's share of a single pot. */
+export interface Transfer {
+    key: string;
+    potId: string;
+    potName: string;
+    payer: BacklogPayer;
+    required: number;
+}
+
+/** How many transfers are outstanding and what they add up to. Spends with no
+ *  pot aren't in it: they can't move until they have one. */
+export const backlogToMove = (
+    pots: Array<Pick<BacklogPot, "payers">>
+): { transfers: number; total: number } => {
+    const payers = pots.flatMap((pot) => pot.payers);
+    return {
+        transfers: payers.length,
+        total: payers.reduce((sum, p) => sum + settlement(p).required, 0),
+    };
+};
+
+/** Everything going to one person, which is how the transfers get made. */
+export interface TransferSection {
+    ownerId: string;
+    name: string;
+    total: number;
+    transfers: Transfer[];
+}
+
+/** The backlog re-cut from pots to people, biggest first. */
+export const transferSections = (
+    pots: BacklogPot[],
+    members: Array<{ id: string; displayName: string }>
+): TransferSection[] => {
+    const sections = new Map<string, TransferSection>();
+    for (const pot of pots) {
+        for (const payer of pot.payers) {
+            const { required } = settlement(payer);
+            const section = sections.get(payer.ownerId) ?? {
+                ownerId: payer.ownerId,
+                name:
+                    members.find((m) => m.id === payer.ownerId)?.displayName ??
+                    "Someone",
+                total: 0,
+                transfers: [],
+            };
+            section.total += required;
+            section.transfers.push({
+                // Keyed by what is outstanding: once a part-move lands, the row
+                // is a different ask and shouldn't keep its old state.
+                key: `${pot.potId}:${payer.ownerId}:${payer.total}:${payer.residual}`,
+                potId: pot.potId,
+                potName: pot.potName,
+                payer,
+                required,
+            });
+            sections.set(payer.ownerId, section);
+        }
+    }
+    return [...sections.values()]
+        .map((section) => ({
+            ...section,
+            transfers: section.transfers.sort(
+                (a, b) => Math.abs(b.required) - Math.abs(a.required)
+            ),
+        }))
+        .sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+};
 /** Parse the amount field (which holds a magnitude) into minor units; blank or unparseable is 0. */
 export const parseMoved = (
     moved: number | string,

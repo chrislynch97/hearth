@@ -6,7 +6,8 @@ import { notifySuccess } from "@/notify";
 import { useFormatDate, useMoney } from "@/useMoney";
 import { ArchiveAction } from "@/components/ui/ArchiveAction";
 import { Button } from "@/components/ui/Button";
-import { Callout } from "@/components/ui/Callout";
+import { FormFooter } from "@/components/ui/FormFooter";
+import { Notice } from "@/components/ui/Notice";
 import { TextField } from "@/components/ui/TextField";
 import {
     moneyInput,
@@ -146,11 +147,13 @@ export const ItemForm = ({ goal, items, item, onDone }: ItemFormProps) => {
                     })}
                 />
                 {raiseTo !== null && target !== null && (
-                    <Callout tone="attention">
+                    <Notice
+                        tone="attention"
+                        title={`Saving raises the target to ${formatMoney(raiseTo, money)}`}
+                    >
                         Items would come to {formatMoney(raiseTo, money)}, over
-                        the {formatMoney(target, money)} target. Saving raises
-                        the target to {formatMoney(raiseTo, money)}.
-                    </Callout>
+                        the {formatMoney(target, money)} target.
+                    </Notice>
                 )}
                 {goal.targetDate === null ? (
                     <TextField
@@ -172,23 +175,27 @@ export const ItemForm = ({ goal, items, item, onDone }: ItemFormProps) => {
                 )}
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
-                <Button variant="ghost" onClick={onDone}>
-                    Cancel
-                </Button>
-                <Button variant="solid" type="submit" disabled={isSubmitting}>
+            <FormFooter
+                aside={
+                    item && (
+                        <ArchiveAction
+                            label="Delete item"
+                            consequence="Takes it out of the plan. This can't be undone."
+                            pending={remove.isPending}
+                            onArchive={() => void handleRemove()}
+                        />
+                    )
+                }
+            >
+                <Button
+                    variant="solid"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="max-sm:h-9 max-sm:w-full"
+                >
                     {item ? "Save changes" : "Add item"}
                 </Button>
-            </div>
-
-            {item && (
-                <ArchiveAction
-                    label="Delete item"
-                    consequence="Takes it out of the plan. This can't be undone."
-                    pending={remove.isPending}
-                    onArchive={() => void handleRemove()}
-                />
-            )}
+            </FormFooter>
         </form>
     );
 };

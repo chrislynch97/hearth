@@ -6,7 +6,6 @@ import {
     waitFor,
     within,
 } from "@testing-library/react";
-import { MantineProvider } from "@mantine/core";
 
 // Erasing the login identity (#230), as opposed to the household. Irreversible
 // and confirmed twice over, so what's asserted here is that the confirmation
@@ -38,11 +37,7 @@ vi.mock("@/trpc", () => ({
 import { DeleteAccountSection } from "./DeleteAccountSection";
 
 const renderSection = () =>
-    render(
-        <MantineProvider>
-            <DeleteAccountSection />
-        </MantineProvider>
-    );
+    render(<DeleteAccountSection />);
 
 const openConfirm = async () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete my account" }));
@@ -127,9 +122,10 @@ describe("DeleteAccountSection", () => {
         };
         renderSection();
 
+        // Blocked: no button to press, just the reason.
         expect(
-            screen.getByRole("button", { name: "Delete my account" })
-        ).toBeDisabled();
+            screen.queryByRole("button", { name: "Delete my account" })
+        ).not.toBeInTheDocument();
         expect(
             screen.getByText(/only owner of Maple Street/)
         ).toBeInTheDocument();
@@ -139,9 +135,10 @@ describe("DeleteAccountSection", () => {
         mocks.impact = { ...mocks.impact, isInstanceOwner: true };
         renderSection();
 
+        // Blocked: no button to press, just the reason.
         expect(
-            screen.getByRole("button", { name: "Delete my account" })
-        ).toBeDisabled();
+            screen.queryByRole("button", { name: "Delete my account" })
+        ).not.toBeInTheDocument();
         expect(
             screen.getByText(/instance owner's account/)
         ).toBeInTheDocument();

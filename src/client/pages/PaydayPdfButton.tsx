@@ -25,9 +25,9 @@ export const PaydayPdfButton = () => {
     };
 
     return (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 max-sm:flex-1">
             {failed && <span className="text-xs text-danger">Couldn't make the PDF. Try again.</span>}
-            <Button onClick={() => void download()} disabled={pending}>
+            <Button className="max-sm:w-full" onClick={() => void download()} disabled={pending}>
                 {pending ? "Making PDF…" : "Export PDF"}
             </Button>
         </div>

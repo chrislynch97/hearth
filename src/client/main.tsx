@@ -2,9 +2,8 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 // Fonts are bundled and served from our own origin rather than fetched from
 // Google Fonts (#54): a self-hosted instance should make zero third-party
-// requests, and an offline LAN deployment has no route to a CDN. The weights
-// here are exactly the ones theme.ts asks for — adding a weight to the theme
-// means adding its import here, or the browser will synthesize it.
+// requests, and an offline LAN deployment has no route to a CDN. Using a new
+// weight means adding its import here, or the browser will synthesize it.
 import '@fontsource/hanken-grotesk/400.css'
 import '@fontsource/hanken-grotesk/500.css'
 import '@fontsource/hanken-grotesk/600.css'
@@ -14,22 +13,14 @@ import '@fontsource/spectral/500.css'
 import '@fontsource/spectral/600.css'
 import '@fontsource/space-mono/400.css'
 import '@fontsource/space-mono/700.css'
-import '@mantine/core/styles.css'
-import '@mantine/charts/styles.css'
-import '@mantine/dates/styles.css'
-import '@mantine/notifications/styles.css'
 // Only the stylesheets the charts we actually use need — microcharts splits
 // them per chart, and `styles.css` would pull in all 106 (#184).
 import '@microcharts/react/styles/core.css'
 import '@microcharts/react/styles/sparkline.css'
-// Design-system tokens + Tailwind utilities. After Mantine's sheet so utilities
-// win where the two overlap; see design-system.css for why preflight is left
-// out while both libraries live in the same app.
+// Design-system tokens + Tailwind utilities.
 import './design-system.css'
-// Imported after Mantine's styles so our overrides win the cascade (#83).
 import './mobile.css'
 import './microcharts.css'
-import './safe-area.css'
 import { App } from './App'
 import { AppProviders } from './providers'
 

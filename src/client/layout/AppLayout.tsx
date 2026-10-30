@@ -1,121 +1,23 @@
-import { AppShell, Burger, Group } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
-import { useEffect, useRef, useState } from "react";
-import { Outlet, useLocation } from "@tanstack/react-router";
-import { hearthTokens } from "@/theme";
-import "./nav.css";
-import { NavPalette } from "@/layout/NavPalette";
-import { Sidebar } from "@/layout/Sidebar";
-import { closesMobileNav, sectionForPath } from "@/layout/nav-config";
-import { HearthLink } from "@/layout/HearthLink";
+import { Outlet } from "@tanstack/react-router";
+import { SidebarProvider } from "@/components/shadcn/sidebar";
+import { AppSidebar } from "@/layout/AppSidebar";
+import { TopBar } from "@/layout/TopBar";
 import { UpdateBanner } from "@/layout/UpdateBanner";
 import { AccountEmailBanner } from "@/layout/AccountEmailBanner";
 
-export function AppLayout() {
-    const location = useLocation();
-
-    const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] =
-        useDisclosure();
-    const [paletteOpen, setPaletteOpen] = useState(false);
-    const section = sectionForPath(location.pathname);
-
-    // Not every navigation should shut the drawer — see closesMobileNav. The
-    // first line matters under StrictMode: a re-run with the path already
-    // recorded would compare it against itself and close on every route.
-    const previousPath = useRef(location.pathname);
-    useEffect(() => {
-        if (previousPath.current === location.pathname) return;
-        if (closesMobileNav(previousPath.current, location.pathname)) {
-            closeMobile();
-        }
-        previousPath.current = location.pathname;
-    }, [location.pathname, closeMobile]);
-
-    // `/` opens the go-to palette. The `g`-prefixed jump shortcuts were removed
-    // with the nav restructure (#12) — unused, and a flat letter per page stopped
-    // scaling once the sidebar grew past one domain.
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.metaKey || e.ctrlKey || e.altKey) return;
-            const el = document.activeElement as HTMLElement | null;
-            if (
-                el &&
-                (el.tagName === "INPUT" ||
-                    el.tagName === "TEXTAREA" ||
-                    el.tagName === "SELECT" ||
-                    el.isContentEditable)
-            ) {
-                return;
-            }
-            if (e.key === "/") {
-                e.preventDefault();
-                setPaletteOpen(true);
-            }
-        };
-
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, []);
-
-    return (
-        <AppShell
-            header={{ height: { base: 52, sm: 0 } }}
-            navbar={{
-                // 72px rail, plus the 212px page list when a section owns the
-                // route. Overview belongs to no section, so the list tier — and
-                // its width — go with it.
-                width: section ? 284 : 72,
-                breakpoint: "sm",
-                collapsed: { mobile: !mobileOpened },
-            }}
-            padding="xl"
-            styles={{
-                header: {
-                    backgroundColor:
-                        "light-dark(var(--mantine-color-moss-6), var(--mantine-color-dark-7))",
-                    borderBottom: "none",
-                },
-                // The navbar is the design-system sidebar now: it paints its own
-                // two surfaces and owns its borders, so the shell contributes
-                // nothing but the box.
-                navbar: {
-                    backgroundColor: "transparent",
-                    border: "none",
-                    padding: 0,
-                },
-                main: {
-                    backgroundColor:
-                        "light-dark(var(--mantine-color-sand-1), var(--mantine-color-dark-8))",
-                },
-            }}
-        >
-            <AppShell.Header hiddenFrom="sm">
-                <Group h="100%" px="md" gap={10}>
-                    <Burger
-                        opened={mobileOpened}
-                        onClick={toggleMobile}
-                        size="sm"
-                        color={hearthTokens.brand.linen}
-                        aria-label="Toggle navigation"
-                    />
-                    <HearthLink />
-                </Group>
-            </AppShell.Header>
-
-            <AppShell.Navbar>
-                <Sidebar section={section} />
-            </AppShell.Navbar>
-
-            <AppShell.Main>
+/** The app shell: top bar, sidebar, page. `--shell-header-height` sits the
+ *  sidebar under the bar; `--shell-padding` is the page's gutter. */
+export const AppLayout = () => (
+    <SidebarProvider className="flex min-h-dvh flex-col bg-canvas [--shell-header-height:calc(52px+env(safe-area-inset-top))] [--shell-padding:16px] md:[--shell-padding:32px]">
+        <TopBar />
+        <div className="flex flex-1">
+            {/* Under the sticky top bar rather than shadcn's default full height. */}
+            <AppSidebar className="top-[var(--shell-header-height)] h-[calc(100dvh-var(--shell-header-height))]! pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]" />
+            <main className="min-w-0 flex-1 p-[var(--shell-padding)] pb-[calc(var(--shell-padding)+env(safe-area-inset-bottom))]">
                 <UpdateBanner />
                 <AccountEmailBanner />
                 <Outlet />
-            </AppShell.Main>
-
-            <NavPalette
-                opened={paletteOpen}
-                onClose={() => setPaletteOpen(false)}
-            />
-        </AppShell>
-    );
-}
+            </main>
+        </div>
+    </SidebarProvider>
+);

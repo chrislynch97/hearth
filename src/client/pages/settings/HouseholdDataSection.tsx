@@ -1,20 +1,12 @@
 import { useState } from "react";
-import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    Divider,
-    Group,
-    List,
-    Modal,
-    Stack,
-    Text,
-    TextInput,
-    Title,
-} from "@mantine/core";
 import { trpc } from "@/trpc";
 import { downloadJson } from "@/csv";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Notice } from "@/components/ui/Notice";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SettingsSection } from "@/components/ui/SettingsSection";
+import { TextField } from "@/components/ui/TextField";
 
 /** A filename-safe form of the household name, so the download says whose data
  *  it is. Falls back to "household" for a name with nothing usable in it. */
@@ -117,127 +109,92 @@ export const HouseholdDataSection = () => {
     };
 
     return (
-        <Card withBorder padding="md" radius="md">
-            <Title order={4} mb="sm">
-                Your data
-            </Title>
-            <Stack gap="sm">
-                <Group justify="space-between" align="flex-start">
-                    <Box flex={1} miw={260}>
-                        <Text size="sm" fw={500}>
-                            Export this household
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                            Everything this household holds — members, pots,
-                            outgoings, spending, payslips, raises and accounts,
-                            plus the list of people with access — as one JSON
-                            file. Passwords and two-factor secrets are left out.
-                            The file is unencrypted, so store it as carefully as
-                            you would a bank statement.
-                        </Text>
-                    </Box>
-                    <Button
-                        variant="default"
-                        onClick={() => void handleExport()}
-                    >
+        <>
+            <SettingsSection
+                title="Your data"
+                description="Take a copy of everything this household holds."
+            >
+                <SettingsRow
+                    title="Export this household"
+                    description="Members, pots, outgoings, spending, payslips, raises and accounts, plus the people with access, as one JSON file. Passwords and two-factor secrets are left out. It's unencrypted, so store it as carefully as a bank statement."
+                >
+                    <Button onClick={() => void handleExport()}>
                         Download my data
                     </Button>
-                </Group>
-                <Divider />
-                <Group justify="space-between" align="flex-start">
-                    <Box flex={1} miw={260}>
-                        <Text
-                            size="sm"
-                            fw={500}
-                            c={isPrimary ? undefined : "red"}
-                        >
-                            Delete this household
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                            {isPrimary
-                                ? "This is the instance's primary household, so it can't be deleted here — deleting it would take the instance with it. Use Reset all data under Settings → System instead."
-                                : "Permanently erase this household and everything in it. This cannot be undone."}
-                        </Text>
-                    </Box>
-                    <Button
-                        color="red"
-                        variant="light"
-                        disabled={isPrimary}
-                        onClick={() => {
-                            setTyped("");
-                            setConfirmErase(true);
-                        }}
-                    >
-                        Delete
-                    </Button>
-                </Group>
-                {message && (
-                    <Alert color="moss" variant="light">
-                        {message}
-                    </Alert>
-                )}
-                {error && (
-                    <Alert color="red" title="Error">
-                        {error}
-                    </Alert>
-                )}
-            </Stack>
+                </SettingsRow>
+                {message && <Notice tone="positive" title={message} />}
+                {error && <Notice tone="danger" title={error} />}
+            </SettingsSection>
 
-            <Modal
-                opened={confirmErase}
-                onClose={() => setConfirmErase(false)}
-                title={`Delete ${name}?`}
-                size="md"
+            <SettingsSection
+                title="Danger zone"
+                description="Things that can't be undone."
+                tone="danger"
             >
-                <Stack gap="md">
-                    <Text size="sm">This permanently deletes:</Text>
-                    <List size="sm" spacing={4}>
-                        <List.Item>
+                <SettingsRow
+                    title="Delete this household"
+                    danger={!isPrimary}
+                    description={
+                        isPrimary
+                            ? "This is the instance's primary household, so it can't be deleted here — deleting it would take the instance with it. Use Reset all data under Settings → System instead."
+                            : "Permanently erase this household and everything in it. This cannot be undone."
+                    }
+                >
+                    {!isPrimary && (
+                        <Button
+                            variant="danger"
+                            onClick={() => {
+                                setTyped("");
+                                setConfirmErase(true);
+                            }}
+                        >
+                            Delete
+                        </Button>
+                    )}
+                </SettingsRow>
+            </SettingsSection>
+
+            <ConfirmDialog
+                open={confirmErase}
+                onOpenChange={setConfirmErase}
+                title={`Delete ${name}?`}
+                tone="danger"
+                confirm={{
+                    label: "Delete this household",
+                    onClick: () => void handleErase(),
+                    pending: eraseMut.isPending,
+                    disabled: !name || typed.trim() !== name,
+                }}
+            >
+                <div>
+                    <p>This permanently deletes:</p>
+                    <ul className="mt-1.5 list-disc space-y-1 pl-5">
+                        <li>
                             every member, pot, outgoing, spend, payslip, raise
                             and account in {name}
-                        </List.Item>
-                        <List.Item>
+                        </li>
+                        <li>
                             everyone&apos;s access to it, and any pending
                             invitations
-                        </List.Item>
-                        <List.Item>this household&apos;s audit trail</List.Item>
-                        {accountsDeleted > 0 && (
-                            <List.Item>{accountsNote}</List.Item>
-                        )}
-                    </List>
-                    <Text size="sm">
-                        {elsewhere.length > 0
-                            ? `You'll be switched to ${elsewhere[0]?.householdName}. `
-                            : "You'll be signed out — this is your only household. "}
-                        {backupNote}
-                    </Text>
-                    <Text size="sm">
-                        Download your data first if you want to keep it.
-                    </Text>
-                    <TextInput
-                        label={`Type ${name} to confirm`}
-                        value={typed}
-                        onChange={(e) => setTyped(e.currentTarget.value)}
-                        autoComplete="off"
-                    />
-                    <Group justify="flex-end">
-                        <Button
-                            variant="default"
-                            onClick={() => setConfirmErase(false)}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            color="red"
-                            disabled={!name || typed.trim() !== name}
-                            loading={eraseMut.isPending}
-                            onClick={() => void handleErase()}
-                        >
-                            Delete this household
-                        </Button>
-                    </Group>
-                </Stack>
-            </Modal>
-        </Card>
+                        </li>
+                        <li>this household&apos;s audit trail</li>
+                        {accountsDeleted > 0 && <li>{accountsNote}</li>}
+                    </ul>
+                </div>
+                <p className="text-text-secondary">
+                    {elsewhere.length > 0
+                        ? `You'll be switched to ${elsewhere[0]?.householdName}. `
+                        : "You'll be signed out — this is your only household. "}
+                    {backupNote} Download your data first if you want to keep
+                    it.
+                </p>
+                <TextField
+                    label={`Type ${name} to confirm`}
+                    value={typed}
+                    onChange={(e) => setTyped(e.currentTarget.value)}
+                    autoComplete="off"
+                />
+            </ConfirmDialog>
+        </>
     );
 };

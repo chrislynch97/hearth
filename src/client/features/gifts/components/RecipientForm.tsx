@@ -4,7 +4,8 @@ import { notifySuccess } from "@/notify";
 import { formatMoney } from "@shared/money";
 import { useMoney } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
-import { Callout } from "@/components/ui/Callout";
+import { FormFooter } from "@/components/ui/FormFooter";
+import { Notice } from "@/components/ui/Notice";
 import { TextField } from "@/components/ui/TextField";
 import { ArchiveAction } from "@/components/ui/ArchiveAction";
 import {
@@ -135,37 +136,42 @@ export const RecipientForm = ({
                     })}
                 />
                 {raiseTo !== null && occasion.budget !== null && (
-                    <Callout tone="attention">
-                        Everyone's budgets would come to{" "}
-                        {formatMoney(raiseTo, money)}, over the{" "}
+                    <Notice
+                        tone="attention"
+                        title={`Saving raises the budget to ${formatMoney(raiseTo, money)}`}
+                    >
+                        Everyone's budgets would come to more than the{" "}
                         {formatMoney(occasion.budget, money)} for{" "}
-                        {occasion.name}. Saving raises the {occasion.name}{" "}
-                        budget to {formatMoney(raiseTo, money)}.
-                    </Callout>
+                        {occasion.name}.
+                    </Notice>
                 )}
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
-                <Button variant="ghost" onClick={onDone}>
-                    Cancel
-                </Button>
-                <Button variant="solid" type="submit" disabled={isSubmitting}>
+            <FormFooter
+                aside={
+                    recipient && (
+                        <ArchiveAction
+                            label="Remove person"
+                            consequence={
+                                giftCount === 0
+                                    ? "Takes them off this occasion only."
+                                    : `Takes them off this occasion along with their ${giftCount === 1 ? "gift" : `${giftCount} gifts`}. Other occasions keep theirs.`
+                            }
+                            pending={remove.isPending}
+                            onArchive={() => void handleRemove()}
+                        />
+                    )
+                }
+            >
+                <Button
+                    variant="solid"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="max-sm:h-9 max-sm:w-full"
+                >
                     {recipient ? "Save changes" : "Add person"}
                 </Button>
-            </div>
-
-            {recipient && (
-                <ArchiveAction
-                    label="Remove person"
-                    consequence={
-                        giftCount === 0
-                            ? "Takes them off this occasion only."
-                            : `Takes them off this occasion along with their ${giftCount === 1 ? "gift" : `${giftCount} gifts`}. Other occasions keep theirs.`
-                    }
-                    pending={remove.isPending}
-                    onArchive={() => void handleRemove()}
-                />
-            )}
+            </FormFooter>
         </form>
     );
 };

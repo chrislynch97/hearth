@@ -1,26 +1,21 @@
-import { useMemo, useState } from "react";
-import {
-    Alert,
-    Button,
-    Center,
-    Group,
-    Loader,
-    Stack,
-    Text,
-    Title,
-} from "@mantine/core";
+import { useState } from "react";
+import { Plus } from "lucide-react";
 import { trpc } from "@/trpc";
 import { useMoney } from "@/useMoney";
-import type { Account } from "../../server/db/schema";
-import type { AccountWithValue } from "../../server/features/networth/accounts.router";
-import { NetWorthHeadline } from "@/features/accounts/components/NetWorkHeadline";
-import { TrendCard } from "@/features/accounts/components/TrendCard";
-import { BalancesModal } from "@/features/accounts/components/BalancesModal";
-import { daysSince, STALE_DAYS } from "@/features/accounts/util";
-import type { OwnerOption } from "@/features/accounts/model";
-import { AccountModal } from "@/features/accounts/components/AccountModal";
+import { Card, CardContent } from "@/components/shadcn/card";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Notice } from "@/components/ui/Notice";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Spinner } from "@/components/ui/Spinner";
+import { AccountDialog } from "@/features/accounts/components/AccountDialog";
 import { AccountGroup } from "@/features/accounts/components/AccountGroup";
+import { BalancesDialog } from "@/features/accounts/components/BalancesDialog";
+import { NetWorthCard } from "@/features/accounts/components/NetWorthCard";
+import type { AccountWithValue, OwnerOption } from "@/features/accounts/model";
+import { daysSince, STALE_DAYS } from "@/features/accounts/util";
 
+/** What the household owns and owes, and how that has moved over time. */
 export const AccountsPage = () => {
     const money = useMoney();
     const utils = trpc.useUtils();
@@ -28,153 +23,137 @@ export const AccountsPage = () => {
     const accountsQuery = trpc.accounts.list.useQuery();
     const summaryQuery = trpc.accounts.summary.useQuery();
     const remove = trpc.accounts.remove.useMutation();
+    const [adding, setAdding] = useState(false);
+    const [editing, setEditing] = useState<AccountWithValue | null>(null);
+    const [balancesFor, setBalancesFor] = useState<AccountWithValue | null>(
+        null
+    );
+    const [deleting, setDeleting] = useState<AccountWithValue | null>(null);
 
     const owners: OwnerOption[] = (membersQuery.data ?? [])
         .filter((m) => m.archivedAt === null)
         .map((m) => ({ value: m.id, label: m.displayName }));
-    const ownerName = (id: string) =>
-        owners.find((o) => o.value === id)?.label ?? "—";
-
-    const accounts = useMemo(
-        () => accountsQuery.data ?? [],
-        [accountsQuery.data]
-    );
-    const assets = useMemo(
-        () => accounts.filter((a) => a.kind === "asset"),
-        [accounts]
-    );
-    const liabilities = useMemo(
-        () => accounts.filter((a) => a.kind === "liability"),
-        [accounts]
-    );
+    const accounts = accountsQuery.data ?? [];
+    const summary = summaryQuery.data;
+    const isLoading = accountsQuery.isLoading || summaryQuery.isLoading;
     const staleCount = accounts.filter(
         (a) => a.asOfDate === null || daysSince(a.asOfDate) > STALE_DAYS
     ).length;
 
-    const [modalOpen, setModalOpen] = useState(false);
-    const [editing, setEditing] = useState<Account | null>(null);
-    const [modalKind, setModalKind] = useState<"asset" | "liability">("asset");
-    const [balancesFor, setBalancesFor] = useState<AccountWithValue | null>(
-        null
-    );
+    const ownerName = (id: string) =>
+        owners.find((o) => o.value === id)?.label ?? "—";
 
-    function openAdd(kind: "asset" | "liability") {
-        setEditing(null);
-        setModalKind(kind);
-        setModalOpen(true);
-    }
-    function openEdit(a: AccountWithValue) {
-        setEditing(a);
-        setModalOpen(true);
-    }
-    async function handleDelete(a: AccountWithValue) {
-        const msg =
-            a.currentValue !== null
-                ? `Delete "${a.name}" and its balance history? This can't be undone.`
-                : `Delete "${a.name}"?`;
-        if (!window.confirm(msg)) return;
-        await remove.mutateAsync({ id: a.id });
+    const confirmDelete = async () => {
+        if (!deleting) return;
+        await remove.mutateAsync({ id: deleting.id });
         await Promise.all([
             utils.accounts.list.invalidate(),
             utils.accounts.summary.invalidate(),
         ]);
-    }
-
-    const summary = summaryQuery.data;
-    const isLoading = accountsQuery.isLoading || summaryQuery.isLoading;
+        setDeleting(null);
+    };
 
     return (
-        <Stack gap="lg" maw={900} mx="auto">
-            <Group justify="space-between" align="center">
-                <Title order={2}>Accounts &amp; net worth</Title>
-                <Button onClick={() => openAdd("asset")}>+ Add account</Button>
-            </Group>
-
-            {isLoading && (
-                <Center>
-                    <Loader size="sm" />
-                </Center>
-            )}
-
-            {!isLoading && summary && (
-                <>
-                    <NetWorthHeadline
-                        assets={summary.assets}
-                        liabilities={summary.liabilities}
-                        netWorth={summary.netWorth}
-                        money={money}
-                    />
-                    <TrendCard timeline={summary.timeline} money={money} />
-                </>
-            )}
-
-            {!isLoading && accounts.length > 0 && staleCount > 0 && (
-                <Alert
-                    color="apricot"
-                    variant="light"
-                    title="Some balances are out of date"
-                >
-                    {staleCount} account{staleCount === 1 ? "" : "s"}{" "}
-                    {staleCount === 1 ? "hasn't" : "haven't"} been updated in
-                    over {Math.round(STALE_DAYS / 30)} months — your net worth
-                    may be stale. Open an account's balances to record a current
-                    value.
-                </Alert>
-            )}
-
+        <div className="hearth-ds mx-auto flex max-w-[1000px] flex-col gap-5">
+            <PageHeader
+                title="Net worth"
+                actions={
+                    <Button
+                        icon={<Plus />}
+                        className="max-sm:w-full"
+                        onClick={() => setAdding(true)}
+                    >
+                        Add account
+                    </Button>
+                }
+            />
+            {isLoading && <Spinner label="Loading accounts" />}
             {!isLoading && accounts.length === 0 && (
-                <Text c="dimmed">
-                    Track the things you own and owe — savings, pensions,
-                    property, mortgage, loans — and Hearth charts your net worth
-                    over time. Add your first account to begin.
-                </Text>
+                <Card>
+                    <CardContent className="text-base text-text-muted">
+                        Track the things you own and owe — savings, pensions,
+                        property, mortgage, loans — and Hearth charts your net
+                        worth over time. Add your first account to begin.
+                    </CardContent>
+                </Card>
             )}
-
-            {!isLoading && accounts.length > 0 && (
+            {!isLoading && summary && accounts.length > 0 && (
                 <>
-                    <AccountGroup
-                        title="Assets"
-                        accounts={assets}
-                        ownerName={ownerName}
-                        total={summary?.assets ?? 0}
-                        money={money}
-                        onAdd={() => openAdd("asset")}
-                        onEdit={openEdit}
-                        onBalances={setBalancesFor}
-                        onDelete={handleDelete}
-                    />
-                    <AccountGroup
-                        title="Liabilities"
-                        accounts={liabilities}
-                        ownerName={ownerName}
-                        total={summary?.liabilities ?? 0}
-                        money={money}
-                        onAdd={() => openAdd("liability")}
-                        onEdit={openEdit}
-                        onBalances={setBalancesFor}
-                        onDelete={handleDelete}
-                    />
+                    <NetWorthCard summary={summary} money={money} />
+                    {staleCount > 0 && (
+                        <Notice
+                            tone="attention"
+                            title="Some balances are out of date"
+                        >
+                            {staleCount} account{staleCount === 1 ? "" : "s"}{" "}
+                            {staleCount === 1 ? "hasn't" : "haven't"} been
+                            updated in over {Math.round(STALE_DAYS / 30)}{" "}
+                            months, so your net worth may be behind. Open an
+                            account to record a current value.
+                        </Notice>
+                    )}
+                    <div className="grid items-start gap-5 lg:grid-cols-2">
+                        <AccountGroup
+                            title="Assets"
+                            accounts={accounts.filter(
+                                (a) => a.kind === "asset"
+                            )}
+                            ownerName={ownerName}
+                            total={summary.assets}
+                            money={money}
+                            onOpen={setBalancesFor}
+                        />
+                        <AccountGroup
+                            title="Liabilities"
+                            accounts={accounts.filter(
+                                (a) => a.kind === "liability"
+                            )}
+                            ownerName={ownerName}
+                            total={summary.liabilities}
+                            money={money}
+                            onOpen={setBalancesFor}
+                        />
+                    </div>
                 </>
             )}
 
-            {modalOpen && (
-                <AccountModal
-                    opened={modalOpen}
-                    onClose={() => setModalOpen(false)}
+            {(adding || editing) && (
+                <AccountDialog
                     account={editing}
                     owners={owners}
-                    defaultKind={modalKind}
+                    onClose={() => {
+                        setAdding(false);
+                        setEditing(null);
+                    }}
+                    onDelete={(account) => {
+                        setEditing(null);
+                        setDeleting(account);
+                    }}
                 />
             )}
-
             {balancesFor && (
-                <BalancesModal
-                    opened={balancesFor !== null}
-                    onClose={() => setBalancesFor(null)}
+                <BalancesDialog
                     account={balancesFor}
                     money={money}
+                    onClose={() => setBalancesFor(null)}
+                    onEdit={() => {
+                        setEditing(balancesFor);
+                        setBalancesFor(null);
+                    }}
                 />
             )}
-        </Stack>
+            <ConfirmDialog
+                open={deleting !== null}
+                onOpenChange={(open) => !open && setDeleting(null)}
+                title={`Delete ${deleting?.name ?? ""}?`}
+                description="This removes the account and its balance history, and takes it out of your net worth. It can't be undone."
+                tone="danger"
+                confirm={{
+                    label: "Delete account",
+                    onClick: () => void confirmDelete(),
+                    pending: remove.isPending,
+                }}
+            />
+        </div>
     );
 };

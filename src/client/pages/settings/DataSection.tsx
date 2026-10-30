@@ -1,40 +1,43 @@
 import { useRef, useState } from "react";
-import {
-    Alert,
-    Button,
-    Card,
-    Divider,
-    Group,
-    Modal,
-    Select,
-    Stack,
-    Text,
-    Title,
-} from "@mantine/core";
 import { trpc } from "@/trpc";
 import { useFormatDate } from "@/useMoney";
 import { downloadBlob, downloadJson, toCsv } from "@/csv";
 import { zipStore } from "@/zip";
-import { msToLocalIso } from "./util";
+import { Button } from "@/components/ui/Button";
+import { ChoiceField } from "@/components/ui/ChoiceField";
+import { Notice } from "@/components/ui/Notice";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SettingsSection } from "@/components/ui/SettingsSection";
 import { OffsiteRestore } from "./OffsiteRestore";
+import { msToLocalIso } from "./util";
 
+type BackupFrequency = "off" | "daily" | "weekly";
+
+/** The instance's backups: when they run, taking one now, downloading a copy,
+ *  and putting one back. */
 export const DataSection = () => {
     const utils = trpc.useUtils();
     const ctx = trpc.bootstrap.context.useQuery();
     const fmt = useFormatDate();
     const importMut = trpc.data.import.useMutation();
-    const resetMut = trpc.data.reset.useMutation();
     const updateHousehold = trpc.household.update.useMutation();
     const backupNow = trpc.data.backupNow.useMutation();
     const backups = trpc.data.listBackups.useQuery();
     const fileRef = useRef<HTMLInputElement>(null);
 
-    const hh = ctx.data?.household;
     const [message, setMessage] = useState("");
     const [error, setError] = useState("");
-    const [confirmReset, setConfirmReset] = useState(false);
 
-    const setFrequency = async (frequency: "off" | "daily" | "weekly") => {
+    const hh = ctx.data?.household;
+    const lastBackup = hh?.backupLastAt
+        ? `Last: ${fmt(msToLocalIso(hh.backupLastAt.getTime()))} ${hh.backupLastAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`
+        : "None yet.";
+    const where =
+        backups.data?.primary === "offsite"
+            ? `Written to your ${backups.data.kind} off-site target; the local copy is staging only.`
+            : "Written to a backups folder next to your database; the last 14 are kept.";
+
+    const setFrequency = async (frequency: BackupFrequency) => {
         await updateHousehold.mutateAsync({ backupFrequency: frequency });
         await utils.bootstrap.context.invalidate();
     };
@@ -129,194 +132,70 @@ export const DataSection = () => {
         }
     };
 
-    const handleReset = async () => {
-        setConfirmReset(false);
-        await resetMut.mutateAsync();
-        // Fresh household → app returns to the setup wizard.
-        window.location.href = "/";
-    };
-
     return (
-        <Card withBorder padding="md" radius="md">
-            <Title order={4} mb="sm">
-                Data
-            </Title>
-            <Stack gap="sm">
-                <Group justify="space-between" align="flex-end">
-                    <div>
-                        <Text size="sm" fw={500}>
-                            Automatic backups
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                            {backups.data?.primary === "offsite" ? (
-                                <>
-                                    Written to your{" "}
-                                    <Text span ff="monospace" fz="xs">
-                                        {backups.data.kind}
-                                    </Text>{" "}
-                                    off-site target; the local copy is staging
-                                    only.
-                                </>
-                            ) : (
-                                <>
-                                    Written to a{" "}
-                                    <Text span ff="monospace" fz="xs">
-                                        backups/
-                                    </Text>{" "}
-                                    folder next to your database (last 14 kept).
-                                </>
-                            )}
-                            {hh?.backupLastAt
-                                ? ` Last: ${fmt(msToLocalIso(hh.backupLastAt.getTime()))} ${hh.backupLastAt.toLocaleTimeString()}.`
-                                : " None yet."}
-                        </Text>
-                    </div>
-                    <Group gap="sm" align="flex-end">
-                        <Select
-                            label="Frequency"
-                            size="xs"
-                            w={110}
-                            data={[
-                                { value: "off", label: "Off" },
-                                { value: "daily", label: "Daily" },
-                                { value: "weekly", label: "Weekly" },
-                            ]}
-                            value={hh?.backupFrequency ?? "off"}
-                            onChange={(v) =>
-                                void setFrequency(
-                                    (v as "off" | "daily" | "weekly") ?? "off"
-                                )
-                            }
-                            allowDeselect={false}
-                        />
-                        <Button
-                            size="xs"
-                            variant="default"
-                            loading={backupNow.isPending}
-                            onClick={() => void handleBackupNow()}
-                        >
-                            Back up now
-                        </Button>
-                    </Group>
-                </Group>
-                <Divider />
-                <Group justify="space-between">
-                    <div>
-                        <Text size="sm" fw={500}>
-                            Download backup
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                            JSON is the portable backup format (used by
-                            Restore). CSV gives one file per table, zipped —
-                            handy for spreadsheets.
-                        </Text>
-                    </div>
-                    <Group gap="sm">
-                        <Button
-                            variant="default"
-                            onClick={() => void handleExportCsv()}
-                        >
-                            Download CSV
-                        </Button>
-                        <Button
-                            variant="default"
-                            onClick={() => void handleExport()}
-                        >
-                            Download JSON
-                        </Button>
-                    </Group>
-                </Group>
-                <Divider />
-                <Group justify="space-between">
-                    <div>
-                        <Text size="sm" fw={500}>
-                            Restore
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                            Replace all current data with a backup file. This
-                            cannot be undone.
-                        </Text>
-                    </div>
-                    <Button
-                        variant="default"
-                        loading={importMut.isPending}
-                        onClick={() => fileRef.current?.click()}
-                    >
-                        Restore from file
-                    </Button>
-                    <input
-                        ref={fileRef}
-                        type="file"
-                        accept="application/json,.json"
-                        style={{ display: "none" }}
-                        onChange={(e) => {
-                            const file = e.currentTarget.files?.[0];
-                            if (file) void handleImportFile(file);
-                            e.currentTarget.value = "";
-                        }}
-                    />
-                </Group>
-                <OffsiteRestore />
-                <Divider />
-                <Group justify="space-between">
-                    <div>
-                        <Text size="sm" fw={500} c="red">
-                            Reset all data
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                            Wipe everything and start fresh from the setup
-                            wizard.
-                        </Text>
-                    </div>
-                    <Button
-                        color="red"
-                        variant="light"
-                        onClick={() => setConfirmReset(true)}
-                    >
-                        Reset
-                    </Button>
-                </Group>
-                {message && (
-                    <Alert color="moss" variant="light">
-                        {message}
-                    </Alert>
-                )}
-                {error && (
-                    <Alert color="red" title="Error">
-                        {error}
-                    </Alert>
-                )}
-            </Stack>
-
-            <Modal
-                opened={confirmReset}
-                onClose={() => setConfirmReset(false)}
-                title="Reset all data?"
-                size="sm"
+        <SettingsSection
+            title="Backups"
+            description="Copies of everything on this instance, and how to put one back."
+        >
+            <SettingsRow
+                title="Automatic backups"
+                description={`${where} ${lastBackup}`}
             >
-                <Stack gap="md">
-                    <Text size="sm">
-                        This permanently deletes every member, pot, outgoing,
-                        spend, payslip and raise, and returns to the setup
-                        wizard. Consider downloading a backup first.
-                    </Text>
-                    <Group justify="flex-end">
-                        <Button
-                            variant="default"
-                            onClick={() => setConfirmReset(false)}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            color="red"
-                            loading={resetMut.isPending}
-                            onClick={() => void handleReset()}
-                        >
-                            Reset everything
-                        </Button>
-                    </Group>
-                </Stack>
-            </Modal>
-        </Card>
+                <ChoiceField
+                    label="Frequency"
+                    hideLabel
+                    options={[
+                        { value: "off", label: "Off" },
+                        { value: "daily", label: "Daily" },
+                        { value: "weekly", label: "Weekly" },
+                    ]}
+                    value={(hh?.backupFrequency ?? "off") as BackupFrequency}
+                    onChange={(v) => void setFrequency(v)}
+                    className="w-32"
+                />
+                <Button
+                    disabled={backupNow.isPending}
+                    onClick={() => void handleBackupNow()}
+                >
+                    Back up now
+                </Button>
+            </SettingsRow>
+            <SettingsRow
+                title="Download a copy"
+                description="JSON is the portable backup format, the one Restore takes. CSV is one file per table, zipped — handy for spreadsheets."
+            >
+                <Button onClick={() => void handleExportCsv()}>
+                    Download CSV
+                </Button>
+                <Button onClick={() => void handleExport()}>
+                    Download JSON
+                </Button>
+            </SettingsRow>
+            <SettingsRow
+                title="Restore"
+                description="Replace all current data with a backup file. This cannot be undone."
+            >
+                <Button
+                    disabled={importMut.isPending}
+                    onClick={() => fileRef.current?.click()}
+                >
+                    Restore from file
+                </Button>
+                <input
+                    ref={fileRef}
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={(e) => {
+                        const file = e.currentTarget.files?.[0];
+                        if (file) void handleImportFile(file);
+                        e.currentTarget.value = "";
+                    }}
+                />
+            </SettingsRow>
+            <OffsiteRestore />
+            {message && <Notice tone="positive" title={message} />}
+            {error && <Notice tone="danger" title={error} />}
+        </SettingsSection>
     );
 };

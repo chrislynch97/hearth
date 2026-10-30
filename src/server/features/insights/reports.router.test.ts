@@ -32,8 +32,6 @@ describe('reports.overview', () => {
     expect(report.categoryBreakdown.total).toBe(6000)
     expect(report.categoryBreakdown.rows[0]).toMatchObject({ categoryId: bills.id, spent: 6000 })
 
-    expect(report.perMemberVsJoint.find((r) => r.ownerId === alice.id)?.monthlyCost).toBe(10000)
-
     expect(report.monthOverMonth.months.length).toBe(6)
   })
 
@@ -69,7 +67,6 @@ describe('reports.overview', () => {
     const caller = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
 
     const alice = await caller.members.addPerson({ displayName: 'Alice' })
-    const joint = (await caller.members.list()).find((m) => m.kind === 'joint')!
     const utilities = await caller.categories.create({ name: 'Utilities' })
     await caller.expenses.create({
       name: 'Electricity', recurrence: 'monthly', amount: 15000, funding: 'main', categoryId: utilities.id,
@@ -80,8 +77,6 @@ describe('reports.overview', () => {
 
     const report = await caller.reports.overview()
 
-    expect(report.perMemberVsJoint.find((r) => r.ownerId === alice.id)?.monthlyCost).toBe(2000)
-    expect(report.perMemberVsJoint.find((r) => r.ownerId === joint.id)?.monthlyCost).toBe(15000)
     expect(report.spendVsAllocation.find((r) => r.categoryId === utilities.id)?.planned).toBe(17000)
   })
 

@@ -1,12 +1,11 @@
 # Hearth — Brand identity (v1)
 
 Source of truth for the Hearth visual identity. Human-readable and safe to hand to
-Claude / Claude Code. The machine-consumable Mantine theme lives in
-`brand/hearth-theme.ts` (copy to `src/client/theme.ts` for the app).
+Claude / Claude Code. The machine-consumable tokens live in
+`src/client/design-system.css`.
 
 > **For AI assistants:** when building or restyling any Hearth UI, use the tokens
-> below. Prefer the Mantine theme colours (`moss`, `apricot`, `sand`) and the
-> `hearthTokens` object over raw hex. Headings + money figures are Spectral;
+> below. Prefer the design-system tokens over raw hex. Headings + money figures are Spectral;
 > everything else is Hanken Grotesk. Never introduce new hues or gradients.
 
 ---
@@ -47,16 +46,16 @@ set the wordmark in a sans.
 ### Core
 | Token | Hex | Role |
 |---|---|---|
-| Moss | `#47613F` | Primary. Brand green, primary buttons, active nav, sidebar. |
+| Moss | `#3D6B35` | Primary. Brand green, primary buttons, active nav, sidebar. |
 | Moss deep | `#2E3F28` | Emphasis surfaces (e.g. joint-pots card). |
-| Ink / Bark | `#22261F` | Text, dark buttons, dark-mode background. |
+| Ink / Bark | `#22261F` | Text and dark buttons. (Dark mode uses its own grey ramp — see `bark` in `hearth-theme.ts`.) |
 | Apricot | `#D98C5F` | Accent — attention only (over budget, needs-a-pot, reconcile). |
 | Linen | `#EFEDE3` | Light elements on dark (logo, sidebar text). |
 
 ### Neutrals (`sand` scale)
 | Token | Hex | Role |
 |---|---|---|
-| Paper | `#FBFAF4` | Card surface (Mantine `white`). |
+| Paper | `#FBFAF4` | Card surface. |
 | Canvas | `#F4F2EA` | App background. |
 | Border | `#E7E2D5` | Hairlines, card borders. |
 | Stone | `#A9A491` | Muted UI, savings-pot bars. |
@@ -71,8 +70,6 @@ set the wordmark in a sans.
 
 ### Owner accents
 Assign per household member, in order: `#6E8A5F`, `#C1745A`, `#8A7A6A`, `#5B7D86`, `#A08A52`.
-
-Full 10-step ramps for Mantine are in `hearth-theme.ts`.
 
 ---
 
@@ -103,13 +100,5 @@ Google Fonts `<link>` for `index.html`:
 - Density is comfortable, not cramped — this is a calm app.
 
 ---
-
-## Using it with Mantine (v1)
-
-1. Copy `brand/hearth-theme.ts` → `src/client/theme.ts` (it already exports `theme`).
-2. Add the Google Fonts `<link>` to `index.html`.
-3. Import `hearthTokens` where you need raw values (custom charts, bars, tinted panels).
-4. Primary buttons/nav read as moss automatically; use `color="apricot"` only for
-   attention states and `color="green"`→ map to the `positive` token for credits.
 
 Visual reference sheet: `Hearth — Identity.dc.html`.

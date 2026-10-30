@@ -29,4 +29,12 @@ export const SUBTYPES: Record<
     ],
 };
 
+export const subtypeLabel = (kind: string, value: string | null): string | null => {
+    if (!value) return null;
+    return (
+        SUBTYPES[kind as "asset" | "liability"]?.find((s) => s.value === value)
+            ?.label ?? value
+    );
+};
+
 export const today = (): string => new Date().toISOString().slice(0, 10);

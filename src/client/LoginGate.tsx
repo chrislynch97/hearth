@@ -1,19 +1,23 @@
 import { useState } from "react";
-import { Anchor, Button, PasswordInput, Text, TextInput } from "@mantine/core";
-import { trpc } from "./trpc";
-import { AuthCard } from "./AuthCard";
-import { ForgotPassword } from "./ForgotPassword";
-import {
-    MIN_PASSWORD_LENGTH,
-    validatePassword,
-} from "../shared/password-policy";
+import { MIN_PASSWORD_LENGTH, validatePassword } from "@shared/password-policy";
+import { AuthCard } from "@/AuthCard";
+import { AuthForm } from "@/AuthForm";
+import { Button } from "@/components/ui/Button";
+import { PasswordField } from "@/components/ui/PasswordField";
+import { TextField } from "@/components/ui/TextField";
+import { ForgotPassword } from "@/ForgotPassword";
+import { trpc } from "@/trpc";
 
 /** Shown when the instance is locked and this session isn't authenticated. Also
  *  offers self-registration when the instance has open registration enabled. */
-export function LoginGate() {
+export const LoginGate = () => {
     const utils = trpc.useUtils();
-    const login = trpc.auth.login.useMutation();
-    const register = trpc.auth.register.useMutation();
+    const login = trpc.auth.login.useMutation({
+        meta: { suppressErrorToast: true },
+    });
+    const register = trpc.auth.register.useMutation({
+        meta: { suppressErrorToast: true },
+    });
     const regOpen = trpc.auth.registrationOpen.useQuery();
     const status = trpc.auth.status.useQuery();
 
@@ -32,11 +36,15 @@ export function LoginGate() {
     // relay resets the owner password from the CLI instead.
     const canReset = status.data?.passwordResetAvailable ?? false;
     // A hosted instance can't recover an addressless account by any route, so it
-    // asks for one up front (#199). A LAN install doesn't, and doesn't show the
-    // field at all — the owner resets from a shell there.
+    // asks for one up front (#199). A LAN install doesn't show the field at all.
     const emailRequired = status.data?.emailRequired ?? false;
 
-    async function submit() {
+    const switchTo = (next: typeof mode) => {
+        setMode(next);
+        setError("");
+    };
+
+    const submit = async () => {
         setError("");
         try {
             const result = await login.mutateAsync({
@@ -59,9 +67,9 @@ export function LoginGate() {
                 setPassword("");
             }
         }
-    }
+    };
 
-    async function submitRegister() {
+    const submitRegister = async () => {
         setError("");
         if (emailRequired && !email.trim()) {
             return setError("Enter an email address.");
@@ -84,39 +92,31 @@ export function LoginGate() {
                     : "Could not create your account."
             );
         }
+    };
+
+    if (mode === "forgot") {
+        return <ForgotPassword onBack={() => switchTo("login")} />;
     }
 
-    return (
-        <AuthCard w={360}>
-            {mode !== "forgot" && (
-                <Text size="sm" c="dimmed" ta="center">
-                    {mode === "register"
-                        ? "Create your account and household."
-                        : mfaRequired
-                          ? "Enter the code from your authenticator app."
-                          : "Sign in to your household."}
-                </Text>
-            )}
-
-            {mode === "forgot" ? (
-                <ForgotPassword onBack={() => setMode("login")} />
-            ) : mode === "register" ? (
-                <>
-                    <TextInput
+    if (mode === "register") {
+        return (
+            <AuthCard lead="Create your account and household.">
+                <AuthForm onSubmit={() => void submitRegister()}>
+                    <TextField
                         label="Your name"
                         value={displayName}
                         onChange={(e) => setDisplayName(e.currentTarget.value)}
                         autoComplete="name"
                         autoFocus
                     />
-                    <TextInput
+                    <TextField
                         label="Username"
                         value={username}
                         onChange={(e) => setUsername(e.currentTarget.value)}
                         autoComplete="username"
                     />
                     {emailRequired && (
-                        <TextInput
+                        <TextField
                             label="Email"
                             description="Where a password-reset link would go. We'll send a confirmation link to check it's yours."
                             value={email}
@@ -125,7 +125,7 @@ export function LoginGate() {
                             autoComplete="email"
                         />
                     )}
-                    <TextInput
+                    <TextField
                         label="Household name"
                         description="Your new household — you'll be its owner."
                         value={householdName}
@@ -133,117 +133,103 @@ export function LoginGate() {
                             setHouseholdName(e.currentTarget.value)
                         }
                     />
-                    <PasswordInput
+                    <PasswordField
                         label="Password"
                         description={`At least ${MIN_PASSWORD_LENGTH} characters.`}
                         value={password}
                         onChange={(e) => setPassword(e.currentTarget.value)}
-                        onKeyDown={(e) =>
-                            e.key === "Enter" && void submitRegister()
-                        }
                         error={error || undefined}
                         autoComplete="new-password"
                     />
                     <Button
-                        onClick={() => void submitRegister()}
-                        loading={register.isPending}
-                        fullWidth
+                        type="submit"
+                        variant="solid"
+                        className="w-full"
+                        disabled={register.isPending}
                     >
                         Create account
                     </Button>
-                    <Text size="xs" c="dimmed" ta="center">
-                        Already have an account?{" "}
-                        <Anchor
-                            component="button"
-                            type="button"
-                            size="xs"
-                            onClick={() => {
-                                setMode("login");
-                                setError("");
-                            }}
-                        >
-                            Sign in
-                        </Anchor>
-                    </Text>
-                </>
-            ) : mfaRequired ? (
-                <>
-                    <TextInput
+                </AuthForm>
+                <p className="text-center text-base text-text-muted">
+                    Already have an account?{" "}
+                    <Button variant="link" onClick={() => switchTo("login")}>
+                        Sign in
+                    </Button>
+                </p>
+            </AuthCard>
+        );
+    }
+
+    if (mfaRequired) {
+        return (
+            <AuthCard lead="Enter the code from your authenticator app.">
+                <AuthForm onSubmit={() => void submit()}>
+                    <TextField
                         label="Authentication code"
                         description="6-digit code, or one of your recovery codes"
                         value={code}
                         onChange={(e) => setCode(e.currentTarget.value)}
-                        onKeyDown={(e) => e.key === "Enter" && void submit()}
                         error={error || undefined}
                         inputMode="numeric"
                         autoComplete="one-time-code"
                         autoFocus
                     />
                     <Button
-                        onClick={() => void submit()}
-                        loading={login.isPending}
-                        fullWidth
+                        type="submit"
+                        variant="solid"
+                        className="w-full"
+                        disabled={login.isPending}
                     >
                         Unlock
                     </Button>
-                </>
-            ) : (
-                <>
-                    <TextInput
-                        label="Username"
-                        value={username}
-                        onChange={(e) => setUsername(e.currentTarget.value)}
-                        onKeyDown={(e) => e.key === "Enter" && void submit()}
-                        autoComplete="username"
-                        autoFocus
-                    />
-                    <PasswordInput
-                        label="Password"
-                        value={password}
-                        onChange={(e) => setPassword(e.currentTarget.value)}
-                        onKeyDown={(e) => e.key === "Enter" && void submit()}
-                        error={error || undefined}
-                        autoComplete="current-password"
-                    />
-                    <Button
-                        onClick={() => void submit()}
-                        loading={login.isPending}
-                        fullWidth
-                    >
-                        Unlock
+                </AuthForm>
+            </AuthCard>
+        );
+    }
+
+    return (
+        <AuthCard lead="Sign in to your household.">
+            <AuthForm onSubmit={() => void submit()}>
+                <TextField
+                    label="Username"
+                    value={username}
+                    onChange={(e) => setUsername(e.currentTarget.value)}
+                    autoComplete="username"
+                    autoFocus
+                />
+                <PasswordField
+                    label="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.currentTarget.value)}
+                    error={error || undefined}
+                    autoComplete="current-password"
+                />
+                <Button
+                    type="submit"
+                    variant="solid"
+                    className="w-full"
+                    disabled={login.isPending}
+                >
+                    Unlock
+                </Button>
+            </AuthForm>
+            {canReset && (
+                <Button
+                    variant="link"
+                    className="self-center"
+                    onClick={() => switchTo("forgot")}
+                >
+                    Forgot your password?
+                </Button>
+            )}
+            {canRegister && (
+                <p className="text-center text-base text-text-muted">
+                    New here?{" "}
+                    <Button variant="link" onClick={() => switchTo("register")}>
+                        Create an account
                     </Button>
-                    {canReset && (
-                        <Anchor
-                            component="button"
-                            type="button"
-                            size="xs"
-                            ta="center"
-                            onClick={() => {
-                                setMode("forgot");
-                                setError("");
-                            }}
-                        >
-                            Forgot your password?
-                        </Anchor>
-                    )}
-                    {canRegister && (
-                        <Text size="xs" c="dimmed" ta="center">
-                            New here?{" "}
-                            <Anchor
-                                component="button"
-                                type="button"
-                                size="xs"
-                                onClick={() => {
-                                    setMode("register");
-                                    setError("");
-                                }}
-                            >
-                                Create an account
-                            </Anchor>
-                        </Text>
-                    )}
-                </>
+                </p>
             )}
         </AuthCard>
     );
-}
+};

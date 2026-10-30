@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
-    closesMobileNav,
     NAV_ITEMS,
     NAV_SECTIONS,
+    opensByDefault,
+    owningSection,
     type AppRoutePath,
+    type NavSectionConfig,
 } from "@/layout/nav-config";
 import type { FileRoutesByFullPath } from "@/routeTree.gen";
 
@@ -43,9 +45,9 @@ describe("nav config", () => {
         }
     });
 
-    it("only lets a single-page section navigate from the rail", () => {
-        // A rail item with `to` skips the page list entirely, so it had better
-        // not be hiding pages behind itself.
+    it("only gives a single-page section a `to`", () => {
+        // A section with `to` shows as a plain link, so it had better not be
+        // hiding pages behind itself.
         for (const section of NAV_SECTIONS) {
             if (section.to === undefined) continue;
             const items = section.groups.flatMap((g) => g.items);
@@ -54,40 +56,53 @@ describe("nav config", () => {
         }
     });
 
-    it("declares the section the sidebar falls back to", () => {
-        // useSelectedSection asserts Money exists — it's what shows while you're
-        // on Overview, which owns no page list of its own.
-        const money = NAV_SECTIONS.find((s) => s.id === "money");
-        expect(money?.to).toBeUndefined();
-        expect(money?.groups.length).toBeGreaterThan(0);
-    });
-
     it("wires the compile-time route check", () => {
         expect(navPathsAreRealRoutes).toBe(true);
     });
 });
 
-describe("closesMobileNav", () => {
-    // Tapping a rail section on a phone swaps the page list; closing the drawer
-    // there means reopening it to pick one of the pages you just asked to see.
-    it("stays open when the section changes", () => {
-        expect(closesMobileNav("/", "/plan")).toBe(false);
-        expect(closesMobileNav("/plan", "/rooms")).toBe(false);
-        expect(closesMobileNav("/rooms", "/todos")).toBe(false);
+describe("owningSection", () => {
+    it("finds the section for a page and for a path below it", () => {
+        expect(owningSection("/")?.id).toBe("overview");
+        expect(owningSection("/plan")?.id).toBe("money");
+        expect(owningSection("/gifts/birthdays")?.id).toBe("lists");
     });
 
-    it("closes when a page inside the same section is picked", () => {
-        expect(closesMobileNav("/plan", "/funding")).toBe(true);
-        expect(closesMobileNav("/plan", "/plan")).toBe(true);
-        expect(closesMobileNav("/rooms", "/quotes")).toBe(true);
+    it("finds none for a page outside the nav", () => {
+        expect(owningSection("/settings/account")).toBeNull();
+    });
+});
+
+describe("opensByDefault", () => {
+    const sectionOf = (planned: boolean[]): NavSectionConfig => ({
+        id: "test",
+        title: "Test",
+        groups: [
+            {
+                title: null,
+                items: planned.map((soon, i) => ({
+                    to: "/plan",
+                    label: `Page ${i}`,
+                    icon: "plan",
+                    planned: soon ? "Planned, with a blurb." : undefined,
+                })),
+            },
+        ],
     });
 
-    // Overview owns no page list, so there is nothing left to pick.
-    it("closes on the way to Overview", () => {
-        expect(closesMobileNav("/plan", "/")).toBe(true);
+    it("opens a section that is mostly built", () => {
+        expect(opensByDefault(sectionOf([false, false, true]))).toBe(true);
     });
 
-    it("closes for a path outside the nav", () => {
-        expect(closesMobileNav("/plan", "/settings")).toBe(true);
+    it("folds a section that is half or more Soon", () => {
+        expect(opensByDefault(sectionOf([false, true]))).toBe(false);
+        expect(opensByDefault(sectionOf([true, true]))).toBe(false);
+    });
+
+    it("opens Money and folds Home and Lists as things stand", () => {
+        const byId = (id: string) => NAV_SECTIONS.find((s) => s.id === id)!;
+        expect(opensByDefault(byId("money"))).toBe(true);
+        expect(opensByDefault(byId("home"))).toBe(false);
+        expect(opensByDefault(byId("lists"))).toBe(false);
     });
 });

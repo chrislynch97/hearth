@@ -82,7 +82,7 @@ export interface DemoPerson {
   /** Stable key for this person's pots and payslip components ('ava'). Unique per household. */
   key: string
   name: string
-  /** Mantine colour name for the member chip. */
+  /** Legacy palette name for the member chip. */
   color: string
   /** Annual salary (major units) before the promotion below. */
   salary: number
@@ -156,7 +156,7 @@ export const MAPLE_STREET: DemoHouseholdSpec = {
     {
       key: 'ava',
       name: 'Ava',
-      color: 'grape',
+      color: '#b9775c',
       salary: 42000,
       promotedTo: 48000,
       positions: ['Product Designer', 'Senior Product Designer'],
@@ -173,7 +173,7 @@ export const MAPLE_STREET: DemoHouseholdSpec = {
     {
       key: 'ben',
       name: 'Ben',
-      color: 'teal',
+      color: '#5f8796',
       salary: 37000,
       promotedTo: 41000,
       positions: ['Support Engineer', 'Software Engineer'],

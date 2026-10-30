@@ -1,7 +1,9 @@
 import { useEffect } from "react";
-import { Alert, Anchor, Button, Loader, Text } from "@mantine/core";
-import { trpc } from "@/trpc";
 import { AuthCard } from "@/AuthCard";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
+import { Spinner } from "@/components/ui/Spinner";
+import { trpc } from "@/trpc";
 
 export interface VerifyEmailProps {
     token: string;
@@ -11,7 +13,9 @@ export interface VerifyEmailProps {
  *  Reached from an email, so often in a browser with no session; the token is
  *  the whole proof, so no login is required either way. */
 export const VerifyEmail = ({ token }: VerifyEmailProps) => {
-    const verify = trpc.email.verify.useMutation();
+    const verify = trpc.email.verify.useMutation({
+        meta: { suppressErrorToast: true },
+    });
 
     // A mutation, not a query, so the token travels in the POST body rather than
     // a logged URL (#176) — hence a manual fire on mount. `mutate` is
@@ -21,38 +25,36 @@ export const VerifyEmail = ({ token }: VerifyEmailProps) => {
         claim({ token });
     }, [claim, token]);
 
+    const checking = verify.isIdle || verify.isPending;
+
     return (
-        <AuthCard w={400}>
-            {verify.isIdle || verify.isPending ? (
-                <>
-                    <Loader size="sm" mx="auto" />
-                    <Text size="sm" c="dimmed" ta="center">
-                        Confirming your address…
-                    </Text>
-                </>
+        <AuthCard lead={checking ? "Confirming your address…" : undefined}>
+            {checking ? (
+                <Spinner label="Confirming your address" />
             ) : verify.isError ? (
-                <Alert color="red" title="Link not valid">
+                <Notice tone="danger" title="Link not valid">
                     {verify.error.message}
-                </Alert>
+                </Notice>
             ) : (
-                <Alert color="moss" variant="light" title="Address confirmed">
-                    <Text size="sm">
-                        <b>{verify.data?.email}</b> is confirmed. You can now
-                        use it to reset your password if you ever lose it.
-                    </Text>
-                </Alert>
+                <Notice tone="positive" title="Address confirmed">
+                    <strong className="font-semibold">
+                        {verify.data?.email}
+                    </strong>{" "}
+                    is confirmed. You can now use it to reset your password if
+                    you ever lose it.
+                </Notice>
             )}
-            <Button component="a" href="/" variant="default" fullWidth>
-                Go to Hearth
+            <Button asChild className="w-full">
+                <a href="/">Go to Hearth</a>
             </Button>
             {verify.isError && (
-                <Text size="xs" c="dimmed" ta="center">
+                <p className="text-center text-base text-text-muted">
                     Sign in and ask for a new link from{" "}
-                    <Anchor href="/settings/account" size="xs">
-                        Settings → Account
-                    </Anchor>
+                    <Button asChild variant="link">
+                        <a href="/settings/account">Settings → Account</a>
+                    </Button>
                     .
-                </Text>
+                </p>
             )}
         </AuthCard>
     );

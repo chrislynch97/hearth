@@ -1,547 +1,54 @@
 import { lazy, Suspense } from "react";
-import {
-    Anchor,
-    Badge,
-    Button,
-    Card,
-    Center,
-    Group,
-    Loader,
-    Select,
-    SimpleGrid,
-    Stack,
-    Text,
-    Title,
-} from "@mantine/core";
-import { Link } from "@tanstack/react-router";
-import { trpc } from "../trpc";
+import { trpc } from "@/trpc";
+import { useMoney } from "@/useMoney";
 import { GettingStarted } from "@/components/GettingStarted";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Spinner } from "@/components/ui/Spinner";
 import { AllocationCard } from "@/features/home/components/AllocationCard";
+import { BacklogHeadline } from "@/features/home/components/BacklogHeadline";
 import { NetWorthTile } from "@/features/home/components/NetWorthTile";
+import { PeriodSnapshot } from "@/features/home/components/PeriodSnapshot";
 import { SavingsAlerts } from "@/features/home/components/SavingsAlerts";
-import { formatMoney } from "../../shared/money";
-import type { MoneyFormat } from "../useMoney";
-import { useFormatDate, useMoney } from "../useMoney";
-import { hearthTokens } from "../theme";
-
-function getGreeting(): string {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
-}
-
-// ---------------------------------------------------------------------------
-// A — Catch-up backlog headline
-// ---------------------------------------------------------------------------
-
-function BacklogHeadline({
-    backlog,
-    money,
-}: {
-    backlog: {
-        grandTotal: number;
-        perPot: Array<{ potId: string }>;
-        unassigned: { count: number };
-    };
-    money: MoneyFormat;
-}) {
-    const toReconcile = backlog.perPot.length;
-    const needsPot = backlog.unassigned.count;
-    const active = toReconcile > 0 || needsPot > 0;
-
-    return (
-        <Card
-            padding="lg"
-            radius="lg"
-            style={{
-                backgroundColor: active
-                    ? `light-dark(${hearthTokens.surface.warmTint}, rgba(217, 140, 95, 0.10))`
-                    : "light-dark(var(--mantine-color-sand-0), var(--mantine-color-dark-6))",
-                border: active
-                    ? `1px solid ${hearthTokens.brand.apricot}55`
-                    : "1px solid transparent",
-            }}
-        >
-            <Group justify="space-between" align="center">
-                <Stack gap={2}>
-                    {active ? (
-                        <>
-                            <Text
-                                fw={700}
-                                fz={22}
-                                style={{
-                                    fontFamily:
-                                        "var(--mantine-font-family-headings)",
-                                }}
-                            >
-                                {toReconcile > 0
-                                    ? `${toReconcile} pot${toReconcile === 1 ? "" : "s"} to reconcile`
-                                    : "Spending to sort"}
-                            </Text>
-                            <Text size="sm" c="dimmed">
-                                Move{" "}
-                                {formatMoney(
-                                    Math.abs(backlog.grandTotal),
-                                    money
-                                )}{" "}
-                                between pots
-                                {needsPot > 0
-                                    ? ` · ${needsPot} need a pot`
-                                    : ""}
-                            </Text>
-                        </>
-                    ) : (
-                        <>
-                            <Text
-                                fw={700}
-                                fz={22}
-                                style={{
-                                    fontFamily:
-                                        "var(--mantine-font-family-headings)",
-                                }}
-                            >
-                                You're all caught up
-                            </Text>
-                            <Text size="sm" c="dimmed">
-                                No spending waiting to be reconciled.
-                            </Text>
-                        </>
-                    )}
-                </Stack>
-                {active && (
-                    <Button
-                        component={Link}
-                        to="/catchup"
-                        color={hearthTokens.semantic.attention}
-                        variant="filled"
-                    >
-                        Catch up
-                    </Button>
-                )}
-            </Group>
-        </Card>
-    );
-}
-
-// ---------------------------------------------------------------------------
-// C — This-period snapshot
-// ---------------------------------------------------------------------------
-
-interface SnapshotPerson {
-    memberId: string;
-    displayName: string;
-    periodIncome: number;
-    personalPotFunding: number;
-    jointContribution: number;
-    personalMainAccount: number;
-    setAside: number;
-    remainder: number;
-}
-
-function SnapshotSection({
-    perPerson,
-    jointPotFundingTotal,
-    coupleSurplus,
-    jointFundingModel,
-    jointPool,
-    money,
-}: {
-    perPerson: SnapshotPerson[];
-    jointPotFundingTotal: number;
-    coupleSurplus: number;
-    jointFundingModel: "split" | "pooled";
-    jointPool: { totalIn: number; jointCosts: number; surplus: number };
-    money: MoneyFormat;
-}) {
-    if (perPerson.length === 0) {
-        return (
-            <Text c="dimmed" size="sm">
-                Set up your outgoings and income to see your snapshot for this
-                period here.
-            </Text>
-        );
-    }
-    const pooled = jointFundingModel === "pooled";
-    return (
-        <Stack gap="sm">
-            <SimpleGrid
-                cols={{ base: 1, xs: perPerson.length > 1 ? 2 : 1 }}
-                spacing="sm"
-            >
-                {perPerson.map((p) => (
-                    <Card key={p.memberId} withBorder padding="md" radius="md">
-                        <Text
-                            size="xs"
-                            fw={700}
-                            tt="uppercase"
-                            c="dimmed"
-                            ff="monospace"
-                            lts="0.05em"
-                            mb={6}
-                        >
-                            {p.displayName}
-                        </Text>
-                        <Group justify="space-between">
-                            <Text size="sm" c="dimmed">
-                                Income
-                            </Text>
-                            <Text size="sm">
-                                {formatMoney(p.periodIncome, money)}
-                            </Text>
-                        </Group>
-                        {p.personalMainAccount > 0 && (
-                            <Group justify="space-between">
-                                <Text size="sm" c="dimmed">
-                                    Paid from own account
-                                </Text>
-                                <Text size="sm">
-                                    {formatMoney(p.personalMainAccount, money)}
-                                </Text>
-                            </Group>
-                        )}
-                        {pooled ? (
-                            <>
-                                <Group justify="space-between">
-                                    <Text size="sm" c="dimmed">
-                                        Personal set aside
-                                    </Text>
-                                    <Text size="sm">
-                                        {formatMoney(
-                                            p.personalPotFunding,
-                                            money
-                                        )}
-                                    </Text>
-                                </Group>
-                                <Group justify="space-between">
-                                    <Text size="sm" fw={700}>
-                                        Into joint
-                                    </Text>
-                                    <Text size="sm" fw={700}>
-                                        {formatMoney(
-                                            p.jointContribution,
-                                            money
-                                        )}
-                                    </Text>
-                                </Group>
-                            </>
-                        ) : (
-                            <>
-                                <Group justify="space-between">
-                                    <Text size="sm" c="dimmed">
-                                        Set aside
-                                    </Text>
-                                    <Text size="sm">
-                                        {formatMoney(p.setAside, money)}
-                                    </Text>
-                                </Group>
-                                <Group justify="space-between">
-                                    <Text
-                                        size="sm"
-                                        fw={700}
-                                        c={p.remainder < 0 ? "red" : undefined}
-                                    >
-                                        Remainder
-                                    </Text>
-                                    <Text
-                                        size="sm"
-                                        fw={700}
-                                        c={p.remainder < 0 ? "red" : undefined}
-                                    >
-                                        {formatMoney(p.remainder, money)}
-                                    </Text>
-                                </Group>
-                            </>
-                        )}
-                    </Card>
-                ))}
-            </SimpleGrid>
-            {pooled ? (
-                <Card withBorder padding="md" radius="md">
-                    <Text
-                        size="xs"
-                        fw={700}
-                        tt="uppercase"
-                        c="dimmed"
-                        ff="monospace"
-                        lts="0.05em"
-                        mb={6}
-                    >
-                        Joint pool
-                    </Text>
-                    <Group justify="space-between">
-                        <Text size="sm" c="dimmed">
-                            Total in
-                        </Text>
-                        <Text size="sm">
-                            {formatMoney(jointPool.totalIn, money)}
-                        </Text>
-                    </Group>
-                    <Group justify="space-between">
-                        <Text size="sm" c="dimmed">
-                            Joint costs
-                        </Text>
-                        <Text size="sm">
-                            {formatMoney(jointPool.jointCosts, money)}
-                        </Text>
-                    </Group>
-                    <Group justify="space-between">
-                        <Text
-                            size="sm"
-                            fw={700}
-                            c={
-                                jointPool.surplus < 0
-                                    ? "red"
-                                    : hearthTokens.semantic.positive
-                            }
-                        >
-                            Surplus
-                        </Text>
-                        <Text
-                            size="sm"
-                            fw={700}
-                            c={
-                                jointPool.surplus < 0
-                                    ? "red"
-                                    : hearthTokens.semantic.positive
-                            }
-                        >
-                            {formatMoney(jointPool.surplus, money)}
-                        </Text>
-                    </Group>
-                </Card>
-            ) : (
-                <Group justify="space-between" px="xs">
-                    <Text size="sm" c="dimmed">
-                        Joint pots total{" "}
-                        {formatMoney(jointPotFundingTotal, money)}
-                    </Text>
-                    <Text
-                        size="sm"
-                        fw={700}
-                        c={
-                            coupleSurplus < 0
-                                ? "red"
-                                : hearthTokens.semantic.positive
-                        }
-                    >
-                        Couple surplus {formatMoney(coupleSurplus, money)}
-                    </Text>
-                </Group>
-            )}
-        </Stack>
-    );
-}
-
-// ---------------------------------------------------------------------------
-// E — Income trend
-// ---------------------------------------------------------------------------
+import { greetingFor } from "@/features/home/model";
 
 // Lazy so recharts (the app's heaviest dependency) isn't in the home chunk;
 // the chart card pops in once its chunk arrives.
 const IncomeTrendChart = lazy(() =>
-    import("./IncomeTrendChart").then((m) => ({ default: m.IncomeTrendChart }))
+    import("@/features/home/components/IncomeTrendChart").then((m) => ({
+        default: m.IncomeTrendChart,
+    }))
 );
 
-// ---------------------------------------------------------------------------
-// G — Upcoming payments
-// ---------------------------------------------------------------------------
-
-function UpcomingCard({
-    upcoming,
-    money,
-}: {
-    upcoming: Array<{
-        expenseId: string;
-        name: string;
-        date: string;
-        amount: number;
-        daysUntil: number;
-        dueSoon: boolean;
-    }>;
-    money: MoneyFormat;
-}) {
-    if (upcoming.length === 0) return null;
-    const total = upcoming.reduce((acc, u) => acc + u.amount, 0);
-    return (
-        <Card withBorder padding="md" radius="md">
-            <Group justify="space-between" mb="sm">
-                <Title order={4}>Upcoming payments</Title>
-                <Text size="sm" c="dimmed">
-                    {formatMoney(total, money)} next 30 days
-                </Text>
-            </Group>
-            <Stack gap={4}>
-                {upcoming.map((u, i) => (
-                    <Group
-                        key={`${u.expenseId}-${i}`}
-                        justify="space-between"
-                        px="xs"
-                        py={4}
-                    >
-                        <Group gap="xs">
-                            <Text size="sm">{u.name}</Text>
-                            <Badge
-                                size="sm"
-                                variant="light"
-                                color={u.dueSoon ? "apricot" : "gray"}
-                            >
-                                {u.daysUntil === 0
-                                    ? "today"
-                                    : `in ${u.daysUntil}d`}
-                            </Badge>
-                        </Group>
-                        <Text size="sm">{formatMoney(u.amount, money)}</Text>
-                    </Group>
-                ))}
-            </Stack>
-        </Card>
-    );
-}
-
-// ---------------------------------------------------------------------------
-// F — Recent activity (with inline quick-assign for null-pot rows)
-// ---------------------------------------------------------------------------
-
-function RecentActivityCard({
-    recent,
-    money,
-}: {
-    recent: Array<{
-        id: string;
-        date: string;
-        description: string;
-        amount: number;
-        ownerId: string;
-        potName: string | null;
-        potId: string | null;
-    }>;
-    money: MoneyFormat;
-}) {
-    const utils = trpc.useUtils();
-    const fmt = useFormatDate();
-    const potsQuery = trpc.pots.list.useQuery();
-    const update = trpc.spends.update.useMutation();
-    const pots = potsQuery.data ?? [];
-
-    if (recent.length === 0) return null;
-
-    async function assign(spendId: string, potId: string | null) {
-        if (!potId) return;
-        // No optimistic-lock guard: the recent-activity projection doesn't carry the
-        // spend's updatedAt, so this quick pot-assign stays last-write-wins (#23).
-        // The full spend edit form on the Spending page is guarded.
-        await update.mutateAsync({ id: spendId, potId });
-        await Promise.all([
-            utils.dashboard.summary.invalidate(),
-            utils.reconcile.backlog.invalidate(),
-        ]);
-    }
-
-    return (
-        <Card withBorder padding="md" radius="md">
-            <Title order={4} mb="sm">
-                Recent activity
-            </Title>
-            <Stack gap={2}>
-                {recent.map((r) => (
-                    <Group
-                        key={r.id}
-                        justify="space-between"
-                        px="xs"
-                        py={4}
-                        wrap="nowrap"
-                    >
-                        <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
-                            <Text
-                                size="sm"
-                                style={{
-                                    whiteSpace: "nowrap",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                }}
-                            >
-                                {r.description}
-                            </Text>
-                            <Text size="xs" c="dimmed">
-                                {fmt(r.date)}
-                            </Text>
-                        </Group>
-                        <Group gap="xs" wrap="nowrap">
-                            {r.potName ? (
-                                <Badge size="sm" variant="light">
-                                    {r.potName}
-                                </Badge>
-                            ) : (
-                                <Select
-                                    size="xs"
-                                    placeholder="Assign a pot"
-                                    w={160}
-                                    data={pots
-                                        .filter((p) => p.ownerId === r.ownerId)
-                                        .map((p) => ({
-                                            value: p.id,
-                                            label: p.name,
-                                        }))}
-                                    searchable
-                                    onChange={(v) => void assign(r.id, v)}
-                                />
-                            )}
-                            <Text
-                                size="sm"
-                                style={{ fontVariantNumeric: "tabular-nums" }}
-                            >
-                                {formatMoney(r.amount, money)}
-                            </Text>
-                        </Group>
-                    </Group>
-                ))}
-            </Stack>
-        </Card>
-    );
-}
-
-// ---------------------------------------------------------------------------
-// HomePage
-// ---------------------------------------------------------------------------
-
-export function HomePage() {
+export const HomePage = () => {
     const money = useMoney();
     const ctx = trpc.bootstrap.context.useQuery();
     const summaryQuery = trpc.dashboard.summary.useQuery();
     const accountsSummary = trpc.accounts.summary.useQuery();
-
     const me = trpc.users.me.useQuery();
+
     // Greet the person: their linked budgeting member, else their account name,
     // falling back to the household name (e.g. an open instance with no account).
-    const householdName = ctx.data?.household?.displayName;
     const greetingName =
-        me.data?.linkedMemberName || me.data?.displayName || householdName;
+        me.data?.linkedMemberName ||
+        me.data?.displayName ||
+        ctx.data?.household?.displayName;
     const summary = summaryQuery.data;
+    const now = new Date();
 
     if (ctx.isLoading || summaryQuery.isLoading) {
-        return (
-            <Center h={200}>
-                <Loader />
-            </Center>
-        );
+        return <Spinner label="Loading the overview" />;
     }
 
     return (
-        <Stack gap="lg" maw={900} mx="auto">
-            <Group justify="space-between" align="center">
-                <Title order={2}>
-                    {getGreeting()}
-                    {greetingName ? `, ${greetingName}` : ""}
-                </Title>
-                <Button
-                    component={Link}
-                    to="/spending"
-                    w={{ base: "100%", sm: "auto" }}
-                >
-                    + Quick add
-                </Button>
-            </Group>
+        <div className="hearth-ds mx-auto flex max-w-[1100px] flex-col gap-5">
+            <PageHeader
+                title={`${greetingFor(now.getHours())}${greetingName ? `, ${greetingName}` : ""}`}
+                description={now.toLocaleDateString(undefined, {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                })}
+            />
 
             <GettingStarted />
 
@@ -552,45 +59,35 @@ export function HomePage() {
                         alerts={summary.savingsAlerts}
                         money={money}
                     />
-                    <SnapshotSection
-                        perPerson={summary.funding.perPerson}
-                        jointPotFundingTotal={
-                            summary.funding.jointPotFundingTotal
-                        }
-                        coupleSurplus={summary.coupleSurplus}
-                        jointFundingModel={summary.funding.jointFundingModel}
-                        jointPool={summary.funding.jointPool}
-                        money={money}
-                    />
-                    {accountsSummary.data && (
-                        <NetWorthTile
-                            data={accountsSummary.data}
+                    <div className="grid gap-5 lg:grid-cols-3">
+                        <div className="lg:col-span-2">
+                            <PeriodSnapshot
+                                funding={summary.funding}
+                                coupleSurplus={summary.coupleSurplus}
+                                money={money}
+                            />
+                        </div>
+                        {accountsSummary.data && (
+                            <NetWorthTile
+                                data={accountsSummary.data}
+                                money={money}
+                            />
+                        )}
+                    </div>
+                    <Suspense fallback={null}>
+                        <IncomeTrendChart
+                            trend={summary.incomeTrend}
+                            earners={summary.incomeEarners}
                             money={money}
                         />
-                    )}
+                    </Suspense>
                     <AllocationCard
                         allocation={summary.allocation}
                         householdIncome={summary.householdPeriodIncome}
                         money={money}
                     />
-                    <Suspense fallback={null}>
-                        <IncomeTrendChart
-                            trend={summary.incomeTrend}
-                            money={money}
-                        />
-                    </Suspense>
-                    <UpcomingCard upcoming={summary.upcoming} money={money} />
-                    <RecentActivityCard
-                        recent={summary.recentActivity}
-                        money={money}
-                    />
-                    <Group justify="flex-end">
-                        <Anchor component={Link} to="/funding" size="sm">
-                            View full funding plan →
-                        </Anchor>
-                    </Group>
                 </>
             )}
-        </Stack>
+        </div>
     );
-}
+};

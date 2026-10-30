@@ -5,7 +5,6 @@ export interface DeleteGoalConfirmProps {
     plan: GoalPlan;
     pending: boolean;
     onConfirm: () => void;
-    onCancel: () => void;
 }
 
 /** The one question before a goal goes for good. */
@@ -13,7 +12,6 @@ export const DeleteGoalConfirm = ({
     plan,
     pending,
     onConfirm,
-    onCancel,
 }: DeleteGoalConfirmProps) => (
     <div className="flex flex-col gap-5">
         <p className="text-base">
@@ -24,13 +22,10 @@ export const DeleteGoalConfirm = ({
         <p className="text-sm text-text-muted">
             Done with it but want to keep the history? Archive it instead.
         </p>
-        <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={onCancel}>
-                Cancel
-            </Button>
+        <div className="flex justify-end">
             <Button
-                variant="danger"
-                className="border-danger"
+                variant="destructive"
+                className="max-sm:h-9 max-sm:w-full"
                 disabled={pending}
                 onClick={onConfirm}
             >

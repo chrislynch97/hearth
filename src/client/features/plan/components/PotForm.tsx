@@ -4,7 +4,8 @@ import { notifySuccess } from "@/notify";
 import { parseRate, rateInput, validRate } from "@/interestRate";
 import { orderMembers } from "@/potOptions";
 import { Button } from "@/components/ui/Button";
-import { SelectField } from "@/components/ui/SelectField";
+import { FormFooter } from "@/components/ui/FormFooter";
+import { FormChoiceField } from "@/components/ui/FormChoiceField";
 import { TextField } from "@/components/ui/TextField";
 import { ArchiveAction } from "@/components/ui/ArchiveAction";
 import type { Category, Member, Pot } from "../../../../server/db/schema";
@@ -43,6 +44,7 @@ export const PotForm = ({
 
     const {
         register,
+        control,
         handleSubmit,
         formState: { errors, isSubmitting },
     } = useForm<PotFormValues>({
@@ -130,20 +132,21 @@ export const PotForm = ({
                             value.trim().length > 0 || "Enter a pot name.",
                     })}
                 />
-                <SelectField
+                <FormChoiceField
+                    control={control}
+                    name="ownerId"
+                    rules={{ required: "Choose who this pot belongs to." }}
                     label="Owner"
                     placeholder="Choose an owner"
                     options={memberOptions}
                     error={errors.ownerId?.message}
-                    {...register("ownerId", {
-                        required: "Choose who this pot belongs to.",
-                    })}
                 />
-                <SelectField
+                <FormChoiceField
+                    control={control}
+                    name="categoryId"
                     label="Category"
-                    placeholder="Uncategorised"
+                    emptyLabel="Uncategorised"
                     options={categoryOptions}
-                    {...register("categoryId")}
                 />
                 <TextField
                     label="Interest rate (AER %)"
@@ -160,23 +163,27 @@ export const PotForm = ({
                 />
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
-                <Button variant="ghost" onClick={onDone}>
-                    Cancel
-                </Button>
-                <Button variant="solid" type="submit" disabled={isSubmitting}>
+            <FormFooter
+                aside={
+                    pot && (
+                        <ArchiveAction
+                            label="Archive pot"
+                            consequence="Bills pointing at it keep their history, but stop being funded. Nothing is deleted."
+                            pending={archive.isPending}
+                            onArchive={() => void handleArchive()}
+                        />
+                    )
+                }
+            >
+                <Button
+                    variant="solid"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="max-sm:h-9 max-sm:w-full"
+                >
                     {pot ? "Save changes" : "Add pot"}
                 </Button>
-            </div>
-
-            {pot && (
-                <ArchiveAction
-                    label="Archive pot"
-                    consequence="Bills pointing at it keep their history, but stop being funded. Nothing is deleted."
-                    pending={archive.isPending}
-                    onArchive={() => void handleArchive()}
-                />
-            )}
+            </FormFooter>
         </form>
     );
 };

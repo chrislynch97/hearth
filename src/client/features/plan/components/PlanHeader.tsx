@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { formatMoney } from "@shared/money";
 import type { MoneyFormat } from "@/useMoney";
+import { Separator } from "@/components/shadcn/separator";
 import { CountChips } from "@/features/plan/components/CountChips";
 
 export interface PlanHeaderProps {
@@ -12,9 +13,9 @@ export interface PlanHeaderProps {
     potCount: number;
     billCount: number;
     setAsideCount: number;
-    /** The page-wide filters: the owner chips, and on a phone the category
-     *  picker. They narrow everything below, so they live up here rather than
-     *  in whichever category happens to come first. */
+    /** The page-wide filters: the category and owner pickers. They
+     *  narrow everything below, so they live up here rather than in whichever
+     *  category happens to come first. */
     children: ReactNode;
 }
 
@@ -28,7 +29,7 @@ export const PlanHeader = ({
     setAsideCount,
     children,
 }: PlanHeaderProps) => (
-    <header className="border-b border-border-strong pb-5 xl:max-w-[1120px]">
+    <header>
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <div className="min-w-0">
                 <h1 className="font-display text-h1 font-medium leading-tight">
@@ -51,5 +52,6 @@ export const PlanHeader = ({
             </div>
         </div>
         <div className="mt-5 flex flex-col gap-3">{children}</div>
+        <Separator className="mt-5" />
     </header>
 );

@@ -1,56 +1,80 @@
 import { formatMoney } from "@shared/money";
 import type { MoneyFormat } from "@/useMoney";
-import { FigureRow } from "@/features/funding/components/FigureRow";
-import { FundingCard } from "@/features/funding/components/FundingCard";
-import type { FundingPlan } from "@/features/funding/model";
+import { StatRow } from "@/components/ui/StatRow";
+import type {
+    FundingPlan,
+    MainAccountGroup,
+    PotFunding,
+} from "@/features/funding/model";
+import { FundingAccountCard } from "./FundingAccountCard";
+import { FundingSection } from "./FundingSection";
 
 export interface PersonFundingCardProps {
     person: FundingPlan["perPerson"][number];
+    pots: PotFunding[];
+    /** The bills this person's own account pays directly, if any. */
+    ownBills?: MainAccountGroup;
     pooled: boolean;
     money: MoneyFormat;
-    unit: string;
+    adverb: string;
 }
 
-/** One person's money for the period as a running sum: what moves by standing
- *  order, then what stays behind for their own bills, then the two together. No
- *  headline figure — leading with one total made the rows below it misread. */
+/** One person's money for the period: what leaves by standing order and where
+ *  it goes, then what stays behind for their own bills. */
 export const PersonFundingCard = ({
     person,
+    pots,
+    ownBills,
     pooled,
     money,
-    unit,
+    adverb,
 }: PersonFundingCardProps) => {
-    const amount = (minor: number) => `${formatMoney(minor, money)}${unit}`;
     const ownAccount = person.personalMainAccount;
 
     return (
-        <FundingCard title={person.displayName}>
-            <FigureRow
-                label="To personal pots"
-                amount={amount(person.personalPotFunding)}
-            />
-            <FigureRow
-                label={pooled ? "Into joint" : "To the joint account"}
-                amount={amount(person.jointContribution)}
-            />
-            <FigureRow
-                label="By standing order"
-                amount={amount(person.setAside)}
-                total
+        <FundingAccountCard
+            title={person.displayName}
+            figureLabel="By standing order"
+            figure={formatMoney(person.setAside, money)}
+            hint={adverb}
+        >
+            {person.personalPotFunding > 0 && (
+                <FundingSection
+                    title="To personal pots"
+                    total={person.personalPotFunding}
+                    rows={pots.map((pot) => ({
+                        key: pot.potId,
+                        name: pot.name,
+                        amount: pot.fundingPerPeriod,
+                    }))}
+                    money={money}
+                />
+            )}
+            <FundingSection
+                title={pooled ? "Into joint" : "To the joint account"}
+                total={person.jointContribution}
+                money={money}
             />
             {ownAccount > 0 && (
                 <>
-                    <FigureRow
-                        label="Stays in own account"
-                        amount={amount(ownAccount)}
+                    <FundingSection
+                        title="Stays in own account"
+                        total={ownAccount}
+                        rows={ownBills?.rows}
+                        money={money}
                     />
-                    <FigureRow
-                        label="Total spoken for"
-                        amount={amount(person.setAside + ownAccount)}
-                        total
-                    />
+                    <div className="py-2.5 last:pb-0">
+                        <StatRow
+                            label="Total spoken for"
+                            value={formatMoney(
+                                person.setAside + ownAccount,
+                                money
+                            )}
+                            total
+                        />
+                    </div>
                 </>
             )}
-        </FundingCard>
+        </FundingAccountCard>
     );
 };

@@ -73,7 +73,7 @@ function devHouseholds(now: Date): DemoHouseholdSpec[] {
         {
           key: 'priya',
           name: 'Priya',
-          color: 'orange',
+          color: '#b8954a',
           salary: 34000,
           promotedTo: 39500,
           positions: ['Ward Nurse', 'Senior Ward Nurse'],
@@ -108,7 +108,7 @@ function devHouseholds(now: Date): DemoHouseholdSpec[] {
         {
           key: 'mikko',
           name: 'Mikko',
-          color: 'indigo',
+          color: '#6f93c0',
           salary: 52000,
           positions: ['Marine Engineer', 'Lead Marine Engineer'],
           baselineMonthsAgo: 18,
@@ -121,7 +121,7 @@ function devHouseholds(now: Date): DemoHouseholdSpec[] {
         {
           key: 'sara',
           name: 'Sara',
-          color: 'pink',
+          color: '#8f6a8c',
           salary: 46000,
           positions: ['Radiographer', 'Senior Radiographer'],
           baselineMonthsAgo: 15,

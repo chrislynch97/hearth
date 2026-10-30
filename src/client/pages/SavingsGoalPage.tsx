@@ -4,11 +4,11 @@ import { formatMoney } from "@shared/money";
 import { periodUnitLabel } from "@shared/period";
 import { trpc } from "@/trpc";
 import { notifySuccess } from "@/notify";
-import { useMediaQuery } from "@/useMediaQuery";
 import { useFormatDate, useMoney } from "@/useMoney";
+import { Card, CardContent } from "@/components/shadcn/card";
 import { Button } from "@/components/ui/Button";
-import { Callout } from "@/components/ui/Callout";
 import { EditorPanel } from "@/components/ui/EditorPanel";
+import { Notice } from "@/components/ui/Notice";
 import { PlusIcon } from "@/components/ui/PlusIcon";
 import { Spinner } from "@/components/ui/Spinner";
 import { BalanceForm } from "@/features/savings/components/BalanceForm";
@@ -62,9 +62,6 @@ const editorKey = (editor: Editor): string => {
 
 const route = getRouteApi("/planners/$goal");
 
-/** Below this the editor is a sheet rather than a modal. */
-const MODAL_FITS = "(min-width: 640px)";
-
 /** A savings goal on top of one pot: what's in it, what each deadline needs,
  *  where the current set-aside gets you, and what a different one would. */
 export const SavingsGoalPage = () => {
@@ -76,7 +73,6 @@ export const SavingsGoalPage = () => {
     const money = useMoney();
     const formatDate = useFormatDate();
 
-    const compact = !useMediaQuery(MODAL_FITS);
 
     // The goal's URL segment, `<shortId>-<name>`.
     const key = route.useParams().goal;
@@ -149,24 +145,23 @@ export const SavingsGoalPage = () => {
     };
 
     return (
-        <div className="hearth-ds mx-auto flex max-w-[1040px] flex-col gap-4 text-base">
+        <div className="hearth-ds mx-auto flex max-w-[1000px] flex-col gap-5 text-base">
             {!selected && (goalsQuery.isLoading || goalsQuery.isFetching) && (
                 <Spinner label="Loading the goal" />
             )}
 
             {!selected && !goalsQuery.isLoading && !goalsQuery.isFetching && (
-                <div className="flex flex-col items-start gap-3 rounded-md border border-dashed border-border-strong p-5">
-                    <p className="text-sm text-text-muted">
+                <Card>
+                    <CardContent className="flex flex-col items-start gap-3">
+                        <p className="text-base text-text-muted">
                         There's no savings goal at this address. It may have
                         been renamed or deleted.
-                    </p>
-                    <Link
-                        to="/planners"
-                        className="text-sm font-semibold text-primary"
-                    >
-                        ← All savings planners
-                    </Link>
-                </div>
+                        </p>
+                        <Button asChild>
+                            <Link to="/planners">All savings planners</Link>
+                        </Button>
+                    </CardContent>
+                </Card>
             )}
 
             {selected && (
@@ -192,27 +187,32 @@ export const SavingsGoalPage = () => {
                         <>
                             {detail.goal.archivedAt !== null &&
                                 detail.contribution > 0 && (
-                                    <Callout>
-                                        This goal is archived, but the{" "}
-                                        {detail.potName} pot still gets{" "}
+                                    <Notice
+                                        tone="info"
+                                        title="This goal is archived"
+                                        action={
+                                            <Button asChild>
+                                                <Link to="/plan">
+                                                    Change it on Plan
+                                                </Link>
+                                            </Button>
+                                        }
+                                    >
+                                        The {detail.potName} pot still gets{" "}
                                         {formatMoney(detail.contribution, money)}
-                                        {periodUnitLabel(detail.period.frequency)}.{" "}
-                                        <Link
-                                            to="/plan"
-                                            className="font-semibold text-primary"
-                                        >
-                                            Change it on Plan →
-                                        </Link>
-                                    </Callout>
+                                        {periodUnitLabel(detail.period.frequency)}.
+                                    </Notice>
                                 )}
 
                             <GoalFigures detail={detail} money={money} />
                             {nothingToPlan ? (
-                                <p className="rounded-md border border-dashed border-border-strong px-3.5 py-3 text-sm text-text-muted">
+                                <Card>
+                                    <CardContent className="text-base text-text-muted">
                                     {detail.items.length === 0
                                         ? "Add what you're saving for, each with its own date, and the plan shows here."
                                         : "Nothing left to save for. Add an item, or archive the goal."}
-                                </p>
+                                    </CardContent>
+                                </Card>
                             ) : (
                                 <>
                                     <GoalVerdict
@@ -222,7 +222,7 @@ export const SavingsGoalPage = () => {
                                         onUse={(perPeriod) => void switchContribution(perPeriod)}
                                     />
 
-                                    <section className="rounded-md border border-border bg-raised px-3.5 pb-3 pt-3">
+                                    <Card className="gap-0 px-3.5 py-3">
                                         <GoalChart
                                             input={input}
                                             balanceNow={detail.plan.balanceNow}
@@ -234,7 +234,7 @@ export const SavingsGoalPage = () => {
                                             money={money}
                                             formatDate={formatDate}
                                         />
-                                    </section>
+                                    </Card>
 
                                     <WhatIf
                                         input={input}
@@ -251,8 +251,8 @@ export const SavingsGoalPage = () => {
                                 </>
                             )}
 
-                            <section className="rounded-md border border-border bg-raised">
-                                <div className="flex items-center gap-2 border-b border-border px-3.5 py-2.5">
+                            <Card className="gap-0 overflow-hidden py-0">
+                                <div className="flex flex-wrap items-center gap-2 border-b border-border px-3.5 py-2.5">
                                     <h2 className="text-base font-semibold">
                                         Items
                                     </h2>
@@ -264,6 +264,7 @@ export const SavingsGoalPage = () => {
                                         variant="dashed"
                                         compact
                                         icon={<PlusIcon />}
+                                        className="max-sm:h-9 max-sm:w-full"
                                         onClick={() =>
                                             setEditor({ kind: "item", item: undefined })
                                         }
@@ -304,10 +305,10 @@ export const SavingsGoalPage = () => {
                                 {detail.items.length > 0 && (
                                     <ItemsFooter plan={detail} money={money} />
                                 )}
-                            </section>
+                            </Card>
 
-                            <section className="rounded-md border border-border bg-raised">
-                                <div className="flex items-center gap-2 border-b border-border px-3.5 py-2.5">
+                            <Card className="gap-0 overflow-hidden py-0">
+                                <div className="flex flex-wrap items-center gap-2 border-b border-border px-3.5 py-2.5">
                                     <h2 className="text-base font-semibold">
                                         Recorded balances
                                     </h2>
@@ -316,6 +317,7 @@ export const SavingsGoalPage = () => {
                                         variant="dashed"
                                         compact
                                         icon={<PlusIcon />}
+                                        className="max-sm:h-9 max-sm:w-full"
                                         onClick={() =>
                                             setEditor({
                                                 kind: "balance",
@@ -333,7 +335,7 @@ export const SavingsGoalPage = () => {
                                         setEditor({ kind: "balance", balance })
                                     }
                                 />
-                            </section>
+                            </Card>
                         </>
                     )}
                 </>
@@ -343,7 +345,6 @@ export const SavingsGoalPage = () => {
                 <EditorPanel
                     title={editorTitle(editor)}
                     subtitle={selected?.goal.name}
-                    mode={compact ? "sheet" : "modal"}
                     exiting={exiting}
                     onExited={finishClose}
                     onClose={close}
@@ -358,7 +359,6 @@ export const SavingsGoalPage = () => {
                                     if (done) void navigate({ to: "/planners" });
                                 })
                             }
-                            onCancel={close}
                         />
                     )}
                     {editor.kind === "goal" && (

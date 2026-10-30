@@ -1,5 +1,7 @@
-import { Badge, Card, Group, Stack, Text, Title } from "@mantine/core";
 import { useLocation } from "@tanstack/react-router";
+import { Card, CardContent } from "@/components/shadcn/card";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SoonBadge } from "@/components/ui/SoonBadge";
 import { NavIcon } from "@/layout/NavIcon";
 import { NAV_ITEMS } from "@/layout/nav-config";
 
@@ -14,12 +16,12 @@ export const ComingSoonPage = () => {
 
     if (!entry?.item.planned) {
         return (
-            <Stack gap="xs">
-                <Title order={2}>Not built yet</Title>
-                <Text c="dimmed">
-                    This page is planned but has nothing to show.
-                </Text>
-            </Stack>
+            <div className="hearth-ds mx-auto max-w-[1000px]">
+                <PageHeader
+                    title="Not built yet"
+                    description="This page is planned but has nothing to show."
+                />
+            </div>
         );
     }
 
@@ -27,32 +29,26 @@ export const ComingSoonPage = () => {
     const trail = [section.title, group.title].filter(Boolean).join(" → ");
 
     return (
-        <Stack gap="md" maw={560}>
-            <Stack gap={4}>
-                {trail && (
-                    <Text size="xs" c="dimmed" tt="uppercase" ff="monospace">
-                        {trail}
-                    </Text>
-                )}
-                <Group gap="sm">
-                    <Title order={2}>{item.label}</Title>
-                    <Badge color="gray" variant="outline">
-                        Soon
-                    </Badge>
-                </Group>
-            </Stack>
-
-            <Card withBorder padding="lg" radius="md">
-                <Group align="flex-start" gap="md" wrap="nowrap">
+        <div className="hearth-ds mx-auto flex max-w-[1000px] flex-col gap-5">
+            <PageHeader
+                title={
+                    <span className="flex items-center gap-2.5">
+                        {item.label}
+                        <SoonBadge />
+                    </span>
+                }
+                description={trail}
+            />
+            <Card>
+                <CardContent className="flex items-start gap-3 text-md text-text">
                     <NavIcon name={item.icon} color="currentColor" size={22} />
-                    <Text>{item.planned}</Text>
-                </Group>
+                    <p>{item.planned}</p>
+                </CardContent>
             </Card>
-
-            <Text size="sm" c="dimmed">
+            <p className="text-base text-text-muted">
                 Nothing here works yet — the page exists so the idea has
                 somewhere to live until it does.
-            </Text>
-        </Stack>
+            </p>
+        </div>
     );
 };

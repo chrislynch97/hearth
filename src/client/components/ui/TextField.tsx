@@ -1,4 +1,11 @@
-import { forwardRef, useId, type InputHTMLAttributes } from "react";
+import {
+    forwardRef,
+    useId,
+    type InputHTMLAttributes,
+    type ReactNode,
+} from "react";
+import { Input } from "@/components/shadcn/input";
+import { Label } from "@/components/shadcn/label";
 
 export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
     label: string;
@@ -7,12 +14,33 @@ export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
     error?: string;
     /** Sits inside the field ahead of the value — a currency symbol, a unit. */
     prefix?: string;
+    /** Sits inside the field after the value — a small button, usually. */
+    trailing?: ReactNode;
+    /** Keeps the label for assistive tech only, where the row around the field
+     *  already says what it is. */
+    hideLabel?: boolean;
 }
 
-/** A labelled input. Forwards its ref so `{...register("name")}` works as-is. */
+// shadcn's Input, sized and coloured for Hearth: 13px text at every width (its
+// own `md:text-sm` would drop to 12px) and the page background inside.
+const FIELD =
+    "h-9 border-border-strong bg-bg text-base md:text-base dark:bg-bg placeholder:text-text-faint";
+
+/** A labelled input on shadcn's Input. Forwards its ref so
+ *  `{...register("name")}` works as-is. */
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
     (
-        { label, description, error, prefix, id, className = "", ...rest },
+        {
+            label,
+            description,
+            error,
+            prefix,
+            trailing,
+            hideLabel = false,
+            id,
+            className = "",
+            ...rest
+        },
         ref
     ) => {
         const generatedId = useId();
@@ -20,14 +48,32 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         const describedBy = description ? `${inputId}-description` : undefined;
         const errorId = error ? `${inputId}-error` : undefined;
 
+        const input = (extra: string) => (
+            <Input
+                {...rest}
+                id={inputId}
+                ref={ref}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={
+                    [errorId, describedBy].filter(Boolean).join(" ") ||
+                    undefined
+                }
+                className={`${FIELD} ${extra}`}
+            />
+        );
+
         return (
             <div className={className}>
-                <label
+                <Label
                     htmlFor={inputId}
-                    className="mb-1.5 block text-sm font-medium text-text-secondary"
+                    className={
+                        hideLabel
+                            ? "sr-only"
+                            : "mb-1.5 text-sm font-medium text-text-secondary"
+                    }
                 >
                     {label}
-                </label>
+                </Label>
                 {description && (
                     <p
                         id={describedBy}
@@ -36,33 +82,32 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
                         {description}
                     </p>
                 )}
-                <div
-                    className={[
-                        "flex h-[34px] items-center gap-1 rounded-sm border bg-bg px-2.5",
-                        "transition-colors duration-[140ms] ease-out",
-                        "focus-within:shadow-[0_0_0_2px_var(--color-bg),0_0_0_4px_var(--color-ring)]",
-                        error
-                            ? "border-danger"
-                            : "border-border-strong focus-within:border-primary",
-                    ].join(" ")}
-                >
-                    {prefix && (
-                        <span className="tabular shrink-0 text-base text-text-muted">
-                            {prefix}
-                        </span>
-                    )}
-                    <input
-                        {...rest}
-                        id={inputId}
-                        ref={ref}
-                        aria-invalid={error ? true : undefined}
-                        aria-describedby={
-                            [errorId, describedBy].filter(Boolean).join(" ") ||
-                            undefined
-                        }
-                        className="h-full w-full min-w-0 bg-transparent text-base text-text outline-none placeholder:text-text-faint"
-                    />
-                </div>
+                {prefix || trailing ? (
+                    // The border and ring move to a wrapper so the prefix sits
+                    // inside the same box as the value.
+                    <div
+                        className={[
+                            "flex h-9 items-center rounded-md border bg-bg shadow-xs transition-[color,box-shadow]",
+                            "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
+                            prefix ? "pl-3" : "",
+                            error
+                                ? "border-destructive"
+                                : "border-border-strong",
+                        ].join(" ")}
+                    >
+                        {prefix && (
+                            <span className="tabular shrink-0 text-base text-text-muted">
+                                {prefix}
+                            </span>
+                        )}
+                        {input(
+                            `h-full border-0 shadow-none focus-visible:ring-0 ${prefix ? "pl-1.5" : ""}`
+                        )}
+                        {trailing}
+                    </div>
+                ) : (
+                    input("")
+                )}
                 {error && (
                     <p id={errorId} className="mt-1.5 text-xs text-danger">
                         {error}

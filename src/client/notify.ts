@@ -1,14 +1,15 @@
-import { notifications } from '@mantine/notifications'
+import { toast } from 'sonner'
 
 /**
  * Global toast helpers (issue #33).
  *
  * Client mutation failures used to be handled ad-hoc: some forms rendered an
- * inline `<Alert>`, many fire-and-forget callsites swallowed the rejection and
+ * inline alert, many fire-and-forget callsites swallowed the rejection and
  * showed the user nothing. These helpers give every mutation one consistent
- * feedback surface. The bulk of the wiring lives in `main.tsx`, where a global
- * `MutationCache.onError` routes *every* failed mutation through `notifyError`,
- * so a background archive/invalidate that fails off-screen is no longer silent.
+ * feedback surface. The bulk of the wiring lives in `queryClient.ts`, where a
+ * global `MutationCache.onError` routes *every* failed mutation through
+ * `notifyError`, so a background archive/invalidate that fails off-screen is no
+ * longer silent.
  */
 
 /**
@@ -31,21 +32,18 @@ function messageOf(error: unknown): string {
 
 /** Red (or amber, for conflicts) error toast. Safe to pass any thrown value. */
 export function notifyError(error: unknown, opts?: { title?: string }): void {
-  const conflict = isConflictError(error)
-  notifications.show({
-    color: conflict ? 'yellow' : 'red',
-    title: opts?.title ?? (conflict ? 'Changed by someone else' : 'Something went wrong'),
-    message: messageOf(error),
-    autoClose: conflict ? 8000 : 5000,
-  })
+  const description = messageOf(error)
+  if (isConflictError(error)) {
+    toast.warning(opts?.title ?? 'Changed by someone else', { description, duration: 8000 })
+    return
+  }
+  toast.error(opts?.title ?? 'Something went wrong', { description, duration: 5000 })
 }
 
 /** Green confirmation toast for a completed action. */
 export function notifySuccess(message: string, opts?: { title?: string }): void {
-  notifications.show({
-    color: 'teal',
-    title: opts?.title,
-    message,
-    autoClose: 3000,
+  toast.success(opts?.title ?? message, {
+    description: opts?.title ? message : undefined,
+    duration: 3000,
   })
 }

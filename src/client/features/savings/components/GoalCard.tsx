@@ -3,6 +3,7 @@ import { Progress } from "@microcharts/react/progress";
 import { formatMoney } from "@shared/money";
 import { useElementWidth } from "@/useElementWidth";
 import { useFormatDate, type MoneyFormat } from "@/useMoney";
+import { Card } from "@/components/shadcn/card";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import { nextDueLabel, type GoalPlan } from "@/features/savings/model";
 
@@ -38,7 +39,8 @@ export const GoalCard = ({
             : `${formatMoney(outcome.difference, money)} over`;
 
     return (
-        <li className="flex items-center gap-2 rounded-md border border-border bg-raised pr-2 transition-colors duration-[140ms] ease-out hover:bg-hover">
+        <li>
+            <Card className="flex-row items-center gap-2 py-0 pr-2 transition-colors duration-[140ms] ease-out hover:bg-hover">
             <Link
                 to="/planners/$goal"
                 params={{ goal: slug }}
@@ -108,6 +110,7 @@ export const GoalCard = ({
                     { label: "Delete", onSelect: onDelete, danger: true },
                 ]}
             />
+            </Card>
         </li>
     );
 };

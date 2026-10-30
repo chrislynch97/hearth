@@ -1,25 +1,17 @@
 import { useState } from "react";
-import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    Group,
-    List,
-    Modal,
-    Stack,
-    Text,
-    TextInput,
-    Title,
-} from "@mantine/core";
 import { trpc } from "@/trpc";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Notice } from "@/components/ui/Notice";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { TextField } from "@/components/ui/TextField";
 
 /** What the operator types to confirm. Long enough that it can't be a slip,
  *  short enough to get right at 2am. */
 const CONFIRM_PHRASE = "sign out everyone";
 
 /** Settings → System → Sign everyone out: break-glass containment for the
- *  instance owner (#248).
+ *  instance owner (#248). A row in the System danger zone.
  *
  *  The lever for when you don't yet know *which* session is the problem — a
  *  leaked backup, a suspected host compromise, a token of unknown provenance.
@@ -51,94 +43,64 @@ export const SignOutEveryoneSection = () => {
     };
 
     return (
-        <Card withBorder padding="md" radius="md">
-            <Title order={4} mb="sm">
-                Sessions
-            </Title>
-            <Stack gap="sm">
-                <Group justify="space-between" align="flex-start">
-                    <Box flex={1} miw={260}>
-                        <Text size="sm" fw={500}>
-                            Sign everyone out
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                            End every session on this instance, so everyone —
-                            including you — signs in again. Reach for this when
-                            you suspect a session or a backup has been exposed
-                            and you don&apos;t know whose. Nothing else changes:
-                            no password, no data, no access.
-                        </Text>
-                    </Box>
-                    <Button
-                        color="red"
-                        variant="light"
-                        onClick={() => {
-                            setTyped("");
-                            setConfirming(true);
-                        }}
-                    >
-                        Sign everyone out
-                    </Button>
-                </Group>
-                {error && (
-                    <Alert color="red" title="Error">
-                        {error}
-                    </Alert>
-                )}
-            </Stack>
-
-            <Modal
-                opened={confirming}
-                onClose={() => setConfirming(false)}
-                title="Sign everyone out?"
-                size="md"
+        <>
+            <SettingsRow
+                title="Sign everyone out"
+                danger
+                description="End every session on this instance, so everyone — including you — signs in again. For when you suspect a session or a backup has been exposed and don't know whose. No password, data or access changes."
             >
-                <Stack gap="md">
-                    <Text size="sm">This immediately:</Text>
-                    <List size="sm" spacing={4}>
-                        <List.Item>
+                <Button
+                    variant="danger"
+                    onClick={() => {
+                        setTyped("");
+                        setConfirming(true);
+                    }}
+                >
+                    Sign everyone out
+                </Button>
+            </SettingsRow>
+            {error && <Notice tone="danger" title={error} />}
+
+            <ConfirmDialog
+                open={confirming}
+                onOpenChange={setConfirming}
+                title="Sign everyone out?"
+                tone="danger"
+                confirm={{
+                    label: "Sign everyone out",
+                    onClick: () => void handleRevokeAll(),
+                    pending: revokeAll.isPending,
+                    disabled: typed.trim().toLowerCase() !== CONFIRM_PHRASE,
+                }}
+            >
+                <div>
+                    <p>This immediately:</p>
+                    <ul className="mt-1.5 list-disc space-y-1 pl-5">
+                        <li>
                             ends every session on this instance, on every device
-                        </List.Item>
-                        <List.Item>
+                        </li>
+                        <li>
                             signs you out too — you&apos;ll need your password,
                             and your authenticator if you use one
-                        </List.Item>
-                        <List.Item>
+                        </li>
+                        <li>
                             leaves passwords, two-factor and data untouched, so
                             anyone who still has their credentials can sign
                             straight back in
-                        </List.Item>
-                    </List>
-                    <Text size="sm">
-                        If a password may be compromised, change it as well —
-                        this only ends the sessions.
-                    </Text>
-                    <TextInput
-                        label={`Type ${CONFIRM_PHRASE} to confirm`}
-                        value={typed}
-                        onChange={(e) => setTyped(e.currentTarget.value)}
-                        autoComplete="off"
-                    />
-                    <Group justify="flex-end">
-                        <Button
-                            variant="default"
-                            onClick={() => setConfirming(false)}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            color="red"
-                            disabled={
-                                typed.trim().toLowerCase() !== CONFIRM_PHRASE
-                            }
-                            loading={revokeAll.isPending}
-                            onClick={() => void handleRevokeAll()}
-                        >
-                            Sign everyone out
-                        </Button>
-                    </Group>
-                </Stack>
-            </Modal>
-        </Card>
+                        </li>
+                    </ul>
+                </div>
+                <p className="text-text-secondary">
+                    If a password may be compromised, change it as well — this
+                    only ends the sessions.
+                </p>
+                <TextField
+                    label={`Type ${CONFIRM_PHRASE} to confirm`}
+                    value={typed}
+                    onChange={(e) => setTyped(e.currentTarget.value)}
+                    autoComplete="off"
+                />
+            </ConfirmDialog>
+        </>
     );
 };

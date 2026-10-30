@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MantineProvider } from "@mantine/core";
 
 // The in-app route for a portability or erasure request (#228). Erasure is
 // irreversible and owner-only, so what's asserted here is who sees the controls,
@@ -47,13 +46,9 @@ vi.mock("@/csv", () => ({ downloadJson: mocks.downloadJson }));
 import { HouseholdDataSection } from "./HouseholdDataSection";
 
 const renderSection = () =>
-    render(
-        <MantineProvider>
-            <HouseholdDataSection />
-        </MantineProvider>
-    );
+    render(<HouseholdDataSection />);
 
-/** Opens the confirmation and waits for the modal, which Mantine portals in on
+/** Opens the confirmation and waits for the dialog, which portals in on
  *  the tick after the click. */
 const openConfirm = async () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
@@ -170,13 +165,15 @@ describe("HouseholdDataSection", () => {
         );
     });
 
-    // eraseHousehold refuses DEFAULT_HOUSEHOLD_ID; a silently missing button
-    // would leave the owner assuming the right doesn't exist.
+    // eraseHousehold refuses DEFAULT_HOUSEHOLD_ID. No button there, but the
+    // reason stays so the owner doesn't assume the right doesn't exist.
     it("explains why the primary household can't be erased here", () => {
         mocks.me = { ...mocks.me, isPrimaryHousehold: true };
         renderSection();
 
-        expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+        expect(
+            screen.queryByRole("button", { name: "Delete" })
+        ).not.toBeInTheDocument();
         expect(screen.getByText(/Use Reset all data/)).toBeInTheDocument();
         // Export still works there — only erasure is instance-wide.
         expect(

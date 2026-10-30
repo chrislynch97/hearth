@@ -22,10 +22,9 @@ Two libraries, and the choice is about size, not taste:
   static SVG, no axes, no tooltips. Import per chart
   (`@microcharts/react/sparkline`), never the barrel, and add its stylesheet to
   `main.tsx` if the chart has one.
-- Existing full charts (axes, legend, tooltips — net-worth trend, income and
-  payslip history) use `@mantine/charts` behind a `React.lazy` boundary (see
-  `pages/IncomeTrendChart.tsx`). It's Mantine, so don't reach for it in new UI;
-  ask before picking a library for a new full chart.
+- Full charts (axes, legend, tooltips) use shadcn's `components/shadcn/chart`
+  (recharts, themed from the design tokens) behind a `React.lazy` boundary — see
+  `features/home/components/IncomeTrendChart.tsx`.
 
 Don't hand-roll a bar or sparkline out of `<Box>` and percentage widths;
 microcharts covers those and describes itself to assistive tech.
@@ -52,4 +51,4 @@ build, dev start and test run.
 - The plugin's `autoCodeSplitting` puts each route's component in its own chunk,
   so pages load on demand (#141). A heavy dependency used by only part of a page
   (recharts, say) still deserves its own `React.lazy` boundary inside the page —
-  see `pages/IncomeTrendChart.tsx`.
+  see `pages/HomePage.tsx`.

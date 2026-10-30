@@ -1,9 +1,6 @@
 export type IconName =
     | "home"
     | "plan"
-    | "categories"
-    | "pots"
-    | "bills"
     | "review"
     | "renewals"
     | "funding"
@@ -38,9 +35,6 @@ export type IconName =
 export type AppRoutePath =
     | "/"
     | "/plan"
-    | "/categories"
-    | "/pots"
-    | "/outgoings"
     | "/review"
     | "/renewals"
     | "/funding"
@@ -93,9 +87,8 @@ export interface NavSectionConfig {
     id: string;
     title: string;
     groups: NavGroupConfig[];
-    /** Set on a rail item that navigates straight to a page instead of swapping
-     *  the page list. Only Overview: it's one page, so a list of one would be
-     *  a tier of pure overhead. */
+    /** Set on a section that is a single page, which the sidebar shows as a
+     *  plain link rather than a heading over a list of one. Only Overview. */
     to?: AppRoutePath;
 }
 
@@ -127,19 +120,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
                         icon: "renewals",
                         planned:
                             "Insurance, broadband, mobile and energy contracts with their renewal dates and current price, so nothing auto-renews at the loyalty penalty.",
-                    },
-                    {
-                        to: "/categories",
-                        label: "Categories",
-                        icon: "categories",
-                        hidden: true,
-                    },
-                    { to: "/pots", label: "Pots", icon: "pots", hidden: true },
-                    {
-                        to: "/outgoings",
-                        label: "Bills",
-                        icon: "bills",
-                        hidden: true,
                     },
                     {
                         to: "/review",
@@ -308,44 +288,28 @@ export interface FlatNavItem {
 }
 
 /** Every nav item, flattened, carrying the section and group it came from — for
- *  the palette's trail and for a ComingSoon page looking up its own blurb. */
+ *  a ComingSoon page looking up its own blurb and trail. */
 export const NAV_ITEMS: FlatNavItem[] = NAV_SECTIONS.flatMap((section) =>
     section.groups.flatMap((group) =>
         group.items.map((item) => ({ item, section, group }))
     )
 );
 
-/** Where a rail item goes. Sections land on their first page — arbitrary, but
- *  the list is right there to pick another, and it keeps every rail item a plain
- *  link so exactly one of them is ever lit. */
-export const sectionTarget = (section: NavSectionConfig): AppRoutePath =>
-    section.to ?? section.groups[0]!.items[0]!.to;
+/** Whether a nav item is the page at `pathname`, or an ancestor of it. */
+export const isCurrent = (item: NavItem, pathname: string): boolean =>
+    pathname === item.to || pathname.startsWith(item.to + "/");
 
-/** The section a path belongs to, Overview included. This is what the rail
- *  highlights, so exactly one rail item is lit on every route. */
+/** The section a path belongs to, Overview included. */
 export const owningSection = (pathname: string): NavSectionConfig | null =>
-    NAV_ITEMS.find(
-        ({ item }) => pathname === item.to || pathname.startsWith(item.to + "/")
-    )?.section ?? null;
+    NAV_ITEMS.find(({ item }) => isCurrent(item, pathname))?.section ?? null;
 
-/** Whether a navigation should close the drawer on a phone.
- *
- *  Tapping a rail section is "show me this section's pages", not a destination
- *  you asked for — closing the drawer there makes you reopen it to pick one.
- *  Tapping a page IS the pick, so that closes. Overview owns no page list, so
- *  landing there closes too: there would be nothing to pick from. */
-export const closesMobileNav = (from: string, to: string): boolean => {
-    const next = sectionForPath(to);
-    if (!next) return true;
-
-    return owningSection(from)?.id === next.id;
-};
-
-/** The section whose page list should show — the same thing, minus Overview,
- *  which is a single page and has no list to show. The list follows this and
- *  nothing else, so there's no second "what am I looking at" state to disagree
- *  with where you actually are. */
-export const sectionForPath = (pathname: string): NavSectionConfig | null => {
-    const owner = owningSection(pathname);
-    return owner && !owner.to ? owner : null;
+/** Whether a section starts unfolded before anyone has toggled it: when most of
+ *  what it lists is built. A section of "Soon" badges stays out of the way, and
+ *  opens by itself once its pages ship. */
+export const opensByDefault = (section: NavSectionConfig): boolean => {
+    const listed = section.groups
+        .flatMap((g) => g.items)
+        .filter((i) => !i.hidden);
+    const built = listed.filter((i) => i.planned === undefined);
+    return built.length * 2 > listed.length;
 };

@@ -1,39 +1,40 @@
-import { Avatar, type AvatarProps } from "@mantine/core";
-import { hearthTokens } from "@/theme";
+import { Avatar, AvatarFallback } from "@/components/shadcn/avatar";
+import { personColor } from "@/personColor";
 
-function paletteColor(seed: string): string {
-    const { ownerPalette } = hearthTokens;
-
-    let hash = 0;
-    for (let i = 0; i < seed.length; i++) {
-        hash = (hash * 31 + seed.charCodeAt(i)) | 0;
-    }
-
-    return (
-        ownerPalette[Math.abs(hash) % ownerPalette.length] ?? ownerPalette[0]
-    );
-}
-
-export interface PersonAvatarProps extends Omit<AvatarProps, "color" | "name"> {
+export interface PersonAvatarProps {
     name: string;
     color?: string | null;
+    /** Diameter in pixels. */
+    size?: number;
 }
 
-export const PersonAvatar = ({
-    name,
-    color,
-    size = 28,
-    ...props
-}: PersonAvatarProps) => {
-    const background = color ?? paletteColor(name);
+const initials = (name: string) =>
+    name
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((word) => word.charAt(0))
+        .join("")
+        .toUpperCase();
+
+/** A person's initials in a ring of their colour. */
+export const PersonAvatar = ({ name, color, size = 28 }: PersonAvatarProps) => {
+    const ring = personColor(name, color);
 
     return (
         <Avatar
-            name={name}
-            size={size}
-            variant={"outline"}
-            color={background}
-            {...props}
-        />
+            aria-hidden
+            className="border"
+            style={{
+                width: size,
+                height: size,
+                color: ring,
+                borderColor: ring,
+            }}
+        >
+            <AvatarFallback className="bg-transparent font-semibold text-inherit">
+                {initials(name)}
+            </AvatarFallback>
+        </Avatar>
     );
 };

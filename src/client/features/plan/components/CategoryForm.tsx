@@ -2,6 +2,7 @@ import { useForm } from "react-hook-form";
 import { trpc } from "@/trpc";
 import { notifySuccess } from "@/notify";
 import { Button } from "@/components/ui/Button";
+import { FormFooter } from "@/components/ui/FormFooter";
 import { TextField } from "@/components/ui/TextField";
 import { ArchiveAction } from "@/components/ui/ArchiveAction";
 import type { Category } from "../../../../server/db/schema";
@@ -96,26 +97,31 @@ export const CategoryForm = ({
                         value.trim().length > 0 || "Enter a name.",
                 })}
             />
-            <div className="mt-4 flex justify-end gap-2">
-                <Button variant="ghost" onClick={onDone}>
-                    Cancel
-                </Button>
-                <Button variant="solid" type="submit" disabled={isSubmitting}>
+            <FormFooter
+                aside={
+                    category && (
+                        <ArchiveAction
+                            label="Archive category"
+                            consequence={
+                                potCount === 0
+                                    ? "Nothing is using it. Nothing is deleted."
+                                    : `Its ${potCount} pot${potCount === 1 ? "" : "s"} become uncategorised. Nothing is deleted.`
+                            }
+                            pending={archive.isPending}
+                            onArchive={() => void handleArchive()}
+                        />
+                    )
+                }
+            >
+                <Button
+                    variant="solid"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="max-sm:h-9 max-sm:w-full"
+                >
                     {category ? "Save changes" : "Add category"}
                 </Button>
-            </div>
-            {category && (
-                <ArchiveAction
-                    label="Archive category"
-                    consequence={
-                        potCount === 0
-                            ? "Nothing is using it. Nothing is deleted."
-                            : `Its ${potCount} pot${potCount === 1 ? "" : "s"} become uncategorised. Nothing is deleted.`
-                    }
-                    pending={archive.isPending}
-                    onArchive={() => void handleArchive()}
-                />
-            )}
+            </FormFooter>
         </form>
     );
 };

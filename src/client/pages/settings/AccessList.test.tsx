@@ -6,7 +6,6 @@ import {
     waitFor,
     within,
 } from "@testing-library/react";
-import { MantineProvider } from "@mantine/core";
 
 // The "lost phone" reset (issue #51): clearing a member's second factor is an
 // explicit opt-in on the reset, and only offered to someone who has one.
@@ -54,11 +53,7 @@ const member = (over: Record<string, unknown> = {}) => ({
 });
 
 const renderList = () =>
-    render(
-        <MantineProvider>
-            <AccessList isOwner />
-        </MantineProvider>
-    );
+    render(<AccessList isOwner />);
 
 /** Open the modal from the member's row, and return it — the row trigger and the
  *  modal's submit share a name, so every later query has to be scoped to one. */
