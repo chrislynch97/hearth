@@ -30,7 +30,8 @@ export interface ConfirmDialogProps {
     description?: ReactNode;
     /** The detail, and any fields the confirm depends on. */
     children?: ReactNode;
-    confirm: ConfirmDialogAction;
+    /** Leave out for a dialog that only shows something. */
+    confirm?: ConfirmDialogAction;
     /** `danger` makes the confirm the solid red one. */
     tone?: "default" | "danger";
     /** A second way through (e.g. "Save without sending"), left of confirm. */
@@ -55,7 +56,7 @@ export const ConfirmDialog = ({
 }: ConfirmDialogProps) => {
     const keyboardInset = useKeyboardInset();
 
-    const busy = Boolean(confirm.pending || secondary?.pending);
+    const busy = Boolean(confirm?.pending || secondary?.pending);
 
     // The browser only scrolls a field clear of the keyboard when it's tapped,
     // not when the dialog focuses it on opening.
@@ -105,13 +106,17 @@ export const ConfirmDialog = ({
                             {secondary.label}
                         </Button>
                     )}
-                    <Button
-                        variant={tone === "danger" ? "destructive" : "solid"}
-                        disabled={busy || confirm.disabled}
-                        onClick={confirm.onClick}
-                    >
-                        {confirm.label}
-                    </Button>
+                    {confirm && (
+                        <Button
+                            variant={
+                                tone === "danger" ? "destructive" : "solid"
+                            }
+                            disabled={busy || confirm.disabled}
+                            onClick={confirm.onClick}
+                        >
+                            {confirm.label}
+                        </Button>
+                    )}
                 </DialogFooter>
             </DialogContent>
         </Dialog>

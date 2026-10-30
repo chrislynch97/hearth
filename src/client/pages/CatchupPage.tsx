@@ -68,7 +68,12 @@ export const CatchupPage = () => {
                             title={`${backlog.unassigned.count} ${backlog.unassigned.count === 1 ? "spend needs" : "spends need"} a pot`}
                             action={
                                 <Button asChild>
-                                    <Link to="/spending">Assign pots</Link>
+                                    <Link
+                                        to="/spending"
+                                        search={{ status: "needs-pot" }}
+                                    >
+                                        Assign pots
+                                    </Link>
                                 </Button>
                             }
                         >

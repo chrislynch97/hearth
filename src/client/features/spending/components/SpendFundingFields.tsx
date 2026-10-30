@@ -1,12 +1,14 @@
-import type { Category, Member, Pot } from "../../../../server/db/schema";
 import { groupedPotOptions } from "@/potOptions";
-import { SegmentedControl, Select, Stack, Switch, Text } from "@mantine/core";
+import { CheckboxField } from "@/components/ui/CheckboxField";
+import { Combobox } from "@/components/ui/Combobox";
+import { FieldGroup } from "@/components/ui/FieldGroup";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import type { Category, Member, Pot, SpendFunding } from "../model";
 
-export interface SpendFunding {
-    potId: string | null;
-    categoryId: string | null;
-    settledAtSource: boolean;
-}
+const SOURCES: Array<{ value: "pot" | "main"; label: string }> = [
+    { value: "pot", label: "A pot" },
+    { value: "main", label: "Main account" },
+];
 
 export interface SpendFundingFieldsProps {
     value: SpendFunding;
@@ -16,6 +18,8 @@ export interface SpendFundingFieldsProps {
     categories: Category[];
 }
 
+/** Where a spend's money comes from: a pot, which goes on Catch-up unless it's
+ *  already come out, or the main account, which never does. */
 export const SpendFundingFields = ({
     value,
     onChange,
@@ -24,94 +28,75 @@ export const SpendFundingFields = ({
     categories,
 }: SpendFundingFieldsProps) => {
     const { potId, categoryId, settledAtSource } = value;
-    // Main account = no pot but settled at source; everything else is "a pot"
-    // (including an empty pot, i.e. needs-a-pot).
-    const source: "pot" | "main" =
-        potId == null && settledAtSource ? "main" : "pot";
-    const potGroups = groupedPotOptions(pots, members);
+    // An empty pot is still "a pot": it means needs a pot, not the main account.
+    const source = potId === null && settledAtSource ? "main" : "pot";
 
     return (
-        <Stack gap="sm">
-            <div>
-                <Text size="sm" fw={500} mb={4}>
-                    Comes from
-                </Text>
+        <>
+            <FieldGroup label="Comes from">
                 <SegmentedControl
-                    fullWidth
+                    label="Comes from"
+                    options={SOURCES}
                     value={source}
-                    onChange={(v) =>
-                        v === "main"
-                            ? onChange({
-                                  potId: null,
-                                  categoryId,
-                                  settledAtSource: true,
-                              })
-                            : onChange({
-                                  potId: null,
-                                  categoryId: null,
-                                  settledAtSource: false,
-                              })
+                    onChange={(next) =>
+                        onChange({
+                            potId: null,
+                            categoryId: next === "main" ? categoryId : null,
+                            settledAtSource: next === "main",
+                        })
                     }
-                    data={[
-                        { value: "pot", label: "A pot" },
-                        { value: "main", label: "Main account" },
-                    ]}
+                    className="w-full [&>*]:flex-1"
                 />
-            </div>
-
+            </FieldGroup>
             {source === "pot" ? (
                 <>
-                    <Select
+                    <Combobox
                         label="Pot"
-                        placeholder="No pot (assign later)"
-                        description="Leave empty to sort the pot out later — it'll show on Catch-up as needing a pot."
-                        data={potGroups}
+                        placeholder="Assign later"
+                        clearLabel="Assign later"
+                        options={groupedPotOptions(pots, members)}
                         value={potId}
-                        searchable
-                        clearable
-                        onChange={(v) =>
+                        onChange={(next) =>
                             onChange({
-                                potId: v || null,
+                                potId: next,
                                 categoryId: null,
-                                settledAtSource: v ? settledAtSource : false,
+                                settledAtSource: next ? settledAtSource : false,
                             })
                         }
                     />
                     {potId && (
-                        <Switch
-                            label="Already came out — no transfer needed"
-                            description="Tick for a pot that auto-deducts (e.g. Monzo). Keeps it off Catch-up."
+                        <CheckboxField
                             checked={settledAtSource}
-                            onChange={(e) =>
+                            onCheckedChange={(checked) =>
                                 onChange({
                                     potId,
                                     categoryId: null,
-                                    settledAtSource: e.currentTarget.checked,
+                                    settledAtSource: checked,
                                 })
                             }
+                            label="Already came out"
+                            description="For a pot that auto-deducts. No transfer needed, so it stays off Catch-up."
                         />
                     )}
                 </>
             ) : (
-                <Select
+                <Combobox
                     label="Category"
                     placeholder="Pick a category"
-                    description="Paid straight from the main account — won't show on Catch-up."
-                    data={categories.map((c) => ({
+                    options={categories.map((c) => ({
                         value: c.id,
                         label: c.name,
                     }))}
                     value={categoryId}
-                    searchable
-                    onChange={(v) =>
+                    onChange={(next) =>
                         onChange({
                             potId: null,
-                            categoryId: v,
+                            categoryId: next,
                             settledAtSource: true,
                         })
                     }
                 />
             )}
-        </Stack>
+        </>
     );
 };

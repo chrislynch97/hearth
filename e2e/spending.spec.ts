@@ -6,14 +6,12 @@ test('adding a spend puts it in the register', async ({ page }) => {
   // Unique per run so a re-run against a stale database can't pass on an old row.
   const description = `E2E smoke ${Date.now()}`
 
+  await page.getByRole('button', { name: 'Add spend' }).click()
   await page.getByLabel('Amount').fill('12.34')
   await page.getByLabel('Description').fill(description)
   await page.getByRole('button', { name: 'Add spend' }).click()
 
-  // Named, not a bare `role=alert`: the banner and any other Mantine Alert on
-  // the page share that role, and an unqualified match is a strict-mode failure
-  // the moment a second one appears.
-  await expect(page.getByRole('alert', { name: 'Logged' })).toContainText('Logged £12.34')
-  // `exact` — the row's action buttons are labelled with the description too.
-  await expect(page.getByRole('cell', { name: description, exact: true })).toBeVisible()
+  await expect(page.getByRole('dialog').getByRole('status')).toContainText('Logged £12.34')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: description })).toBeVisible()
 })
