@@ -1,3 +1,5 @@
+import { z } from 'zod'
+import { TRPCError } from '@trpc/server'
 import { desc, eq, isNull } from 'drizzle-orm'
 import { router, publicProcedure } from '../../trpc/trpc'
 import { scopeWhere } from '../../trpc/tenant'
@@ -6,15 +8,27 @@ import { computeBacklog } from '../spending/backlog'
 import { computeFundingPlan } from '../budget/funding'
 import { computeIncomeByMember, loadPayslipSummaries } from '../income/service'
 import { allocationByCategory, monthlyNetTrend } from './summary'
+import { loadCalendar } from './calendar'
 import { projectUpcoming, type UpcomingExpenseInput } from '../budget/upcoming'
 import { savingsAlerts } from '../savings/savings'
 import { periodConfig } from '../../../shared/period'
-import { addDays, todayIso } from '../../../shared/dates'
+import { addDays, diffDays, todayIso } from '../../../shared/dates'
+import { MAX_CALENDAR_DAYS } from '@shared/calendar'
 import { monthlyToPeriod, roundMinor, type Recurrence } from '../../../shared/recurrence'
 
 const UPCOMING_HORIZON_DAYS = 30
 
+const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+
 export const dashboardRouter = router({
+  /** Everything with a date in a range, for the home calendar. */
+  calendar: publicProcedure.input(z.object({ from: DATE, to: DATE })).query(async ({ ctx, input }) => {
+    if (diffDays(input.from, input.to) > MAX_CALENDAR_DAYS) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Ask for one month at a time.' })
+    }
+    return loadCalendar(ctx.db, ctx.householdId, input.from, input.to)
+  }),
+
   /** One aggregated call powering the home dashboard (spec §5.6). */
   summary: publicProcedure
     .query(async ({ ctx }) => {

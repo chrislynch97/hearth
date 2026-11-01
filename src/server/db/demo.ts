@@ -1020,6 +1020,90 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
   })
   savingsBalances.push({ id: id(), goalId: hens, asOfDate: addDays(today, -10), amount: cost(250), note: null, ...ts })
 
+  // -- to-dos --------------------------------------------------------------
+  // House admin and shopping, plus a wedding with deadlines running out months
+  // ahead, spread across overdue, due soon, undated and done. Generated last for
+  // the same PRNG reason.
+  const todoLists: Array<Record<string, unknown>> = []
+  const todos: Array<Record<string, unknown>> = []
+  const todoTags: Array<Record<string, unknown>> = []
+  const todoTagLinks: Array<Record<string, unknown>> = []
+  const todoReminders: Array<Record<string, unknown>> = []
+  const tagIds = new Map<string, string>()
+  const todoFirst = people[0] ? mine(people[0]) : joint
+  const todoSecond = people[1] ? mine(people[1]) : todoFirst
+  type TodoDef = {
+    title: string
+    due?: number
+    who?: string
+    priority?: string
+    tags?: string[]
+    doneDaysAgo?: number
+    remindDaysAhead?: number
+  }
+  const todoPlan: Array<{ list: string | null; todos: TodoDef[] }> = [
+    {
+      list: 'Wedding',
+      todos: [
+        { title: 'Book the venue', due: -40, who: todoFirst, priority: 'high', tags: ['Venue'], doneDaysAgo: 41 },
+        { title: 'Send the save the dates', due: -2, who: todoSecond, priority: 'high', tags: ['Guests'] },
+        { title: 'Choose the caterer', due: 6, who: todoFirst, tags: ['Suppliers', 'Food'], remindDaysAhead: 1 },
+        { title: 'Book the photographer', due: 30, who: todoSecond, tags: ['Suppliers'], remindDaysAhead: 14 },
+        { title: 'Order the cake', due: 60, tags: ['Suppliers', 'Food'] },
+        { title: 'Plan the seating', due: 120, tags: ['Guests', 'Venue'] },
+        { title: 'Write the speeches' },
+      ],
+    },
+    {
+      list: 'House admin',
+      todos: [
+        { title: 'Chase the buildings insurance quote', due: -3, who: todoFirst, priority: 'high' },
+        { title: 'Book the boiler service', due: 0, who: todoSecond, priority: 'high', tags: ['Boiler'] },
+        { title: 'Pay the window cleaner', due: -6, who: todoFirst, doneDaysAgo: 2 },
+      ],
+    },
+    {
+      list: 'Shopping',
+      todos: [
+        { title: 'Bin bags' },
+        { title: 'Light bulbs for the landing', priority: 'low', who: todoFirst },
+      ],
+    },
+    { list: null, todos: [{ title: 'Descale the kettle', priority: 'low' }, { title: 'Put the recycling out', due: 1, who: joint }] },
+  ]
+  for (const { list, todos: planned } of todoPlan) {
+    const listId = list ? id() : null
+    if (listId) todoLists.push({ id: listId, shortId: shortId(), name: list, archivedAt: null, ...ts })
+    for (const def of planned) {
+      const todoId = id()
+      const completedAt = def.doneDaysAgo === undefined ? null : new Date(nowMs - def.doneDaysAgo * 86_400_000)
+      todos.push({
+        id: todoId,
+        listId,
+        title: def.title,
+        notes: null,
+        priority: def.priority ?? 'normal',
+        assigneeId: def.who ?? null,
+        dueDate: def.due === undefined ? null : addDays(today, def.due),
+        completedAt,
+        completedById: completedAt ? (def.who ?? null) : null,
+        archivedAt: null,
+        ...ts,
+      })
+      for (const name of def.tags ?? []) {
+        if (!tagIds.has(name)) {
+          tagIds.set(name, id())
+          todoTags.push({ id: tagIds.get(name), name, ...ts })
+        }
+        todoTagLinks.push({ id: id(), todoId, tagId: tagIds.get(name), ...ts })
+      }
+      if (def.remindDaysAhead !== undefined) {
+        const remindAt = new Date(nowMs + def.remindDaysAhead * 86_400_000)
+        todoReminders.push({ id: id(), todoId, remindAt, sentAt: null, ...ts })
+      }
+    }
+  }
+
   return {
     household: households,
     member: members,
@@ -1044,6 +1128,11 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     savingsGoal: savingsGoals,
     savingsItem: savingsItems,
     savingsBalance: savingsBalances,
+    todoList: todoLists,
+    todo: todos,
+    todoTag: todoTags,
+    todoTagLink: todoTagLinks,
+    todoReminder: todoReminders,
   }
 }
 

@@ -246,13 +246,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
             {
                 title: null,
                 items: [
-                    {
-                        to: "/todos",
-                        label: "To-dos",
-                        icon: "todos",
-                        planned:
-                            "Tasks with a priority, an assignee, a due date and a done state. The plainest thing in the app.",
-                    },
+                    { to: "/todos", label: "To-dos", icon: "todos" },
                     {
                         to: "/chores",
                         label: "Chores rota",

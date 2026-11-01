@@ -306,7 +306,9 @@ with a contact in `HEARTH_VAPID_SUBJECT` (`mailto:you@example.com`), and restart
 Each person then turns notifications on in **Settings → Account**, per device. On
 an iPhone, Hearth has to be added to the Home Screen and opened from there first.
 
-Only "Send a test" sends anything so far.
+To-do reminders go out this way. One goes to the person the to-do is assigned to,
+or to everyone in the household if it's nobody's, and only reaches devices with
+notifications on. With notifications off, to-dos don't offer reminders at all.
 
 ## Email (optional)
 

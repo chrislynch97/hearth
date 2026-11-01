@@ -1,7 +1,7 @@
 /* iOS Safari auto-zooms the page whenever a focused input/select/textarea has an
    effective font-size below 16px, forcing the user to pinch back out after every
    edit (#83). Unlayered so it beats the fields' compact desktop size. */
-@media (max-width: 48em) {
+@media (max-width: 48em), (pointer: coarse) {
     input,
     select,
     textarea {

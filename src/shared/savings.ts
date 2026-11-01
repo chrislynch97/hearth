@@ -12,19 +12,12 @@
 import { addDays, diffDays } from './dates'
 import { periodForDate, shiftPeriod, type PeriodConfig } from './period'
 import { periodToMonthly } from './recurrence'
-import { slugify } from './slug'
+import { shortIdOf, shortPath } from './slug'
 
-const SHORT_ID = /^[0-9a-z]{6}(?=-|$)/
+/** A goal's URL segment, `k3x9p2-wedding`. */
+export const goalPath = shortPath
 
-/** A goal's URL segment: its fixed short id, then its name as a slug for
- *  people to read — `k3x9p2-wedding`. Only the short id is ever looked up. */
-export const goalPath = (shortId: string, name: string): string => {
-  const slug = slugify(name)
-  return slug ? `${shortId}-${slug}` : shortId
-}
-
-/** The short id at the front of a goal's URL segment, or null if there isn't one. */
-export const shortIdOf = (path: string): string | null => SHORT_ID.exec(path)?.[0] ?? null
+export { shortIdOf }
 
 /** How close an unfunded deadline has to be before it counts as at risk. */
 export const AT_RISK_DAYS = 14

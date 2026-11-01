@@ -9,6 +9,7 @@ import { ensureSeed } from './db/seed'
 import { db, closeDb } from './db/client'
 import { assertBackupConfig, startBackupScheduler } from './backup/runner'
 import { startAuditPruneScheduler } from './features/admin/prune'
+import { startTodoReminderScheduler } from './features/todos/reminders'
 import { startUpdateScheduler } from './updateScheduler'
 import { isInstanceLocked, startSessionPurgeScheduler } from './auth/session'
 import { allowedOrigins, openGuardConfig } from './auth/gate'
@@ -108,6 +109,7 @@ async function main() {
   startSessionPurgeScheduler(db)
   startUpdateScheduler(db)
   startAuthAlertScheduler(db)
+  startTodoReminderScheduler(db)
 
   // 64 MB body limit so restoring a large JSON export isn't rejected (default 1 MB).
   // `trustProxy` is opt-in (HEARTH_TRUST_PROXY): only set it when a reverse proxy /

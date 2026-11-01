@@ -18,6 +18,7 @@ const badgeVariants = cva(
         ghost: "[a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
         tint: "bg-primary-tint text-primary",
         attention: "bg-attention-tint text-attention-fg",
+        danger: "bg-danger-tint text-danger",
         link: "text-primary underline-offset-4 [a&]:hover:underline",
       },
     },

@@ -23,7 +23,10 @@ import './mobile.css'
 import './microcharts.css'
 import '@/hooks/useInstallPrompt'
 import { App } from './App'
+import { lockIosFocusZoom } from './lib/iosViewport'
 import { AppProviders } from './providers'
+
+lockIosFocusZoom()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
