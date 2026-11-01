@@ -12,46 +12,19 @@ Two trackers, deliberately:
 
 ## Task loop
 
-Feature and fix work runs through the skills in `.claude/skills/`, a Hearth
-port of the `procemx-workflow` v2 plugin: three sessions per task. **Build**
-writes everything (plan, code, fixes), **Check** judges it cold (review, checks,
-a test it mostly drives itself, a short list for me), **Ship** lands it. Each
-starts the next on my sign-off; there is no manager session. `/my-workflow`
-prints the loop; `/my-workflow <key>` says where a task is.
-
-```
-spec-task → (issue) → (Build) plan → I approve → build → "commit" → (Check) → findings back to (Build) until clean → (Ship) PR, CI → merged
-```
-
-When I send a GitHub issue link, start it with `/build-task <link>`.
+One session per task, from the `task` skill: plan, build, test, ship. My usage is
+tight, so no subagents or extra sessions unless I ask. When I send a GitHub issue
+link, start it with `/task <link>`.
 
 - **Task key**: `<issue#>-<slug>` for an issue (`65-keep-spend-date`, slug from
   the title, four words max), else `<slug>`. The branch and the worktree
   (`.claude/worktrees/<key>`) share the key.
-- **Paperwork** lives in the main checkout's `.claude/tasks/<key>/`
-  (gitignored): `spec.md`, `plan.md`, `status.md` (the ledger) and
-  `findings.md`; every session also appends to `.claude/tasks/workflow-log.jsonl`.
-  From any worktree the main checkout is `$(git rev-parse --path-format=absolute --git-common-dir)/..`;
-  always write there, never to a worktree's own `.claude/tasks/`.
-- **Ledger** (`status.md`): line 1 is the state (`state: needs you — approve plan`,
-  `running — …`, `waiting — …`, `done`), mirrored in the session titles. Then one
-  line per stage, newest last: `plan: 2026-10-03`, `build: …`, `sync: …`,
-  `review: … — 2 findings`, `checks: … — pass`, `auto-test: … — 7 pass, 0 fail`,
-  `manual-test: … — 2 pass`, `fix: … — 2 fixed, 0 declined, 0 your call`,
-  `pr: … — <url>`, `merged: … — PR #123`, `done: …`.
-- **Findings** (`findings.md`): checkbox lines under dated headings
-  (`## Review …`, `## Checks …`, `## Test …`, `## CI …`, `## Additions …`).
-  Check and Ship append; Build ticks them.
-- **Nothing commits before I've seen the diff.** Build stops uncommitted; I say
-  `commit` (it commits, syncs and starts Check) or commit myself and say `done`.
-- **Shipping** (`ship-task`) opens the PR and turns on squash auto-merge, so CI
-  (`check`, `e2e`, `image-scan`) is the gate. A `hearth` issue gets `Closes #65`
-  in the body; a planning issue gets `Closes chrislynch97/hearth-planning#13`,
-  which **doesn't auto-close across repos**, so ship-task closes it after the
-  merge.
-- **Models**: skills name the family (Opus) and an effort; the session that
-  starts the next one sets the newest Opus id from the app's model list. No fast
-  mode.
+- **Nothing commits before I've seen the diff.** Work stops uncommitted; I say
+  `ship`, or `commit` for a commit alone.
+- **Shipping** opens the PR and turns on squash auto-merge, so CI (`check`, `e2e`,
+  `image-scan`) is the gate. A `hearth` issue gets `Closes #65` in the body; a
+  planning issue gets `Closes chrislynch97/hearth-planning#13`, which **doesn't
+  auto-close across repos**, so close it by hand after the merge.
 
 ## Running / testing the app: fake data only, never the real database
 
