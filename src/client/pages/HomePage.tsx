@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
 import { AllocationCard } from "@/features/home/components/AllocationCard";
 import { BacklogHeadline } from "@/features/home/components/BacklogHeadline";
+import { HomeCalendar } from "@/features/home/components/HomeCalendar";
 import { NetWorthTile } from "@/features/home/components/NetWorthTile";
 import { PeriodSnapshot } from "@/features/home/components/PeriodSnapshot";
 import { SavingsAlerts } from "@/features/home/components/SavingsAlerts";
@@ -59,6 +60,7 @@ export const HomePage = () => {
                         alerts={summary.savingsAlerts}
                         money={money}
                     />
+                    <HomeCalendar />
                     <div className="grid gap-5 lg:grid-cols-3">
                         <div className="lg:col-span-2">
                             <PeriodSnapshot
