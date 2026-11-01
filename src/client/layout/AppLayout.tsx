@@ -4,11 +4,13 @@ import { AppSidebar } from "@/layout/AppSidebar";
 import { TopBar } from "@/layout/TopBar";
 import { UpdateBanner } from "@/layout/UpdateBanner";
 import { AccountEmailBanner } from "@/layout/AccountEmailBanner";
+import { PushDeviceSync } from "@/layout/PushDeviceSync";
 
 /** The app shell: top bar, sidebar, page. `--shell-header-height` sits the
  *  sidebar under the bar; `--shell-padding` is the page's gutter. */
 export const AppLayout = () => (
     <SidebarProvider className="flex min-h-dvh flex-col bg-canvas [--shell-header-height:calc(52px+env(safe-area-inset-top))] [--shell-padding:16px] md:[--shell-padding:32px]">
+        <PushDeviceSync />
         <TopBar />
         <div className="flex flex-1">
             {/* Under the sticky top bar rather than shadcn's default full height. */}

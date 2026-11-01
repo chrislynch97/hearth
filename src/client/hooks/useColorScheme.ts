@@ -27,8 +27,22 @@ const getScheme = (): "light" | "dark" => {
     return systemDark.matches ? "dark" : "light";
 };
 
+// The tags' own media queries only know the device, not a forced Hearth theme.
+const syncThemeColor = () => {
+    const surface = getComputedStyle(document.documentElement)
+        .getPropertyValue("--hearth-surface")
+        .trim();
+
+    if (!surface) return;
+
+    document
+        .querySelectorAll('meta[name="theme-color"]')
+        .forEach((meta) => meta.setAttribute("content", surface));
+};
+
 const refresh = () => {
     document.documentElement.dataset.theme = getScheme();
+    syncThemeColor();
     listeners.forEach((listener) => listener());
 };
 
