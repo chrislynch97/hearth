@@ -3,6 +3,7 @@ import type { PgTable } from 'drizzle-orm/pg-core'
 import {
   household,
   user,
+  pushSubscription,
   membership,
   invitation,
   member,
@@ -86,6 +87,7 @@ export const SNAPSHOT_EXCLUDED: ReadonlyArray<readonly [string, PgTable, string]
     'instance-scoped, and a security problem to restore: a stale auth_required would reopen a locked instance (#63)',
   ],
   ['auditLog', auditLog, 'operational metadata: an append-only record of what happened on THIS instance'],
+  ['pushSubscription', pushSubscription, "device-specific: subscriptions are tied to this instance's keys, so restored rows would only fail"],
 ] as const
 
 /** JS property names that hold money in minor units. Integer columns with one

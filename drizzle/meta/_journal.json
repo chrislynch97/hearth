@@ -155,6 +155,13 @@
       "when": 1792952939626,
       "tag": "0021_savings_followups",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793555897329,
+      "tag": "0022_push_subscription",
+      "breakpoints": true
     }
   ]
 }
