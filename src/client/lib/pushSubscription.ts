@@ -50,6 +50,17 @@ export const currentSubscription = async () => {
     return (await registration?.pushManager.getSubscription()) ?? null;
 };
 
+export const subscriptionKeys = (
+    subscription: PushSubscription
+): PushSubscriptionKeys => {
+    const { endpoint, keys } = subscription.toJSON();
+
+    return {
+        endpoint: endpoint ?? subscription.endpoint,
+        keys: { p256dh: keys?.p256dh ?? "", auth: keys?.auth ?? "" },
+    };
+};
+
 /** Ask permission and subscribe this browser. Null if permission was refused.
  *  The worker is registered only here, so nobody who hasn't opted in gets one. */
 export const subscribeThisDevice = async (
@@ -63,16 +74,28 @@ export const subscribeThisDevice = async (
         userVisibleOnly: true,
         applicationServerKey: base64UrlToBytes(publicKey),
     });
-    const { endpoint, keys } = subscription.toJSON();
 
-    return {
-        endpoint: endpoint ?? subscription.endpoint,
-        keys: { p256dh: keys?.p256dh ?? "", auth: keys?.auth ?? "" },
-    };
+    return subscriptionKeys(subscription);
 };
 
-/** Opt this browser out. Never throws, because signing out calls it and must
- *  still happen when this fails. */
+/** Opt this browser out from Settings. Throws on failure, and the browser goes
+ *  last, so anything that fails leaves it still subscribed and still showing On. */
+export const turnOffThisDevice = async (
+    removeFromServer: (endpoint: string) => Promise<unknown>
+) => {
+    const subscription = await currentSubscription();
+
+    if (!subscription) return;
+
+    await removeFromServer(subscription.endpoint);
+
+    if (!(await subscription.unsubscribe().catch(() => false))) {
+        throw new Error("This browser didn’t turn them off. Try again.");
+    }
+};
+
+/** Opt this browser out on sign-out. Never throws, because signing out must still
+ *  happen when this fails. */
 export const forgetThisDevice = async (
     removeFromServer: (endpoint: string) => Promise<unknown>
 ) => {
@@ -84,6 +107,6 @@ export const forgetThisDevice = async (
         await subscription.unsubscribe();
         await removeFromServer(subscription.endpoint);
     } catch {
-        // A row left behind is removed the first time the push service rejects it.
+        // Signing out removes the row on the server anyway.
     }
 };

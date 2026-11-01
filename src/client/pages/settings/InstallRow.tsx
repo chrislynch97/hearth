@@ -24,12 +24,12 @@ export const InstallRow = () => {
 
     return (
         <SettingsRow
+            inline
             title="Install Hearth"
             description="Open it from your home screen, like any other app."
         >
             <Button
                 variant="outline"
-                className="w-full sm:w-auto"
                 icon={<Download size={15} strokeWidth={1.75} />}
                 onClick={() => void install()}
             >

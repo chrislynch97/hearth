@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { trpc } from "@/trpc";
 import {
     currentSubscription,
-    forgetThisDevice,
     pushAvailability,
     subscribeThisDevice,
+    turnOffThisDevice,
 } from "@/lib/pushSubscription";
+import { Switch } from "@/components/shadcn/switch";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
 import { SettingsRow } from "@/components/ui/SettingsRow";
@@ -75,7 +76,7 @@ export const NotificationsSection = () => {
 
     const turnOff = () =>
         run(async () => {
-            await forgetThisDevice((value) =>
+            await turnOffThisDevice((value) =>
                 unsubscribe.mutateAsync({ endpoint: value })
             );
             setEndpoint(null);
@@ -114,37 +115,34 @@ export const NotificationsSection = () => {
                         title={TITLE}
                         description={UNAVAILABLE[availability]}
                     />
-                ) : endpoint ? (
-                    <SettingsRow title={TITLE} description="On.">
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                            <Button
-                                variant="outline"
-                                className="w-full sm:w-auto"
-                                disabled={working}
-                                onClick={() => void test()}
-                            >
-                                Send a test
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="w-full sm:w-auto"
-                                disabled={working}
-                                onClick={() => void turnOff()}
-                            >
-                                Turn off
-                            </Button>
-                        </div>
-                    </SettingsRow>
                 ) : (
-                    <SettingsRow title={TITLE} description="Off.">
-                        <Button
-                            className="w-full sm:w-auto"
-                            disabled={working}
-                            onClick={() => void turnOn()}
-                        >
-                            Turn on
-                        </Button>
-                    </SettingsRow>
+                    <>
+                        <SettingsRow inline title={TITLE}>
+                            <Switch
+                                aria-label={TITLE}
+                                checked={endpoint !== null}
+                                disabled={working}
+                                onCheckedChange={(on) =>
+                                    void (on ? turnOn() : turnOff())
+                                }
+                            />
+                        </SettingsRow>
+                        {endpoint && (
+                            <SettingsRow
+                                inline
+                                title="Test notification"
+                                description="Check it reaches this device."
+                            >
+                                <Button
+                                    variant="outline"
+                                    disabled={working}
+                                    onClick={() => void test()}
+                                >
+                                    Send a test
+                                </Button>
+                            </SettingsRow>
+                        )}
+                    </>
                 )}
                 {error && <Notice tone="danger" title={error} />}
                 {message && <Notice tone="positive" title={message} />}

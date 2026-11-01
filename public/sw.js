@@ -1,11 +1,6 @@
 // Web Push only. There's deliberately no fetch handler: caching here risks showing
 // a household stale budget figures, and notifications don't need it.
 
-// Without this an already-open page stays uncontrolled, and a tap can't navigate it.
-self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim())
-})
-
 // Always show something: Safari revokes permission after a silent push.
 self.addEventListener('push', (event) => {
   let message = {}
@@ -18,7 +13,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(message.title || 'Hearth', {
       body: message.body,
-      icon: '/icons/icon-192.png',
+      // Full bleed: the other icons have light corners painted in, and Android shows them.
+      icon: '/icons/icon-maskable-512.png',
       data: { url: message.url },
     }),
   )
@@ -27,18 +23,20 @@ self.addEventListener('push', (event) => {
 const sameOriginPath = (url) => {
   try {
     const target = new URL(url, self.location.origin)
-    return target.origin === self.location.origin ? target.href : '/'
+    return target.origin === self.location.origin ? target.pathname + target.search + target.hash : '/'
   } catch {
     return '/'
   }
 }
 
+// An open window goes through its own router: a real navigation would reload the
+// page out from under whatever someone was typing.
 const open = async (url) => {
   const [client] = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
   if (!client) return self.clients.openWindow(url)
 
   await client.focus()
-  return client.navigate(url).catch(() => self.clients.openWindow(url))
+  client.postMessage({ type: 'hearth:open', url })
 }
 
 self.addEventListener('notificationclick', (event) => {
