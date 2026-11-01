@@ -1,5 +1,5 @@
 {
-  "id": "5373ef4e-721c-4197-88cc-48fa7e8795a9",
+  "id": "f563d547-9fd1-4bf3-aada-adb71a1befd4",
   "prevId": "e4ecde64-84d2-4e6a-b69b-c2ebed70bfa4",
   "version": "7",
   "dialect": "postgresql",
@@ -4316,8 +4316,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.todo": {
-      "name": "todo",
+    "public.push_subscription": {
+      "name": "push_subscription",
       "schema": "",
       "columns": {
         "id": {
@@ -4326,431 +4326,26 @@
           "primaryKey": true,
           "notNull": true
         },
-        "household_id": {
-          "name": "household_id",
+        "user_id": {
+          "name": "user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "list_id": {
-          "name": "list_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "title": {
-          "name": "title",
+        "endpoint": {
+          "name": "endpoint",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "priority": {
-          "name": "priority",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'normal'"
-        },
-        "assignee_id": {
-          "name": "assignee_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "due_date": {
-          "name": "due_date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "completed_at": {
-          "name": "completed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "completed_by_id": {
-          "name": "completed_by_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "archived_at": {
-          "name": "archived_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "todo_household_id_idx": {
-          "name": "todo_household_id_idx",
-          "columns": [
-            {
-              "expression": "household_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "todo_household_list_idx": {
-          "name": "todo_household_list_idx",
-          "columns": [
-            {
-              "expression": "household_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "list_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "todo_household_id_household_id_fk": {
-          "name": "todo_household_id_household_id_fk",
-          "tableFrom": "todo",
-          "tableTo": "household",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "todo_list_id_todo_list_id_fk": {
-          "name": "todo_list_id_todo_list_id_fk",
-          "tableFrom": "todo",
-          "tableTo": "todo_list",
-          "columnsFrom": [
-            "list_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "todo_assignee_id_member_id_fk": {
-          "name": "todo_assignee_id_member_id_fk",
-          "tableFrom": "todo",
-          "tableTo": "member",
-          "columnsFrom": [
-            "assignee_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "todo_completed_by_id_member_id_fk": {
-          "name": "todo_completed_by_id_member_id_fk",
-          "tableFrom": "todo",
-          "tableTo": "member",
-          "columnsFrom": [
-            "completed_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.todo_list": {
-      "name": "todo_list",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "household_id": {
-          "name": "household_id",
+        "p256dh": {
+          "name": "p256dh",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "short_id": {
-          "name": "short_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "archived_at": {
-          "name": "archived_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "todo_list_short_id": {
-          "name": "todo_list_short_id",
-          "columns": [
-            {
-              "expression": "household_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "short_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "todo_list_household_id_idx": {
-          "name": "todo_list_household_id_idx",
-          "columns": [
-            {
-              "expression": "household_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "todo_list_household_id_household_id_fk": {
-          "name": "todo_list_household_id_household_id_fk",
-          "tableFrom": "todo_list",
-          "tableTo": "household",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.todo_reminder": {
-      "name": "todo_reminder",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "household_id": {
-          "name": "household_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "todo_id": {
-          "name": "todo_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "remind_at": {
-          "name": "remind_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sent_at": {
-          "name": "sent_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "todo_reminder_household_id_idx": {
-          "name": "todo_reminder_household_id_idx",
-          "columns": [
-            {
-              "expression": "household_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "todo_reminder_todo_id_idx": {
-          "name": "todo_reminder_todo_id_idx",
-          "columns": [
-            {
-              "expression": "todo_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "todo_reminder_due_idx": {
-          "name": "todo_reminder_due_idx",
-          "columns": [
-            {
-              "expression": "remind_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"todo_reminder\".\"sent_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "todo_reminder_household_id_household_id_fk": {
-          "name": "todo_reminder_household_id_household_id_fk",
-          "tableFrom": "todo_reminder",
-          "tableTo": "household",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "todo_reminder_todo_id_todo_id_fk": {
-          "name": "todo_reminder_todo_id_todo_id_fk",
-          "tableFrom": "todo_reminder",
-          "tableTo": "todo",
-          "columnsFrom": [
-            "todo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.todo_tag": {
-      "name": "todo_tag",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "household_id": {
-          "name": "household_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
+        "auth": {
+          "name": "auth",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -4769,132 +4364,11 @@
         }
       },
       "indexes": {
-        "todo_tag_household_name": {
-          "name": "todo_tag_household_name",
+        "push_subscription_user_id_idx": {
+          "name": "push_subscription_user_id_idx",
           "columns": [
             {
-              "expression": "household_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "lower(\"name\")",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "todo_tag_household_id_household_id_fk": {
-          "name": "todo_tag_household_id_household_id_fk",
-          "tableFrom": "todo_tag",
-          "tableTo": "household",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.todo_tag_link": {
-      "name": "todo_tag_link",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "household_id": {
-          "name": "household_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "todo_id": {
-          "name": "todo_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tag_id": {
-          "name": "tag_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "todo_tag_link_pair": {
-          "name": "todo_tag_link_pair",
-          "columns": [
-            {
-              "expression": "todo_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "tag_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "todo_tag_link_tag_id_idx": {
-          "name": "todo_tag_link_tag_id_idx",
-          "columns": [
-            {
-              "expression": "tag_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "todo_tag_link_household_id_idx": {
-          "name": "todo_tag_link_household_id_idx",
-          "columns": [
-            {
-              "expression": "household_id",
+              "expression": "user_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -4907,38 +4381,12 @@
         }
       },
       "foreignKeys": {
-        "todo_tag_link_household_id_household_id_fk": {
-          "name": "todo_tag_link_household_id_household_id_fk",
-          "tableFrom": "todo_tag_link",
-          "tableTo": "household",
+        "push_subscription_user_id_user_id_fk": {
+          "name": "push_subscription_user_id_user_id_fk",
+          "tableFrom": "push_subscription",
+          "tableTo": "user",
           "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "todo_tag_link_todo_id_todo_id_fk": {
-          "name": "todo_tag_link_todo_id_todo_id_fk",
-          "tableFrom": "todo_tag_link",
-          "tableTo": "todo",
-          "columnsFrom": [
-            "todo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "todo_tag_link_tag_id_todo_tag_id_fk": {
-          "name": "todo_tag_link_tag_id_todo_tag_id_fk",
-          "tableFrom": "todo_tag_link",
-          "tableTo": "todo_tag",
-          "columnsFrom": [
-            "tag_id"
+            "user_id"
           ],
           "columnsTo": [
             "id"
@@ -4948,7 +4396,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "push_subscription_endpoint_unique": {
+          "name": "push_subscription_endpoint_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "endpoint"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

@@ -89,6 +89,11 @@ export const WRITE_ROLE_EXEMPT = new Set([
   // Filing a bug/feedback issue (#86) is not a household-data write and carries
   // its own per-user throttle, so any signed-in user (viewers included) may send.
   'feedback.submit',
+  // Opting your own device in or out touches no household data, so a viewer's
+  // phone can get notifications too.
+  'notifications.subscribe',
+  'notifications.unsubscribe',
+  'notifications.sendTest',
   'sessions.revoke',
   'sessions.revokeOthers',
   // Pre-membership joins: authenticated by an invite token / open-registration

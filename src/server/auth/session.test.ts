@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { makeTestDb } from '../db/testdb'
 import { ensureSeed } from '../db/seed'
-import { membership, session, user } from '../db/schema'
+import { membership, pushSubscription, session, user } from '../db/schema'
 import { getInstanceSettings, setInstanceOwnerId } from '../db/instanceSettings'
 import { DEFAULT_HOUSEHOLD_ID } from '../trpc/tenant'
 import { newId } from '../../shared/ids'
@@ -13,9 +13,12 @@ import {
   SESSION_IDLE_TTL_MS,
   SESSION_TOUCH_INTERVAL_MS,
   createSession,
+  deleteAllSessions,
   deleteExpiredSessions,
   deleteOtherUserSessions,
+  deleteSession,
   deleteUserSessionById,
+  deleteUserSessions,
   getOwnerUser,
   getValidSession,
   isInstanceLocked,
@@ -318,5 +321,62 @@ describe('listing and revoking sessions (issue #50)', () => {
     expect(await getValidSession(db, keep)).not.toBeNull()
     expect(await getValidSession(db, drop1)).toBeNull()
     expect(await getValidSession(db, drop2)).toBeNull()
+  })
+})
+
+describe('ending sessions and notification devices', () => {
+  async function devices() {
+    const db = await makeTestDb()
+    await ensureSeed(db)
+    const owner = (await getOwnerUser(db))!
+    const phone = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+    const laptop = await createSession(db, owner.id, DEFAULT_HOUSEHOLD_ID)
+    const add = (endpoint: string, sessionId: string | null) => {
+      const now = new Date()
+      return db.insert(pushSubscription).values({
+        id: newId(), userId: owner.id, endpoint, p256dh: 'p', auth: 'a', sessionId, createdAt: now, updatedAt: now,
+      })
+    }
+    await add('phone', hashToken(phone))
+    await add('laptop', hashToken(laptop))
+    const left = async () =>
+      (await db.select().from(pushSubscription)).map((row) => row.endpoint).sort()
+    return { db, owner, phone, laptop, add, left }
+  }
+
+  it('ending one session removes only its device', async () => {
+    const { db, owner, phone, left } = await devices()
+    await deleteUserSessionById(db, owner.id, hashToken(phone))
+    expect(await left()).toEqual(['laptop'])
+  })
+
+  it('logging out removes that device', async () => {
+    const { db, phone, left } = await devices()
+    await deleteSession(db, phone)
+    expect(await left()).toEqual(['laptop'])
+  })
+
+  it('signing out elsewhere keeps only this device, and clears unowned ones', async () => {
+    const { db, owner, laptop, add, left } = await devices()
+    await add('from-open-instance', null)
+    await deleteOtherUserSessions(db, owner.id, hashToken(laptop))
+    expect(await left()).toEqual(['laptop'])
+  })
+
+  it('ending all of a user’s sessions, or everyone’s, removes the devices', async () => {
+    const first = await devices()
+    await deleteUserSessions(first.db, first.owner.id)
+    expect(await first.left()).toEqual([])
+
+    const second = await devices()
+    await deleteAllSessions(second.db)
+    expect(await second.left()).toEqual([])
+  })
+
+  it('a session merely expiring leaves its device', async () => {
+    const { db, phone, left } = await devices()
+    await db.update(session).set({ expiresAt: new Date(0) }).where(eq(session.id, hashToken(phone)))
+    await deleteExpiredSessions(db)
+    expect(await left()).toEqual(['laptop', 'phone'])
   })
 })

@@ -19,8 +19,12 @@
          deliberately no Google Fonts <link> here (#54). -->
 
     <!-- Installable to the home screen (#144). The status bar follows the app's
-         own light/dark surface; the manifest's single theme_color can't. -->
+         own light/dark surface. The manifest deliberately has no theme_color: Chrome
+         paints Android's gesture bar with it, and it can't vary by scheme. -->
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Paints the page dark on a dark device before the stylesheet arrives; :root
+         in design-system.css takes over once it does, so a forced theme still wins. -->
+    <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbfaf4" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#242523" />
 

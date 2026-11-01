@@ -2,12 +2,12 @@
  *  authenticated when that id resolves to a live (unexpired) session row.
  *  Replaces the old stateless HMAC(password) token so sessions can carry user
  *  identity and be revoked (logout, password change, "sign out everywhere"). */
-import { and, asc, eq, isNotNull, lt, ne, or } from 'drizzle-orm'
+import { and, asc, eq, isNotNull, isNull, lt, ne, or } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import type { DB, DBOrTx } from '../db/client'
 import { hashToken, newBearerToken } from './bearer'
 import { SchedulerLock, withLeaderLock } from '../db/leader'
-import { membership, session, user } from '../db/schema'
+import { membership, pushSubscription, session, user } from '../db/schema'
 import type { Session, User } from '../db/schema'
 import { getInstanceSettings, setAuthRequired, setInstanceOwnerId } from '../db/instanceSettings'
 import { DEFAULT_HOUSEHOLD_ID, ROLE_RANK, type Role } from '../trpc/tenant'
@@ -169,6 +169,7 @@ export async function deleteUserSessionById(db: DB, userId: string, sessionId: s
     .delete(session)
     .where(and(eq(session.userId, userId), eq(session.id, sessionId)))
     .returning({ id: session.id })
+  if (deleted.length > 0) await db.delete(pushSubscription).where(eq(pushSubscription.sessionId, sessionId))
   return deleted.length > 0
 }
 
@@ -180,18 +181,30 @@ export async function deleteOtherUserSessions(db: DB, userId: string, keepSessio
     .delete(session)
     .where(and(eq(session.userId, userId), ne(session.id, keepSessionId)))
     .returning({ id: session.id })
+  await db
+    .delete(pushSubscription)
+    .where(
+      and(
+        eq(pushSubscription.userId, userId),
+        or(isNull(pushSubscription.sessionId), ne(pushSubscription.sessionId, keepSessionId)),
+      ),
+    )
   return deleted.length
 }
 
 export async function deleteSession(db: DB, token: string): Promise<void> {
-  await db.delete(session).where(eq(session.id, hashToken(token)))
+  const id = hashToken(token)
+  await db.delete(session).where(eq(session.id, id))
+  await db.delete(pushSubscription).where(eq(pushSubscription.sessionId, id))
 }
 
 /** Revoke every session for a user (password change / clear, or an admin ending
  *  their logins — #249). Returns how many went, for the audit entry; callers
- *  that only need the side effect can ignore it. */
+ *  that only need the side effect can ignore it. Their devices go too, so a lost
+ *  phone is cut off; a device still in use re-registers on its next sign-in. */
 export async function deleteUserSessions(db: DB, userId: string): Promise<number> {
   const deleted = await db.delete(session).where(eq(session.userId, userId)).returning({ id: session.id })
+  await db.delete(pushSubscription).where(eq(pushSubscription.userId, userId))
   return deleted.length
 }
 
@@ -201,6 +214,7 @@ export async function deleteUserSessions(db: DB, userId: string): Promise<number
  *  Returns how many were ended, for the audit entry and the confirmation. */
 export async function deleteAllSessions(db: DB): Promise<number> {
   const deleted = await db.delete(session).returning({ id: session.id })
+  await db.delete(pushSubscription)
   return deleted.length
 }
 

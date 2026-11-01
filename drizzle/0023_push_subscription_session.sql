@@ -1,0 +1,1 @@
+ALTER TABLE "push_subscription" ADD COLUMN "session_id" text;

@@ -167,10 +167,12 @@ All configuration is via environment variables:
 | `HEARTH_SMTP_PORT` | `587`, or `465` for implicit TLS | Relay port. |
 | `HEARTH_SMTP_TLS` | `starttls` | `starttls` upgrades the connection and **refuses to send** if the relay doesn't offer it; `implicit` is TLS from the first byte (port 465); `none` is cleartext — only for a relay on localhost. |
 | `HEARTH_SMTP_USER` / `HEARTH_SMTP_PASS` | unset | Relay credentials. Omit both for an unauthenticated relay; setting a user with no password is a startup error. |
+| `HEARTH_VAPID_PUBLIC_KEY` / `HEARTH_VAPID_PRIVATE_KEY` | unset | Turn on push notifications (see [Notifications](#notifications-optional)). Generate both with `npx web-push generate-vapid-keys`. Changing them cuts off every device: each person has to turn notifications off and on again. |
+| `HEARTH_VAPID_SUBJECT` | unset | A `mailto:` or `https://` contact the push services can reach you on. **Required** with the keys; setting only some of the three is a startup error. |
 | `HEARTH_DEPLOY` | unset | Set to `image` by the GHCR compose files (`docker-compose.ghcr.yml`). Tells the in-app update UI this is the prebuilt-image deploy, so it shows `pull`-based update commands and — with the host updater — enables one-click / automatic updates. Any other value (or unset) means a build-from-source deploy. See [Updating](docs/deployment.md#updating--three-ways). |
 | `HEARTH_COMPOSE_FILE` | inferred | Compose file the in-app update card names in its copy-paste commands. Unset, it's inferred from `HEARTH_DEPLOY` + `DATABASE_URL`; set it if you run a compose file other than the four shipped ones (`docker-compose.public.yml` sets it to itself). The host updater reads the same variable. |
 | `HEARTH_UPDATE_DIR` | `<data>/updates` | Where the app and the host updater exchange update control files (request / result / heartbeat). Defaults next to your data dir; only set it if you relocate that exchange. |
-| `HEARTH_UPDATE_CHECK` | unset | Set to `off` to stop Hearth checking GitHub for new releases. That check is the app's only outbound request, so this is the switch for an instance that should make none — it also hides the update banner. Any other value leaves the check on; switched off, it reports the same "couldn't check" state as being offline. |
+| `HEARTH_UPDATE_CHECK` | unset | Set to `off` to stop Hearth checking GitHub for new releases. Unless you turn on an optional service such as email or notifications, that check is the app's only outbound request, so this is the switch for an instance that should make none — it also hides the update banner. Any other value leaves the check on; switched off, it reports the same "couldn't check" state as being offline. |
 | `HEARTH_UPDATE_TOKEN` | unset | GitHub token the update check uses to read the latest release. Only needed when your repo is **private** — GitHub 404s an unauthenticated request to a private repo's releases, so the check silently finds nothing. Needs **read only** (`contents: read` / classic `repo`), never write. Falls back to `HEARTH_FEEDBACK_TOKEN` if that's set against the same repo. Public repos need neither. |
 | `HEARTH_FEEDBACK_TOKEN` | unset | GitHub token with **issues: write** on the target repo. Setting it turns on the in-app **Send feedback** entry (account menu), which files a bug/idea straight to GitHub; left unset the feature is hidden. Use a **fine-grained** token scoped to the one repo — reports land in a **public** repo, which the form makes clear to submitters. |
 | `HEARTH_FEEDBACK_REPO` | `chrislynch97/hearth` | `owner/repo` in-app feedback is filed against. Defaults to upstream; point it at your own fork to keep reports. Only used when `HEARTH_FEEDBACK_TOKEN` is set. |
@@ -287,6 +289,24 @@ stored, who can see it (you, all of it), how long backups keep it and what they
 can ask for. The invite screen and the invite email carry a summary of it, so
 nobody joins without being told; fill in its three blanks before you send anyone
 a link.
+
+## Notifications (optional)
+
+**Off by default.** Hearth can send push notifications to phones and browsers,
+which means the server contacting Google's, Apple's or Mozilla's push service, so
+it stays off until you ask for it. It needs HTTPS: browsers refuse push over plain
+`http://`, except on `localhost`.
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Add those to `.env` as `HEARTH_VAPID_PUBLIC_KEY` and `HEARTH_VAPID_PRIVATE_KEY`,
+with a contact in `HEARTH_VAPID_SUBJECT` (`mailto:you@example.com`), and restart.
+Each person then turns notifications on in **Settings → Account**, per device. On
+an iPhone, Hearth has to be added to the Home Screen and opened from there first.
+
+Only "Send a test" sends anything so far.
 
 ## Email (optional)
 

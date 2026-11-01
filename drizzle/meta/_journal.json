@@ -159,8 +159,22 @@
     {
       "idx": 22,
       "version": "7",
-      "when": 1793557515637,
-      "tag": "0022_todos",
+      "when": 1793555897329,
+      "tag": "0022_push_subscription",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793562018363,
+      "tag": "0023_push_subscription_session",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793563449980,
+      "tag": "0024_todos",
       "breakpoints": true
     }
   ]

@@ -12,6 +12,7 @@ const ASSETS = [
   { path: '/icons/icon-512.png', type: /image\/png/ },
   { path: '/icons/icon-maskable-512.png', type: /image\/png/ },
   { path: '/icons/apple-touch-icon.png', type: /image\/png/ },
+  { path: '/sw.js', type: /javascript/ },
 ]
 
 test('the PWA assets are served from the build, not the SPA fallback', async ({ request }) => {

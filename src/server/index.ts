@@ -21,6 +21,7 @@ import { redactUrl } from './logRedact'
 import { checkHealth, healthBody } from './ops/health'
 import { startAuthAlertScheduler } from './ops/authAlerts'
 import { resolveMailConfig } from './mail/config'
+import { resolvePushConfig } from './notifications/config'
 
 const PORT = Number(process.env.PORT ?? 8787)
 const HOST = process.env.HOST ?? '0.0.0.0'
@@ -96,6 +97,7 @@ async function main() {
   // dev, demo) the same states are legitimate, so we only warn.
   await assertStartupSafety()
   reportMailConfig()
+  reportPushConfig()
   // Throws on a backup config that can't do what it claims (#114) — same
   // reasoning as the mail check: an instance backing up to nowhere looks exactly
   // like one that's backing up fine, right until you need the backup.
@@ -268,6 +270,13 @@ function reportMailConfig(): void {
   }
   const via = config.smtp ? `smtp ${config.smtp.host}:${config.smtp.port} (${config.smtp.tls})` : 'log (not sent)'
   console.log(`[hearth] email via ${via}, from ${config.from}, links point at ${config.publicUrl}`)
+}
+
+/** Same reasoning as the mail report: half-set keys are fatal here rather than
+ *  looking like a feature that's switched off. */
+function reportPushConfig(): void {
+  const config = resolvePushConfig()
+  console.log(config ? `[hearth] push notifications on, contact ${config.subject}` : '[hearth] push notifications are off')
 }
 
 main().catch((err) => {

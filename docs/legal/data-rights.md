@@ -21,7 +21,7 @@ written must match the retention windows stated below rather than restate them.
 | Who | What they can exercise |
 | --- | --- |
 | A **household owner** | Access, portability and erasure over that household's data — the budgeting records, the member list, and who has access |
-| **Any account holder** | Access to, correction of, and erasure of *their own account* — name, username, email address, sessions |
+| **Any account holder** | Access to, correction of, and erasure of *their own account* — name, username, email address, sessions, and the devices they turned notifications on for |
 | An **admin, member or viewer** | Nothing over the household as a whole. They can see it and (depending on role) edit it, but taking it out or destroying it is the owner's decision |
 
 A household's data is genuinely shared: one person's spending sits in the same
@@ -68,14 +68,15 @@ and returns it to the setup wizard. Self-hosters wanting to erase everything
 should use that, or simply delete the database volume.
 
 **Your own account** — **Settings → Account** to correct your name or email, and
-**Settings → Account → Sessions** to end sessions.
+**Settings → Account → Sessions** to end sessions, which also stops notifications
+to that device. Notifications are turned off per device in **Settings → Account**.
 
 **Deleting your account** — **Settings → Account → Delete your account**.
 Available to anyone signed in. It asks for your password, and for a code from
 your authenticator if you have two-factor on: the same bar as changing your
 username, because a stolen session must not be able to erase you. What goes is
 your login — name, username, email address, password hash and two-factor secret
-— and every session you have open.
+— every session you have open, and every device you turned notifications on for.
 
 Two cases are refused, and the app says which:
 
