@@ -9,6 +9,9 @@ export const pushSubscription = pgTable('push_subscription', {
   endpoint: text('endpoint').notNull().unique(),  // the push service URL for this browser
   p256dh: text('p256dh').notNull(),
   auth: text('auth').notNull(),
+  // No FK: expiry must not silently stop an installed app, only ending a session
+  // does. Null on an open instance, which has no sessions.
+  sessionId: text('session_id'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
 }, (t) => ({

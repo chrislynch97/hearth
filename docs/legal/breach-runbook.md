@@ -206,7 +206,7 @@ rotate. Restart the stack afterwards and confirm a backup still runs.
 | `HEARTH_BACKUP_S3_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` | Read and write on the whole bucket | The object store's console. Delete the old key, don't just add a new one. |
 | `HEARTH_BACKUP_WEBHOOK_URL` / `_AUTH` | Wherever snapshots are POSTed | The receiving service |
 | `HEARTH_SMTP_USER` / `HEARTH_SMTP_PASS` | Sending mail as you — resets, invites | The mail provider |
-| `HEARTH_VAPID_PRIVATE_KEY` | Sending push notifications as this instance to any opted-in device | Generate a new pair; everyone turns notifications on again |
+| `HEARTH_VAPID_PRIVATE_KEY` | Sending push notifications as this instance to any opted-in device | Generate a new pair; old devices stop receiving, and each person turns notifications off and on again |
 | `HEARTH_ALERT_WEBHOOK` | Your alert stream. An ntfy topic is a bearer secret: anyone who knows it can read and post | Pick a new random topic |
 | `HEARTH_BACKUP_HEARTBEAT_URL` | Faking or suppressing backup alerts | Healthchecks.io — new check UUID |
 | `HEARTH_UPDATE_TOKEN` | Triggering an update on the host | Regenerate; update the host-side updater too |

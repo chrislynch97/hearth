@@ -58,6 +58,37 @@ describe('notifications router', () => {
     expect(rows.map((row) => row.userId)).toEqual(['ben'])
   })
 
+  it('moves a device to the session that re-sent it', async () => {
+    const { db } = await setup()
+    const inSession = (sessionId: string) =>
+      appRouter.createCaller({ db, householdId: 'household', role: 'owner', userId: 'ava', sessionId })
+    await inSession('old').notifications.subscribe({ endpoint, keys })
+    await inSession('new').notifications.subscribe({ endpoint, keys })
+
+    const rows = await db.select().from(pushSubscription)
+    expect(rows.map((row) => row.sessionId)).toEqual(['new'])
+  })
+
+  it('keeps an account to ten devices, dropping the longest unused', async () => {
+    const { db, as } = await setup()
+    for (let i = 0; i < 11; i++) {
+      await as('ava').notifications.subscribe({ endpoint: `${endpoint}-${i}`, keys })
+      await new Promise((resolve) => setTimeout(resolve, 2))
+    }
+
+    const rows = await db.select().from(pushSubscription)
+    expect(rows).toHaveLength(10)
+    expect(rows.map((row) => row.endpoint)).not.toContain(`${endpoint}-0`)
+  })
+
+  it('throttles test notifications per account', async () => {
+    const { as } = await setup()
+    for (let i = 0; i < 20; i++) await as('ava').notifications.sendTest()
+
+    await expect(as('ava').notifications.sendTest()).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' })
+    expect(await as('ben').notifications.sendTest()).toEqual({ sent: 0 })
+  })
+
   it("won't remove someone else's device", async () => {
     const { db, as } = await setup()
     await as('ava').notifications.subscribe({ endpoint, keys })
