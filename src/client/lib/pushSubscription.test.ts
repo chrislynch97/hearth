@@ -1,0 +1,76 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+    base64UrlToBytes,
+    forgetThisDevice,
+    pushAvailability,
+} from "./pushSubscription";
+
+const stubUserAgent = (userAgent: string) =>
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue(userAgent);
+
+const stubRegistration = (subscription: unknown) =>
+    vi.stubGlobal("navigator", {
+        userAgent: navigator.userAgent,
+        maxTouchPoints: 0,
+        serviceWorker: {
+            getRegistration: async () => ({
+                pushManager: { getSubscription: async () => subscription },
+            }),
+        },
+    });
+
+afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+});
+
+describe("base64UrlToBytes", () => {
+    it("decodes url-safe base64 without padding", () => {
+        expect([...base64UrlToBytes("-_8")]).toEqual([251, 255]);
+    });
+});
+
+describe("pushAvailability", () => {
+    it("sends an iPhone in a browser tab to the Home Screen first", () => {
+        stubUserAgent("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)");
+
+        expect(pushAvailability()).toBe("needs-install");
+    });
+
+    it("says so when the browser has no push", () => {
+        stubUserAgent("Mozilla/5.0 (X11; Linux x86_64)");
+
+        expect(pushAvailability()).toBe("unsupported");
+    });
+});
+
+describe("forgetThisDevice", () => {
+    it("unsubscribes the browser and tells the server", async () => {
+        const unsubscribe = vi.fn().mockResolvedValue(true);
+        const removeFromServer = vi.fn().mockResolvedValue(undefined);
+        stubRegistration({ endpoint: "https://push.example/1", unsubscribe });
+
+        await forgetThisDevice(removeFromServer);
+
+        expect(unsubscribe).toHaveBeenCalled();
+        expect(removeFromServer).toHaveBeenCalledWith("https://push.example/1");
+    });
+
+    it("does nothing on a device that never opted in", async () => {
+        const removeFromServer = vi.fn();
+        stubRegistration(null);
+
+        await forgetThisDevice(removeFromServer);
+
+        expect(removeFromServer).not.toHaveBeenCalled();
+    });
+
+    it("never throws, so signing out still happens", async () => {
+        stubRegistration({
+            endpoint: "https://push.example/1",
+            unsubscribe: vi.fn().mockRejectedValue(new Error("offline")),
+        });
+
+        await expect(forgetThisDevice(vi.fn())).resolves.toBeUndefined();
+    });
+});
