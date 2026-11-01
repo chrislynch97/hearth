@@ -48,6 +48,7 @@ export const TodoForm = ({
     const utils = trpc.useUtils();
     const update = trpc.todos.update.useMutation();
     const archive = trpc.todos.archive.useMutation();
+    const pushConfig = trpc.notifications.config.useQuery();
 
     const [pickedTags, setPickedTags] = useState(todo.tags);
     const [reminders, setReminders] = useState<DraftReminder[]>(
@@ -168,11 +169,13 @@ export const TodoForm = ({
                     value={pickedTags}
                     onChange={setPickedTags}
                 />
-                <ReminderField
-                    dueDate={dueDate}
-                    value={reminders}
-                    onChange={setReminders}
-                />
+                {pushConfig.data?.enabled && (
+                    <ReminderField
+                        dueDate={dueDate}
+                        value={reminders}
+                        onChange={setReminders}
+                    />
+                )}
                 <TextAreaField
                     label="Notes"
                     placeholder="Optional"

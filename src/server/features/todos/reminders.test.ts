@@ -4,7 +4,8 @@ import { makeTestDb } from '../../db/testdb'
 import { ensureSeed } from '../../db/seed'
 import { appRouter } from '../../trpc/router'
 import { member, membership, todoReminder, user } from '../../db/schema'
-import { runTodoReminderPass, type ReminderMessage } from './reminders'
+import type { PushMessage } from '../../notifications/push'
+import { runTodoReminderPass, startTodoReminderScheduler } from './reminders'
 
 type Db = Awaited<ReturnType<typeof makeTestDb>>
 
@@ -28,8 +29,8 @@ async function setup() {
   await addLogin(db, 'ana')
   await addLogin(db, 'ben')
   const api = appRouter.createCaller({ db, householdId: 'household', role: 'owner' })
-  const sent: Array<{ userId: string; message: ReminderMessage }> = []
-  const send = async (userId: string, message: ReminderMessage) => {
+  const sent: Array<{ userId: string; message: PushMessage }> = []
+  const send = async (userId: string, message: PushMessage) => {
     sent.push({ userId, message })
   }
 
@@ -156,5 +157,18 @@ describe('runTodoReminderPass', () => {
       body: 'Reminder from Wedding',
       url: `/todos/${wedding.slug}`,
     })
+  })
+})
+
+describe('startTodoReminderScheduler', () => {
+  it('leaves due reminders unclaimed while push is off', async () => {
+    const { db, due } = await setup()
+    await due({ title: 'Waits for push' })
+
+    startTodoReminderScheduler(db)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const [reminder] = await db.select().from(todoReminder)
+    expect(reminder?.sentAt).toBeNull()
   })
 })

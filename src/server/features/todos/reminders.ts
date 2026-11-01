@@ -1,15 +1,14 @@
 import { and, eq, inArray, isNotNull, isNull, lte } from 'drizzle-orm'
+import { SchedulerLock, withLeaderLock } from '../../db/leader'
 import { member, membership, todo, todoList, todoReminder } from '../../db/schema'
+import { pushConfig } from '../../notifications/config'
+import { sendPushToUser, type PushMessage } from '../../notifications/push'
 import { shortPath } from '@shared/slug'
 import type { DB } from '../../db/client'
 
-export interface ReminderMessage {
-  title: string
-  body: string
-  url: string
-}
+const CHECK_INTERVAL_MS = 60_000
 
-export type SendReminder = (userId: string, message: ReminderMessage) => Promise<void>
+export type SendReminder = (userId: string, message: PushMessage) => Promise<unknown>
 
 /** Sends every reminder that has come due, across all households. Claims first
  *  and sends after: a crash in between loses a reminder rather than doubling it.
@@ -69,4 +68,24 @@ export async function runTodoReminderPass(db: DB, now: Date, send: SendReminder)
     }
   }
   return sent
+}
+
+/** Checks for due reminders every minute. Stays off with push, or the pass would
+ *  mark reminders sent that could never go out. Best-effort, like the other
+ *  schedulers, and leader-guarded so replicas don't contend for the same claim. */
+export function startTodoReminderScheduler(db: DB): void {
+  if (!pushConfig()) return
+
+  const tick = async () => {
+    try {
+      await withLeaderLock(db, SchedulerLock.todoReminders, async () => {
+        await runTodoReminderPass(db, new Date(), (userId, message) => sendPushToUser(db, userId, message))
+      })
+    } catch (err) {
+      console.error('To-do reminder pass failed:', err)
+    }
+  }
+  void tick()
+  const timer = setInterval(() => void tick(), CHECK_INTERVAL_MS)
+  timer.unref?.()
 }

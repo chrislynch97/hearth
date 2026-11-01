@@ -36,6 +36,7 @@ export const SchedulerLock = {
   backup: 1,
   auditPrune: 2,
   sessionPurge: 3,
+  todoReminders: 4,
 } as const
 
 export type SchedulerLock = (typeof SchedulerLock)[keyof typeof SchedulerLock]
