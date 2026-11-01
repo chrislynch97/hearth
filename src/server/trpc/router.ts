@@ -27,6 +27,8 @@ import { raisesRouter } from '../features/income/raises.router'
 import { accountsRouter } from '../features/networth/accounts.router'
 import { giftsRouter } from '../features/gifts/gifts.router'
 import { savingsRouter } from '../features/savings/savings.router'
+import { todoListsRouter } from '../features/todos/todoLists.router'
+import { todosRouter } from '../features/todos/todos.router'
 
 import { dashboardRouter } from '../features/insights/dashboard.router'
 import { reportsRouter } from '../features/insights/reports.router'
@@ -69,6 +71,8 @@ export const appRouter = router({
   accounts: accountsRouter,
   gifts: giftsRouter,
   savings: savingsRouter,
+  todoLists: todoListsRouter,
+  todos: todosRouter,
   imports: importsRouter,
   users: usersRouter,
   sessions: sessionsRouter,

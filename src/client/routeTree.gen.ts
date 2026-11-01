@@ -44,6 +44,8 @@ import { Route as SettingsIndexRouteImport } from "./routes/settings.index";
 import { Route as SettingsAccountRouteImport } from "./routes/settings.account";
 import { Route as SettingsHouseholdRouteImport } from "./routes/settings.household";
 import { Route as SettingsSystemRouteImport } from "./routes/settings.system";
+import { Route as TodosIndexRouteImport } from "./routes/todos.index";
+import { Route as TodosListRouteImport } from "./routes/todos.$list";
 
 const IndexRoute = IndexRouteImport.update({
   id: "/",
@@ -220,6 +222,16 @@ const SettingsSystemRoute = SettingsSystemRouteImport.update({
   path: "/system",
   getParentRoute: () => SettingsRoute,
 } as any);
+const TodosIndexRoute = TodosIndexRouteImport.update({
+  id: "/",
+  path: "/",
+  getParentRoute: () => TodosRoute,
+} as any);
+const TodosListRoute = TodosListRouteImport.update({
+  id: "/$list",
+  path: "/$list",
+  getParentRoute: () => TodosRoute,
+} as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute;
@@ -245,7 +257,7 @@ export interface FileRoutesByFullPath {
   "/rooms": typeof RoomsRoute;
   "/settings": typeof SettingsRouteWithChildren;
   "/spending": typeof SpendingRoute;
-  "/todos": typeof TodosRoute;
+  "/todos": typeof TodosRouteWithChildren;
   "/trades": typeof TradesRoute;
   "/upcoming": typeof UpcomingRoute;
   "/vehicles": typeof VehiclesRoute;
@@ -255,8 +267,10 @@ export interface FileRoutesByFullPath {
   "/settings/account": typeof SettingsAccountRoute;
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
+  "/todos/$list": typeof TodosListRoute;
   "/planners/": typeof PlannersIndexRoute;
   "/settings/": typeof SettingsIndexRoute;
+  "/todos/": typeof TodosIndexRoute;
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute;
@@ -280,7 +294,6 @@ export interface FileRoutesByTo {
   "/review": typeof ReviewRoute;
   "/rooms": typeof RoomsRoute;
   "/spending": typeof SpendingRoute;
-  "/todos": typeof TodosRoute;
   "/trades": typeof TradesRoute;
   "/upcoming": typeof UpcomingRoute;
   "/vehicles": typeof VehiclesRoute;
@@ -290,8 +303,10 @@ export interface FileRoutesByTo {
   "/settings/account": typeof SettingsAccountRoute;
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
+  "/todos/$list": typeof TodosListRoute;
   "/planners": typeof PlannersIndexRoute;
   "/settings": typeof SettingsIndexRoute;
+  "/todos": typeof TodosIndexRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
@@ -318,7 +333,7 @@ export interface FileRoutesById {
   "/rooms": typeof RoomsRoute;
   "/settings": typeof SettingsRouteWithChildren;
   "/spending": typeof SpendingRoute;
-  "/todos": typeof TodosRoute;
+  "/todos": typeof TodosRouteWithChildren;
   "/trades": typeof TradesRoute;
   "/upcoming": typeof UpcomingRoute;
   "/vehicles": typeof VehiclesRoute;
@@ -328,8 +343,10 @@ export interface FileRoutesById {
   "/settings/account": typeof SettingsAccountRoute;
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
+  "/todos/$list": typeof TodosListRoute;
   "/planners/": typeof PlannersIndexRoute;
   "/settings/": typeof SettingsIndexRoute;
+  "/todos/": typeof TodosIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
@@ -367,8 +384,10 @@ export interface FileRouteTypes {
     | "/settings/account"
     | "/settings/household"
     | "/settings/system"
+    | "/todos/$list"
     | "/planners/"
-    | "/settings/";
+    | "/settings/"
+    | "/todos/";
   fileRoutesByTo: FileRoutesByTo;
   to:
     | "/"
@@ -392,7 +411,6 @@ export interface FileRouteTypes {
     | "/review"
     | "/rooms"
     | "/spending"
-    | "/todos"
     | "/trades"
     | "/upcoming"
     | "/vehicles"
@@ -402,8 +420,10 @@ export interface FileRouteTypes {
     | "/settings/account"
     | "/settings/household"
     | "/settings/system"
+    | "/todos/$list"
     | "/planners"
-    | "/settings";
+    | "/settings"
+    | "/todos";
   id:
     | "__root__"
     | "/"
@@ -439,8 +459,10 @@ export interface FileRouteTypes {
     | "/settings/account"
     | "/settings/household"
     | "/settings/system"
+    | "/todos/$list"
     | "/planners/"
-    | "/settings/";
+    | "/settings/"
+    | "/todos/";
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -467,7 +489,7 @@ export interface RootRouteChildren {
   RoomsRoute: typeof RoomsRoute;
   SettingsRoute: typeof SettingsRouteWithChildren;
   SpendingRoute: typeof SpendingRoute;
-  TodosRoute: typeof TodosRoute;
+  TodosRoute: typeof TodosRouteWithChildren;
   TradesRoute: typeof TradesRoute;
   UpcomingRoute: typeof UpcomingRoute;
   VehiclesRoute: typeof VehiclesRoute;
@@ -722,6 +744,20 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof SettingsSystemRouteImport;
       parentRoute: typeof SettingsRoute;
     };
+    "/todos/": {
+      id: "/todos/";
+      path: "/";
+      fullPath: "/todos/";
+      preLoaderRoute: typeof TodosIndexRouteImport;
+      parentRoute: typeof TodosRoute;
+    };
+    "/todos/$list": {
+      id: "/todos/$list";
+      path: "/$list";
+      fullPath: "/todos/$list";
+      preLoaderRoute: typeof TodosListRouteImport;
+      parentRoute: typeof TodosRoute;
+    };
   }
 }
 
@@ -757,6 +793,18 @@ const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
   SettingsRouteChildren,
 );
 
+interface TodosRouteChildren {
+  TodosListRoute: typeof TodosListRoute;
+  TodosIndexRoute: typeof TodosIndexRoute;
+}
+
+const TodosRouteChildren: TodosRouteChildren = {
+  TodosListRoute: TodosListRoute,
+  TodosIndexRoute: TodosIndexRoute,
+};
+
+const TodosRouteWithChildren = TodosRoute._addFileChildren(TodosRouteChildren);
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountsRoute: AccountsRoute,
@@ -781,7 +829,7 @@ const rootRouteChildren: RootRouteChildren = {
   RoomsRoute: RoomsRoute,
   SettingsRoute: SettingsRouteWithChildren,
   SpendingRoute: SpendingRoute,
-  TodosRoute: TodosRoute,
+  TodosRoute: TodosRouteWithChildren,
   TradesRoute: TradesRoute,
   UpcomingRoute: UpcomingRoute,
   VehiclesRoute: VehiclesRoute,
