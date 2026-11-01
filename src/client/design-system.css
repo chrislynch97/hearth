@@ -152,10 +152,10 @@
     --hearth-attention-ink: #2b1b11;
     --hearth-positive-fg: #3e7c4f;
     --hearth-savings-fg: #8a7a6a;
-    --hearth-danger: #a85f30;
-    --hearth-danger-hover: #8e4e27;
-    --hearth-danger-active: #7a4220;
-    --hearth-danger-tint: #f8efe5;
+    --hearth-danger: #b3261e;
+    --hearth-danger-hover: #96201a;
+    --hearth-danger-active: #7d1a15;
+    --hearth-danger-tint: #fbeae8;
     --hearth-ring: #3d6b35;
     --hearth-overlay: rgba(34, 38, 31, 0.44);
 
@@ -201,10 +201,10 @@
     --hearth-attention-ink: #1c140e;
     --hearth-positive-fg: #5fa06f;
     --hearth-savings-fg: #a3937f;
-    --hearth-danger: #d98c5f;
-    --hearth-danger-hover: #e39c72;
-    --hearth-danger-active: #c67c50;
-    --hearth-danger-tint: #36291f;
+    --hearth-danger: #f0736b;
+    --hearth-danger-hover: #f58d86;
+    --hearth-danger-active: #e05d55;
+    --hearth-danger-tint: #3b2020;
     --hearth-ring: #9dcc90;
     --hearth-overlay: rgba(9, 11, 8, 0.62);
     --hearth-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -219,6 +219,12 @@
     ::backdrop,
     ::file-selector-button {
         border-color: var(--color-border);
+    }
+
+    /* Holds the scrollbar's room, so a page doesn't change width when it gets
+       short enough to lose it. */
+    html {
+        scrollbar-gutter: stable;
     }
 
     body {

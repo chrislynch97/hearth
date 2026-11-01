@@ -17,6 +17,8 @@ export interface EditorPanelProps {
     onExited: () => void;
     /** Ask to close — the X, Escape, a tap on the backdrop. */
     onClose: () => void;
+    /** Off for something opened to read, which shouldn't raise the keyboard. */
+    focusField?: boolean;
     children: ReactNode;
 }
 
@@ -32,6 +34,7 @@ export const EditorPanel = ({
     exiting,
     onExited,
     onClose,
+    focusField = true,
     children,
 }: EditorPanelProps) => {
     const exit = useRef(onExited);
@@ -49,7 +52,17 @@ export const EditorPanel = ({
 
     return (
         <Dialog open={!exiting} onOpenChange={(open) => !open && onClose()}>
-            <SheetDialogContent className="gap-4">
+            <SheetDialogContent
+                className="gap-4"
+                onOpenAutoFocus={
+                    focusField
+                        ? undefined
+                        : (event) => {
+                              event.preventDefault();
+                              (event.currentTarget as HTMLElement).focus();
+                          }
+                }
+            >
                 <DialogHeader className="text-left">
                     <DialogTitle className="font-display text-h3 font-medium">
                         {title}
