@@ -2,6 +2,7 @@ import { AccountSection } from "./AccountSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { DeleteAccountSection } from "./DeleteAccountSection";
 import { MfaSection } from "./MfaSection";
+import { NotificationsSection } from "./NotificationsSection";
 import { SecuritySection } from "./SecuritySection";
 import { SessionsSection } from "./SessionsSection";
 
@@ -10,6 +11,7 @@ export const AccountSettingsPage = () => (
     <div className="flex flex-col gap-10">
         <AccountSection />
         <AppearanceSection />
+        <NotificationsSection />
         <SecuritySection />
         <MfaSection />
         <SessionsSection />

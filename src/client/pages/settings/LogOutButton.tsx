@@ -1,5 +1,6 @@
 import { LogOut } from "lucide-react";
 import { trpc } from "@/trpc";
+import { forgetThisDevice } from "@/lib/pushSubscription";
 import { Button } from "@/components/ui/Button";
 
 /** Signs you out of this browser. Hidden on an open instance with no password,
@@ -8,10 +9,17 @@ export const LogOutButton = () => {
     const utils = trpc.useUtils();
     const status = trpc.auth.status.useQuery();
     const logout = trpc.auth.logout.useMutation();
+    const unsubscribe = trpc.notifications.unsubscribe.useMutation({
+        meta: { suppressErrorToast: true },
+    });
 
     if (!status.data?.passwordSet) return null;
 
     const logOut = async () => {
+        // First: it needs the session this is about to end.
+        await forgetThisDevice((endpoint) =>
+            unsubscribe.mutateAsync({ endpoint })
+        );
         await logout.mutateAsync();
         // Invalidate ONLY auth.status: it re-fetches alone and returns 200
         // (authenticated: false), flipping the app to the login screen. Invalidating
