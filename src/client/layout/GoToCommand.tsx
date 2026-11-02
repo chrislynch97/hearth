@@ -9,8 +9,12 @@ import {
     CommandItem,
     CommandList,
 } from "@/components/shadcn/command";
-import { NAV_SECTIONS, type AppRoutePath } from "@/layout/nav-config";
-import { SoonBadge } from "@/components/ui/SoonBadge";
+import {
+    hasListed,
+    NAV_SECTIONS,
+    type AppRoutePath,
+    type NavItem,
+} from "@/layout/nav-config";
 
 // A shortcut typed into a field is just text.
 const isTyping = (el: Element | null) =>
@@ -20,8 +24,10 @@ const isTyping = (el: Element | null) =>
         el.tagName === "SELECT" ||
         el.isContentEditable);
 
+const isBuilt = (item: NavItem) => item.planned === undefined;
+
 /** The top bar's "Go to…": a field-shaped button (an icon on phones) opening a
- *  palette of every page, retired ones included. `/` or Ctrl/⌘+K from anywhere. */
+ *  palette of every built page, retired ones included. `/` or Ctrl/⌘+K from anywhere. */
 export const GoToCommand = () => {
     const navigate = useNavigate();
 
@@ -81,10 +87,10 @@ export const GoToCommand = () => {
                 <CommandInput placeholder="Go to…" />
                 <CommandList>
                     <CommandEmpty>No matching page.</CommandEmpty>
-                    {NAV_SECTIONS.map((section) => (
+                    {NAV_SECTIONS.filter(hasListed).map((section) => (
                         <CommandGroup key={section.id} heading={section.title}>
                             {section.groups.flatMap((group) =>
-                                group.items.map((item) => (
+                                group.items.filter(isBuilt).map((item) => (
                                     // The section and group ride along in the
                                     // value, so "upkeep" finds the whole group.
                                     <CommandItem
@@ -100,7 +106,6 @@ export const GoToCommand = () => {
                                                 {group.title}
                                             </span>
                                         )}
-                                        {item.planned && <SoonBadge />}
                                     </CommandItem>
                                 ))
                             )}

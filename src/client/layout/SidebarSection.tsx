@@ -10,7 +10,7 @@ import {
     SidebarMenuSub,
 } from "@/components/shadcn/sidebar";
 import {
-    opensByDefault,
+    isListed,
     owningSection,
     type AppRoutePath,
     type NavGroupConfig,
@@ -27,10 +27,8 @@ export interface SidebarSectionProps {
     onNavigate: () => void;
 }
 
-/** A group's items minus the retired ones — pages folded into another page
- *  keep their route and their place in the go-to palette, but leave the list. */
-const visible = (group: NavGroupConfig) =>
-    group.items.filter((item) => !item.hidden);
+/** A group's items minus the retired and the unbuilt. */
+const visible = (group: NavGroupConfig) => group.items.filter(isListed);
 
 /** A top-level item that folds its pages away. The section you're in opens by
  *  itself until you fold it; then it turns green so you can still see where
@@ -42,10 +40,7 @@ export const SidebarSection = ({
     onNavigate,
 }: SidebarSectionProps) => {
     const current = owningSection(pathname)?.id === section.id;
-    const [open, toggle] = useSectionOpen(
-        section.id,
-        current || opensByDefault(section)
-    );
+    const [open, toggle] = useSectionOpen(section.id, true);
 
     const Icon = SECTION_ICONS[section.id];
 

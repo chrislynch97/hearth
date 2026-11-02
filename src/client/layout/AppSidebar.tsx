@@ -11,7 +11,7 @@ import {
     SidebarMenuItem,
     useSidebar,
 } from "@/components/shadcn/sidebar";
-import { isCurrent, NAV_SECTIONS } from "@/layout/nav-config";
+import { hasListed, isCurrent, NAV_SECTIONS } from "@/layout/nav-config";
 import { MobileMenuHeader } from "@/layout/MobileMenuHeader";
 import { SECTION_ICONS } from "@/layout/sectionIcons";
 import { SidebarFeedback } from "@/layout/SidebarFeedback";
@@ -40,7 +40,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                 <SidebarGroup>
                     <nav aria-label="Main">
                         <SidebarMenu>
-                            {NAV_SECTIONS.map((section) => {
+                            {NAV_SECTIONS.filter(hasListed).map((section) => {
                                 const single =
                                     section.to && section.groups[0]?.items[0];
                                 if (!single) {

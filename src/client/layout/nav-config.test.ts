@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
     NAV_ITEMS,
     NAV_SECTIONS,
-    opensByDefault,
+    hasListed,
+    isListed,
     owningSection,
     type AppRoutePath,
     type NavSectionConfig,
@@ -73,7 +74,7 @@ describe("owningSection", () => {
     });
 });
 
-describe("opensByDefault", () => {
+describe("isListed and hasListed", () => {
     const sectionOf = (planned: boolean[]): NavSectionConfig => ({
         id: "test",
         title: "Test",
@@ -90,19 +91,15 @@ describe("opensByDefault", () => {
         ],
     });
 
-    it("opens a section that is mostly built", () => {
-        expect(opensByDefault(sectionOf([false, false, true]))).toBe(true);
+    it("lists only built pages that aren't retired", () => {
+        const [built, soon] = sectionOf([false, true]).groups[0]!.items;
+        expect(isListed(built!)).toBe(true);
+        expect(isListed(soon!)).toBe(false);
+        expect(isListed({ ...built!, hidden: true })).toBe(false);
     });
 
-    it("folds a section that is half or more Soon", () => {
-        expect(opensByDefault(sectionOf([false, true]))).toBe(false);
-        expect(opensByDefault(sectionOf([true, true]))).toBe(false);
-    });
-
-    it("opens Money and Lists and folds Home as things stand", () => {
-        const byId = (id: string) => NAV_SECTIONS.find((s) => s.id === id)!;
-        expect(opensByDefault(byId("money"))).toBe(true);
-        expect(opensByDefault(byId("home"))).toBe(false);
-        expect(opensByDefault(byId("lists"))).toBe(true);
+    it("drops a section with nothing built", () => {
+        expect(hasListed(sectionOf([false, true]))).toBe(true);
+        expect(hasListed(sectionOf([true, true]))).toBe(false);
     });
 });
