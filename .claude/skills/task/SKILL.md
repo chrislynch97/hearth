@@ -41,16 +41,19 @@ body; don't file unprompted.
 3. Build in `<wt>` by absolute path, fake data only. Run the tests you touched as you go
    (`npx vitest run <path>`). No `prettier --write`.
 4. Before hand-back, once: `npm run typecheck`, `npm test`, `npm run lint`. E2e is CI's job.
-5. UI changes: one look at the changed screens at desktop and 375px, including their dialogs. Server
-   changes: call it once or lean on the tests.
+5. UI changes: run `<wt>`'s demo in two Terminal tabs (`cwd` set to `<wt>`, never `<main>`), open it
+   with `preview_start {url}`, and look at the changed screens at desktop and 375px, dialogs included.
+   Server changes: call it once or lean on the tests.
 6. Migrations, auth or tenancy: run `code-review medium` on the diff first. Anything else only when
    Chris says `review`.
 7. Hand back uncommitted: a line or two, plus at most three test steps that need a person (a real
-   phone, how something reads), with exact on-screen labels. Then wait.
+   phone, how something reads), with exact on-screen labels. UI changes: leave the demo running in
+   the pane on the changed screen and say so; Chris tries it before he decides. Then wait.
 
 ## Ship
 
-On `ship`, or `commit` for a commit alone. Saying it is the go for everything below.
+On `ship`, or `commit` for a commit alone. Saying it is the go for everything below. UI that changed
+since Chris last had it in the pane goes back in front of him first.
 
 1. Commit: one to four conventional commits (`feat(plan): …`).
 2. Sync: `git fetch origin main`, `git merge origin/main`, never rebase. Main moved: re-run
