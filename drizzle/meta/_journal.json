@@ -183,6 +183,13 @@
       "when": 1793567846247,
       "tag": "0025_wishlists",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793653556559,
+      "tag": "0026_vehicles",
+      "breakpoints": true
     }
   ]
 }

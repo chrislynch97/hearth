@@ -1,16 +1,17 @@
 import { and, eq, gte, isNotNull, isNull, lte } from 'drizzle-orm'
 import { scopeWhere } from '../../trpc/tenant'
-import { expense, savingsGoal, savingsItem, todo, todoList } from '../../db/schema'
+import { expense, savingsGoal, savingsItem, todo, todoList, vehicle, vehicleDate } from '../../db/schema'
 import { projectUpcoming, type UpcomingExpenseInput } from '../budget/upcoming'
 import type { DBOrTx } from '../../db/client'
 import type { CalendarEvent } from '@shared/calendar'
 import { goalPath } from '@shared/savings'
 import { shortPath } from '@shared/slug'
+import { vehicleDateName } from '@shared/vehicles'
 
 /** Everything with a date between `from` and `to`, inclusive, soonest first.
  *  Finished things stay off it: ticked to-dos and paid savings items. */
 export async function loadCalendar(db: DBOrTx, householdId: string, from: string, to: string): Promise<CalendarEvent[]> {
-  const [bills, todos, goals, items] = await Promise.all([
+  const [bills, todos, goals, items, vehicleDates] = await Promise.all([
     db
       .select()
       .from(expense)
@@ -67,6 +68,26 @@ export async function loadCalendar(db: DBOrTx, householdId: string, from: string
           lte(savingsItem.dueDate, to),
         ),
       ),
+    db
+      .select({
+        id: vehicleDate.id,
+        kind: vehicleDate.kind,
+        label: vehicleDate.label,
+        dueDate: vehicleDate.dueDate,
+        shortId: vehicle.shortId,
+        vehicleName: vehicle.name,
+      })
+      .from(vehicleDate)
+      .innerJoin(vehicle, eq(vehicleDate.vehicleId, vehicle.id))
+      .where(
+        scopeWhere(
+          householdId,
+          vehicleDate.householdId,
+          isNull(vehicle.archivedAt),
+          gte(vehicleDate.dueDate, from),
+          lte(vehicleDate.dueDate, to),
+        ),
+      ),
   ])
 
   const upcoming: UpcomingExpenseInput[] = bills.map((bill) => ({
@@ -110,6 +131,14 @@ export async function loadCalendar(db: DBOrTx, householdId: string, from: string
       title: row.name,
       amount: row.amount,
       href: `/planners/${goalPath(row.shortId, row.goalName)}`,
+    })),
+    ...vehicleDates.map((row) => ({
+      id: `vehicle:${row.id}`,
+      kind: 'vehicle' as const,
+      date: row.dueDate,
+      title: `${vehicleDateName(row.kind, row.label)} · ${row.vehicleName}`,
+      amount: null,
+      href: `/vehicles/${shortPath(row.shortId, row.vehicleName)}`,
     })),
   ]
 
