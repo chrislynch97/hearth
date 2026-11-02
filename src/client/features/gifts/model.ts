@@ -133,21 +133,6 @@ export const pickOccasion = (
     );
 };
 
-/** A gift's "where from" as a link, when it is a web address. Anything else
- *  (a shop name, a javascript: URL) stays plain text. */
-export const giftLink = (
-    text: string | null
-): { href: string; label: string } | null => {
-    if (!text) return null;
-    try {
-        const url = new URL(text.trim());
-        if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-        return { href: url.href, label: url.hostname.replace(/^www\./, "") };
-    } catch {
-        return null;
-    }
-};
-
 /** The occasion budget saving this person's budget would raise it to, or
  *  null when it still fits (or the occasion has no budget). `allocated` is
  *  everyone's total as saved, `previous` this person's saved budget. */

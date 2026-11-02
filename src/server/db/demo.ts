@@ -1104,6 +1104,70 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     }
   }
 
+  // -- wish lists ----------------------------------------------------------
+  // A kitchen list and a house-wide one, plus strays on no list, across every
+  // priority: priced and unpriced, linked and not, some bought. Generated last for
+  // the same PRNG reason.
+  const wishlists: Array<Record<string, unknown>> = []
+  const wishlistItems: Array<Record<string, unknown>> = []
+  const wishlistItemTags: Array<Record<string, unknown>> = []
+  type WishDef = {
+    name: string
+    price?: number
+    link?: string
+    who?: string
+    priority?: string
+    notes?: string
+    tags?: string[]
+    boughtDaysAgo?: number
+  }
+  const wishPlan: Array<{ list: string | null; items: WishDef[] }> = [
+    {
+      list: 'Kitchen',
+      items: [
+        { name: 'Stand mixer', price: 349, link: 'https://www.example.com/stand-mixer', who: todoFirst, priority: 'high', tags: ['Baking'], notes: 'The tilt-head one, not the bowl-lift.' },
+        { name: 'Knife block', price: 85, link: 'Lakeland', who: todoSecond, tags: ['Cooking'] },
+        { name: 'Cast iron casserole', price: 120, who: todoFirst, tags: ['Cooking'], boughtDaysAgo: 12 },
+        { name: 'Pasta machine', priority: 'low', tags: ['Cooking'] },
+      ],
+    },
+    {
+      list: 'House',
+      items: [
+        { name: 'Hall runner', price: 160, link: 'https://www.example.com/hall-runner', priority: 'high', tags: ['Hall'] },
+        { name: 'Garden bench', price: 240, who: todoSecond, tags: ['Garden'] },
+        { name: 'Bedside lamps', price: 70, who: todoFirst, tags: ['Bedroom'], boughtDaysAgo: 30 },
+        { name: 'Fire pit', price: 95, priority: 'low', tags: ['Garden'] },
+      ],
+    },
+    { list: null, items: [{ name: 'Waterproof jacket', who: todoFirst }, { name: 'Bread bin', price: 28, priority: 'low' }] },
+  ]
+  for (const { list, items } of wishPlan) {
+    const listId = list ? id() : null
+    if (listId) wishlists.push({ id: listId, shortId: shortId(), name: list, archivedAt: null, ...ts })
+    for (const def of items) {
+      const itemId = id()
+      const boughtAt = def.boughtDaysAgo === undefined ? null : new Date(nowMs - def.boughtDaysAgo * 86_400_000)
+      wishlistItems.push({
+        id: itemId,
+        listId,
+        name: def.name,
+        link: def.link ?? null,
+        price: def.price === undefined ? null : cost(def.price),
+        priority: def.priority ?? 'normal',
+        wantedById: def.who ?? null,
+        notes: def.notes ?? null,
+        boughtAt,
+        boughtById: boughtAt ? (def.who ?? null) : null,
+        archivedAt: null,
+        ...ts,
+      })
+      for (const name of def.tags ?? []) {
+        wishlistItemTags.push({ id: id(), itemId, name, ...ts })
+      }
+    }
+  }
+
   return {
     household: households,
     member: members,
@@ -1133,6 +1197,9 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     todoTag: todoTags,
     todoTagLink: todoTagLinks,
     todoReminder: todoReminders,
+    wishlist: wishlists,
+    wishlistItem: wishlistItems,
+    wishlistItemTag: wishlistItemTags,
   }
 }
 

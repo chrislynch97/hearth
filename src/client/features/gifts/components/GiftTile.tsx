@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
+import { externalLink } from "@shared/links";
 import { formatMoney } from "@shared/money";
 import { useMoney } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
 import {
     GIFT_DRAG_TYPE,
     STATUS_LABEL,
-    giftLink,
     nextStatus,
     type GiftStatus,
     type GiftWithRecipient,
@@ -34,7 +34,7 @@ export const GiftTile = ({
     const { gift, recipient } = item;
     const status = gift.status as GiftStatus;
     const next = nextStatus(status);
-    const link = giftLink(gift.link);
+    const link = externalLink(gift.link);
 
     return (
         <li

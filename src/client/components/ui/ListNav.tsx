@@ -1,11 +1,23 @@
 import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/PlusIcon";
-import type { TodoListSummary } from "@/features/todos/model";
 
-export interface TodoListNavProps {
-    lists: TodoListSummary[];
+export interface ListNavItem {
+    id: string;
+    name: string;
+    slug: string;
+    archivedAt: Date | null;
+    total: number;
+    done: number;
+}
+
+export interface ListNavProps {
+    /** Names the landmark: "To-do lists". */
+    label: string;
+    /** The entry showing every list: "All to-dos". */
+    allLabel: string;
+    lists: ListNavItem[];
     /** Absent on All. */
-    selected: TodoListSummary | undefined;
+    selected: ListNavItem | undefined;
     /** What's still open across every list. */
     openCount: number;
     onSelect: (slug: string | undefined) => void;
@@ -34,16 +46,18 @@ const Entry = ({ label, count, active, muted, onClick }: EntryProps) => (
 );
 
 /** Which list is on screen. Archived ones stay reachable, at the end. */
-export const TodoListNav = ({
+export const ListNav = ({
+    label,
+    allLabel,
     lists,
     selected,
     openCount,
     onSelect,
     onAdd,
-}: TodoListNavProps) => (
-    <nav aria-label="To-do lists" className="flex flex-wrap gap-1.5 lg:flex-col">
+}: ListNavProps) => (
+    <nav aria-label={label} className="flex flex-wrap gap-1.5 lg:flex-col">
         <Entry
-            label="All to-dos"
+            label={allLabel}
             count={openCount}
             active={!selected}
             onClick={() => onSelect(undefined)}

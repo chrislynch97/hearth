@@ -12,13 +12,13 @@ import {
     ReminderField,
     type DraftReminder,
 } from "@/features/todos/components/ReminderField";
-import { TagPicker } from "@/features/todos/components/TagPicker";
+import { TagPicker } from "@/components/ui/TagPicker";
 import {
     PRIORITY_OPTIONS,
     type TodoListSummary,
     type TodoWithDetails,
 } from "@/features/todos/model";
-import type { TodoPriority } from "@shared/todos";
+import type { Priority } from "@shared/priority";
 
 export interface TodoFormProps {
     todo: TodoWithDetails;
@@ -35,7 +35,7 @@ interface TodoFormValues {
     listId: string;
     assigneeId: string;
     dueDate: string;
-    priority: TodoPriority;
+    priority: Priority;
 }
 
 export const TodoForm = ({
@@ -69,7 +69,7 @@ export const TodoForm = ({
             listId: todo.listId ?? "",
             assigneeId: todo.assigneeId ?? "",
             dueDate: todo.dueDate ?? "",
-            priority: todo.priority as TodoPriority,
+            priority: todo.priority as Priority,
         },
     });
     const dueDate = useWatch({ control, name: "dueDate" });
