@@ -71,6 +71,8 @@ since Chris last had it in the pane goes back in front of him first.
 On merge (a wake-up, or Chris says so):
 
 1. Planning issue: `gh issue close <n> --repo chrislynch97/hearth-planning --comment "Shipped in chrislynch97/hearth#<pr>"`.
-2. `git -C <main> worktree remove <wt>`, `git -C <main> branch -D <key>`,
+2. Unlink the junction first, or the remove follows it and empties main's `node_modules`:
+   `cmd /c rmdir <wt>\node_modules` (no `/s`). Then
+   `git -C <main> worktree remove <wt>`, `git -C <main> branch -D <key>`,
    `git -C <main> fetch --prune`; fast-forward main if it's clean. A dirty worktree stays; name it.
 3. One line, done.
