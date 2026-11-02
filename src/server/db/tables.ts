@@ -42,6 +42,8 @@ import {
   vehicleDate,
   vehicleCost,
   vehicleBill,
+  maintenanceJob,
+  maintenanceLog,
   auditLog,
   emailToken,
   instanceSettings,
@@ -92,6 +94,8 @@ export const ALL_TABLES: ReadonlyArray<readonly [string, PgTable]> = [
   ['vehicleDate', vehicleDate],
   ['vehicleCost', vehicleCost],
   ['vehicleBill', vehicleBill],
+  ['maintenanceJob', maintenanceJob],
+  ['maintenanceLog', maintenanceLog],
 ] as const
 
 /** Tables deliberately kept OUT of the snapshot, each with the reason. Exists so

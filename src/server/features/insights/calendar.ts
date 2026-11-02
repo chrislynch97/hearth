@@ -1,6 +1,6 @@
 import { and, eq, gte, isNotNull, isNull, lte } from 'drizzle-orm'
 import { scopeWhere } from '../../trpc/tenant'
-import { expense, savingsGoal, savingsItem, todo, todoList, vehicle, vehicleDate } from '../../db/schema'
+import { expense, savingsGoal, savingsItem, todo, todoList, vehicle, vehicleDate, maintenanceJob } from '../../db/schema'
 import { projectUpcoming, type UpcomingExpenseInput } from '../budget/upcoming'
 import type { DBOrTx } from '../../db/client'
 import type { CalendarEvent } from '@shared/calendar'
@@ -11,7 +11,7 @@ import { vehicleDateName } from '@shared/vehicles'
 /** Everything with a date between `from` and `to`, inclusive, soonest first.
  *  Finished things stay off it: ticked to-dos and paid savings items. */
 export async function loadCalendar(db: DBOrTx, householdId: string, from: string, to: string): Promise<CalendarEvent[]> {
-  const [bills, todos, goals, items, vehicleDates] = await Promise.all([
+  const [bills, todos, goals, items, vehicleDates, jobs] = await Promise.all([
     db
       .select()
       .from(expense)
@@ -88,6 +88,18 @@ export async function loadCalendar(db: DBOrTx, householdId: string, from: string
           lte(vehicleDate.dueDate, to),
         ),
       ),
+    db
+      .select({ id: maintenanceJob.id, name: maintenanceJob.name, dueDate: maintenanceJob.dueDate })
+      .from(maintenanceJob)
+      .where(
+        scopeWhere(
+          householdId,
+          maintenanceJob.householdId,
+          isNull(maintenanceJob.archivedAt),
+          gte(maintenanceJob.dueDate, from),
+          lte(maintenanceJob.dueDate, to),
+        ),
+      ),
   ])
 
   const upcoming: UpcomingExpenseInput[] = bills.map((bill) => ({
@@ -139,6 +151,14 @@ export async function loadCalendar(db: DBOrTx, householdId: string, from: string
       title: `${vehicleDateName(row.kind, row.label)} · ${row.vehicleName}`,
       amount: null,
       href: `/vehicles/${shortPath(row.shortId, row.vehicleName)}`,
+    })),
+    ...jobs.map((row) => ({
+      id: `maintenance:${row.id}`,
+      kind: 'maintenance' as const,
+      date: row.dueDate,
+      title: row.name,
+      amount: null,
+      href: '/maintenance',
     })),
   ]
 
