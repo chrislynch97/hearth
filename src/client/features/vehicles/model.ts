@@ -40,14 +40,6 @@ export const REPEAT_OPTIONS = [
     { value: "0", label: "Just once" },
 ];
 
-export const repeatLabel = (months: number | null): string => {
-    if (months === null) return "Just once";
-    if (months === 12) return "Every year";
-    if (months % 12 === 0) return `Every ${months / 12} years`;
-
-    return months === 1 ? "Every month" : `Every ${months} months`;
-};
-
 /** "Car · AB12 CDE · Ava's", leaving out what isn't set. */
 export const vehicleDetails = (
     vehicle: VehicleWithDetails,

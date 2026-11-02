@@ -11,14 +11,8 @@ import type { DBOrTx } from '../../db/client'
 import { newId } from '@shared/ids'
 import { shortPath } from '@shared/slug'
 import { annualise, type Recurrence } from '@shared/recurrence'
-import {
-  MAX_REMIND_DAYS,
-  VEHICLE_COST_KINDS,
-  VEHICLE_DATE_KINDS,
-  VEHICLE_KINDS,
-  nextDueDate,
-  vehicleDateName,
-} from '@shared/vehicles'
+import { MAX_REMIND_DAYS, nextDueDate } from '@shared/schedule'
+import { VEHICLE_COST_KINDS, VEHICLE_DATE_KINDS, VEHICLE_KINDS, vehicleDateName } from '@shared/vehicles'
 import { newShortId } from '../savings/savings'
 
 const NAME = z.string().trim().min(1).max(100)

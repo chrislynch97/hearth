@@ -4,8 +4,8 @@ import { VEHICLE_COST_LABEL, type VehicleCostKind } from "@shared/vehicles";
 import { useFormatDate, useMoney } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/PlusIcon";
-import { VehicleRow } from "@/features/vehicles/components/VehicleRow";
-import { VehicleSection } from "@/features/vehicles/components/VehicleSection";
+import { RecordRow } from "@/components/ui/RecordRow";
+import { IconSection } from "@/components/ui/IconSection";
 import { costsByYear, type VehicleCostRow } from "@/features/vehicles/model";
 
 export interface VehicleCostsProps {
@@ -21,7 +21,7 @@ export const VehicleCosts = ({ costs, onAdd, onEdit }: VehicleCostsProps) => {
     const years = costsByYear(costs);
 
     return (
-        <VehicleSection
+        <IconSection
             title="Costs"
             icon={<Wrench />}
             action={
@@ -51,7 +51,7 @@ export const VehicleCosts = ({ costs, onAdd, onEdit }: VehicleCostsProps) => {
                     </div>
                     <ul className="flex flex-col divide-y divide-border">
                         {rows.map((cost) => (
-                            <VehicleRow
+                            <RecordRow
                                 key={cost.id}
                                 title={
                                     VEHICLE_COST_LABEL[
@@ -68,6 +68,6 @@ export const VehicleCosts = ({ costs, onAdd, onEdit }: VehicleCostsProps) => {
                     </ul>
                 </div>
             ))}
-        </VehicleSection>
+        </IconSection>
     );
 };

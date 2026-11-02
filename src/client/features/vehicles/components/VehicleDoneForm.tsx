@@ -8,7 +8,7 @@ import { TextField } from "@/components/ui/TextField";
 import { parseOptionalMoney, validMoney } from "@/features/gifts/model";
 import type { VehicleDateRow } from "@/features/vehicles/model";
 import { todayIso } from "@shared/dates";
-import { nextDueDate } from "@shared/vehicles";
+import { nextDueDate } from "@shared/schedule";
 
 export interface VehicleDoneFormProps {
     date: VehicleDateRow;

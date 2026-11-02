@@ -1,8 +1,6 @@
 /** Vehicle vocabulary, shared so the stored values, the router's validation and
  *  the client's labels all come from one place. */
 
-import { addDays, addMonths } from './dates'
-
 export const VEHICLE_KINDS = ['car', 'motorbike', 'van', 'campervan', 'other'] as const
 
 export type VehicleKind = (typeof VEHICLE_KINDS)[number]
@@ -42,7 +40,6 @@ export const DEFAULT_REMIND_DAYS: Record<VehicleDateKind, number> = {
 }
 
 export const DEFAULT_REPEAT_MONTHS = 12
-export const MAX_REMIND_DAYS = 365
 
 export const VEHICLE_COST_KINDS = [
   'mot',
@@ -72,18 +69,4 @@ export const VEHICLE_COST_LABEL: Record<VehicleCostKind, string> = {
 export function vehicleDateName(kind: string, label: string | null): string {
   if (kind === 'other') return label?.trim() || 'Other'
   return VEHICLE_DATE_LABEL[kind as VehicleDateKind] ?? kind
-}
-
-/** The day its reminder becomes due. */
-export function remindOn(dueDate: string, remindDays: number): string {
-  return addDays(dueDate, -remindDays)
-}
-
-/** Where a date moves to once it's done: on by its repeat from whichever is
- *  later, the old due date or the day it was done, so an early MOT still lands
- *  a year out from the old date and a late one doesn't come due again at once. */
-export function nextDueDate(dueDate: string, doneOn: string, repeatMonths: number): string {
-  let next = addMonths(dueDate, repeatMonths)
-  while (next <= doneOn) next = addMonths(next, repeatMonths)
-  return next
 }

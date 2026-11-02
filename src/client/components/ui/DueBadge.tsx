@@ -1,5 +1,5 @@
 import { Badge } from "@/components/shadcn/badge";
-import { dueLabel, dueStatus, type DueStatus } from "@/features/todos/model";
+import { dueLabel, dueStatus, type DueStatus } from "@/lib/due";
 
 export interface DueBadgeProps {
     dueDate: string;

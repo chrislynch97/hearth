@@ -3,9 +3,10 @@ import { useFormatDate } from "@/useMoney";
 import { Badge } from "@/components/shadcn/badge";
 import { Checkbox } from "@/components/shadcn/checkbox";
 import { Button } from "@/components/ui/Button";
-import { DueBadge } from "@/features/todos/components/DueBadge";
+import { DueBadge } from "@/components/ui/DueBadge";
 import { TodoDate } from "@/features/todos/components/TodoDate";
-import { dueStatus, type TodoWithDetails } from "@/features/todos/model";
+import { type TodoWithDetails } from "@/features/todos/model";
+import { dueStatus } from "@/lib/due";
 
 export interface TodoRowProps {
     todo: TodoWithDetails;

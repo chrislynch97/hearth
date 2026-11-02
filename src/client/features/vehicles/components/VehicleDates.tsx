@@ -2,11 +2,12 @@ import { CalendarClock } from "lucide-react";
 import { useFormatDate } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/PlusIcon";
-import { DueBadge } from "@/features/todos/components/DueBadge";
-import { dueStatus } from "@/features/todos/model";
-import { VehicleRow } from "@/features/vehicles/components/VehicleRow";
-import { VehicleSection } from "@/features/vehicles/components/VehicleSection";
-import { repeatLabel, type VehicleDateRow } from "@/features/vehicles/model";
+import { DueBadge } from "@/components/ui/DueBadge";
+import { dueStatus } from "@/lib/due";
+import { RecordRow } from "@/components/ui/RecordRow";
+import { IconSection } from "@/components/ui/IconSection";
+import { type VehicleDateRow } from "@/features/vehicles/model";
+import { repeatLabel } from "@shared/schedule";
 
 export interface VehicleDatesProps {
     dates: VehicleDateRow[];
@@ -31,7 +32,7 @@ export const VehicleDates = ({
     const formatDate = useFormatDate();
 
     return (
-        <VehicleSection
+        <IconSection
             title="Dates"
             icon={<CalendarClock />}
             action={
@@ -54,7 +55,7 @@ export const VehicleDates = ({
             ) : (
                 <ul className="flex flex-col divide-y divide-border">
                     {dates.map((date) => (
-                        <VehicleRow
+                        <RecordRow
                             key={date.id}
                             title={date.name}
                             details={`${repeatLabel(date.repeatMonths)} · ${reminderLabel(date.remindDays)}`}
@@ -82,6 +83,6 @@ export const VehicleDates = ({
                     ))}
                 </ul>
             )}
-        </VehicleSection>
+        </IconSection>
     );
 };

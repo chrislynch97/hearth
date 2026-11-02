@@ -7,14 +7,14 @@ import {
 } from "@/components/shadcn/collapsible";
 import { Button } from "@/components/ui/Button";
 
-export interface VehicleArchivedProps {
+export interface ArchivedGroupProps {
     count: number;
-    /** The cards. */
+    /** The archived items, as list items. */
     children: ReactNode;
 }
 
-/** Sold or scrapped vehicles, folded away until someone asks. */
-export const VehicleArchived = ({ count, children }: VehicleArchivedProps) => {
+/** Archived records, folded away until someone asks. */
+export const ArchivedGroup = ({ count, children }: ArchivedGroupProps) => {
     const [open, setOpen] = useState(false);
 
     return (
