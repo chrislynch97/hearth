@@ -46,6 +46,8 @@ import { Route as SettingsHouseholdRouteImport } from "./routes/settings.househo
 import { Route as SettingsSystemRouteImport } from "./routes/settings.system";
 import { Route as TodosIndexRouteImport } from "./routes/todos.index";
 import { Route as TodosListRouteImport } from "./routes/todos.$list";
+import { Route as WishlistsIndexRouteImport } from "./routes/wishlists.index";
+import { Route as WishlistsListRouteImport } from "./routes/wishlists.$list";
 
 const IndexRoute = IndexRouteImport.update({
   id: "/",
@@ -232,6 +234,16 @@ const TodosListRoute = TodosListRouteImport.update({
   path: "/$list",
   getParentRoute: () => TodosRoute,
 } as any);
+const WishlistsIndexRoute = WishlistsIndexRouteImport.update({
+  id: "/",
+  path: "/",
+  getParentRoute: () => WishlistsRoute,
+} as any);
+const WishlistsListRoute = WishlistsListRouteImport.update({
+  id: "/$list",
+  path: "/$list",
+  getParentRoute: () => WishlistsRoute,
+} as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute;
@@ -262,15 +274,17 @@ export interface FileRoutesByFullPath {
   "/upcoming": typeof UpcomingRoute;
   "/vehicles": typeof VehiclesRoute;
   "/warranties": typeof WarrantiesRoute;
-  "/wishlists": typeof WishlistsRoute;
+  "/wishlists": typeof WishlistsRouteWithChildren;
   "/planners/$goal": typeof PlannersGoalRoute;
   "/settings/account": typeof SettingsAccountRoute;
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
   "/todos/$list": typeof TodosListRoute;
+  "/wishlists/$list": typeof WishlistsListRoute;
   "/planners/": typeof PlannersIndexRoute;
   "/settings/": typeof SettingsIndexRoute;
   "/todos/": typeof TodosIndexRoute;
+  "/wishlists/": typeof WishlistsIndexRoute;
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute;
@@ -298,15 +312,16 @@ export interface FileRoutesByTo {
   "/upcoming": typeof UpcomingRoute;
   "/vehicles": typeof VehiclesRoute;
   "/warranties": typeof WarrantiesRoute;
-  "/wishlists": typeof WishlistsRoute;
   "/planners/$goal": typeof PlannersGoalRoute;
   "/settings/account": typeof SettingsAccountRoute;
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
   "/todos/$list": typeof TodosListRoute;
+  "/wishlists/$list": typeof WishlistsListRoute;
   "/planners": typeof PlannersIndexRoute;
   "/settings": typeof SettingsIndexRoute;
   "/todos": typeof TodosIndexRoute;
+  "/wishlists": typeof WishlistsIndexRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
@@ -338,15 +353,17 @@ export interface FileRoutesById {
   "/upcoming": typeof UpcomingRoute;
   "/vehicles": typeof VehiclesRoute;
   "/warranties": typeof WarrantiesRoute;
-  "/wishlists": typeof WishlistsRoute;
+  "/wishlists": typeof WishlistsRouteWithChildren;
   "/planners/$goal": typeof PlannersGoalRoute;
   "/settings/account": typeof SettingsAccountRoute;
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
   "/todos/$list": typeof TodosListRoute;
+  "/wishlists/$list": typeof WishlistsListRoute;
   "/planners/": typeof PlannersIndexRoute;
   "/settings/": typeof SettingsIndexRoute;
   "/todos/": typeof TodosIndexRoute;
+  "/wishlists/": typeof WishlistsIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
@@ -385,9 +402,11 @@ export interface FileRouteTypes {
     | "/settings/household"
     | "/settings/system"
     | "/todos/$list"
+    | "/wishlists/$list"
     | "/planners/"
     | "/settings/"
-    | "/todos/";
+    | "/todos/"
+    | "/wishlists/";
   fileRoutesByTo: FileRoutesByTo;
   to:
     | "/"
@@ -415,15 +434,16 @@ export interface FileRouteTypes {
     | "/upcoming"
     | "/vehicles"
     | "/warranties"
-    | "/wishlists"
     | "/planners/$goal"
     | "/settings/account"
     | "/settings/household"
     | "/settings/system"
     | "/todos/$list"
+    | "/wishlists/$list"
     | "/planners"
     | "/settings"
-    | "/todos";
+    | "/todos"
+    | "/wishlists";
   id:
     | "__root__"
     | "/"
@@ -460,9 +480,11 @@ export interface FileRouteTypes {
     | "/settings/household"
     | "/settings/system"
     | "/todos/$list"
+    | "/wishlists/$list"
     | "/planners/"
     | "/settings/"
-    | "/todos/";
+    | "/todos/"
+    | "/wishlists/";
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -494,7 +516,7 @@ export interface RootRouteChildren {
   UpcomingRoute: typeof UpcomingRoute;
   VehiclesRoute: typeof VehiclesRoute;
   WarrantiesRoute: typeof WarrantiesRoute;
-  WishlistsRoute: typeof WishlistsRoute;
+  WishlistsRoute: typeof WishlistsRouteWithChildren;
 }
 
 declare module "@tanstack/react-router" {
@@ -758,6 +780,20 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof TodosListRouteImport;
       parentRoute: typeof TodosRoute;
     };
+    "/wishlists/": {
+      id: "/wishlists/";
+      path: "/";
+      fullPath: "/wishlists/";
+      preLoaderRoute: typeof WishlistsIndexRouteImport;
+      parentRoute: typeof WishlistsRoute;
+    };
+    "/wishlists/$list": {
+      id: "/wishlists/$list";
+      path: "/$list";
+      fullPath: "/wishlists/$list";
+      preLoaderRoute: typeof WishlistsListRouteImport;
+      parentRoute: typeof WishlistsRoute;
+    };
   }
 }
 
@@ -805,6 +841,20 @@ const TodosRouteChildren: TodosRouteChildren = {
 
 const TodosRouteWithChildren = TodosRoute._addFileChildren(TodosRouteChildren);
 
+interface WishlistsRouteChildren {
+  WishlistsListRoute: typeof WishlistsListRoute;
+  WishlistsIndexRoute: typeof WishlistsIndexRoute;
+}
+
+const WishlistsRouteChildren: WishlistsRouteChildren = {
+  WishlistsListRoute: WishlistsListRoute,
+  WishlistsIndexRoute: WishlistsIndexRoute,
+};
+
+const WishlistsRouteWithChildren = WishlistsRoute._addFileChildren(
+  WishlistsRouteChildren,
+);
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountsRoute: AccountsRoute,
@@ -834,7 +884,7 @@ const rootRouteChildren: RootRouteChildren = {
   UpcomingRoute: UpcomingRoute,
   VehiclesRoute: VehiclesRoute,
   WarrantiesRoute: WarrantiesRoute,
-  WishlistsRoute: WishlistsRoute,
+  WishlistsRoute: WishlistsRouteWithChildren,
 };
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -35,6 +35,9 @@ import {
   todoTag,
   todoTagLink,
   todoReminder,
+  wishlist,
+  wishlistItem,
+  wishlistItemTag,
   auditLog,
   emailToken,
   instanceSettings,
@@ -78,6 +81,9 @@ export const ALL_TABLES: ReadonlyArray<readonly [string, PgTable]> = [
   ['todoTag', todoTag],
   ['todoTagLink', todoTagLink],
   ['todoReminder', todoReminder],
+  ['wishlist', wishlist],
+  ['wishlistItem', wishlistItem],
+  ['wishlistItemTag', wishlistItemTag],
 ] as const
 
 /** Tables deliberately kept OUT of the snapshot, each with the reason. Exists so

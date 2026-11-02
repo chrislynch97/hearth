@@ -258,8 +258,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
                         to: "/wishlists",
                         label: "Wish lists",
                         icon: "wishlists",
-                        planned:
-                            "Things we want to buy — link, price, who wants it, how badly.",
                     },
                     { to: "/gifts", label: "Gifts", icon: "gifts" },
                     {
