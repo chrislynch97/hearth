@@ -1,5 +1,5 @@
 {
-  "id": "6b87e592-2958-4ebf-860e-1ce8bda48764",
+  "id": "8ed92ebb-6327-4d05-ac21-c0e71d514687",
   "prevId": "63d196b4-0ae7-4645-85b5-68395a119730",
   "version": "7",
   "dialect": "postgresql",
@@ -4953,8 +4953,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.vehicle": {
-      "name": "vehicle",
+    "public.wishlist": {
+      "name": "wishlist",
       "schema": "",
       "columns": {
         "id": {
@@ -4981,21 +4981,151 @@
           "primaryKey": false,
           "notNull": true
         },
-        "kind": {
-          "name": "kind",
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "wishlist_short_id": {
+          "name": "wishlist_short_id",
+          "columns": [
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "short_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "wishlist_household_id_idx": {
+          "name": "wishlist_household_id_idx",
+          "columns": [
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "wishlist_household_id_household_id_fk": {
+          "name": "wishlist_household_id_household_id_fk",
+          "tableFrom": "wishlist",
+          "tableTo": "household",
+          "columnsFrom": [
+            "household_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.wishlist_item": {
+      "name": "wishlist_item",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "household_id": {
+          "name": "household_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'car'"
+          "notNull": true
         },
-        "registration": {
-          "name": "registration",
+        "list_id": {
+          "name": "list_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "owner_id": {
-          "name": "owner_id",
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "link": {
+          "name": "link",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "price": {
+          "name": "price",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "priority": {
+          "name": "priority",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'normal'"
+        },
+        "wanted_by_id": {
+          "name": "wanted_by_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bought_at": {
+          "name": "bought_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bought_by_id": {
+          "name": "bought_by_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -5020,29 +5150,8 @@
         }
       },
       "indexes": {
-        "vehicle_short_id": {
-          "name": "vehicle_short_id",
-          "columns": [
-            {
-              "expression": "household_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "short_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "vehicle_household_id_idx": {
-          "name": "vehicle_household_id_idx",
+        "wishlist_item_household_id_idx": {
+          "name": "wishlist_item_household_id_idx",
           "columns": [
             {
               "expression": "household_id",
@@ -5055,12 +5164,33 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "wishlist_item_household_list_idx": {
+          "name": "wishlist_item_household_list_idx",
+          "columns": [
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "list_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
-        "vehicle_household_id_household_id_fk": {
-          "name": "vehicle_household_id_household_id_fk",
-          "tableFrom": "vehicle",
+        "wishlist_item_household_id_household_id_fk": {
+          "name": "wishlist_item_household_id_household_id_fk",
+          "tableFrom": "wishlist_item",
           "tableTo": "household",
           "columnsFrom": [
             "household_id"
@@ -5071,12 +5201,38 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "vehicle_owner_id_member_id_fk": {
-          "name": "vehicle_owner_id_member_id_fk",
-          "tableFrom": "vehicle",
+        "wishlist_item_list_id_wishlist_id_fk": {
+          "name": "wishlist_item_list_id_wishlist_id_fk",
+          "tableFrom": "wishlist_item",
+          "tableTo": "wishlist",
+          "columnsFrom": [
+            "list_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "wishlist_item_wanted_by_id_member_id_fk": {
+          "name": "wishlist_item_wanted_by_id_member_id_fk",
+          "tableFrom": "wishlist_item",
           "tableTo": "member",
           "columnsFrom": [
-            "owner_id"
+            "wanted_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "wishlist_item_bought_by_id_member_id_fk": {
+          "name": "wishlist_item_bought_by_id_member_id_fk",
+          "tableFrom": "wishlist_item",
+          "tableTo": "member",
+          "columnsFrom": [
+            "bought_by_id"
           ],
           "columnsTo": [
             "id"
@@ -5091,8 +5247,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.vehicle_bill": {
-      "name": "vehicle_bill",
+    "public.wishlist_item_tag": {
+      "name": "wishlist_item_tag",
       "schema": "",
       "columns": {
         "id": {
@@ -5107,14 +5263,14 @@
           "primaryKey": false,
           "notNull": true
         },
-        "vehicle_id": {
-          "name": "vehicle_id",
+        "item_id": {
+          "name": "item_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "expense_id": {
-          "name": "expense_id",
+        "name": {
+          "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -5133,13 +5289,19 @@
         }
       },
       "indexes": {
-        "vehicle_bill_expense": {
-          "name": "vehicle_bill_expense",
+        "wishlist_item_tag_item_name": {
+          "name": "wishlist_item_tag_item_name",
           "columns": [
             {
-              "expression": "expense_id",
+              "expression": "item_id",
               "isExpression": false,
               "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lower(\"name\")",
+              "asc": true,
+              "isExpression": true,
               "nulls": "last"
             }
           ],
@@ -5148,8 +5310,8 @@
           "method": "btree",
           "with": {}
         },
-        "vehicle_bill_household_id_idx": {
-          "name": "vehicle_bill_household_id_idx",
+        "wishlist_item_tag_household_id_idx": {
+          "name": "wishlist_item_tag_household_id_idx",
           "columns": [
             {
               "expression": "household_id",
@@ -5162,27 +5324,12 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "vehicle_bill_vehicle_id_idx": {
-          "name": "vehicle_bill_vehicle_id_idx",
-          "columns": [
-            {
-              "expression": "vehicle_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
-        "vehicle_bill_household_id_household_id_fk": {
-          "name": "vehicle_bill_household_id_household_id_fk",
-          "tableFrom": "vehicle_bill",
+        "wishlist_item_tag_household_id_household_id_fk": {
+          "name": "wishlist_item_tag_household_id_household_id_fk",
+          "tableFrom": "wishlist_item_tag",
           "tableTo": "household",
           "columnsFrom": [
             "household_id"
@@ -5193,287 +5340,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "vehicle_bill_vehicle_id_vehicle_id_fk": {
-          "name": "vehicle_bill_vehicle_id_vehicle_id_fk",
-          "tableFrom": "vehicle_bill",
-          "tableTo": "vehicle",
+        "wishlist_item_tag_item_id_wishlist_item_id_fk": {
+          "name": "wishlist_item_tag_item_id_wishlist_item_id_fk",
+          "tableFrom": "wishlist_item_tag",
+          "tableTo": "wishlist_item",
           "columnsFrom": [
-            "vehicle_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "vehicle_bill_expense_id_expense_id_fk": {
-          "name": "vehicle_bill_expense_id_expense_id_fk",
-          "tableFrom": "vehicle_bill",
-          "tableTo": "expense",
-          "columnsFrom": [
-            "expense_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.vehicle_cost": {
-      "name": "vehicle_cost",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "household_id": {
-          "name": "household_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "vehicle_id": {
-          "name": "vehicle_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "date": {
-          "name": "date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "amount": {
-          "name": "amount",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "vehicle_cost_household_id_idx": {
-          "name": "vehicle_cost_household_id_idx",
-          "columns": [
-            {
-              "expression": "household_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "vehicle_cost_vehicle_id_idx": {
-          "name": "vehicle_cost_vehicle_id_idx",
-          "columns": [
-            {
-              "expression": "vehicle_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "vehicle_cost_household_id_household_id_fk": {
-          "name": "vehicle_cost_household_id_household_id_fk",
-          "tableFrom": "vehicle_cost",
-          "tableTo": "household",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "vehicle_cost_vehicle_id_vehicle_id_fk": {
-          "name": "vehicle_cost_vehicle_id_vehicle_id_fk",
-          "tableFrom": "vehicle_cost",
-          "tableTo": "vehicle",
-          "columnsFrom": [
-            "vehicle_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.vehicle_date": {
-      "name": "vehicle_date",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "household_id": {
-          "name": "household_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "vehicle_id": {
-          "name": "vehicle_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "due_date": {
-          "name": "due_date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "repeat_months": {
-          "name": "repeat_months",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "remind_days": {
-          "name": "remind_days",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reminded_for": {
-          "name": "reminded_for",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "vehicle_date_household_id_idx": {
-          "name": "vehicle_date_household_id_idx",
-          "columns": [
-            {
-              "expression": "household_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "vehicle_date_vehicle_id_idx": {
-          "name": "vehicle_date_vehicle_id_idx",
-          "columns": [
-            {
-              "expression": "vehicle_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "vehicle_date_household_id_household_id_fk": {
-          "name": "vehicle_date_household_id_household_id_fk",
-          "tableFrom": "vehicle_date",
-          "tableTo": "household",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "vehicle_date_vehicle_id_vehicle_id_fk": {
-          "name": "vehicle_date_vehicle_id_vehicle_id_fk",
-          "tableFrom": "vehicle_date",
-          "tableTo": "vehicle",
-          "columnsFrom": [
-            "vehicle_id"
+            "item_id"
           ],
           "columnsTo": [
             "id"

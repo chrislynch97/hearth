@@ -27,3 +27,16 @@ export function tokenLink(origin: string, route: TokenRoute, token: string): str
 export const inviteLink = (origin: string, token: string) => tokenLink(origin, 'invite', token)
 export const verifyEmailLink = (origin: string, token: string) => tokenLink(origin, 'verifyEmail', token)
 export const resetPasswordLink = (origin: string, token: string) => tokenLink(origin, 'resetPassword', token)
+
+/** Typed text as a link, when it is a web address. Anything else (a shop name, a
+ *  javascript: URL) gives null, and stays plain text. */
+export function externalLink(text: string | null): { href: string; label: string } | null {
+  if (!text) return null
+  try {
+    const url = new URL(text.trim())
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    return { href: url.href, label: url.hostname.replace(/^www\./, '') }
+  } catch {
+    return null
+  }
+}

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { FilterChip } from "@/components/ui/FilterChip";
 
-export interface TodoFiltersProps {
+export interface ListFiltersProps {
     tags: string[];
     selectedTags: string[];
     onToggleTag: (tag: string) => void;
@@ -13,15 +13,16 @@ export interface TodoFiltersProps {
 const HEADING = "text-sm font-medium text-text-secondary max-lg:sr-only";
 
 /** Narrows what's on screen. All of it lives in the URL. Folded behind a button
- *  on a phone, where the chips would push the to-dos off the screen. */
-export const TodoFilters = ({
+ *  on a phone, where the chips would push the list off the screen. */
+export const ListFilters = ({
     tags,
     selectedTags,
     onToggleTag,
     members,
     person,
     onPerson,
-}: TodoFiltersProps) => {
+}: ListFiltersProps) => {
+    const id = useId();
     const activeCount = selectedTags.length + (person ? 1 : 0);
     const [open, setOpen] = useState(activeCount > 0);
 
@@ -37,10 +38,10 @@ export const TodoFilters = ({
             </FilterChip>
             <div
                 role="group"
-                aria-labelledby="todo-filter-who"
+                aria-labelledby={`${id}-who`}
                 className={`flex flex-col gap-1.5 ${open ? "" : "max-lg:hidden"}`}
             >
-                <h2 id="todo-filter-who" className={HEADING}>
+                <h2 id={`${id}-who`} className={HEADING}>
                     Who
                 </h2>
                 <div className="flex flex-wrap gap-1.5">
@@ -62,10 +63,10 @@ export const TodoFilters = ({
             {tags.length > 0 && (
                 <div
                     role="group"
-                    aria-labelledby="todo-filter-tags"
+                    aria-labelledby={`${id}-tags`}
                     className={`flex flex-col gap-1.5 ${open ? "" : "max-lg:hidden"}`}
                 >
-                    <h2 id="todo-filter-tags" className={HEADING}>
+                    <h2 id={`${id}-tags`} className={HEADING}>
                         Tags
                     </h2>
                     <div className="flex flex-wrap gap-1.5">

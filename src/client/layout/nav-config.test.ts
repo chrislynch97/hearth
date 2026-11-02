@@ -99,10 +99,10 @@ describe("opensByDefault", () => {
         expect(opensByDefault(sectionOf([true, true]))).toBe(false);
     });
 
-    it("opens Money and folds Home and Lists as things stand", () => {
+    it("opens Money and Lists and folds Home as things stand", () => {
         const byId = (id: string) => NAV_SECTIONS.find((s) => s.id === id)!;
         expect(opensByDefault(byId("money"))).toBe(true);
         expect(opensByDefault(byId("home"))).toBe(false);
-        expect(opensByDefault(byId("lists"))).toBe(false);
+        expect(opensByDefault(byId("lists"))).toBe(true);
     });
 });

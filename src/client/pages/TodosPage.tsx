@@ -7,13 +7,13 @@ import { trpc } from "@/trpc";
 import { notifySuccess } from "@/notify";
 import { useFormatDate, useMoney } from "@/useMoney";
 import { EditorPanel } from "@/components/ui/EditorPanel";
+import { ListFilters } from "@/components/ui/ListFilters";
+import { ListNav } from "@/components/ui/ListNav";
 import { Spinner } from "@/components/ui/Spinner";
 import { TodoDone } from "@/features/todos/components/TodoDone";
-import { TodoFilters } from "@/features/todos/components/TodoFilters";
 import { TodoForm } from "@/features/todos/components/TodoForm";
 import { TodoHero } from "@/features/todos/components/TodoHero";
 import { TodoListForm } from "@/features/todos/components/TodoListForm";
-import { TodoListNav } from "@/features/todos/components/TodoListNav";
 import { TodoQuickAdd } from "@/features/todos/components/TodoQuickAdd";
 import { TodoRow } from "@/features/todos/components/TodoRow";
 import {
@@ -203,7 +203,9 @@ export const TodosPage = () => {
             {!loading && (
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_15rem] lg:gap-10">
                     <aside className="flex flex-col gap-3 lg:order-2 lg:gap-5">
-                        <TodoListNav
+                        <ListNav
+                            label="To-do lists"
+                            allLabel="All to-dos"
                             lists={lists}
                             selected={selected}
                             openCount={
@@ -215,7 +217,7 @@ export const TodosPage = () => {
                                 setEditor({ kind: "list", list: undefined })
                             }
                         />
-                        <TodoFilters
+                        <ListFilters
                             tags={tags}
                             selectedTags={selectedTags}
                             onToggleTag={toggleTag}

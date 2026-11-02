@@ -2,18 +2,20 @@ import { z } from 'zod'
 import { asc, eq, inArray, isNotNull, isNull, notExists, sql } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure } from '../../trpc/trpc'
-import { assertMember, scopeWhere } from '../../trpc/tenant'
+import { actingMemberId, assertMember, scopeWhere } from '../../trpc/tenant'
 import { expectedUpdatedAtInput, throwStaleWrite, versionGuard } from '../../trpc/concurrency'
 import { recordAudit } from '../../trpc/audit'
-import { member, todo, todoList, todoReminder, todoTag, todoTagLink } from '../../db/schema'
+import { todo, todoList, todoReminder, todoTag, todoTagLink } from '../../db/schema'
 import type { Todo, TodoReminder } from '../../db/schema'
 import { newId } from '@shared/ids'
-import { MAX_REMINDERS_PER_TODO, MAX_TAGS_PER_TODO, MAX_TAG_LENGTH, TODO_PRIORITIES, cleanTagNames } from '@shared/todos'
+import { PRIORITIES } from '@shared/priority'
+import { MAX_TAGS, MAX_TAG_LENGTH, cleanTagNames } from '@shared/tags'
+import { MAX_REMINDERS_PER_TODO } from '@shared/todos'
 import type { DBOrTx, Tx } from '../../db/client'
 
-const PRIORITY = z.enum(TODO_PRIORITIES)
+const PRIORITY = z.enum(PRIORITIES)
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
-const TAGS = z.array(z.string().max(MAX_TAG_LENGTH)).max(MAX_TAGS_PER_TODO)
+const TAGS = z.array(z.string().max(MAX_TAG_LENGTH)).max(MAX_TAGS)
 const REMINDERS = z.array(z.date()).max(MAX_REMINDERS_PER_TODO)
 
 export interface TodoWithDetails extends Todo {
@@ -28,16 +30,6 @@ async function assertList(db: DBOrTx, householdId: string, listId: string): Prom
     .from(todoList)
     .where(scopeWhere(householdId, todoList.householdId, eq(todoList.id, listId)))
   if (!row) throw new TRPCError({ code: 'BAD_REQUEST', message: 'That list no longer exists.' })
-}
-
-/** The member this login acts as here. Null is fine: a login needn't be linked. */
-async function actingMemberId(db: DBOrTx, householdId: string, userId: string | undefined): Promise<string | null> {
-  if (!userId) return null
-  const [row] = await db
-    .select({ id: member.id })
-    .from(member)
-    .where(scopeWhere(householdId, member.householdId, eq(member.userId, userId)))
-  return row?.id ?? null
 }
 
 /** Makes a to-do's tags exactly `names`, creating new ones and dropping any left

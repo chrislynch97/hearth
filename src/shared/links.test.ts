@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inviteLink, resetPasswordLink, tokenLink, verifyEmailLink } from './links'
+import { externalLink, inviteLink, resetPasswordLink, tokenLink, verifyEmailLink } from './links'
 
 const TOKEN = 'a'.repeat(64)
 
@@ -29,5 +29,24 @@ describe('token links', () => {
 
   it('keep a sub-path origin intact', () => {
     expect(tokenLink('https://h.example/hearth', 'invite', TOKEN)).toBe(`https://h.example/hearth/invite#${TOKEN}`)
+  })
+})
+
+describe('externalLink', () => {
+  it('labels a web address by its host, without www', () => {
+    expect(externalLink('https://www.lego.com/en-gb/product/1')).toEqual({
+      href: 'https://www.lego.com/en-gb/product/1',
+      label: 'lego.com',
+    })
+  })
+
+  it('only strips a real www. prefix', () => {
+    expect(externalLink('https://wwwlego.com/')?.label).toBe('wwwlego.com')
+  })
+
+  it('leaves anything else as plain text', () => {
+    expect(externalLink('Smyths')).toBeNull()
+    expect(externalLink('javascript:alert(1)')).toBeNull()
+    expect(externalLink(null)).toBeNull()
   })
 })
