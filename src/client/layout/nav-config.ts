@@ -232,8 +232,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
                         to: "/vehicles",
                         label: "Vehicles",
                         icon: "vehicles",
-                        planned:
-                            "MOT, tax, insurance and service dates, on the same recurring schedule as the rest of the house.",
                     },
                 ],
             },

@@ -46,6 +46,8 @@ import { Route as SettingsHouseholdRouteImport } from "./routes/settings.househo
 import { Route as SettingsSystemRouteImport } from "./routes/settings.system";
 import { Route as TodosIndexRouteImport } from "./routes/todos.index";
 import { Route as TodosListRouteImport } from "./routes/todos.$list";
+import { Route as VehiclesIndexRouteImport } from "./routes/vehicles.index";
+import { Route as VehiclesVehicleRouteImport } from "./routes/vehicles.$vehicle";
 
 const IndexRoute = IndexRouteImport.update({
   id: "/",
@@ -232,6 +234,16 @@ const TodosListRoute = TodosListRouteImport.update({
   path: "/$list",
   getParentRoute: () => TodosRoute,
 } as any);
+const VehiclesIndexRoute = VehiclesIndexRouteImport.update({
+  id: "/",
+  path: "/",
+  getParentRoute: () => VehiclesRoute,
+} as any);
+const VehiclesVehicleRoute = VehiclesVehicleRouteImport.update({
+  id: "/$vehicle",
+  path: "/$vehicle",
+  getParentRoute: () => VehiclesRoute,
+} as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute;
@@ -260,7 +272,7 @@ export interface FileRoutesByFullPath {
   "/todos": typeof TodosRouteWithChildren;
   "/trades": typeof TradesRoute;
   "/upcoming": typeof UpcomingRoute;
-  "/vehicles": typeof VehiclesRoute;
+  "/vehicles": typeof VehiclesRouteWithChildren;
   "/warranties": typeof WarrantiesRoute;
   "/wishlists": typeof WishlistsRoute;
   "/planners/$goal": typeof PlannersGoalRoute;
@@ -268,9 +280,11 @@ export interface FileRoutesByFullPath {
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
   "/todos/$list": typeof TodosListRoute;
+  "/vehicles/$vehicle": typeof VehiclesVehicleRoute;
   "/planners/": typeof PlannersIndexRoute;
   "/settings/": typeof SettingsIndexRoute;
   "/todos/": typeof TodosIndexRoute;
+  "/vehicles/": typeof VehiclesIndexRoute;
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute;
@@ -296,7 +310,6 @@ export interface FileRoutesByTo {
   "/spending": typeof SpendingRoute;
   "/trades": typeof TradesRoute;
   "/upcoming": typeof UpcomingRoute;
-  "/vehicles": typeof VehiclesRoute;
   "/warranties": typeof WarrantiesRoute;
   "/wishlists": typeof WishlistsRoute;
   "/planners/$goal": typeof PlannersGoalRoute;
@@ -304,9 +317,11 @@ export interface FileRoutesByTo {
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
   "/todos/$list": typeof TodosListRoute;
+  "/vehicles/$vehicle": typeof VehiclesVehicleRoute;
   "/planners": typeof PlannersIndexRoute;
   "/settings": typeof SettingsIndexRoute;
   "/todos": typeof TodosIndexRoute;
+  "/vehicles": typeof VehiclesIndexRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
@@ -336,7 +351,7 @@ export interface FileRoutesById {
   "/todos": typeof TodosRouteWithChildren;
   "/trades": typeof TradesRoute;
   "/upcoming": typeof UpcomingRoute;
-  "/vehicles": typeof VehiclesRoute;
+  "/vehicles": typeof VehiclesRouteWithChildren;
   "/warranties": typeof WarrantiesRoute;
   "/wishlists": typeof WishlistsRoute;
   "/planners/$goal": typeof PlannersGoalRoute;
@@ -344,9 +359,11 @@ export interface FileRoutesById {
   "/settings/household": typeof SettingsHouseholdRoute;
   "/settings/system": typeof SettingsSystemRoute;
   "/todos/$list": typeof TodosListRoute;
+  "/vehicles/$vehicle": typeof VehiclesVehicleRoute;
   "/planners/": typeof PlannersIndexRoute;
   "/settings/": typeof SettingsIndexRoute;
   "/todos/": typeof TodosIndexRoute;
+  "/vehicles/": typeof VehiclesIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
@@ -385,9 +402,11 @@ export interface FileRouteTypes {
     | "/settings/household"
     | "/settings/system"
     | "/todos/$list"
+    | "/vehicles/$vehicle"
     | "/planners/"
     | "/settings/"
-    | "/todos/";
+    | "/todos/"
+    | "/vehicles/";
   fileRoutesByTo: FileRoutesByTo;
   to:
     | "/"
@@ -413,7 +432,6 @@ export interface FileRouteTypes {
     | "/spending"
     | "/trades"
     | "/upcoming"
-    | "/vehicles"
     | "/warranties"
     | "/wishlists"
     | "/planners/$goal"
@@ -421,9 +439,11 @@ export interface FileRouteTypes {
     | "/settings/household"
     | "/settings/system"
     | "/todos/$list"
+    | "/vehicles/$vehicle"
     | "/planners"
     | "/settings"
-    | "/todos";
+    | "/todos"
+    | "/vehicles";
   id:
     | "__root__"
     | "/"
@@ -460,9 +480,11 @@ export interface FileRouteTypes {
     | "/settings/household"
     | "/settings/system"
     | "/todos/$list"
+    | "/vehicles/$vehicle"
     | "/planners/"
     | "/settings/"
-    | "/todos/";
+    | "/todos/"
+    | "/vehicles/";
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -492,7 +514,7 @@ export interface RootRouteChildren {
   TodosRoute: typeof TodosRouteWithChildren;
   TradesRoute: typeof TradesRoute;
   UpcomingRoute: typeof UpcomingRoute;
-  VehiclesRoute: typeof VehiclesRoute;
+  VehiclesRoute: typeof VehiclesRouteWithChildren;
   WarrantiesRoute: typeof WarrantiesRoute;
   WishlistsRoute: typeof WishlistsRoute;
 }
@@ -758,6 +780,20 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof TodosListRouteImport;
       parentRoute: typeof TodosRoute;
     };
+    "/vehicles/": {
+      id: "/vehicles/";
+      path: "/";
+      fullPath: "/vehicles/";
+      preLoaderRoute: typeof VehiclesIndexRouteImport;
+      parentRoute: typeof VehiclesRoute;
+    };
+    "/vehicles/$vehicle": {
+      id: "/vehicles/$vehicle";
+      path: "/$vehicle";
+      fullPath: "/vehicles/$vehicle";
+      preLoaderRoute: typeof VehiclesVehicleRouteImport;
+      parentRoute: typeof VehiclesRoute;
+    };
   }
 }
 
@@ -805,6 +841,20 @@ const TodosRouteChildren: TodosRouteChildren = {
 
 const TodosRouteWithChildren = TodosRoute._addFileChildren(TodosRouteChildren);
 
+interface VehiclesRouteChildren {
+  VehiclesVehicleRoute: typeof VehiclesVehicleRoute;
+  VehiclesIndexRoute: typeof VehiclesIndexRoute;
+}
+
+const VehiclesRouteChildren: VehiclesRouteChildren = {
+  VehiclesVehicleRoute: VehiclesVehicleRoute,
+  VehiclesIndexRoute: VehiclesIndexRoute,
+};
+
+const VehiclesRouteWithChildren = VehiclesRoute._addFileChildren(
+  VehiclesRouteChildren,
+);
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountsRoute: AccountsRoute,
@@ -832,7 +882,7 @@ const rootRouteChildren: RootRouteChildren = {
   TodosRoute: TodosRouteWithChildren,
   TradesRoute: TradesRoute,
   UpcomingRoute: UpcomingRoute,
-  VehiclesRoute: VehiclesRoute,
+  VehiclesRoute: VehiclesRouteWithChildren,
   WarrantiesRoute: WarrantiesRoute,
   WishlistsRoute: WishlistsRoute,
 };

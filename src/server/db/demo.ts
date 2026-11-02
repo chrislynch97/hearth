@@ -1104,6 +1104,89 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     }
   }
 
+  // -- vehicles ------------------------------------------------------------
+  // Each car commuter's car, with its insurance as a linked bill, plus a joint
+  // campervan with dates and no bills. Last, for the PRNG.
+  const vehicles: Array<Record<string, unknown>> = []
+  const vehicleDates: Array<Record<string, unknown>> = []
+  const vehicleCosts: Array<Record<string, unknown>> = []
+  const vehicleBills: Array<Record<string, unknown>> = []
+  type VehicleDef = {
+    name: string
+    kind: string
+    registration: string
+    owner: string | null
+    dates: Array<[kind: string, due: number, remindDays: number]>
+    costs: Array<[kind: string, daysAgo: number, amount: number, note: string | null]>
+    insurance?: { amount: number; pot: string }
+  }
+  const vehiclePlan: VehicleDef[] = [
+    ...people
+      .filter((p) => p.commute === 'car')
+      .map((p) => ({
+        name: 'Golf',
+        kind: 'car',
+        registration: 'KX19 HRT',
+        owner: mine(p),
+        dates: [['mot', 11, 14], ['service', 75, 14], ['insurance', 140, 30], ['tax', 200, 14]] as VehicleDef['dates'],
+        costs: [
+          ['mot', 354, cost(54.85), 'Passed, one advisory'],
+          ['service', 290, cost(189), null],
+          ['tyres', 120, cost(178), 'Two front'],
+          ['tax', 165, cost(190), null],
+        ] as VehicleDef['costs'],
+        insurance: { amount: cost(48), pot: `${p.key}_car` },
+      })),
+    {
+      name: 'Bessie',
+      kind: 'campervan',
+      registration: 'WD08 BSE',
+      owner: null,
+      dates: [['mot', -4, 14], ['insurance', 38, 30], ['other', 95, 14]],
+      costs: [['repair', 60, cost(420), 'New leisure battery'], ['insurance', 330, cost(612), null]],
+    },
+  ]
+  for (const def of vehiclePlan) {
+    const vehicleId = id()
+    vehicles.push({ id: vehicleId, shortId: shortId(), name: def.name, kind: def.kind, registration: def.registration, ownerId: def.owner, archivedAt: null, ...ts })
+    for (const [kind, due, remindDays] of def.dates) {
+      vehicleDates.push({
+        id: id(),
+        vehicleId,
+        kind,
+        label: kind === 'other' ? 'Habitation check' : null,
+        dueDate: addDays(today, due),
+        repeatMonths: 12,
+        remindDays,
+        remindedFor: null,
+        ...ts,
+      })
+    }
+    for (const [kind, daysAgo, amount, note] of def.costs) {
+      vehicleCosts.push({ id: id(), vehicleId, kind, date: addDays(today, -daysAgo), amount, note, ...ts })
+    }
+    if (def.insurance && potId[def.insurance.pot]) {
+      const expenseId = id()
+      expenses.push({
+        id: expenseId,
+        name: `${def.name} insurance`,
+        recurrence: 'monthly',
+        amount: def.insurance.amount,
+        funding: 'pot_manual',
+        potId: potId[def.insurance.pot],
+        categoryId: null,
+        ownerId: null,
+        note: null,
+        active: 1,
+        dueAnchor: anchorDay(1),
+        dueReminderDays: null,
+        archivedAt: null,
+        ...ts,
+      })
+      vehicleBills.push({ id: id(), vehicleId, expenseId, ...ts })
+    }
+  }
+
   return {
     household: households,
     member: members,
@@ -1133,6 +1216,10 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     todoTag: todoTags,
     todoTagLink: todoTagLinks,
     todoReminder: todoReminders,
+    vehicle: vehicles,
+    vehicleDate: vehicleDates,
+    vehicleCost: vehicleCosts,
+    vehicleBill: vehicleBills,
   }
 }
 

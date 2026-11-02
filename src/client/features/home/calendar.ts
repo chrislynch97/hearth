@@ -4,6 +4,7 @@ export const KIND_LABEL: Record<CalendarKind, string> = {
     bill: "Bills",
     todo: "To-dos",
     savings: "Savings",
+    vehicle: "Vehicles",
 };
 
 /** Each kind's colour, as a dot or a bar. Green is left to today and selection. */
@@ -11,6 +12,7 @@ export const KIND_COLOUR: Record<CalendarKind, string> = {
     bill: "bg-(--mc-cat-3)",
     todo: "bg-(--mc-cat-2)",
     savings: "bg-(--mc-cat-4)",
+    vehicle: "bg-(--mc-cat-5)",
 };
 
 /** The same colour as a tint with an edge, for anything holding text. */
@@ -18,6 +20,7 @@ export const KIND_CHIP: Record<CalendarKind, string> = {
     bill: "border-(--mc-cat-3) bg-(--mc-cat-3)/15",
     todo: "border-(--mc-cat-2) bg-(--mc-cat-2)/15",
     savings: "border-(--mc-cat-4) bg-(--mc-cat-4)/15",
+    vehicle: "border-(--mc-cat-5) bg-(--mc-cat-5)/15",
 };
 
 const STORAGE_KEY = "hearth.calendar.hiddenKinds";
@@ -73,6 +76,7 @@ export const monthSummary = (
     const billTotal = bills.reduce((sum, bill) => sum + (bill.amount ?? 0), 0);
     const todos = ofKind("todo").length;
     const savings = ofKind("savings").length;
+    const vehicles = ofKind("vehicle").length;
 
     const parts = [
         ...(bills.length > 0
@@ -81,6 +85,9 @@ export const monthSummary = (
         ...(todos > 0 ? [counted(todos, "to-do", "to-dos")] : []),
         ...(savings > 0
             ? [counted(savings, "savings date", "savings dates")]
+            : []),
+        ...(vehicles > 0
+            ? [counted(vehicles, "vehicle date", "vehicle dates")]
             : []),
     ];
 

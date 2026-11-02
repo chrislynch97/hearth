@@ -30,6 +30,7 @@ import { notificationsRouter } from '../features/notifications/notifications.rou
 import { savingsRouter } from '../features/savings/savings.router'
 import { todoListsRouter } from '../features/todos/todoLists.router'
 import { todosRouter } from '../features/todos/todos.router'
+import { vehiclesRouter } from '../features/vehicles/vehicles.router'
 
 import { dashboardRouter } from '../features/insights/dashboard.router'
 import { reportsRouter } from '../features/insights/reports.router'
@@ -75,6 +76,7 @@ export const appRouter = router({
   savings: savingsRouter,
   todoLists: todoListsRouter,
   todos: todosRouter,
+  vehicles: vehiclesRouter,
   imports: importsRouter,
   users: usersRouter,
   sessions: sessionsRouter,

@@ -176,6 +176,13 @@
       "when": 1793563449980,
       "tag": "0024_todos",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793651878666,
+      "tag": "0025_vehicles",
+      "breakpoints": true
     }
   ]
 }
