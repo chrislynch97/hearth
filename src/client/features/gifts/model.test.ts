@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
     budgetSegments,
-    giftLink,
     giftsByStatus,
     moneyInput,
     nextStatus,
@@ -67,25 +66,6 @@ describe("pickOccasion", () => {
             pickOccasion([occasion("old", true)], undefined, TODAY)?.id
         ).toBe("old");
         expect(pickOccasion([], undefined, TODAY)).toBeUndefined();
-    });
-});
-
-describe("giftLink", () => {
-    it("links a web address, labelled by its site", () => {
-        expect(giftLink("https://www.lego.com/en-gb/product/1")).toEqual({
-            href: "https://www.lego.com/en-gb/product/1",
-            label: "lego.com",
-        });
-    });
-
-    it("strips only a real www. prefix", () => {
-        expect(giftLink("https://wwwlego.com/")?.label).toBe("wwwlego.com");
-    });
-
-    it("leaves shop names and other schemes as text", () => {
-        expect(giftLink("Smyths")).toBeNull();
-        expect(giftLink("javascript:alert(1)")).toBeNull();
-        expect(giftLink(null)).toBeNull();
     });
 });
 

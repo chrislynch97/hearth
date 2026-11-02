@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import { Check, ChevronsUpDown, X } from "lucide-react";
-import { MAX_TAGS_PER_TODO, MAX_TAG_LENGTH, cleanTagNames } from "@shared/todos";
+import { MAX_TAGS, MAX_TAG_LENGTH, cleanTagNames } from "@shared/tags";
 import { Badge } from "@/components/shadcn/badge";
 import {
     Command,
@@ -35,7 +35,7 @@ export const TagPicker = ({ tags, value, onChange }: TagPickerProps) => {
     const has = (list: string[], name: string) =>
         list.some((tag) => tag.toLowerCase() === name.toLowerCase());
     const isNew = typed !== "" && !has([...tags, ...value], typed);
-    const atLimit = value.length >= MAX_TAGS_PER_TODO;
+    const atLimit = value.length >= MAX_TAGS;
 
     const toggle = (name: string) => {
         const picked = has(value, name);

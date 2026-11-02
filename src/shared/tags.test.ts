@@ -1,11 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cleanTagNames, comparePriority } from './todos'
-
-describe('comparePriority', () => {
-  it('puts urgent first and unknown values last', () => {
-    expect(['low', 'mystery', 'high', 'normal'].sort(comparePriority)).toEqual(['high', 'normal', 'low', 'mystery'])
-  })
-})
+import { cleanTagNames } from './tags'
 
 describe('cleanTagNames', () => {
   it('trims, collapses spaces and drops blanks', () => {

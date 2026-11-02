@@ -3,7 +3,7 @@ import type { PgColumn } from 'drizzle-orm/pg-core'
 import { TRPCError } from '@trpc/server'
 import { member } from '../db/schema'
 import type { Member } from '../db/schema'
-import type { DB } from '../db/client'
+import type { DB, DBOrTx } from '../db/client'
 
 /**
  * Id of the original single-tenant household. Until per-user login lands
@@ -31,6 +31,16 @@ export function scopeWhere(
 ): SQL {
   // `and` with at least one argument always yields a defined SQL.
   return and(eq(householdColumn, householdId), ...more)!
+}
+
+/** The member this login acts as here. Null is fine: a login needn't be linked. */
+export async function actingMemberId(db: DBOrTx, householdId: string, userId: string | undefined): Promise<string | null> {
+  if (!userId) return null
+  const [row] = await db
+    .select({ id: member.id })
+    .from(member)
+    .where(scopeWhere(householdId, member.householdId, eq(member.userId, userId)))
+  return row?.id ?? null
 }
 
 /** Return the member `ownerId` names within `householdId`, or throw BAD_REQUEST.

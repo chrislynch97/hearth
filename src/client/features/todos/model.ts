@@ -1,11 +1,11 @@
 import { addDays, diffDays, subtractMonths } from "@shared/dates";
-import { comparePriority, type TodoPriority } from "@shared/todos";
+import { comparePriority, type Priority } from "@shared/priority";
 import type { TodoListSummary } from "../../../server/features/todos/todoLists.router";
 import type { TodoWithDetails } from "../../../server/features/todos/todos.router";
 
 export type { TodoListSummary, TodoWithDetails };
 
-export const PRIORITY_OPTIONS: Array<{ value: TodoPriority; label: string }> = [
+export const PRIORITY_OPTIONS: Array<{ value: Priority; label: string }> = [
     { value: "high", label: "High" },
     { value: "normal", label: "Normal" },
     { value: "low", label: "Low" },
@@ -147,8 +147,8 @@ export const todoSummary = (
 };
 
 /** Every tag in use, for the filter and the picker. */
-export const allTags = (todos: TodoWithDetails[]): string[] =>
-    [...new Set(todos.flatMap((todo) => todo.tags))].sort((a, b) =>
+export const allTags = (items: Array<{ tags: string[] }>): string[] =>
+    [...new Set(items.flatMap((item) => item.tags))].sort((a, b) =>
         a.localeCompare(b)
     );
 
