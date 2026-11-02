@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 
-export interface VehicleRowProps {
+export interface RecordRowProps {
     title: ReactNode;
     /** A muted line under the title. */
     details?: ReactNode;
@@ -14,16 +14,16 @@ export interface VehicleRowProps {
     onClick: () => void;
 }
 
-/** One date, cost or bill. The whole row opens it; its action sits inside the
- *  row's box, raised above the stretched tap target so both stay clickable. */
-export const VehicleRow = ({
+/** One record with a figure on the right. The whole row opens it; its action
+ *  sits inside the row, raised above the stretched tap target so both work. */
+export const RecordRow = ({
     title,
     details,
     value,
     meta,
     action,
     onClick,
-}: VehicleRowProps) => (
+}: RecordRowProps) => (
     <li className="relative flex items-center gap-3 rounded-sm px-2.5 py-2.5 transition-colors duration-[140ms] ease-out hover:bg-hover">
         <button
             type="button"

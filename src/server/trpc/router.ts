@@ -33,6 +33,7 @@ import { todosRouter } from '../features/todos/todos.router'
 import { wishlistItemsRouter } from '../features/wishlists/wishlistItems.router'
 import { wishlistsRouter } from '../features/wishlists/wishlists.router'
 import { vehiclesRouter } from '../features/vehicles/vehicles.router'
+import { maintenanceRouter } from '../features/maintenance/maintenance.router'
 
 import { dashboardRouter } from '../features/insights/dashboard.router'
 import { reportsRouter } from '../features/insights/reports.router'
@@ -81,6 +82,7 @@ export const appRouter = router({
   wishlists: wishlistsRouter,
   wishlistItems: wishlistItemsRouter,
   vehicles: vehiclesRouter,
+  maintenance: maintenanceRouter,
   imports: importsRouter,
   users: usersRouter,
   sessions: sessionsRouter,

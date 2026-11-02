@@ -9,8 +9,8 @@ import { EditorPanel } from "@/components/ui/EditorPanel";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PlusIcon } from "@/components/ui/PlusIcon";
 import { Spinner } from "@/components/ui/Spinner";
-import { DueBadge } from "@/features/todos/components/DueBadge";
-import { VehicleArchived } from "@/features/vehicles/components/VehicleArchived";
+import { DueBadge } from "@/components/ui/DueBadge";
+import { ArchivedGroup } from "@/components/ui/ArchivedGroup";
 import { VehicleCard } from "@/features/vehicles/components/VehicleCard";
 import { VehicleForm } from "@/features/vehicles/components/VehicleForm";
 import { comingUp } from "@/features/vehicles/model";
@@ -86,7 +86,7 @@ export const VehiclesPage = () => {
                             ))}
                         </ul>
                         {archived.length > 0 && (
-                            <VehicleArchived count={archived.length}>
+                            <ArchivedGroup count={archived.length}>
                                 {archived.map((vehicle) => (
                                     <VehicleCard
                                         key={vehicle.id}
@@ -95,7 +95,7 @@ export const VehiclesPage = () => {
                                         today={today}
                                     />
                                 ))}
-                            </VehicleArchived>
+                            </ArchivedGroup>
                         )}
                     </div>
 

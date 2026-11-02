@@ -8,11 +8,11 @@ test.describe('dashboard', () => {
     await expect(page.getByRole('heading', { level: 2 })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Unlock' })).toHaveCount(0)
 
-    // Money is mostly built, so it starts open; Home is all "Soon", so it starts
-    // folded.
+    // Sections start open, and pages not built yet stay off the list.
     const nav = page.getByRole('navigation', { name: 'Main' })
     await expect(nav.getByRole('link', { name: 'Overview' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Spending' })).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Maintenance' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Rooms' })).toHaveCount(0)
   })
 
@@ -34,13 +34,14 @@ test.describe('dashboard', () => {
     await expect(page).toHaveURL(/\/upcoming$/)
   })
 
-  test('unfolds a section and jumps to a page by name', async ({ page }) => {
+  test('folds a section and jumps to a page by name', async ({ page }) => {
     await page.goto('/')
 
     const nav = page.getByRole('navigation', { name: 'Main' })
+    await nav.getByRole('link', { name: 'Maintenance' }).click()
+    await expect(page).toHaveURL(/\/maintenance$/)
     await nav.getByRole('button', { name: 'Home' }).click()
-    await nav.getByRole('link', { name: 'Rooms' }).click()
-    await expect(page).toHaveURL(/\/rooms$/)
+    await expect(nav.getByRole('link', { name: 'Maintenance' })).toHaveCount(0)
 
     await page.keyboard.press('/')
     await page.keyboard.type('payslips')

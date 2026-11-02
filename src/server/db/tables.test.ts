@@ -62,6 +62,7 @@ describe('MONEY_COLUMNS (derived from schema)', () => {
         'spendTransaction.amount',
         'standingOrderAck.amount',
         'vehicleCost.amount',
+        'maintenanceLog.amount',
       ].sort(),
     )
   })

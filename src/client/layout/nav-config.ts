@@ -66,10 +66,9 @@ export interface NavItem {
     to: AppRoutePath;
     label: string;
     icon: IconName;
-    /** Set on a domain that isn't built yet. One field does three jobs: the nav
-     *  item dims and gains a "Soon" badge, and its route renders this line on a
-     *  ComingSoon page — so the three can't drift apart. Promoting a domain is
-     *  deleting this property. */
+    /** Set on a domain that isn't built yet: the item stays out of the sidebar
+     *  and the palette, and its route renders this line on a ComingSoon page.
+     *  Promoting a domain is deleting this property. */
     planned?: string;
     /** Kept out of the sidebar list, but still a real route: it still owns its
      *  section (so a deep link keeps its sidebar) and still answers in the
@@ -192,8 +191,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
                         to: "/maintenance",
                         label: "Maintenance",
                         icon: "maintenance",
-                        planned:
-                            "Boiler services, gutters, smoke alarms and filters on a recurring schedule, so the jobs that only come round once a year still happen.",
                     },
                     {
                         to: "/quotes",
@@ -293,13 +290,10 @@ export const isCurrent = (item: NavItem, pathname: string): boolean =>
 export const owningSection = (pathname: string): NavSectionConfig | null =>
     NAV_ITEMS.find(({ item }) => isCurrent(item, pathname))?.section ?? null;
 
-/** Whether a section starts unfolded before anyone has toggled it: when most of
- *  what it lists is built. A section of "Soon" badges stays out of the way, and
- *  opens by itself once its pages ship. */
-export const opensByDefault = (section: NavSectionConfig): boolean => {
-    const listed = section.groups
-        .flatMap((g) => g.items)
-        .filter((i) => !i.hidden);
-    const built = listed.filter((i) => i.planned === undefined);
-    return built.length * 2 > listed.length;
-};
+/** Whether an item shows in the sidebar: built, and not retired. */
+export const isListed = (item: NavItem): boolean =>
+    !item.hidden && item.planned === undefined;
+
+/** Whether a section has anything to show in the sidebar. */
+export const hasListed = (section: NavSectionConfig): boolean =>
+    section.groups.some((group) => group.items.some(isListed));

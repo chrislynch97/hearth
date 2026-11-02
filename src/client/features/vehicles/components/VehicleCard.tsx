@@ -3,7 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { formatMoney } from "@shared/money";
 import { useFormatDate, useMoney } from "@/useMoney";
 import { Card } from "@/components/shadcn/card";
-import { DueBadge } from "@/features/todos/components/DueBadge";
+import { DueBadge } from "@/components/ui/DueBadge";
 import {
     vehicleDetails,
     yearlyCost,

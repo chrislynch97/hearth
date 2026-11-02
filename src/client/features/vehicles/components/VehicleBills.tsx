@@ -3,8 +3,8 @@ import { formatMoney } from "@shared/money";
 import { useMoney } from "@/useMoney";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/PlusIcon";
-import { VehicleRow } from "@/features/vehicles/components/VehicleRow";
-import { VehicleSection } from "@/features/vehicles/components/VehicleSection";
+import { RecordRow } from "@/components/ui/RecordRow";
+import { IconSection } from "@/components/ui/IconSection";
 import type { LinkedBill } from "@/features/vehicles/model";
 
 export interface VehicleBillsProps {
@@ -34,7 +34,7 @@ export const VehicleBills = ({
     const annual = bills.reduce((sum, bill) => sum + bill.annual, 0);
 
     return (
-        <VehicleSection
+        <IconSection
             title="Bills"
             icon={<ReceiptText />}
             figure={
@@ -58,7 +58,7 @@ export const VehicleBills = ({
             ) : (
                 <ul className="flex flex-col divide-y divide-border">
                     {bills.map((bill) => (
-                        <VehicleRow
+                        <RecordRow
                             key={bill.id}
                             title={bill.name}
                             details={
@@ -85,6 +85,6 @@ export const VehicleBills = ({
                     ))}
                 </ul>
             )}
-        </VehicleSection>
+        </IconSection>
     );
 };

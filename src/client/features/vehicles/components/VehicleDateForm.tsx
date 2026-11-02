@@ -14,10 +14,10 @@ import {
 import {
     DEFAULT_REMIND_DAYS,
     DEFAULT_REPEAT_MONTHS,
-    MAX_REMIND_DAYS,
     vehicleDateName,
     type VehicleDateKind,
 } from "@shared/vehicles";
+import { MAX_REMIND_DAYS } from "@shared/schedule";
 
 export interface VehicleDateFormProps {
     vehicleId: string;

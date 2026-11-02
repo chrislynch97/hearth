@@ -1,7 +1,7 @@
 import { useId, type ReactNode } from "react";
 import { Card } from "@/components/shadcn/card";
 
-export interface VehicleSectionProps {
+export interface IconSectionProps {
     title: string;
     icon: ReactNode;
     /** A figure beside the title: a total, a count. */
@@ -11,14 +11,14 @@ export interface VehicleSectionProps {
     children: ReactNode;
 }
 
-/** One part of a vehicle's page: dates, costs or bills, in a card. */
-export const VehicleSection = ({
+/** A titled part of a page, its rows in a card. */
+export const IconSection = ({
     title,
     icon,
     figure,
     action,
     children,
-}: VehicleSectionProps) => {
+}: IconSectionProps) => {
     const headingId = useId();
 
     return (

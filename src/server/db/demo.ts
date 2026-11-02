@@ -1251,6 +1251,54 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     }
   }
 
+  // -- maintenance ---------------------------------------------------------
+  // A spread of jobs across overdue, this month and later, most with a year of
+  // history so the side column has something to total.
+  const maintenanceJobs: Array<Record<string, unknown>> = []
+  const maintenanceLogs: Array<Record<string, unknown>> = []
+  type JobDef = {
+    name: string
+    area: string
+    every: number
+    unit: 'week' | 'month'
+    due: number
+    remindDays: number
+    doer: string | null
+    notes: string | null
+    log: Array<[daysAgo: number, amount: number | null, note: string | null]>
+  }
+  const handy = people[0] ? mine(people[0]) : null
+  const jobPlan: JobDef[] = [
+    { name: 'Boiler service', area: 'heating', every: 12, unit: 'month', due: 24, remindDays: 30, doer: null, notes: 'Worcester Greenstar 30i. Ask for the flue check too.', log: [[341, cost(95), 'Replaced the pressure valve'], [706, cost(85), null]] },
+    { name: 'Test smoke and CO alarms', area: 'safety', every: 1, unit: 'month', due: -3, remindDays: 0, doer: handy, notes: null, log: [[34, null, null], [65, null, 'Swapped the hall battery']] },
+    { name: 'Clear the gutters', area: 'outside', every: 12, unit: 'month', due: 140, remindDays: 14, doer: null, notes: null, log: [[225, cost(60), 'Window cleaner did it']] },
+    { name: 'Clean the cooker hood filter', area: 'appliances', every: 3, unit: 'month', due: 8, remindDays: 0, doer: handy, notes: 'Dishwasher-safe, top rack.', log: [[83, null, null]] },
+    { name: 'Bleed the radiators', area: 'heating', every: 12, unit: 'month', due: -12, remindDays: 7, doer: handy, notes: null, log: [[377, null, null]] },
+    { name: 'Service the lawnmower', area: 'outside', every: 12, unit: 'month', due: 160, remindDays: 14, doer: null, notes: null, log: [[205, cost(45), 'New blade']] },
+    { name: 'Sweep the chimney', area: 'heating', every: 12, unit: 'month', due: 290, remindDays: 30, doer: null, notes: null, log: [[75, cost(70), null]] },
+    { name: 'Descale the shower heads', area: 'water', every: 2, unit: 'month', due: 19, remindDays: 0, doer: null, notes: null, log: [] },
+  ]
+  for (const def of jobPlan) {
+    const jobId = id()
+    maintenanceJobs.push({
+      id: jobId,
+      name: def.name,
+      area: def.area,
+      notes: def.notes,
+      assigneeId: def.doer,
+      dueDate: addDays(today, def.due),
+      repeatEvery: def.every,
+      repeatUnit: def.unit,
+      remindDays: def.remindDays,
+      remindedFor: null,
+      archivedAt: null,
+      ...ts,
+    })
+    for (const [daysAgo, amount, note] of def.log) {
+      maintenanceLogs.push({ id: id(), jobId, doneOn: addDays(today, -daysAgo), doneById: def.doer, amount, note, ...ts })
+    }
+  }
+
   return {
     household: households,
     member: members,
@@ -1287,6 +1335,8 @@ export function buildDemoData(opts: DemoOptions = {}): DemoRows {
     vehicleDate: vehicleDates,
     vehicleCost: vehicleCosts,
     vehicleBill: vehicleBills,
+    maintenanceJob: maintenanceJobs,
+    maintenanceLog: maintenanceLogs,
   }
 }
 

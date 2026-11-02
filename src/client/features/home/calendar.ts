@@ -5,6 +5,7 @@ export const KIND_LABEL: Record<CalendarKind, string> = {
     todo: "To-dos",
     savings: "Savings",
     vehicle: "Vehicles",
+    maintenance: "Maintenance",
 };
 
 /** Each kind's colour, as a dot or a bar. Green is left to today and selection. */
@@ -13,6 +14,7 @@ export const KIND_COLOUR: Record<CalendarKind, string> = {
     todo: "bg-(--mc-cat-2)",
     savings: "bg-(--mc-cat-4)",
     vehicle: "bg-(--mc-cat-5)",
+    maintenance: "bg-(--mc-cat-6)",
 };
 
 /** The same colour as a tint with an edge, for anything holding text. */
@@ -21,6 +23,7 @@ export const KIND_CHIP: Record<CalendarKind, string> = {
     todo: "border-(--mc-cat-2) bg-(--mc-cat-2)/15",
     savings: "border-(--mc-cat-4) bg-(--mc-cat-4)/15",
     vehicle: "border-(--mc-cat-5) bg-(--mc-cat-5)/15",
+    maintenance: "border-(--mc-cat-6) bg-(--mc-cat-6)/15",
 };
 
 const STORAGE_KEY = "hearth.calendar.hiddenKinds";
@@ -77,6 +80,7 @@ export const monthSummary = (
     const todos = ofKind("todo").length;
     const savings = ofKind("savings").length;
     const vehicles = ofKind("vehicle").length;
+    const jobs = ofKind("maintenance").length;
 
     const parts = [
         ...(bills.length > 0
@@ -88,6 +92,9 @@ export const monthSummary = (
             : []),
         ...(vehicles > 0
             ? [counted(vehicles, "vehicle date", "vehicle dates")]
+            : []),
+        ...(jobs > 0
+            ? [counted(jobs, "maintenance job", "maintenance jobs")]
             : []),
     ];
 

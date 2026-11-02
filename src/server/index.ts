@@ -11,6 +11,7 @@ import { assertBackupConfig, startBackupScheduler } from './backup/runner'
 import { startAuditPruneScheduler } from './features/admin/prune'
 import { startTodoReminderScheduler } from './features/todos/reminders'
 import { startVehicleReminderScheduler } from './features/vehicles/reminders'
+import { startMaintenanceReminderScheduler } from './features/maintenance/reminders'
 import { startUpdateScheduler } from './updateScheduler'
 import { isInstanceLocked, startSessionPurgeScheduler } from './auth/session'
 import { allowedOrigins, openGuardConfig } from './auth/gate'
@@ -112,6 +113,7 @@ async function main() {
   startAuthAlertScheduler(db)
   startTodoReminderScheduler(db)
   startVehicleReminderScheduler(db)
+  startMaintenanceReminderScheduler(db)
 
   // 64 MB body limit so restoring a large JSON export isn't rejected (default 1 MB).
   // `trustProxy` is opt-in (HEARTH_TRUST_PROXY): only set it when a reverse proxy /

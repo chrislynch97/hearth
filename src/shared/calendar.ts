@@ -1,5 +1,5 @@
 /** What the home calendar can show, shared so the query and the toggles agree. */
-export const CALENDAR_KINDS = ['bill', 'todo', 'savings', 'vehicle'] as const
+export const CALENDAR_KINDS = ['bill', 'todo', 'savings', 'vehicle', 'maintenance'] as const
 
 export type CalendarKind = (typeof CALENDAR_KINDS)[number]
 
